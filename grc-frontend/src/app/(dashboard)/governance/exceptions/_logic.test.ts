@@ -3,10 +3,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  DATA_COLS, DEFAULT_PAGE_SIZE, PAGE_SIZES, TITLE_MIN_WIDTH,
-  countLabel, formatDate, nextSort, pagerOf, searchExceptions, shownCols, sortRows, tableMinWidth, toCsv, toggleHidden,
-  type DataCol, type ExceptionFields,
+  ADDRESS, DATA_COLS, DEFAULT_PAGE_SIZE, DOC_TYPES, HIDDEN_DOCUMENT, NO_DOCUMENT, PAGE_SIZES, PICKER_LIMIT, TITLE_MIN_WIDTH,
+  NARROW_HIDDEN, WIDE_WINDOW, browseDocuments, countLabel, countText, countsSummary, cutNotice, docTypeLabel, documentGroupName, documentOf, draftPatch, emptyForm, formFrom, formForPolicy, formatDate, hiddenColumns, listParams, nextSort,
+  pagerOf, payloadOf, sameForm, schedulePatch, searchExceptions, serverList, shownCols, sortRows, stillSuggested, tableMinWidth, toCsv, toggleHidden, uniqueDocuments, withDocumentDetail,
+  unitChipText, unitPlaceholder, unitText, visibleUnits, waitingKindLabel, waitingRows,
+  type DataCol, type ExceptionFields, type Filters,
 } from './_logic.ts';
+import { readAddress, writeAddress } from '../../../../lib/addressState.ts';
 
 type Row = ExceptionFields & { id: number };
 let n = 0;
@@ -94,6 +97,18 @@ test('the Columns menu ticks a column off and on again without touching the list
   assert.deepEqual(hidden, ['policy']);
 });
 
+test('a narrow window leaves the least used columns out until the person chooses their own, and then their choice stands', () => {
+  assert.deepEqual(hiddenColumns(null, true), []);
+  assert.deepEqual(hiddenColumns(null, false), ['type', 'requester', 'created']);
+  assert.deepEqual(hiddenColumns([], false), []);                    // they ticked everything on: it stays on
+  assert.deepEqual(hiddenColumns(['unit'], true), ['unit']);
+  assert.deepEqual(hiddenColumns(['unit'], false), ['unit']);
+  assert.ok(WIDE_WINDOW >= 1440);
+  assert.equal(NARROW_HIDDEN.length, 3);
+  hiddenColumns(null, false).push('x');
+  assert.deepEqual(hiddenColumns(null, false), ['type', 'requester', 'created']);   // the answer is a copy: pushing to it changes nothing
+});
+
 test('the table is never narrower than the title column plus the others\' fixed widths', () => {
   assert.equal(TITLE_MIN_WIDTH, 240);
   assert.equal(tableMinWidth([{ width: 160 }, { width: 140 }, {}]), 240 + 160 + 140);
@@ -138,33 +153,45 @@ test('the page sizes offered include the one the page starts with, smallest firs
 // ── CSV ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 test('the CSV has the data columns, named as the table names them, in the table\'s order', () => {
-  assert.equal(toCsv(cols, []), 'Title,Status,Priority,Type,Created,Expiry');
+  assert.equal(toCsv(cols, []), 'Title,Document,Unit,Status,Priority,Type,Created,Expiry');
 });
 
 test('the CSV holds the raw values: the status as the server names it, the date as it was sent, nothing for no expiry', () => {
   const rows = [
-    row({ title: 'Legacy VPN', status: 'pending_approval', priority: 'high', exception_type_label: 'Technical', created_at: '2026-10-01T09:30:00', expiry_date: null }),
-    row({ title: 'Old FTP', status: 'approved', priority: 'critical', created_at: '2026-09-20T07:00:00', expiry_date: '2026-12-31' }),
+    row({ title: 'Legacy VPN', status: 'pending_approval', priority: 'high', exception_type_label: 'Technical', created_at: '2026-10-01T09:30:00', expiry_date: null,
+      department_path: ['Operations', 'Support'], department_inherited: true }),
+    row({ title: 'Old FTP', status: 'approved', priority: 'critical', created_at: '2026-09-20T07:00:00', expiry_date: '2026-12-31', document_title: null }),
   ];
   assert.equal(toCsv(cols, rows), [
-    'Title,Status,Priority,Type,Created,Expiry',
-    'Legacy VPN,pending_approval,high,Technical,2026-10-01T09:30:00,',
-    'Old FTP,approved,critical,,2026-09-20T07:00:00,2026-12-31',          // no type: nothing
+    'Title,Document,Unit,Status,Priority,Type,Created,Expiry',
+    'Legacy VPN,Remote Access Policy,Operations › Support,pending_approval,high,Technical,2026-10-01T09:30:00,',
+    'Old FTP,,,approved,critical,,2026-09-20T07:00:00,2026-12-31',          // no type, no unit, no document: nothing
   ].join('\n'));
 });
 
 test('commas, quotes and line breaks in a value are quoted so the line stays one row', () => {
   const rows = [row({ title: 'He said "no", then\nleft' })];
-  assert.equal(toCsv(cols, rows).split('\n').slice(1).join('\n'), '"He said ""no"", then\nleft",draft,medium,,2026-10-01T09:30:00,');
+  assert.equal(toCsv(cols, rows).split('\n').slice(1).join('\n'), '"He said ""no"", then\nleft",Remote Access Policy,,draft,medium,,2026-10-01T09:30:00,');
   // each of the three on its own
   assert.equal(toCsv([cols[0]], [row({ title: 'plain' }), row({ title: 'a,b' })]), 'Title\nplain\n"a,b"');
   assert.equal(toCsv([cols[0]], [row({ title: 'say "hi"' })]), 'Title\n"say ""hi"""');
   assert.equal(toCsv([cols[0]], [row({ title: 'two\nlines' })]), 'Title\n"two\nlines"');
 });
 
+test('the CSV also names the kind and the code of the document, right after it, and nothing when the Document column is off', () => {
+  const rows = [row({ title: 'One', document_title: 'Backup Standard', document_type: 'standard', document_code: 'STD-001' }), row({ title: 'Two', document_title: null, document_id: null })];
+  const all = withDocumentDetail(cols);
+  assert.equal(toCsv(all, []), 'Title,Document,Document type,Document code,Unit,Status,Priority,Type,Created,Expiry');
+  const lines = toCsv(all, rows).split('\n');
+  assert.ok(lines[1].startsWith('One,Backup Standard,Standard,STD-001,'), lines[1]);
+  assert.ok(lines[2].startsWith('Two,,,,'), lines[2]);                                                          // about no document: three empty cells
+  const off = cols.filter((c) => c.id !== 'document');
+  assert.deepEqual(withDocumentDetail(off), off);                                                               // the person switched the document off: the file has none of it
+});
+
 test('a column switched off is not exported, and a column that only draws never is', () => {
   const rows = [row({ title: 'One', status: 'draft' })];
-  assert.equal(toCsv(cols.filter((c) => c.id !== 'priority' && c.id !== 'created' && c.id !== 'type'), rows), 'Title,Status,Expiry\nOne,draft,');
+  assert.equal(toCsv(cols.filter((c) => !['priority', 'created', 'type', 'document', 'unit'].includes(c.id)), rows), 'Title,Status,Expiry\nOne,draft,');
   assert.equal(toCsv([{ id: 'policy', header: 'Policy' }, ...cols.slice(0, 1)], rows), 'Title\nOne');
 });
 
@@ -218,4 +245,244 @@ test('dates read "08 Nov 2026", on the day the server means, whatever zone the v
 
 test('no date, or one that is not a date, reads as a dash', () => {
   for (const none of [null, undefined, '', 'not a date']) assert.equal(formatDate(none), '—');
+});
+
+// ── D62: the Unit and Document columns, the search ────────────────────────────────────────────────────────────────────────
+
+test('the Unit is its path from the top down; an exception with no unit has none', () => {
+  assert.equal(unitText({ department_path: ['Operations', 'Support', 'Helpdesk'] }), 'Operations › Support › Helpdesk');
+  assert.equal(unitText({ department_path: [] }), '');
+  assert.equal(unitText({}), '');
+});
+
+test('the Document is its title, its kind as a word and its code; a document the person may not open is named without its number', () => {
+  assert.deepEqual(documentOf({ document_title: 'Password Standard', document_id: 7, document_type: 'standard', document_code: 'STD-004' }),
+    { title: 'Password Standard', hidden: false, type: 'Standard', code: 'STD-004' });
+  assert.deepEqual(documentOf({ document_title: null, document_id: 7, document_type: 'procedure', document_code: null }),
+    { title: HIDDEN_DOCUMENT, hidden: true, type: 'Procedure', code: '' });
+  assert.equal(HIDDEN_DOCUMENT, 'A document you cannot open');
+  assert.equal(documentOf({ document_title: null, document_id: null }), null);                              // about no document
+  assert.equal(documentOf({ policy_name: 'Acceptable Use' })?.title, 'Acceptable Use');                      // older payloads
+  assert.ok(!JSON.stringify(documentOf({ document_title: null, document_id: 7 })).includes('7'));
+});
+
+test('a document kind is said as a word, and a kind nobody listed reads as itself', () => {
+  assert.deepEqual(DOC_TYPES.map((t) => t.value), ['policy', 'standard', 'procedure', 'guideline', 'charter', 'framework']);
+  assert.equal(docTypeLabel('standard'), 'Standard');
+  assert.equal(docTypeLabel('Charter'), 'Charter');
+  assert.equal(docTypeLabel('work_instruction'), 'Work instruction');
+  assert.equal(docTypeLabel(null), '');
+});
+
+test('the Unit and Document columns sort and export their words', () => {
+  const rows = [
+    row({ id: 1, title: 'a', document_title: 'Zeta Standard', department_path: ['Operations', 'Support'] }),
+    row({ id: 2, title: 'b', document_title: 'Alpha Policy', department_path: ['Finance'] }),
+    row({ id: 3, title: 'c', document_title: null, document_id: 9, department_path: [] }),
+  ];
+  assert.equal(ids(sortRows(rows, cols, { id: 'document', dir: 'asc' })), '3,2,1');                      // 'A document you cannot open', then A to Z
+  assert.equal(ids(sortRows(rows, cols, { id: 'unit', dir: 'asc' })), '3,2,1');
+  assert.equal(toCsv(cols.filter((c) => c.id === 'document'), [rows[2]]), `Document\n${HIDDEN_DOCUMENT}`);
+});
+
+test('a search also finds an exception by its document\'s code and by its unit', () => {
+  const list = [
+    row({ id: 1, title: 'Legacy VPN', document_title: 'Remote Access Standard', document_code: 'STD-004', department_path: ['Operations', 'Support'] }),
+    row({ id: 2, title: 'Old FTP', document_title: 'Data Transfer Policy', document_code: 'POL-011', department_path: ['Finance'] }),
+  ];
+  assert.equal(ids(searchExceptions(list, 'std-004')), '1');
+  assert.equal(ids(searchExceptions(list, 'support')), '1');
+  assert.equal(ids(searchExceptions(list, 'finance')), '2');
+  assert.deepEqual(searchExceptions(list, 'hr'), []);
+});
+
+test('a document of By document is named by its title; one the person may not open (it has a kind and no title) and the exceptions about none (neither) are told apart', () => {
+  assert.equal(documentGroupName({ title: 'Password Standard', doc_type: 'standard' }), 'Password Standard');
+  assert.equal(documentGroupName({ title: null, doc_type: 'procedure' }), HIDDEN_DOCUMENT);
+  assert.equal(documentGroupName({ title: null, doc_type: null }), NO_DOCUMENT);
+  assert.equal(NO_DOCUMENT, 'No document');
+});
+
+// ── D62: what the address keeps ───────────────────────────────────────────────────────────────────────────────────────────
+
+test('no address is the list with no filter', () => {
+  assert.deepEqual(readAddress(ADDRESS, ''), { view: 'list', q: '', status: '', priority: '', unit: '', doctype: '', waiting: false });
+  assert.equal(writeAddress(ADDRESS, '', readAddress(ADDRESS, '')), '');
+});
+
+test('the view and the filters are read from the address, any case', () => {
+  const state = readAddress(ADDRESS, '?view=Unit&unit=12&status=approved&priority=high&doctype=standard&waiting=1&q=vpn');
+  assert.deepEqual(state, { view: 'unit', q: 'vpn', status: 'approved', priority: 'high', unit: '12', doctype: 'standard', waiting: true });
+  assert.equal(readAddress(ADDRESS, 'view=document').view, 'document');
+});
+
+test('an address that says something unusable is the default, so a link can never make the server answer 422', () => {
+  const state = readAddress(ADDRESS, '?view=tree&unit=abc&status=bogus&priority=urgent&doctype=memo&waiting=maybe');
+  assert.deepEqual(state, { view: 'list', q: '', status: '', priority: '', unit: '', doctype: '', waiting: false });
+  for (const bad of ['0', '-3', '1.5', '12abc', '12345678901', ' ']) assert.equal(readAddress(ADDRESS, `unit=${encodeURIComponent(bad)}`).unit, '', bad);
+  assert.equal(readAddress(ADDRESS, 'unit=%2012').unit, '12');
+});
+
+test('the address of a state: the list is the plain address, a view and the filters are named, and an alert\'s ?open= is left alone', () => {
+  const state = { ...readAddress(ADDRESS, ''), view: 'unit' as const, unit: '12' };
+  assert.equal(writeAddress(ADDRESS, '', state), 'view=unit&unit=12');
+  assert.equal(writeAddress(ADDRESS, '?open=7', { ...state, view: 'list' as const }), 'open=7&unit=12');
+  assert.equal(writeAddress(ADDRESS, '?view=unit&unit=12', readAddress(ADDRESS, '')), '');
+});
+
+test('the chip of a unit filter says the unit covers what is under it', () => {
+  assert.equal(unitChipText('Support'), 'Unit: Support and below');
+  assert.equal(unitChipText(null), 'Unit: This unit and below');
+  assert.equal(unitChipText('  '), 'Unit: This unit and below');
+});
+
+// ── D62: what the list asks of the server ─────────────────────────────────────────────────────────────────────────────────
+
+test('the list sends only the filters that are set, the unit as its number, and never a limit', () => {
+  assert.deepEqual(listParams({ status: '', priority: '' }), {});
+  assert.deepEqual(listParams({ status: 'approved', priority: '', unit: '12', documentType: 'standard' }), { status: 'approved', unit: 12, document_type: 'standard' });
+  assert.deepEqual(listParams({ status: '', priority: 'high' }), { priority: 'high' });
+  assert.ok(!('limit' in listParams({ status: 'a', priority: 'b', unit: '1', documentType: 'x' })));
+});
+
+test('a full page for a unit or a kind of document cannot be counted from the analytics: it is cut and the total is not known', () => {
+  const counts = { total: 172, by_status: { draft: 54 }, by_priority: { high: 39 } };
+  assert.deepEqual(serverList(100, { status: '', priority: '', unit: '12' }, counts), { cut: true, total: null });
+  assert.deepEqual(serverList(100, { status: 'draft', priority: '', documentType: 'standard' }, counts), { cut: true, total: null });
+  assert.deepEqual(serverList(40, { status: '', priority: '', unit: '12' }, counts), { cut: false, total: 40 });      // fewer than the server's limit is all of it
+  assert.deepEqual(serverList(100, { status: '', priority: '' }, counts), { cut: true, total: 172 });               // as it was
+  assert.equal(cutNotice(100, { cut: true, total: null }, { status: '', priority: '', unit: '12' } as Filters)?.title, 'Showing the first 100 exceptions, there may be more');
+});
+
+test('"Waiting for me" is narrowed by the kind of document and by the unit with everything under it, as it is by status and priority', () => {
+  const rows = [
+    { id: 1, status: 'pending_approval', priority: 'high', document_type: 'standard', department_path: ['Operations', 'Support', 'Helpdesk'] },
+    { id: 2, status: 'approved', priority: 'high', document_type: 'policy', department_path: ['Operations', 'Support'] },
+    { id: 3, status: 'approved', priority: 'low', document_type: null, department_path: ['Finance'] },
+    { id: 4, status: 'approved', priority: 'low', document_type: 'standard' },
+  ];
+  const f = (over: Partial<Filters>): Filters => ({ status: '', priority: '', ...over });
+  assert.deepEqual(waitingRows(rows, f({})).map((r) => r.id), [1, 2, 3, 4]);
+  assert.deepEqual(waitingRows(rows, f({ documentType: 'standard' })).map((r) => r.id), [1, 4]);
+  assert.deepEqual(waitingRows(rows, f({ unit: '5', unitPath: ['Operations', 'Support'] })).map((r) => r.id), [1, 2]);       // Support and Helpdesk under it
+  assert.deepEqual(waitingRows(rows, f({ unit: '6', unitPath: ['Operations', 'Support', 'Helpdesk'] })).map((r) => r.id), [1]);
+  assert.deepEqual(waitingRows(rows, f({ unit: '9', unitPath: ['Treasury'] })).map((r) => r.id), []);
+  assert.deepEqual(waitingRows(rows, f({ unit: '5', unitPath: ['Operations', 'Support'], documentType: 'policy', status: 'approved' })).map((r) => r.id), [2]);
+});
+
+test('a row that waits is a Decide or an Implement; one that waits for nothing has no chip', () => {
+  assert.equal(waitingKindLabel('decision'), 'Decide');
+  assert.equal(waitingKindLabel('implementation'), 'Implement');
+  assert.equal(waitingKindLabel(null), null);
+  assert.equal(waitingKindLabel(undefined), null);
+  assert.equal(waitingKindLabel('something else'), null);
+});
+
+// ── D62: by unit and by document ─────────────────────────────────────────────────────────────────────────────────────────
+
+test('a count is the number, or a dash for none', () => {
+  assert.equal(countText(0), '—');
+  assert.equal(countText(null), '—');
+  assert.equal(countText(7), '7');
+  assert.equal(countText(1200), '1,200');
+});
+
+test('a unit or a document says its total, then each count it has', () => {
+  assert.equal(countsSummary({ total: 5, open: 2, approved: 2, expiring: 1, to_implement: 1 }), '5 exceptions · 2 open · 2 approved · 1 expiring · 1 to implement');
+  assert.equal(countsSummary({ total: 1, open: 1, approved: 0, expiring: 0, to_implement: 0 }), '1 exception · 1 open');
+  assert.equal(countsSummary({ total: 0, open: 0, approved: 0, expiring: 0, to_implement: 0 }), '0 exceptions');
+});
+
+test('a closed unit hides the units under it, and only those', () => {
+  const units = [
+    { department_id: 1, depth: 0 }, { department_id: 2, depth: 1 }, { department_id: 3, depth: 2 }, { department_id: 4, depth: 1 },
+    { department_id: 5, depth: 0 }, { department_id: 6, depth: 1 },
+  ];
+  const shown = (closed: number[]) => visibleUnits(units, new Set(closed)).map((u) => u.department_id);
+  assert.deepEqual(shown([]), [1, 2, 3, 4, 5, 6]);
+  assert.deepEqual(shown([1]), [1, 5, 6]);                       // 2, 3 and 4 are under 1
+  assert.deepEqual(shown([2]), [1, 2, 4, 5, 6]);                 // 3 is under 2, 4 is beside it
+  assert.deepEqual(shown([2, 4, 5]), [1, 2, 4, 5]);              // 6 is under 5
+  assert.deepEqual(shown([3]), [1, 2, 3, 4, 5, 6]);              // nothing is under 3
+  assert.deepEqual(shown([1, 2]), [1, 5, 6]);                    // a unit inside a closed one stays closed
+  assert.deepEqual(visibleUnits([], new Set([1])), []);
+});
+
+// ── D62: the form ────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+test('the form has a business impact and no longer the two long texts: Edit starts with what the exception has', () => {
+  assert.deepEqual(emptyForm(), {
+    title: '', document_id: '', justification: '', business_impact: '', priority: 'medium', department_id: '', exception_type: '', effective_date: '', expiry_date: '', asset_ids: [],
+  });
+  const form = formFrom({ title: 'Legacy VPN', document_id: 44, justification: '["Vendor cannot patch"]', business_impact: 'Remote staff lose access', linked_asset_ids: [3, 1],
+    effective_date: '2026-10-01T08:22:49', expiry_date: '2026-12-15T08:22:49' });
+  assert.deepEqual(form, {
+    title: 'Legacy VPN', document_id: 44, justification: 'Vendor cannot patch', business_impact: 'Remote staff lose access', priority: 'medium', department_id: '', exception_type: '',
+    effective_date: '2026-10-01', expiry_date: '2026-12-15', asset_ids: [3, 1],
+  });
+  assert.equal(formFrom({ title: 'x', document_id: null, business_impact: null }).business_impact, '');
+  assert.equal(formForPolicy(5).business_impact, '');
+});
+
+test('what is sent never holds the two long texts, so an edit wipes nothing; the business impact goes when it has words, and an edit clears it with null', () => {
+  const form = { ...emptyForm(), title: 'T', justification: 'J', document_id: '44', business_impact: 'Staff lose access', asset_ids: [1] };
+  const created = payloadOf(form, false);
+  assert.deepEqual(created, { title: 'T', justification: 'J', priority: 'medium', business_impact: 'Staff lose access', document_id: 44, department_id: null, exception_type: null, asset_ids: [1] });
+  for (const editing of [false, true]) {
+    const sent = payloadOf(form, editing);
+    assert.ok(!('risk_assessment' in sent) && !('compensating_controls' in sent), `editing ${editing}`);
+  }
+  assert.ok(!('business_impact' in payloadOf({ ...form, business_impact: '  ' }, false)));
+  assert.equal(payloadOf({ ...form, business_impact: '' }, true).business_impact, null);
+});
+
+test('closing the form has something to lose when the business impact changed', () => {
+  const start = formFrom({ title: 'T', document_id: 4, justification: 'J', business_impact: 'B' });
+  assert.ok(sameForm(start, { ...start }));
+  assert.ok(!sameForm(start, { ...start, business_impact: 'B2' }));
+});
+
+test('the unit chooser says which unit the exception will follow when none was chosen', () => {
+  assert.equal(unitPlaceholder(['Operations', 'Support'], ''), 'Operations › Support (from the document)');
+  assert.equal(unitPlaceholder(['Operations', 'Support'], 'Finance'), 'Operations › Support (from the document)');          // the document in the form wins over what it followed
+  assert.equal(unitPlaceholder([], 'Finance'), 'No unit');                                                                  // a document with no unit
+  assert.equal(unitPlaceholder(undefined, 'Finance › Treasury'), 'Finance › Treasury (from the document)');                  // not known here: what it already follows
+  assert.equal(unitPlaceholder(undefined, ''), "The document's unit");
+});
+
+test('AI Assist writes into the empty boxes only, so what the person wrote is kept', () => {
+  const answer = { justification: 'The vendor cannot patch.', business_impact: 'Remote staff lose access.' };
+  assert.deepEqual(draftPatch({ justification: '', business_impact: '' }, answer), { justification: 'The vendor cannot patch.', business_impact: 'Remote staff lose access.' });
+  assert.deepEqual(draftPatch({ justification: 'Mine', business_impact: '' }, answer), { business_impact: 'Remote staff lose access.' });
+  assert.deepEqual(draftPatch({ justification: 'Mine', business_impact: 'Mine too' }, answer), {});
+  assert.deepEqual(draftPatch({ justification: '  ', business_impact: '' }, { justification: '', business_impact: '  ' }), {});
+});
+
+test('Suggest period fills the priority and both days as a draft, and its reason stays only while they are the suggested ones', () => {
+  const s = { priority: 'high', effective_date: '2026-11-05', expiry_date: '2027-02-03', rationale: 'The vendor patch is due in three months.' };
+  assert.deepEqual(schedulePatch(s), { priority: 'high', effective_date: '2026-11-05', expiry_date: '2027-02-03' });
+  assert.deepEqual(schedulePatch({ ...s, effective_date: '2026-11-05T00:00:00' }).effective_date, '2026-11-05');
+  assert.ok(stillSuggested(schedulePatch(s), s));
+  assert.ok(!stillSuggested({ ...schedulePatch(s), expiry_date: '2027-03-01' }, s));
+  assert.ok(!stillSuggested({ ...schedulePatch(s), priority: 'low' }, s));
+  assert.ok(!stillSuggested(schedulePatch(s), null));
+});
+
+// ── D62: the document picker ─────────────────────────────────────────────────────────────────────────────────────────────
+
+test('with nothing typed the picker lists the documents of the kind chosen by title, as many as it lists', () => {
+  const docs = [
+    { id: 1, title: 'zeta', doc_type: 'policy' }, { id: 2, title: 'Alpha', doc_type: 'standard' }, { id: 3, title: 'beta', doc_type: 'Standard' }, { id: 4, title: 'Gamma', doc_type: 'procedure' },
+  ];
+  assert.deepEqual(browseDocuments(docs, '').map((d) => d.id), [2, 3, 4, 1]);
+  assert.deepEqual(browseDocuments(docs, 'standard').map((d) => d.id), [2, 3]);
+  assert.deepEqual(browseDocuments(docs, 'charter'), []);
+  assert.deepEqual(browseDocuments(docs, '', 2).map((d) => d.id), [2, 3]);
+  assert.deepEqual(docs.map((d) => d.id), [1, 2, 3, 4]);                                  // the list it was given is not reordered
+  assert.equal(PICKER_LIMIT, 20);
+});
+
+test('a document the search found in its title and in its clauses is listed once', () => {
+  const hits = [{ document_id: 4, match_field: 'title' }, { document_id: 9, match_field: 'content' }, { document_id: 4, match_field: 'policy_statement' }];
+  assert.deepEqual(uniqueDocuments(hits).map((h) => `${h.document_id}:${h.match_field}`), ['4:title', '9:content']);
 });

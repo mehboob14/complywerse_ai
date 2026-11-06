@@ -32,7 +32,7 @@
 //   /governance/attestations/my              -                  (none)                                   My Attestations               -                                        My Attestations
 //   /governance/attestations/complete/:id    -                  (none)                                   Complete Attestation          back "Attestations"                      Complete Attestation
 //   /governance/approvals                    My Approvals       "Governance" + generic subtitle          My Approvals                  -                                        My Approvals (bar: was "Governance")
-//   /governance/exceptions                   -                  tabs                                     Policy exceptions             tab "Exceptions", tooltip "Policy exceptions"   Policy exceptions; shortLabel Exceptions
+//   /governance/exceptions                   -                  tabs                                     Exceptions (was Policy exceptions)  tab "Exceptions"                               Exceptions (D62: labels only; the route, the rights and the API keep their names)
 //   /governance/settings                     -                  tabs                                     Governance settings           tab "Settings" (gear), tooltip "Settings"       Governance settings; shortLabel Settings (tooltip was "Settings")
 //   /governance/reviews                      -                  "Governance" + generic subtitle          Document Reviews              tab Reviews, tooltip "Document Reviews"  Document Reviews; shortLabel Reviews (bar: was "Governance"; now a tab of the Documents strip)
 //   /governance/reviews/calendar             -                  (none)                                   Document Reviews              the same tab (its calendar view)         Document Reviews (an alias: it was "Review Calendar", now a view of the page)
@@ -162,7 +162,7 @@ const pages: RouteEntry[] = [
   gov('/governance/attestations/campaigns/:id', 'Attestation Campaign', { parent: '/governance/attestations/campaigns', hidden: 'opens from the legacy campaign list' }),
   gov('/governance/attestations/my', 'My Attestations', { parent: ATTEST, hidden: 'legacy page: no link opens it, kept for a typed or bookmarked URL' }),
   gov('/governance/attestations/complete/:id', 'Complete Attestation', { parent: '/governance/attestations/my', hidden: 'opens from the legacy My Attestations list' }),
-  gov('/governance/exceptions', 'Policy exceptions', { shortLabel: 'Exceptions', parent: DOCS, tab: { area: 'documents', id: 'exceptions', order: 6 } }),
+  gov('/governance/exceptions', 'Exceptions', { parent: DOCS, tab: { area: 'documents', id: 'exceptions', order: 6 } }),
   gov('/governance/settings', 'Governance settings', { shortLabel: 'Settings', parent: DOCS, tab: { area: 'documents', id: 'settings', order: 7, permission: 'governance:settings:*' } }),
   gov('/governance/reviews', 'Document Reviews', { shortLabel: 'Reviews', parent: DOCS, tab: { area: 'documents', id: 'reviews', order: 5 }, keywords: ['Reviews', 'Review Calendar'] }),
   gov('/governance/reviews/calendar', 'Document Reviews', { aliasOf: '/governance/reviews' }),

@@ -1,25 +1,34 @@
 'use client';
 
-// The details of one exception, in a drawer: who and when, its department, the three long texts, what was decided and why, the approval under its rule
-// when it has one (_ApprovalPanel.tsx: the steps, who it waits for, and what the person asked may do), the linked assets (the first two and +N), the
-// comments, and "Move to risk register". Without a rule decisions are not made here (they are in the row's ⋯ menu, as they always were). On the
-// design-system kit: RightSlidePanel, StatusPill, PersonChip, Button, TextInput, Skeleton / ErrorState, useReportedMutation for the two writes.
+// The details of one exception, in a drawer: who and when, its document (of any kind) and unit, the justification next to the business impact, the assets with who
+// put each there (_AssetsPanel.tsx), the potential risks the people asked recorded and, for the person asked now, where they record theirs (_RisksPanel.tsx), what was
+// decided and why, the approval under its rule when it has one (_ApprovalPanel.tsx: the steps, who it waits for, and what the person asked may do: Approve waits for their
+// own assessment), then, once it is approved under a rule that has an implementer, the Implementation with its compensating controls and Mark implemented
+// (_ImplementationPanel.tsx, _ControlsPanel.tsx), the requester's own notes (the two long texts the form used to have), the comments, and "Move to risk register".
+// The panels read and write what they need themselves (and refresh LIST_KEYS, so this exception and the lists follow); the page's props are as they were. Without a rule,
+// decisions are not made here (they are in the row's ⋯ menu, as they always were). On the design-system kit: RightSlidePanel, StatusPill, PersonChip, Button, TextInput,
+// Skeleton / ErrorState, useReportedMutation for the two writes made here.
 import { useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowRightLeft, ExternalLink, MessageSquare, Send } from 'lucide-react';
 import { policyExceptionApi } from '@/lib/api';
-import { EMPTY, NOT_SET, moreCount } from '@/lib/format';
+import { EMPTY, NOT_SET, statusLabel } from '@/lib/format';
 import { exceptionStatus, priority as priorityStatus, statusPill } from '@/lib/status';
 import { RightSlidePanel } from '@/components/ui';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { Button, ErrorState, IconButton, PersonChip, SkeletonLines, StatusPill, TextInput, useReportedMutation } from '@/components/ui/ds';
 import { errorMessage } from '@/components/ui/ds/reportOutcome';
 import { ApprovalPanel } from './_ApprovalPanel';
+import { AssetsPanel } from './_AssetsPanel';
+import { ControlsPanel } from './_ControlsPanel';
 import type { DecisionKind } from './_Decision';
+import { ImplementationPanel } from './_ImplementationPanel';
+import { RisksPanel } from './_RisksPanel';
+import { implementationTone, implementationWord, statusLine } from './_approval';
 import { dayText, departmentOf, momentDay, momentText, requesterOf } from './_logic';
 import { cleanText, parseListish } from './_text';
-import type { ExceptionComment, ExceptionItem, LinkedAsset } from './_types';
+import type { ExceptionComment, ExceptionItem } from './_types';
 
 /** A label over a value. */
 function Fact({ label, children }: { label: string; children: ReactNode }) {
@@ -32,6 +41,9 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
 }
 
 const Muted = ({ children }: { children: ReactNode }) => <span className="text-ds-fg-muted">{children}</span>;
+
+/** What kind of document it is (policy, standard, procedure...), as the page's Document column says it: a small chip. */
+const KIND = 'inline-flex max-w-full items-center rounded-ds-control border border-ds-border bg-ds-surface-subtle px-[6px] text-ds-label text-ds-fg-body';
 
 /** The small heading of a section of text. (An h3 takes `!`: the platform CSS remaps a bare heading.) */
 const Heading = ({ children }: { children: ReactNode }) => <h3 className="!text-ds-label !text-ds-fg-muted">{children}</h3>;
@@ -57,31 +69,6 @@ function Note({ label, tone, children }: { label: string; tone: 'danger' | 'succ
   );
 }
 
-/** The linked assets: the first two by name and a +N that shows the others where they are. */
-function LinkedAssets({ assets }: { assets: LinkedAsset[] }) {
-  const [all, setAll] = useState(false);
-  const { shown, more } = moreCount(assets, 2);
-  if (assets.length === 0) return <Muted>{NOT_SET}</Muted>;
-  const chip = (a: LinkedAsset) => (
-    <span key={a.id} title={[a.asset_type, a.criticality].filter(Boolean).join(' · ') || undefined}
-      className="inline-flex max-w-full items-center rounded-ds-control border border-ds-border bg-ds-surface-subtle px-[6px] text-ds-label text-ds-fg-body">
-      <span className="truncate">{a.name}</span>
-    </span>
-  );
-  return (
-    <span className="flex flex-wrap items-center gap-[6px]">
-      {(all ? assets : shown).map(chip)}
-      {more > 0 && (
-        <button type="button" aria-expanded={all} onClick={() => setAll(!all)}
-          className="inline-flex h-[24px] items-center rounded-ds-control px-[6px] text-ds-label text-ds-primary-text hover:bg-ds-primary-soft focus-visible:outline-none focus-visible:shadow-ds-ring">
-          {all ? 'Show fewer' : `+${more}`}
-          {!all && <span className="sr-only"> more linked assets</span>}
-        </button>
-      )}
-    </span>
-  );
-}
-
 export function ExceptionDetailsDrawer({ exception: e, onClose, onDecide, onWithdraw, withdrawing }: {
   exception: ExceptionItem;
   onClose: () => void;
@@ -92,6 +79,7 @@ export function ExceptionDetailsDrawer({ exception: e, onClose, onDecide, onWith
 }) {
   const router = useRouter();
   const [newComment, setNewComment] = useState('');
+  const [riskTyped, setRiskTyped] = useState(false);                          // a potential risk typed in "Your assessment" and not added yet
   const commentsKey = ['exception-comments', e.id];
 
   const comments = useQuery({
@@ -117,20 +105,35 @@ export function ExceptionDetailsDrawer({ exception: e, onClose, onDecide, onWith
   });
 
   const send = () => { if (newComment.trim() && !addComment.isPending) addComment.mutate(newComment.trim()); };
-  const policy = e.document_title || e.policy_name;
+  const documentName = e.document_title || e.policy_name;
   const approver = e.approver_name || e.approved_by_name;
   const department = departmentOf(e);
+  const impl = e.implementation ?? null;
+  // "Approved · Waiting for compensating controls": two pills (one long pill is cut off on a phone, and the panel's own header would push its close button off the screen)
+  const stateOfImplementation = impl && e.status === 'approved' ? impl : null;
+  const hasNotes = Boolean(cleanText(e.risk_assessment) || cleanText(e.compensating_controls));
+  // before the first approval there is nothing to show yet; a draft that came back from a round of approval still shows what was said, and one with the requester's
+  // own notes (or already in the risk register) keeps "Move to risk register" where it always was
+  const showRisks = e.status !== 'draft' || e.approval != null || (e.risks_count ?? 0) > 0 || hasNotes || e.promoted_risk_id != null;
+  // the people asked to implement it find that first; everyone else reads it after the approval it follows
+  const implementation = impl && (
+    <ImplementationPanel exception={e}>
+      <ControlsPanel exception={e} />
+    </ImplementationPanel>
+  );
 
   return (
     <RightSlidePanel
       isOpen
       onClose={onClose}
       widthClassName="w-[780px] max-w-full"
+      dirty={riskTyped || newComment.trim() !== ''}
       title={(
         <span className="block min-w-0">
           <span className="block [overflow-wrap:anywhere]">{e.title}</span>
-          <span className="mt-[6px] flex flex-wrap items-center gap-2 text-ds-body font-normal">
+          <span role="group" aria-label={statusLine(e.status, stateOfImplementation)} className="mt-[6px] flex flex-wrap items-center gap-2 text-ds-body font-normal">
             <StatusPill {...statusPill(exceptionStatus, e.status)} />
+            {stateOfImplementation && <StatusPill tone={implementationTone(stateOfImplementation.state)} label={implementationWord(stateOfImplementation.state)} />}
             <StatusPill {...statusPill(priorityStatus, e.priority)} label={`${statusPill(priorityStatus, e.priority).label} priority`} />
           </span>
         </span>
@@ -138,9 +141,17 @@ export function ExceptionDetailsDrawer({ exception: e, onClose, onDecide, onWith
     >
       <div className="flex flex-col gap-[16px]">
         <dl className="grid grid-cols-1 gap-x-[16px] gap-y-[12px] sm:grid-cols-2">
-          <Fact label="Policy">{policy || <Muted>{NOT_SET}</Muted>}</Fact>
-          <Fact label="Department">
-            {department ? <>{department.text}{department.inherited && <Muted> · From the policy</Muted>}</> : <Muted>{NOT_SET}</Muted>}
+          <Fact label="Document">
+            {documentName ? (
+              <span className="flex flex-wrap items-center gap-x-[8px] gap-y-[2px]">
+                <span className="min-w-0 [overflow-wrap:anywhere]">{documentName}</span>
+                {e.document_type && <span className={KIND}>{statusLabel(e.document_type)}</span>}
+                {e.document_code && <Muted>{e.document_code}</Muted>}
+              </span>
+            ) : <Muted>{NOT_SET}</Muted>}
+          </Fact>
+          <Fact label="Unit">
+            {department ? <>{department.text}{department.inherited && <Muted> · From the document</Muted>}</> : <Muted>{NOT_SET}</Muted>}
           </Fact>
           <Fact label="Type">{e.exception_type_label || e.exception_type || <Muted>{NOT_SET}</Muted>}</Fact>
           <Fact label="Requester"><PersonChip name={requesterOf(e)} emptyLabel={EMPTY} /></Fact>
@@ -149,18 +160,33 @@ export function ExceptionDetailsDrawer({ exception: e, onClose, onDecide, onWith
           <Fact label="Created">{momentDay(e.created_at)}</Fact>
           {approver && <Fact label="Approved by">{approver}</Fact>}
           {e.revoker_name && <Fact label="Revoked by">{e.revoker_name}</Fact>}
-          <div className="min-w-0 sm:col-span-2">
-            <dt className="text-ds-label text-ds-fg-muted">Linked assets</dt>
-            <dd className="mt-[2px] text-ds-body text-ds-fg"><LinkedAssets assets={e.linked_assets ?? []} /></dd>
-          </div>
         </dl>
 
-        <section><Heading>Justification</Heading><RichText value={e.justification} /></section>
+        <div className="grid grid-cols-1 gap-[16px] sm:grid-cols-2">
+          <section><Heading>Justification</Heading><RichText value={e.justification} /></section>
+          <section><Heading>Business impact</Heading><RichText value={e.business_impact} /></section>
+        </div>
 
-        <section>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <Heading>Potential risks</Heading>
-            {e.promoted_risk_id ? (
+        {hasNotes && (
+          <section className="flex flex-col gap-[8px]">
+            <span className="flex items-center gap-1">
+              <Heading>{"Requester's notes"}</Heading>
+              <InfoTip label="About the requester's notes" text="Written by the requester before the people asked recorded their own potential risks and compensating controls." />
+            </span>
+            {cleanText(e.risk_assessment) && <div><span className="text-ds-label text-ds-fg-muted">Potential risks</span><RichText value={e.risk_assessment} /></div>}
+            {cleanText(e.compensating_controls) && <div><span className="text-ds-label text-ds-fg-muted">Compensating controls</span><RichText value={e.compensating_controls} /></div>}
+          </section>
+        )}
+
+        {e.implementation?.my_turn && implementation}
+
+        <AssetsPanel exception={e} />
+
+        {showRisks && (
+          <RisksPanel
+            exception={e}
+            onDirty={setRiskTyped}
+            action={e.promoted_risk_id ? (
               <Button variant="link" size="sm" rightIcon={<ExternalLink aria-hidden />} onClick={() => { onClose(); router.push(`/erm/risks/${e.promoted_risk_id}`); }}>In risk register</Button>
             ) : (
               <span className="inline-flex items-center gap-1">
@@ -169,11 +195,8 @@ export function ExceptionDetailsDrawer({ exception: e, onClose, onDecide, onWith
                   text="Creates a risk-register entry from these potential risks, with the linked assets, so you can complete the likelihood and impact assessment there." />
               </span>
             )}
-          </div>
-          <RichText value={e.risk_assessment} />
-        </section>
-
-        <section><Heading>Compensating controls</Heading><RichText value={e.compensating_controls} /></section>
+          />
+        )}
 
         {e.rejection_reason && <Note label="Rejection reason" tone="danger"><RichText value={e.rejection_reason} /></Note>}
         {e.approval_comments && <Note label="Approval comments" tone="success"><RichText value={e.approval_comments} /></Note>}
@@ -182,6 +205,8 @@ export function ExceptionDetailsDrawer({ exception: e, onClose, onDecide, onWith
         {e.approval && (
           <ApprovalPanel exception={e} approval={e.approval} onDecide={onDecide} onWithdraw={onWithdraw} withdrawing={withdrawing} />
         )}
+
+        {!e.implementation?.my_turn && implementation}
 
         <section className="border-t border-ds-border pt-[16px]">
           <h3 className="mb-[12px] flex items-center gap-2 !text-ds-section !text-ds-fg">

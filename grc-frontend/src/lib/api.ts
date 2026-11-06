@@ -268,7 +268,7 @@ export const risksApi = {
   updateTreatment: (id: number, plan: string) => apiClient.post(`/risks/${id}/treatment`, { treatment_plan: plan }),
   linkFrameworkControl: (id: number, data: Record<string, unknown>) => apiClient.post(`/risks/${id}/link-framework-control`, data),
   unlinkFrameworkControl: (id: number, linkId: number) => apiClient.delete(`/risks/${id}/link-framework-control/${linkId}`),
-  // Controls of the frameworks this organisation has installed (UAE IA, ...): the register's Controls tab and the Risk Library link to these.
+  // Controls of the frameworks this organisation has installed (UAE IA, ...): the register's Controls tab links to these.
   requirementFrameworks: () => apiClient.get<{ items: Array<{ id: number; name: string; slug: string | null; version: string | null; controls: number }> }>('/erm/framework-requirements/frameworks'),
   searchRequirements: (params: { framework_id: number; q?: string; skip?: number; limit?: number }) =>
     apiClient.get<{ items: Array<{ id: number; code: string; title: string; domain: string | null; category: string | null; priority_level: string | null; is_mandatory: boolean }>; total: number }>('/erm/framework-requirements', { params }),
@@ -684,9 +684,9 @@ export const policyExceptionApi = {
     apiClient.get('/governance/policy-exceptions', { params }),
   suggestContent: (data: { title: string; document_id: number }) =>
     apiClient.post('/governance/policy-exceptions/suggest-content', data),
-  // Search any sentence/keyword across policy/document content + parsed clauses.
-  searchPolicies: (q: string, limit = 20) =>
-    apiClient.get('/governance/policy-exceptions/search-policies', { params: { q, limit } }),
+  // Search any sentence/keyword across the content of controlled documents (every type, or one: policy, standard, procedure, guideline...) + parsed policy clauses.
+  searchPolicies: (q: string, limit = 20, docType?: string) =>
+    apiClient.get('/governance/policy-exceptions/search-policies', { params: docType ? { q, limit, doc_type: docType } : { q, limit } }),
   // AI-driven candidate exceptions across policies (or focused on one document).
   suggestCandidates: (params?: { document_id?: number; limit?: number }) =>
     apiClient.get('/governance/policy-exceptions/suggest-candidates', { params: params || {} }),
@@ -720,6 +720,44 @@ export const policyExceptionApi = {
   // Real posture-over-time trend from the snapshot history layer.
   getTrend: (metric = 'exception_risk_posture', days = 180) =>
     apiClient.get('/enriched-dashboard/metric-trend', { params: { metric, days } }),
+
+  // ── D62: the hierarchy, potential risks, the implementation and its compensating controls, assets, AI at every step. Shapes: exceptions/_types.ts. ──
+  // The units that have exceptions as a tree (each row counts its unit and everything under it), and the same with the documents under each unit.
+  getByUnit: () => apiClient.get('/governance/policy-exceptions/by-unit'),
+  getByDocument: () => apiClient.get('/governance/policy-exceptions/by-document'),
+  // AI drafts for the person raising an exception: nothing is saved by the call. 503 when AI is not configured, 502 when its answer was unusable.
+  aiDraft: (data: { title: string; document_id?: number | null; department_id?: number | null }) =>
+    apiClient.post('/governance/policy-exceptions/ai/draft', data),
+  aiSchedule: (data: { title: string; justification?: string; document_id?: number | null; priority?: string | null }) =>
+    apiClient.post('/governance/policy-exceptions/ai/schedule', data),
+  aiAssets: (data: { title: string; justification?: string; document_id?: number | null; department_id?: number | null }) =>
+    apiClient.post('/governance/policy-exceptions/ai/assets', data),
+  // Potential risks: recorded by the people asked at the open review or approval step (an approval under a rule needs the approver's own assessment: a risk, or none identified).
+  getRisks: (id: number) => apiClient.get(`/governance/policy-exceptions/${id}/risks`),
+  addRisk: (id: number, data: { title?: string; description?: string; likelihood?: number | null; impact?: number | null; none_identified?: boolean; source?: 'manual' | 'ai' }) =>
+    apiClient.post(`/governance/policy-exceptions/${id}/risks`, data),
+  updateRisk: (id: number, riskId: number, data: { title?: string; description?: string; likelihood?: number | null; impact?: number | null }) =>
+    apiClient.put(`/governance/policy-exceptions/${id}/risks/${riskId}`, data),
+  deleteRisk: (id: number, riskId: number) => apiClient.delete(`/governance/policy-exceptions/${id}/risks/${riskId}`),
+  /** link a potential risk to an entry of the risk register, or take the link off (null) */
+  linkRisk: (id: number, riskId: number, registerRiskId: number | null) =>
+    apiClient.post(`/governance/policy-exceptions/${id}/risks/${riskId}/link`, { risk_id: registerRiskId }),
+  /** the register entries a potential risk can be linked to ({ id, title }), for the person asked at the open step */
+  getRiskRegister: (id: number) => apiClient.get(`/governance/policy-exceptions/${id}/risk-register`),
+  aiRisks: (id: number) => apiClient.post(`/governance/policy-exceptions/${id}/ai/risks`),
+  // The implementation (after the last approval, when the rule has an implementer): compensating controls, then Mark implemented.
+  getControls: (id: number) => apiClient.get(`/governance/policy-exceptions/${id}/controls`),
+  addControl: (id: number, data: Record<string, unknown>) => apiClient.post(`/governance/policy-exceptions/${id}/controls`, data),
+  updateControl: (id: number, controlId: number, data: Record<string, unknown>) =>
+    apiClient.put(`/governance/policy-exceptions/${id}/controls/${controlId}`, data),
+  deleteControl: (id: number, controlId: number) => apiClient.delete(`/governance/policy-exceptions/${id}/controls/${controlId}`),
+  /** needs a control; potential risks no control covers need confirm_uncovered (the server answers 409 with the question until it is sent) */
+  completeImplementation: (id: number, data?: { note?: string; confirm_uncovered?: boolean }) =>
+    apiClient.post(`/governance/policy-exceptions/${id}/implementation/complete`, data || {}),
+  aiControls: (id: number) => apiClient.post(`/governance/policy-exceptions/${id}/ai/controls`),
+  // Assets: one list for the person who raised the exception and the people who implement it, each asset with who added it.
+  addAssets: (id: number, assetIds: number[]) => apiClient.post(`/governance/policy-exceptions/${id}/assets`, { asset_ids: assetIds }),
+  removeAsset: (id: number, assetId: number) => apiClient.delete(`/governance/policy-exceptions/${id}/assets/${assetId}`),
 };
 
 // Governance > Settings > Exception approvals: who reviews and approves a policy exception, per department. Anyone with a governance right reads the

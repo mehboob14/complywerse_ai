@@ -32,6 +32,92 @@ you know nothing extra needs to run on Ubuntu.
 
 ---
 
+## 2026-11-06 — Risk Library removed from the code: nothing is dropped, changed or created (code-only)
+
+### What
+
+- **Code-only.** The Risk Management > Risk Library page, its menu entry and ERM tab, its API (`/erm/risk-library/*`), its shipped data (`backend/grc/seed_data/risk_library/uae_ia.json`, the standard's 159 "Relevant Threats and Vulnerabilities") and its tests are gone. No table, column or row is dropped, altered or added by this change, and nothing is added to `schema_migrations.py`.
+- **Kept on purpose** (the user's choice): the table `grc_risk_framework_requirement_links`, its model, and the register's Controls tab with its endpoints (`GET /erm/framework-requirements/frameworks`, `GET /erm/framework-requirements`, `POST /erm/risks/{id}/framework-requirements`, `DELETE /erm/risks/{id}/framework-requirements/{link_id}`, and `linked_framework_requirements` in both risk detail endpoints). The Library's "Add to register" endpoint is gone, so from now on a link is made only from a risk's own Controls tab.
+
+### What stays in the databases (all of it is still used or is plain history)
+
+- Table **`grc_risk_framework_requirement_links`** in every tenant database where the backend has run since the Risk Library was released (created by `create_all` on first tenant-engine use; it was never in `_COLUMN_ADDS`). Its rows stay: the links made from the Library's pop-up and the ones made from the Controls tab. The Controls tab reads and edits them. Foreign keys: `risk_id` -> `grc_risks.id`, `uploaded_framework_id` -> `grc_uploaded_frameworks.id`, `parsed_control_id` -> `grc_parsed_framework_controls.id`; unique `uq_risk_framework_requirement (risk_id, parsed_control_id)`.
+- **Risks already added to a register** stay as ordinary register risks in `grc_risks`: `source_type = 'risk_library'`, `source_reference` like `uae_ia:M2.3:03` (the retired library id), `register_type = 'UAE IA'`, `risk_sub_category` = the control objective's title. The risk dashboard's "where do these risks come from" chart keeps a label for that source type ("Added from a standard"), so they do not show a raw key.
+- **Audit-log rows** (`grc_audit_logs`) written for requests to `/erm/risk-library...` while the page existed keep their text; nothing to do.
+- No column was ever added to an existing table by the Risk Library (the new relationship `Risk.framework_requirement_links` is ORM-only).
+
+Look at what is there (read-only, per tenant database):
+
+```sql
+SELECT count(*) AS library_risks FROM grc_risks WHERE source_type = 'risk_library';
+SELECT count(*) AS control_links  FROM grc_risk_framework_requirement_links;
+```
+
+### Optional clean-up — NOT run, NOT scheduled; the user decides
+
+Nothing below is needed for the removal. Run it per tenant database (`grc_<slug>`), after a backup, only if the user decides so.
+
+1. **Only if the Controls tab is removed too** (it was NOT: the user kept it). The link table is the only object that would then be unused:
+
+```sql
+DROP TABLE IF EXISTS grc_risk_framework_requirement_links;
+```
+
+2. **Only if the risks that came from the Library should also leave the registers** (the user said they stay). This is a data deletion, listed for completeness. Links go with them only if the table above still exists; run the first statement before the second:
+
+```sql
+DELETE FROM grc_risk_framework_requirement_links WHERE risk_id IN (SELECT id FROM grc_risks WHERE source_type = 'risk_library');
+DELETE FROM grc_risks WHERE source_type = 'risk_library';
+```
+
+   Risks may have reviews, actions, KRIs, tasks and other rows hanging on them, so deleting from `grc_risks` can fail on a foreign key or leave history behind. A softer way that loses nothing is to leave the rows and, if the label is unwanted, `UPDATE grc_risks SET source_type = 'manual' WHERE source_type = 'risk_library';` (this loses where the risk came from).
+
+### Risk
+
+None. Deployed backend and frontend simply stop serving the page and the API; an old browser tab on `/erm/risk-library` gets the not-found page, and an old bookmark or menu cache is harmless.
+
+### Auto-applied?
+
+Nothing to apply.
+
+## 2026-11-05 - Exceptions: an implementer, potential risks, compensating controls, asset provenance (three new tables, five new columns; auto-applied)
+
+### What
+
+- **New tables** (model `backend/grc/models/_94_exception_workflow.py`, made by `create_all` at a tenant's first start; each ON DELETE CASCADE with its exception):
+  `grc_exception_risks` (the potential risks the people asked at a review or approval step record: who, which round and step, what could go wrong,
+  likelihood and impact 1-5, the score and its band, "none identified" as a row of its own, an optional link to a register risk, manual or AI),
+  `grc_exception_controls` (the compensating controls the implementer records: title, the potential risks and assets it covers as JSON id lists, owner,
+  due date, planned or in place, evidence as JSON: a link or an item of the Evidence library) and `grc_exception_asset_links` (who put each asset on an
+  exception and at which stage; unique per exception and asset; the list itself stays `grc_policy_exceptions.linked_asset_ids`). The nullable user
+  references (`owner_id`, `created_by`, `added_by`) are ON DELETE SET NULL; `grc_exception_risks.recorded_by` is kept like a decision's `user_id`.
+- **New columns** (`schema_migrations._COLUMN_ADDS`): `grc_policy_exceptions.business_impact` TEXT; `grc_exception_approval_rules.implementer` JSON (who
+  carries an approved exception out: name, people, days); `grc_exception_approval_runs.implementer` JSON (the rule's copy at submit),
+  `.implementation` JSON (who was asked when the last approval was given, due date, who completed it and when) and `.implementation_state`
+  VARCHAR(20) with index `ix_exc_run_impl_state` (waiting | in_progress | done | cancelled; empty: nothing to implement).
+
+### Why
+
+The user asked for an Implementer in the exception approval rules, potential risks recorded by reviewers and approvers before they decide, compensating
+controls recorded by the implementer after the approval, and assets visible to the requester and the implementer.
+
+### How
+
+Nothing to run. Equivalent SQL for a manual replay: `ALTER TABLE grc_policy_exceptions ADD COLUMN IF NOT EXISTS business_impact TEXT; ALTER TABLE
+grc_exception_approval_rules ADD COLUMN IF NOT EXISTS implementer JSON; ALTER TABLE grc_exception_approval_runs ADD COLUMN IF NOT EXISTS implementer JSON;
+ALTER TABLE grc_exception_approval_runs ADD COLUMN IF NOT EXISTS implementation JSON; ALTER TABLE grc_exception_approval_runs ADD COLUMN IF NOT EXISTS
+implementation_state VARCHAR(20); CREATE INDEX IF NOT EXISTS ix_exc_run_impl_state ON grc_exception_approval_runs (implementation_state);` and the
+three `CREATE TABLE`s from the model file. Rehearsed 2026-11-05 on a throwaway PostgreSQL database: the objects were dropped, the startup schema step
+brought them back, a second run did nothing, SET NULL and CASCADE behaved.
+
+### Risk
+
+None for existing data: everything is additive and empty. A rule without an implementer, and every exception no rule matches, behave exactly as
+before; the approval of an exception under a rule now needs the approver's own assessment (a potential risk, or "none identified") - one constant,
+`exception_risks.REQUIRE_ASSESSMENT`, turns that off.
+
+---
+
 ## 2026-11-04 — Department tree and exception approval rules: four new tables, one new column (auto-applied)
 
 ### What

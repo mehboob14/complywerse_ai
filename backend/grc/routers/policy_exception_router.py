@@ -45,6 +45,8 @@ def _held(db: Session, user: GRCUser) -> set:
 def _viewer(db: Session, user: GRCUser, exceptions) -> SimpleNamespace:
     """What one person may do and which document titles they may see, for these exceptions; the approval of each one that goes
     through a rule (exception_approvals) and the department tree its unit is named from."""
+    from functools import lru_cache
+
     from ..modules.governance import exception_approvals, exception_types
     from ..modules.governance.permissions import readable_among
     from ..services import org_departments
@@ -56,8 +58,14 @@ def _viewer(db: Session, user: GRCUser, exceptions) -> SimpleNamespace:
         mine = {e.id for e in exceptions if e.requested_by == user.id} | exception_approvals.involved_ids(db, approvals, user.id)
         approvals = {eid: view for eid, view in approvals.items() if eid in mine}
     tenants = {e.tenant_id for e in exceptions}
+    from ..modules.governance import exception_controls, exception_risks
+
+    ids = [e.id for e in exceptions]
     return SimpleNamespace(id=user.id, held=held, readable=readable_among(db, user, [e.document_id for e in exceptions]),
+                           alone=lru_cache(maxsize=1)(lambda: exception_approvals.lone_decider(db, user)),     # the organisation's only administrator (asked only for their own exception)
                            approvals=approvals, trees={t: org_departments.Tree.load(db, t) for t in tenants},
+                           implementations=exception_approvals.bulk_implementations(db, exceptions, user.id),
+                           risk_counts=exception_risks.counts_for(db, ids), control_counts=exception_controls.counts_for(db, ids),
                            types={t: exception_types.labels(db, t) for t in tenants if any(e.tenant_id == t and e.exception_type for e in exceptions)})
 
 
@@ -70,7 +78,7 @@ def _may_delete(v, exc) -> bool:
 
 
 def _may_decide(v, exc) -> bool:
-    return exc.requested_by != v.id and "approve" in v.held
+    return "approve" in v.held and (exc.requested_by != v.id or v.alone())
 
 
 def _refuse(detail: str):
@@ -80,7 +88,7 @@ def _refuse(detail: str):
 def _ensure_decider(v, exc) -> None:
     if "approve" not in v.held:
         _refuse(DECIDE_REFUSED)
-    if exc.requested_by == v.id:
+    if exc.requested_by == v.id and not v.alone():
         _refuse(OWN_REFUSED)
 
 
@@ -95,6 +103,7 @@ def _ensure_editable(exc) -> None:
 def _log_decision(db: Session, exc: PolicyException, user: GRCUser, what: str, text: Optional[str]) -> None:
     """A decision is written into the exception's comments too, with who and when: its history."""
     text = (text or "").strip()
+    what = what + (" by the requester, as nobody else could decide" if exc.requested_by == user.id else "")       # only the organisation's only administrator gets here
     db.add(PolicyExceptionComment(exception_id=exc.id, user_id=user.id, comment=f"{what}: {text}" if text else f"{what}."))
 
 # Self-heal the additive columns (linked_asset_ids, closed_at) for tenants
@@ -118,6 +127,7 @@ def _ensure_columns(db: Session) -> None:
         db.execute(text("ALTER TABLE grc_policy_exceptions ADD COLUMN IF NOT EXISTS promoted_risk_id INTEGER"))
         db.execute(text("ALTER TABLE grc_policy_exceptions ADD COLUMN IF NOT EXISTS department_id INTEGER"))
         db.execute(text("ALTER TABLE grc_policy_exceptions ADD COLUMN IF NOT EXISTS exception_type VARCHAR(40)"))
+        db.execute(text("ALTER TABLE grc_policy_exceptions ADD COLUMN IF NOT EXISTS business_impact TEXT"))
         db.commit()
         _COLS_ENSURED.add(key)
     except Exception:
@@ -389,13 +399,13 @@ def _generate_candidate_exceptions(documents, focus: Optional[GovernanceDocument
 
         if focus is not None:
             corpus = "\n".join([
-                f"Policy id: {focus.id}",
-                f"Policy title: {focus.title or ''}",
-                f"Policy type: {focus.doc_type or ''}",
-                f"Policy content excerpt: {(focus.content or '')[:4000]}",
+                f"Document id: {focus.id}",
+                f"Document title: {focus.title or ''}",
+                f"Document type: {focus.doc_type or ''}",
+                f"Document content excerpt: {(focus.content or '')[:4000]}",
             ])
             instruction = (
-                f"Analyze the SINGLE policy below and propose up to {limit} realistic policy EXCEPTION candidates "
+                f"Analyze the SINGLE document below (a policy, standard, procedure or guideline) and propose up to {limit} realistic EXCEPTION candidates "
                 "an organization might legitimately need to request against it."
             )
         else:
@@ -405,7 +415,7 @@ def _generate_candidate_exceptions(documents, focus: Optional[GovernanceDocument
                 parts.append(f"- id={d.id} | {d.title or ''} ({d.doc_type or 'policy'}): {excerpt}")
             corpus = "\n".join(parts)
             instruction = (
-                f"Analyze the policies below and propose up to {limit} realistic policy EXCEPTION candidates across them "
+                f"Analyze the documents below and propose up to {limit} realistic EXCEPTION candidates across them "
                 "(the deviations organizations most commonly need to request)."
             )
 
@@ -414,7 +424,7 @@ def _generate_candidate_exceptions(documents, focus: Optional[GovernanceDocument
             '{"candidates": [{"document_id": <int>, "suggested_title": <string>, "rationale": <string>, '
             '"suggested_priority": "low|medium|high|critical"}]}. '
             "Only use document_id values that appear in the input. Keep each rationale to 1-2 sentences.\n\n"
-            f"Policies:\n{corpus}"
+            f"Documents:\n{corpus}"
         )
 
         completion = client.chat.completions.create(
@@ -545,13 +555,18 @@ def exceptions_waiting_for_me(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
-    """The exceptions that go through an approval rule (Governance > Settings) and wait for this person's decision now."""
+    """The exceptions that go through an approval rule (Governance > Settings) and wait for this person: for a decision, or (once approved)
+    to be implemented. ``waiting_kind`` says which."""
     from ..modules.governance import exception_approvals
 
     _ensure_columns(db)
-    exceptions = exception_approvals.waiting_for(db, current_user.id, get_user_tenants(current_user, db))
+    tenants = get_user_tenants(current_user, db)
+    decide = exception_approvals.waiting_for(db, current_user.id, tenants)
+    implement = [e for e in exception_approvals.to_implement_for(db, current_user.id, tenants) if e.id not in {d.id for d in decide}]
+    exceptions = decide + implement
     v = _viewer(db, current_user, exceptions)
-    return [_exception_to_dict(e, db, v) for e in exceptions]
+    waiting = {d.id for d in decide}
+    return [{**_exception_to_dict(e, db, v), "waiting_kind": "decision" if e.id in waiting else "implementation"} for e in exceptions]
 
 
 @router.post("/{exception_id}/promote-to-risk")
@@ -584,13 +599,17 @@ def promote_exception_to_risk(
             return {"risk_id": existing.id, "created": False,
                     "message": "This exception is already in the risk register"}
 
+    from ..modules.governance import exception_controls, exception_risks
+
     parts = []
-    if exception.risk_assessment:
-        parts.append(f"Potential risks:\n{exception.risk_assessment}")
+    recorded_risks = exception_risks.register_text(db, exception)       # what the reviewers and approvers recorded, else the requester's own text
+    if recorded_risks or exception.risk_assessment:
+        parts.append(f"Potential risks:\n{recorded_risks or exception.risk_assessment}")
     if exception.justification:
         parts.append(f"Exception justification:\n{exception.justification}")
-    if exception.compensating_controls:
-        parts.append(f"Compensating controls:\n{exception.compensating_controls}")
+    recorded_controls = exception_controls.register_text(db, exception)
+    if recorded_controls or exception.compensating_controls:
+        parts.append(f"Compensating controls:\n{recorded_controls or exception.compensating_controls}")
     doc = (db.query(GovernanceDocument).filter(GovernanceDocument.id == exception.document_id).first()
            if exception.document_id else None)
     if doc:
@@ -628,6 +647,8 @@ def list_exceptions(
     document_id: Optional[int] = Query(None),
     priority: Optional[str] = Query(None),
     exception_type: Optional[str] = Query(None),
+    unit: Optional[int] = Query(None, description="a unit (department): its exceptions and those of every unit under it"),
+    document_type: Optional[str] = Query(None, description="the type of the document it is about: policy, standard, procedure, ..."),
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
@@ -650,8 +671,17 @@ def list_exceptions(
         query = query.filter(PolicyException.priority == priority)
     if exception_type:
         query = query.filter(PolicyException.exception_type == exception_type)
+    if document_type:
+        query = query.join(GovernanceDocument, GovernanceDocument.id == PolicyException.document_id).filter(
+            GovernanceDocument.doc_type == document_type.strip().lower())
 
-    exceptions = query.order_by(PolicyException.created_at.desc()).offset(skip).limit(limit).all()
+    query = query.order_by(PolicyException.created_at.desc())
+    if unit:
+        from ..modules.governance import exception_hierarchy
+
+        exceptions = exception_hierarchy.filter_by_unit(db, current_user, query.all(), unit)[skip:skip + limit]
+    else:
+        exceptions = query.offset(skip).limit(limit).all()
     v = _viewer(db, current_user, exceptions)
     return [_exception_to_dict(e, db, v) for e in exceptions]
 
@@ -690,6 +720,7 @@ def create_exception(
         title=data.get("title"),
         description=data.get("description"),
         justification=data.get("justification"),
+        business_impact=(data.get("business_impact") or None),
         risk_assessment=data.get("risk_assessment"),
         compensating_controls=data.get("compensating_controls"),
         requested_by=current_user.id,
@@ -702,6 +733,10 @@ def create_exception(
         metadata_=data.get("metadata", {})
     )
     db.add(exception)
+    db.flush()
+    from ..modules.governance import exception_assets
+
+    exception_assets.sync_from_form(db, exception, current_user, exception.linked_asset_ids or [])      # who put each asset there
     db.commit()
     db.refresh(exception)
     return _exception_to_dict(exception, db, _viewer(db, current_user, [exception]))
@@ -751,7 +786,8 @@ def suggest_exception_content(
 # must come first or it would be captured by the `{exception_id}` path param.
 @router.get("/search-policies")
 def search_policies(
-    q: str = Query(..., min_length=1, description="Sentence or keyword to search across policy content"),
+    q: str = Query(..., min_length=1, description="Sentence or keyword to search across the content of controlled documents"),
+    doc_type: Optional[str] = Query(None, description="only documents of this type (policy, standard, procedure, ...); omitted: every type"),
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
@@ -780,7 +816,7 @@ def search_policies(
         db.query(GovernanceDocument)
         .filter(
             GovernanceDocument.tenant_id.in_(user_tenants),
-            GovernanceDocument.doc_type.ilike("policy"),
+            *([GovernanceDocument.doc_type == doc_type.strip().lower()] if doc_type else []),
             or_(
                 GovernanceDocument.title.ilike(like),
                 GovernanceDocument.description.ilike(like),
@@ -816,8 +852,8 @@ def search_policies(
         })
         seen_docs.add(d.id)
 
-    # 2) Clause-level matches via parsed PolicyStatement rows (best-effort).
-    if len(results) < limit:
+    # 2) Clause-level matches via parsed PolicyStatement rows (best-effort; only policies are parsed into clauses).
+    if len(results) < limit and (not doc_type or doc_type.strip().lower() == "policy"):
         try:
             from ..models import PolicyStatement
             rows = (
@@ -872,24 +908,18 @@ def suggest_candidate_exceptions(
         focus = db.query(GovernanceDocument).filter(
             GovernanceDocument.id == int(document_id),
             GovernanceDocument.tenant_id.in_(user_tenants),
-            GovernanceDocument.doc_type.ilike("policy"),
         ).first()
         if not focus:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Policy not found — exceptions can only be raised against policy documents",
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
         ensure_reader(db, current_user, focus)
         documents = [focus]
     else:
-        # Exceptions can ONLY be raised against policies — never scan procedures,
-        # standards, guidelines, charters or other document types. Only those the person may read.
+        # Any controlled document can be the subject of an exception (policies, standards, procedures, guidelines, ...): the newest ones the person may read.
         visible = visible_filter(db, current_user)
         documents = (
             db.query(GovernanceDocument)
             .filter(
                 GovernanceDocument.tenant_id.in_(user_tenants),
-                GovernanceDocument.doc_type.ilike("policy"),
                 *([visible] if visible is not None else []),
             )
             .order_by(GovernanceDocument.updated_at.desc())
@@ -948,7 +978,9 @@ def update_exception(
 
     _aids = _clean_asset_ids(data, db, user_tenants)
     if _aids is not None:
-        exception.linked_asset_ids = _aids
+        from ..modules.governance import exception_assets
+
+        exception_assets.sync_from_form(db, exception, current_user, _aids)       # what is new is the person's; the implementer's assets stay
 
     # Validate document_id if provided
     if "document_id" in data and data["document_id"]:
@@ -961,7 +993,7 @@ def update_exception(
         from ..modules.governance.permissions import ensure_reader
         ensure_reader(db, current_user, doc)            # raised against a document the person may open
 
-    updatable = ["title", "description", "justification", "risk_assessment",
+    updatable = ["title", "description", "justification", "business_impact", "risk_assessment",
                  "compensating_controls", "priority", "document_id"]
     for field in updatable:
         if field in data:
@@ -1187,6 +1219,9 @@ def revoke_exception(
     exception.revoked_by = current_user.id
     exception.revocation_reason = reason
     exception.updated_at = datetime.utcnow()
+    from ..modules.governance import exception_approvals
+
+    exception_approvals.cancel_implementation(db, exception)
     _log_decision(db, exception, current_user, "Revoked", reason)
     db.commit()
     db.refresh(exception)
@@ -1263,6 +1298,8 @@ def add_comment(
 
 def _exception_to_dict(exc: PolicyException, db: Session, v: SimpleNamespace) -> dict:
     """``v`` (``_viewer``): what the person asking may do with it, and the documents whose title they may see."""
+    from ..modules.governance import exception_assets
+
     requester = db.query(GRCUser).filter(GRCUser.id == exc.requested_by).first() if exc.requested_by else None
     approver = db.query(GRCUser).filter(GRCUser.id == exc.approved_by).first() if exc.approved_by else None
     revoker = db.query(GRCUser).filter(GRCUser.id == exc.revoked_by).first() if exc.revoked_by else None
@@ -1299,6 +1336,12 @@ def _exception_to_dict(exc: PolicyException, db: Session, v: SimpleNamespace) ->
         "exception_type_label": getattr(v, "types", {}).get(exc.tenant_id, {}).get(exc.exception_type, exc.exception_type) if exc.exception_type else None,
         "approval": approval,
         "document_title": doc.title if doc and doc.id in v.readable else None,     # never a document the person may not open
+        "document_type": doc.doc_type if doc is not None else None,
+        "document_code": getattr(doc, "document_code", None) if doc is not None and doc.id in v.readable else None,
+        "business_impact": exc.business_impact,
+        "risks_count": getattr(v, "risk_counts", {}).get(exc.id, 0),
+        "controls_count": getattr(v, "control_counts", {}).get(exc.id, 0),
+        "implementation": getattr(v, "implementations", {}).get(exc.id),
         "title": exc.title,
         "description": exc.description,
         "justification": exc.justification,
@@ -1329,6 +1372,8 @@ def _exception_to_dict(exc: PolicyException, db: Session, v: SimpleNamespace) ->
         "metadata": exc.metadata_,
         "linked_asset_ids": getattr(exc, "linked_asset_ids", None) or [],
         "linked_assets": _assets,
+        "asset_links": exception_assets.view(db, exc, v, "edit" in v.held),
+        "can_add_assets": exception_assets.stage_for(db, exc, v, "edit" in v.held) is not None,
         "posture": exception_posture.posture_for(exc, _asset_rows),
         "closed_on_time": exception_posture.closed_on_time(exc),
         "promoted_risk_id": getattr(exc, "promoted_risk_id", None),

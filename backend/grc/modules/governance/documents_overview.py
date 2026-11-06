@@ -31,7 +31,15 @@ Definitions (every figure counts the documents of the scope that the viewer may 
 * ``by_department`` = the tree of the scope in one table: a row for the department asked for and for each department under it (the
   whole organisation: every department, then "No department"), in picker order, each counting the documents filed in it **and below it**
   (documents, in force, in progress, overdue reviews, documents with an issue) with the figures defined above and its own count apart
-  (``own``); a switched-off department with nothing in it is left out. "No department" is the one scope that has no rows.
+  (``own``); a switched-off department with nothing in it is left out. "No department" is the one scope that has no rows. Each row also
+  breaks its documents down: ``by_status`` and ``by_type`` (the non-zero ones), ``waiting`` (the pending and overdue requests of each kind,
+  people asked, as in ``requests``), ``reviews`` (overdue / due soon / no date, among the documents that owe one) and ``issues_by``
+  (documents that are stuck, on hold, with late approvals, with late acknowledgements, with no owner).
+* ``board`` = the documents of the scope as a Kanban: columns by status (the approval flow, then expired / exception where some document is
+  there), by type or by department (the scope's own documents, then one column for each department directly under it), each with its
+  true count and its most urgent cards (the ones with the most issues first, then the newest); the cards say what is wrong with them.
+* ``export_documents`` = the same documents as a CSV (archived ones left out, as in every figure), cells that a spreadsheet would run as
+  a formula neutralised.
 
 Every figure has its address in ``links`` (the library's own parameters, ``dept`` first): the fixed ones by their path in the answer
 ("totals.in_force", "reviews.overdue", "issues.stuck", "requests.review.overdue"), the rows of a list by their ``key`` ("type:policy",
@@ -42,6 +50,9 @@ Nothing here writes. Every figure comes from a fixed number of queries however m
 """
 from __future__ import annotations
 
+import csv
+import io
+import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -71,6 +82,12 @@ _TYPE_LABEL = {"policy": "Policy", "standard": "Standard", "procedure": "Procedu
                "framework": "Framework"}                # the library's DOC_TYPE_LABEL (libraryModel.ts)
 _KIND_RANK = {kind: i for i, kind in enumerate(routes.STAGE_KINDS)}
 WHOLE, NONE = "", "none"                                # the address values (?dept=) of the two choices that are no department
+ISSUE_KINDS = ("stuck", "on_hold", "late_approvals", "late_acknowledgements", "no_owner")     # what ``issues_by`` counts (a subset of ``issues``)
+BOARD_GROUPS = ("status", "type", "department")
+BOARD_CARDS, BOARD_MAX = 10, 50                         # cards a column lists by default, and at most
+# the words of lib/status.ts documentStatus (the interface's own), for the CSV
+STATUS_WORDS = {"draft": "Draft", "pending_review": "In review", "pending_approval": "In approval", "approved": "Approved", "published": "Published",
+                "expired": "Expired", "archived": "Archived", "exception_applied": "Exception", "review_required": "Review required"}
 
 REFUSED = "The documents overview is for people who can read the document library and for the head of a department."
 NOT_YOURS = "You can open the overview of the departments you head and of everything under them."
@@ -177,7 +194,7 @@ def _load(db: Session, user: GRCUser, who: Access, scope: Scope) -> Loaded:
     elif scope.ids is not None:
         conds.append(G.department_id.in_(scope.ids))
     docs = (db.query(G.id, G.title, G.doc_type, G.status, G.owner_id, G.department_id, G.next_review_date, G.route_stage, G.signoff_round_at,
-                     G.current_version, G.published_version).filter(*conds).order_by(G.id).all())
+                     G.current_version, G.published_version, G.document_code, G.updated_at).filter(*conds).order_by(G.id).all())
     population = select(G.id).where(*conds)
     requests = (db.query(O.document_id, O.kind, O.user_id, O.stage_position, O.due_date)
                 .filter(O.tenant_id == who.tenant_id, O.status == "pending", O.kind.in_(REQUESTS), O.document_id.in_(population))
@@ -197,6 +214,19 @@ def _reviewable(d) -> bool:
     if d.status in ("archived", "expired"):
         return False
     return d.status in ("published", "approved") or bool(permissions.in_force_number(d))
+
+
+def _review_state(d, now: datetime, horizon) -> Optional[str]:
+    """Where a document's next review date stands: overdue, due soon (its calendar day is within ``REVIEW_SOON_DAYS``), unscheduled (no date) or up to
+    date; None when no review is owed (see ``_reviewable``). ``horizon`` is the last calendar day that counts as soon."""
+    if not _reviewable(d):
+        return None
+    due = d.next_review_date
+    if due is None:
+        return "unscheduled"
+    if due < now:
+        return "overdue"
+    return "due_soon" if due.date() <= horizon else "up_to_date"
 
 
 def _attention(data: Loaded, now: datetime, admin_days: int) -> Dict[str, Set[int]]:
@@ -289,32 +319,57 @@ def _waiting(db: Session, longest: list, stages: Dict[int, List[Tuple[int, str, 
     return out
 
 
-def _by_department(db: Session, who: Access, scope: Scope, live: Dict[int, Any], flagged: Set[int], now: datetime) -> List[dict]:
+def _by_department(db: Session, who: Access, scope: Scope, live: Dict[int, Any], flagged: Set[int], attention: Dict[str, Set[int]], requests: list,
+                   now: datetime) -> List[dict]:
     """The scope as a table (see the module docstring): one row per department, the documents in it and below it, in picker order. The
     keys of the figures that open the library are ``dept:<id>`` (documents), ``dept:<id>:in_force``, ``:in_progress`` and ``:overdue_reviews``."""
     if scope.no_department:
         return []
     tree = who.tree
     ids = scope.ids if scope.ids is not None else set(tree.rows)
+    horizon = now.date() + timedelta(days=REVIEW_SOON_DAYS)
     mine: Dict[Optional[int], Counter] = defaultdict(Counter)       # filed in the department itself
     below: Dict[int, Counter] = defaultdict(Counter)                # filed in it or under it
+
+    def add(department_id: Optional[int], one: Counter) -> None:
+        mine[department_id].update(one)
+        if department_id is not None:
+            for node in tree.path(department_id):
+                if node.id in ids:
+                    below[node.id].update(one)
+
+    def gone(department_id: Optional[int]) -> bool:
+        return department_id is not None and department_id not in tree.rows       # a department that is gone (old data): in the totals, in no row
+
     for d in live.values():
-        if d.department_id is not None and d.department_id not in tree.rows:
-            continue                                                # a department that is gone (old data): in the totals, in no row
+        if gone(d.department_id):
+            continue
         one = Counter(documents=1)
+        one["s:" + (d.status or "draft")] = 1
+        one["t:" + (d.doc_type or "")] = 1
         if d.status == "published":
             one["in_force"] = 1
         if d.status in IN_PROGRESS:
             one["in_progress"] = 1
-        if _reviewable(d) and d.next_review_date is not None and d.next_review_date < now:
+        state = _review_state(d, now, horizon)
+        if state in ("overdue", "due_soon", "unscheduled"):
+            one["r:" + state] = 1
+        if state == "overdue":
             one["overdue_reviews"] = 1
         if d.id in flagged:
             one["issues"] = 1
-        mine[d.department_id].update(one)
-        if d.department_id is not None:
-            for node in tree.path(d.department_id):
-                if node.id in ids:
-                    below[node.id].update(one)
+        for kind in ISSUE_KINDS:
+            if (d.id in attention[kind]) if kind != "no_owner" else d.owner_id is None:
+                one["i:" + kind] = 1
+        add(d.department_id, one)
+    for r in requests:                                              # people asked, as in ``requests``: they follow the document's department
+        d = live.get(r.document_id)
+        if d is None or gone(d.department_id):
+            continue
+        one = Counter({f"w:{r.kind}:pending": 1})
+        if r.due_date is not None and r.due_date < now:
+            one[f"w:{r.kind}:overdue"] = 1
+        add(d.department_id, one)
 
     labels = org_departments.level_labels(db, who.tenant_id)
     root = scope.department.id if scope.department is not None else None
@@ -322,6 +377,7 @@ def _by_department(db: Session, who: Access, scope: Scope, live: Dict[int, Any],
     heads = {n: tree.rows[n].department_head_user_id for n in ids if tree.rows[n].department_head_user_id}
     owners = doc_lifecycle._names(db, set(heads.values())) if heads else {}
     by_name = lambda n: (tree.rows[n].name.casefold(), n)           # noqa: E731  (the picker order)
+    status_rank = {w: i for i, w in enumerate(STATUS_ORDER)}
     rows: List[dict] = []
 
     def row(node: Optional[int], name: str, path: List[str], level: int, depth: int, active: bool, owner: Optional[str], total: Counter, own: int) -> dict:
@@ -329,7 +385,12 @@ def _by_department(db: Session, who: Access, scope: Scope, live: Dict[int, Any],
         return {"key": key, "department_id": node, "name": name, "path": path, "level": level,
                 "level_label": labels[min(level, org_departments.MAX_DEPTH) - 1] if level else "", "depth": depth, "is_active": active,
                 "owner": owner, "own": own, "documents": total["documents"], "in_force": total["in_force"],
-                "in_progress": total["in_progress"], "overdue_reviews": total["overdue_reviews"], "issues": total["issues"]}
+                "in_progress": total["in_progress"], "overdue_reviews": total["overdue_reviews"], "issues": total["issues"],
+                "by_status": {k[2:]: v for k, v in sorted(total.items(), key=lambda kv: (status_rank.get(kv[0][2:], 99), kv[0])) if v and k.startswith("s:")},
+                "by_type": {k[2:]: v for k, v in sorted(total.items()) if v and k.startswith("t:")},
+                "waiting": {kind: {"pending": total[f"w:{kind}:pending"], "overdue": total[f"w:{kind}:overdue"]} for kind in REQUESTS},
+                "reviews": {state: total["r:" + state] for state in ("overdue", "due_soon", "unscheduled")},
+                "issues_by": {kind: total["i:" + kind] for kind in ISSUE_KINDS}}
 
     def walk(node: int) -> None:
         department = tree.rows[node]
@@ -413,17 +474,9 @@ def summary(db: Session, user: GRCUser, department: Optional[str] = None, now: O
     reviews = {"overdue": 0, "due_soon": 0, "unscheduled": 0, "up_to_date": 0}
     horizon = now.date() + timedelta(days=REVIEW_SOON_DAYS)
     for d in live.values():
-        if not _reviewable(d):
-            continue
-        due = d.next_review_date
-        if due is None:
-            reviews["unscheduled"] += 1
-        elif due < now:
-            reviews["overdue"] += 1
-        elif due.date() <= horizon:
-            reviews["due_soon"] += 1
-        else:
-            reviews["up_to_date"] += 1
+        state = _review_state(d, now, horizon)
+        if state is not None:
+            reviews[state] += 1
     links.update({"reviews.overdue": link(review="overdue"), "reviews.due_soon": link(review="due_soon"),
                   "reviews.unscheduled": link(review="unscheduled"), "reviews.up_to_date": link(review="ok")})
 
@@ -440,7 +493,7 @@ def summary(db: Session, user: GRCUser, department: Optional[str] = None, now: O
                   "issues.on_hold": link(attn="on_hold"), "issues.late_acknowledgements": link(attn="late_acknowledgements"),
                   "issues.late_approvals": link(attn="late_approvals")})
 
-    by_department = _by_department(db, who, scope, live, flagged, now)
+    by_department = _by_department(db, who, scope, live, flagged, attention, data.requests, now)
     for r in by_department:
         where = {"dept": str(r["department_id"]) if r["department_id"] is not None else NONE}
         links.update({r["key"]: where, f"{r['key']}:in_force": {**where, "status": "published"},
@@ -461,3 +514,130 @@ def ids(db: Session, user: GRCUser, kind: str, department: Optional[str] = None,
     data = _load(db, user, who, scope_of(who, department))
     found = sorted(_attention(data, now, doc_lifecycle.settings(db, who.tenant_id)["admin_after_days"])[kind])
     return {"ids": found, "total": len(found)}
+
+
+# ── the board and the export (D60) ───────────────────────────────────────────
+def _flags(d, attention: Dict[str, Set[int]], state: Optional[str]) -> List[str]:
+    """What is wrong with a document, worst first: stuck, on hold, late approvals, late acknowledgements, no owner, an overdue review."""
+    out = [k for k in ("stuck", "on_hold", "late_approvals", "late_acknowledgements") if d.id in attention[k]]
+    if d.owner_id is None:
+        out.append("no_owner")
+    if state == "overdue":
+        out.append("overdue_review")
+    return out
+
+
+def board(db: Session, user: GRCUser, department: Optional[str] = None, group: str = "status", per: int = BOARD_CARDS,
+          now: Optional[datetime] = None) -> dict:
+    """The documents of the scope as columns (``group``: status | type | department), each with its true count and its first ``per`` cards."""
+    if group not in BOARD_GROUPS:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"group must be one of {', '.join(BOARD_GROUPS)}.")
+    per = max(1, min(int(per), BOARD_MAX))
+    now = now or datetime.utcnow()
+    who = access(db, user)                                  # (first: someone who may not ask is refused before they are told what to ask)
+    scope = scope_of(who, department)
+    data = _load(db, user, who, scope)
+    live = _live(data.docs)
+    attention = _attention(data, now, doc_lifecycle.settings(db, who.tenant_id)["admin_after_days"])
+    horizon = now.date() + timedelta(days=REVIEW_SOON_DAYS)
+    states = {d.id: _review_state(d, now, horizon) for d in live.values()}
+    tree = who.tree
+
+    columns: List[dict] = []                                # key, label, value, department_id (department group), own, docs
+    if group == "status":
+        by: Dict[str, list] = defaultdict(list)
+        for d in live.values():
+            by[d.status or "draft"].append(d)
+        shown = list(FLOW) + [w for w in ("expired", "exception_applied") if by.get(w)] + sorted(w for w in by if w not in STATUS_ORDER)
+        columns = [{"key": f"status:{w}", "label": STATUS_WORDS.get(w, w.replace("_", " ").capitalize()), "value": w, "docs": by.get(w, [])} for w in shown]
+    elif group == "type":
+        by = defaultdict(list)
+        for d in live.values():
+            by[d.doc_type or ""].append(d)
+        columns = [{"key": f"type:{t}", "label": _type_label(t), "value": t, "docs": docs}
+                   for t, docs in sorted(by.items(), key=lambda kv: (-len(kv[1]), _type_label(kv[0]).casefold(), kv[0]))]
+    elif not scope.no_department:                           # the scope's own documents, then each department directly under it (everything in it)
+        ids = scope.ids if scope.ids is not None else set(tree.rows)
+        root = scope.department.id if scope.department is not None else None
+        kids = [c for c in sorted((tree.children.get(root, []) if root is not None else [n for n in tree.rows if tree.parent[n] is None]),
+                                  key=lambda n: (tree.rows[n].name.casefold(), n)) if c in ids]
+        owner_of: Dict[Optional[int], int] = {}             # department id -> the column it is counted in
+        for kid in kids:
+            for node in tree.subtree(kid):
+                owner_of[node] = kid
+        if root is not None:
+            owner_of[root] = root
+        mine_: Dict[Optional[int], list] = defaultdict(list)
+        for d in live.values():
+            if d.department_id is None:
+                mine_[None].append(d)
+            elif d.department_id in owner_of:
+                mine_[owner_of[d.department_id]].append(d)
+        if root is not None:
+            columns.append({"key": f"dept:{root}:own", "label": tree.rows[root].name, "value": str(root), "department_id": root, "own": True, "docs": mine_.get(root, [])})
+        for kid in kids:
+            department = tree.rows[kid]
+            docs = mine_.get(kid, [])
+            if docs or department.is_active is not False:
+                columns.append({"key": f"dept:{kid}", "label": department.name, "value": str(kid), "department_id": kid, "own": False, "docs": docs})
+        if scope.ids is None and mine_.get(None):
+            columns.append({"key": f"dept:{NONE}", "label": "No department", "value": NONE, "department_id": None, "own": False, "docs": mine_[None]})
+    else:
+        columns = [{"key": f"dept:{NONE}", "label": "No department", "value": NONE, "department_id": None, "own": False, "docs": list(live.values())}]
+
+    def urgency(d) -> tuple:
+        return (-len(_flags(d, attention, states[d.id])), -(d.updated_at.timestamp() if d.updated_at else 0.0), -d.id)
+
+    shown_docs = {col["key"]: sorted(col["docs"], key=urgency)[:per] for col in columns}
+    owners = doc_lifecycle._names(db, {d.owner_id for docs in shown_docs.values() for d in docs if d.owner_id}) if shown_docs else {}
+
+    def card(d) -> dict:
+        dept = tree.rows.get(d.department_id) if d.department_id is not None else None
+        return {"id": d.id, "title": d.title, "code": d.document_code, "doc_type": d.doc_type or "", "type_label": _type_label(d.doc_type),
+                "status": d.status or "draft", "version": permissions.in_force_number(d) or d.current_version,
+                "department_id": d.department_id if dept is not None else None, "department": dept.name if dept is not None else None,
+                "owner": owners.get(d.owner_id) if d.owner_id else None, "next_review": d.next_review_date.isoformat() if d.next_review_date else None,
+                "flags": _flags(d, attention, states[d.id])}
+
+    out = []
+    for col in columns:
+        docs = col.pop("docs")
+        cards = [card(d) for d in shown_docs[col["key"]]]
+        out.append({**col, "count": len(docs), "cards": cards, "more": len(docs) - len(cards)})
+    return {"scope": _scope_view(scope), "group": group, "per": per, "as_of": now.isoformat(), "total": len(live), "columns": out}
+
+
+def _safe(cell: Any) -> str:
+    """One CSV cell, with what a spreadsheet would run as a formula (a leading = + - @ or a tab or return) made plain text."""
+    text = "" if cell is None else str(cell)
+    return "'" + text if text[:1] in ("=", "+", "-", "@", "\t", "\r") else text
+
+
+def export_documents(db: Session, user: GRCUser, department: Optional[str] = None, now: Optional[datetime] = None) -> Tuple[str, str]:
+    """(the CSV text, a file name) for the documents of the scope that the person may read: one row each, archived ones left out as in every figure.
+    Columns: Code, Title, Type, Status, Version, Department, Owner, Next review, Issues. No internal id: nobody can use it (UX rule U1)."""
+    now = now or datetime.utcnow()
+    who = access(db, user)
+    scope = scope_of(who, department)
+    data = _load(db, user, who, scope)
+    live = _live(data.docs)
+    attention = _attention(data, now, doc_lifecycle.settings(db, who.tenant_id)["admin_after_days"])
+    horizon = now.date() + timedelta(days=REVIEW_SOON_DAYS)
+    owners = doc_lifecycle._names(db, {d.owner_id for d in live.values() if d.owner_id}) if live else {}
+    issue_words = {"stuck": "Stuck in a stage", "on_hold": "On hold", "late_approvals": "Late approval", "late_acknowledgements": "Late acknowledgement",
+                   "no_owner": "No owner", "overdue_review": "Review overdue"}
+
+    def where(d) -> str:
+        return " > ".join(p.name for p in who.tree.path(d.department_id)) if d.department_id in who.tree.rows else ""
+
+    rows = sorted(live.values(), key=lambda d: (where(d).casefold(), (d.title or "").casefold(), d.id))
+    out = io.StringIO()
+    writer = csv.writer(out, lineterminator="\r\n")
+    writer.writerow(["Code", "Title", "Type", "Status", "Version", "Department", "Owner", "Next review", "Issues"])
+    for d in rows:
+        flags = _flags(d, attention, _review_state(d, now, horizon))
+        writer.writerow([_safe(x) for x in [d.document_code, d.title, _type_label(d.doc_type) if d.doc_type else "", STATUS_WORDS.get(d.status or "draft", d.status),
+                                            permissions.in_force_number(d) or d.current_version, where(d), owners.get(d.owner_id) if d.owner_id else "",
+                                            d.next_review_date.date().isoformat() if d.next_review_date else "", "; ".join(issue_words[f] for f in flags)]])
+    name = re.sub(r"[^a-z0-9]+", "-", (scope.choice["name"] or "documents").lower()).strip("-") or "documents"
+    return "\ufeff" + out.getvalue(), f"documents-{name}-{now.date().isoformat()}.csv"

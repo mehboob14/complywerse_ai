@@ -8,12 +8,19 @@ import { existsSync, readFileSync } from 'node:fs';
 
 import { PARAM_KEYS } from '../_workspace/libraryModel.ts';
 import {
-  departmentLines, hasDepartmentTable, barPercent, choiceLabel, failureOf, figureHref, figureName, flow, isEmpty, issueRows, lapsed, lateBy, lateRequests, libraryHref, namesText, openHref,
-  overviewHref, pickedValue, requestRows, retryOverview, reviewRows, reviewShares, scopeOptions, scopeParams, stages, statusOf, tileLinkName, tiles, typeBars,
+  hasDepartmentTable, rowIsHere, rowValue, choiceLabel, failureOf, figureHref, figureName, flow, isEmpty, issueRows, lapsed, lateBy, lateRequests, libraryHref, namesText, openHref,
+  overviewHref, pickedValue, requestRows, retryOverview, reviewRows, reviewShares, scopeOptions, scopeParams, stages, statusOf, tileLinkName, tiles, typeLines,
   type Choice, type Overview,
 } from './_model.ts';
 
 const D = (dept: string, extra: Record<string, string> = {}) => ({ ...(dept ? { dept } : {}), ...extra });
+
+/** The breakdowns every department row also carries (their rules are _matrix.test.ts's): nothing in them is read here. */
+const NONE = { pending: 0, overdue: 0 };
+const BREAKDOWN = {
+  by_status: {}, by_type: {}, waiting: { review: NONE, approval: NONE, acknowledgement: NONE }, reviews: { overdue: 0, due_soon: 0, unscheduled: 0 },
+  issues_by: { stuck: 0, on_hold: 0, late_approvals: 0, late_acknowledgements: 0, no_owner: 0 },
+};
 
 /** What the server answers for Support (id 11), trimmed. The addresses are the ones the backend writes (documents_overview.py `links`). */
 const SUPPORT = '11';
@@ -35,9 +42,9 @@ const OVERVIEW: Overview = {
   ],
   by_department: [
     { key: 'dept:11', department_id: 11, name: 'Support', path: ['Operations', 'Support'], level: 2, level_label: 'Sub-department', depth: 0, is_active: true, owner: 'Mia',
-      own: 25, documents: 40, in_force: 22, in_progress: 14, overdue_reviews: 6, issues: 9 },
+      own: 25, documents: 40, in_force: 22, in_progress: 14, overdue_reviews: 6, issues: 9, ...BREAKDOWN },
     { key: 'dept:12', department_id: 12, name: 'Helpdesk', path: ['Operations', 'Support', 'Helpdesk'], level: 3, level_label: 'Unit', depth: 1, is_active: true, owner: null,
-      own: 15, documents: 15, in_force: 8, in_progress: 5, overdue_reviews: 2, issues: 3 },
+      own: 15, documents: 15, in_force: 8, in_progress: 5, overdue_reviews: 2, issues: 3, ...BREAKDOWN },
   ],
   stages: [{ key: 'stage:review:Review', name: 'Review', kind: 'review', count: 5 }, { key: 'stage:approval:CISO sign-off', name: 'CISO sign-off', kind: 'approval', count: 3 }],
   requests: {
@@ -118,7 +125,7 @@ test('a department is named by its whole path, a switched-off one says so, and t
 
 // ── words and bars ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-test('how late is said compactly and in words, and a bar is never invisible', () => {
+test('how late is said compactly and in words', () => {
   assert.deepEqual(lateBy(0), { short: '<1 d', long: 'Less than a day late' });
   assert.deepEqual(lateBy(-3), { short: '<1 d', long: 'Less than a day late' });
   assert.deepEqual(lateBy(1), { short: '1 d', long: '1 day late' });
@@ -128,12 +135,6 @@ test('how late is said compactly and in words, and a bar is never invisible', ()
   assert.deepEqual(lateBy(364), { short: '12 mo', long: '12 months late' });
   assert.deepEqual(lateBy(365), { short: '1 y', long: '1 year late' });
   assert.deepEqual(lateBy(548), { short: '1.5 y', long: '1.5 years late' });
-  assert.equal(barPercent(0, 10), 0);
-  assert.equal(barPercent(5, 0), 0);
-  assert.equal(barPercent(10, 10), 100);
-  assert.equal(barPercent(1, 1000), 3, 'one document in a thousand still shows');
-  assert.equal(barPercent(5, 10), 50);
-  assert.equal(barPercent(20, 10), 100);
 });
 
 test('the people a step waits for: the names, and how many more', () => {
@@ -148,7 +149,7 @@ test('the people a step waits for: the names, and how many more', () => {
 
 test('the tiles: four open the library on what they count, two jump to their list; late requests are people asked, and issues count each document once', () => {
   const t = tiles(OVERVIEW);
-  assert.deepEqual(t.map((x) => x.label), ['Documents', 'In force', 'In progress', 'Overdue reviews', 'Late requests', 'Issues']);
+  assert.deepEqual(t.map((x) => x.label), ['Documents', 'Published', 'In progress', 'Overdue reviews', 'Late requests', 'Issues']);
   assert.deepEqual(t.map((x) => x.value), [40, 22, 14, 6, 4, 9]);                                     // 3 + 1 + 0 overdue requests; 9 documents with an issue
   assert.equal(lateRequests(OVERVIEW), 4);
   assert.deepEqual(t.map((x) => x.href), [
@@ -174,12 +175,12 @@ test('a scope with no documents, not even an archived one, is empty; an archived
 
 // ── by type, by status, by stage ───────────────────────────────────────────────────────────────────────────────────────────────────────
 
-test('the type bars are as long as their count against the biggest type, each number with its own address', () => {
-  const bars = typeBars(OVERVIEW);
-  assert.deepEqual(bars.map((b) => [b.label, b.count, b.inForce, b.percent]), [['Policy', 20, 12, 100], ['Standard', 10, 6, 50], ['Risk register', 1, 0, 5]]);
-  assert.equal(bars[0].href, '/governance/documents?dept=11&type=policy');
-  assert.equal(bars[0].inForceHref, '/governance/documents?dept=11&type=policy&status=published');
-  assert.deepEqual(typeBars({ by_type: [], links: {} }), []);
+test('the kinds of document keep the server\'s order, each number with its own address', () => {
+  const lines = typeLines(OVERVIEW);
+  assert.deepEqual(lines.map((b) => [b.label, b.count, b.inForce]), [['Policy', 20, 12], ['Standard', 10, 6], ['Risk register', 1, 0]]);
+  assert.equal(lines[0].href, '/governance/documents?dept=11&type=policy');
+  assert.equal(lines[0].inForceHref, '/governance/documents?dept=11&type=policy&status=published');
+  assert.deepEqual(typeLines({ by_type: [], links: {} }), []);
 });
 
 test('the approval flow is the five steps in order with their counts, a step nobody is at says 0, and what fell out of it is listed apart', () => {
@@ -232,29 +233,15 @@ test('the reviews use the library\'s own words, worst first, and the bar is each
   assert.deepEqual(reviewShares({ overdue: 0, due_soon: 0, unscheduled: 0, up_to_date: 0 }), [], 'no review owed: no bar, never a full one');
 });
 
-test('the department table: a row for the scope and each department under it, every figure opening the library on that department and what is under it', () => {
-  const lines = departmentLines(OVERVIEW);
-  assert.deepEqual(lines.map((l) => [l.row.name, l.here, l.open]), [['Support', true, null], ['Helpdesk', false, '/governance/documents/overview?dept=12']]);
-  assert.equal(lines[0].documentsHref, '/governance/documents?dept=11');
-  assert.equal(lines[1].inForceHref, '/governance/documents?dept=12&status=published');
-  assert.equal(lines[1].inProgressHref, '/governance/documents?dept=12&status=draft%2Cpending_review%2Cpending_approval%2Capproved');
-  assert.equal(lines[1].overdueHref, '/governance/documents?dept=12&review=overdue');
-  // the Issues figure has no single library filter: it goes to the list on this page, or to the department's own overview
-  assert.deepEqual(lines.map((l) => l.issuesHref), ['#issues', '/governance/documents/overview?dept=12#issues']);
-  // the name says where it sits and how the documents are split between the department itself and what is under it
-  assert.equal(lines[0].title, 'Operations › Support · Sub-department · 25 filed in it, 15 below it');
-  assert.equal(lines[1].title, 'Operations › Support › Helpdesk · Unit');
+test('the department table is worth a card when there is more than one row, and each row\'s total opens the library on that department and what is under it', () => {
   assert.equal(hasDepartmentTable(OVERVIEW), true);
   assert.equal(hasDepartmentTable({ by_department: [OVERVIEW.by_department[0]] }), false, 'one row is the six figures above: no table');
   assert.equal(hasDepartmentTable({ by_department: [] }), false);
-  // a missing address is plain text, never a guessed one
-  assert.equal(departmentLines({ ...OVERVIEW, links: {} })[1].documentsHref, null);
-  // the whole organisation: "No department" is a row too, its own overview is ?dept=none and no row is "the page itself"
-  const whole = { ...OVERVIEW, scope: { ...OVERVIEW.scope, value: '', department_id: null, name: 'Whole organisation', whole_organisation: true },
-    by_department: [{ ...OVERVIEW.by_department[0], key: 'dept:none', department_id: null, name: 'No department', path: [], level: 0, level_label: '', depth: 0, owner: null, own: 3, documents: 3 }],
-    links: { ...OVERVIEW.links, 'dept:none': D('none') } };
-  const [none] = departmentLines(whole);
-  assert.deepEqual([none.value, none.here, none.open, none.issuesHref, none.documentsHref], ['none', false, '/governance/documents/overview?dept=none', '/governance/documents/overview?dept=none#issues', '/governance/documents?dept=none']);
+  assert.equal(figureHref(OVERVIEW, OVERVIEW.by_department[0].key), '/governance/documents?dept=11');
+  assert.equal(figureHref({ links: {} }, OVERVIEW.by_department[0].key), null, 'a missing address is plain text, never a guessed one');
+  // the address value of a row: its id, "none" for the documents in no department; the scope's own row is the page itself
+  assert.deepEqual([rowValue(OVERVIEW.by_department[1]), rowValue({ department_id: null })], ['12', 'none']);
+  assert.deepEqual([rowIsHere(OVERVIEW.by_department[0], OVERVIEW.scope), rowIsHere(OVERVIEW.by_department[1], OVERVIEW.scope), rowIsHere({ department_id: null }, { department_id: null })], [true, false, false]);
 });
 
 test('the issues: the ones that mean someone is stuck first, in the words the library shows when it opens them', () => {
@@ -308,9 +295,8 @@ test('every address the page asks the server for is one the server writes, and e
     assert.ok(written.has(key), `${key}: the page asks for it, the server never writes it`);
   }
   for (const prefix of ['f"type:{', 'f"type:{doc_type}:in_force"', 'f"status:{', 'f"stage:{kind}:{name}"']) assert.ok(source.includes(prefix), prefix);
-  // the department table's four addresses per row: `dept:<id>` and its three suffixes, as the model asks for them
-  assert.ok(model.includes('figureHref(d, row.key)') && model.includes('`${row.key}:in_force`') && model.includes('`${row.key}:in_progress`') && model.includes('`${row.key}:overdue_reviews`'));
-  for (const suffix of ['in_force', 'in_progress', 'overdue_reviews']) assert.ok(source.includes(`:${suffix}"`), `the server writes dept:<id>:${suffix}`);
+  // the department table asks for one address per row, `dept:<id>` (its other figures are made from the library's own parameters: _matrix.ts)
+  assert.ok(readFileSync(new URL('./_DepartmentTable.tsx', import.meta.url), 'utf8').includes('figureHref(data, line.row.key)'));
   assert.ok(source.includes('"key": key') && source.includes('f"dept:{node if node is not None else NONE}"'));
   // every parameter the server puts in an address is one the library reads (libraryModel.PARAM_KEYS) - `attn` is the one this page added
   const names = new Set<string>();

@@ -1,14 +1,19 @@
-// What the Policy exceptions page decides, as plain functions (no React, no @/ imports) so `node --test` runs _logic.test.ts against
+// What the Exceptions page decides, as plain functions (no React, no @/ imports) so `node --test` runs _logic.test.ts against
 // them: the order of the rows, the pages, the CSV, what a search keeps, and how dates and counts are said. The page only draws.
 // Since the page moved onto the design-system kit (UX revamp, Phase 1, group D) this file also holds what only THIS page knows: what the server
 // holds against what was loaded (the list is cut), which actions a row offers, what the form sends and how its dates are read, and what the charts
 // are made of. How a header sorts, where the pages are drawn and how a date is written are the kit's (RegisterTable, Pager, lib/format).
+// Since D62 it also holds the three views (the list, by unit, by document) and what the address keeps of them, the Unit and Document columns, what a
+// click on a unit asks the server, what the AI helpers write into the form, and which units a collapsed unit hides.
 import { apiErrorText, safeDetail } from '../../../../lib/apiError.ts';
+import { flag, oneOf, text, type ParamSpec } from '../../../../lib/addressState.ts';
+import { departmentTree } from '../../../../lib/departments.ts';
 import { parseUtc } from '../../../../lib/serverTime.ts';
-import { NOT_SET, formatCount, formatDate as formatDay, formatDateTime as formatMoment } from '../../../../lib/format.ts';
+import { EMPTY, NOT_SET, formatCount, formatDate as formatDay, formatDateTime as formatMoment } from '../../../../lib/format.ts';
 import { exceptionStatus, type Tone } from '../../../../lib/status.ts';
 import { clampPage, rangeLabel } from '../documents/_workspace/libraryFormat.ts';
 import { toEditableText } from './_text.ts';
+import type { Counts, PolicyOption } from './_types.ts';
 import type { SortState } from '../../../../components/ui/ds/tableModel.ts';
 
 // ─── What a row and a column have to offer ───────────────────────────────────────────────────────────────────────────────
@@ -20,8 +25,15 @@ export interface ExceptionFields {
   priority: string;
   created_at: string;
   expiry_date: string | null;
-  document_title?: string;
+  document_title?: string | null;
   policy_name?: string;
+  /** the document it is about (any kind), and what the server says of it: its kind, and its code when the person may open it */
+  document_id?: number | null;
+  document_type?: string | null;
+  document_code?: string | null;
+  /** the unit it is raised for, from the top down, and that it comes from its document (none was chosen for the exception itself) */
+  department_path?: string[];
+  department_inherited?: boolean;
   /** the name of its type, when it has one */
   exception_type_label?: string | null;
   /** the server sends the user's id (a number); older payloads a name */
@@ -44,17 +56,115 @@ export interface DataCol<T> {
 type DataField = Required<Pick<DataCol<ExceptionFields>, 'header' | 'sort' | 'csv'>>;
 
 /**
- * The columns that carry data, by id (the page adds the cell, the width and whether it can be hidden). Raw values on purpose, as the
- * shared table's export had them: the status as the server names it ("pending_approval"), the date as it was sent, "" for no expiry.
+ * The columns that carry data, by id, in the table's order (the page adds the cell, the width and whether it can be hidden). Raw values on purpose, as the
+ * shared table's export had them: the status as the server names it ("pending_approval"), the date as it was sent, "" for no expiry. The Unit is its
+ * path ("Operations › Support"), the Document its title.
  */
-export const DATA_COLS: Record<'title' | 'status' | 'priority' | 'type' | 'created' | 'expiry', DataField> = {
+export const DATA_COLS: Record<'title' | 'document' | 'unit' | 'status' | 'priority' | 'type' | 'created' | 'expiry', DataField> = {
   title: { header: 'Title', sort: (e) => e.title, csv: (e) => e.title },
+  document: { header: 'Document', sort: (e) => documentText(e), csv: (e) => documentText(e) },
+  unit: { header: 'Unit', sort: (e) => unitText(e), csv: (e) => unitText(e) },
   status: { header: 'Status', sort: (e) => e.status, csv: (e) => e.status },
   priority: { header: 'Priority', sort: (e) => e.priority, csv: (e) => e.priority },
   type: { header: 'Type', sort: (e) => e.exception_type_label ?? '', csv: (e) => e.exception_type_label ?? '' },
   created: { header: 'Created', sort: (e) => e.created_at, csv: (e) => e.created_at },
   expiry: { header: 'Expiry', sort: (e) => e.expiry_date ?? '', csv: (e) => e.expiry_date ?? '' },
 };
+
+// ─── The document an exception is about, and its unit ────────────────────────────────────────────────────────────────────
+
+/** The kinds of controlled document an exception can be about (the server answers any; these are the words the library uses). */
+export const DOC_TYPES: ReadonlyArray<{ value: string; label: string }> = [
+  { value: 'policy', label: 'Policy' }, { value: 'standard', label: 'Standard' }, { value: 'procedure', label: 'Procedure' },
+  { value: 'guideline', label: 'Guideline' }, { value: 'charter', label: 'Charter' }, { value: 'framework', label: 'Framework' },
+];
+
+/** A document kind as a word ("standard" is "Standard"; a kind nobody listed reads as itself, capitalised; '' for none). */
+export function docTypeLabel(type: string | null | undefined): string {
+  const word = String(type ?? '').trim();
+  if (!word) return '';
+  return DOC_TYPES.find((t) => t.value === word.toLowerCase())?.label ?? word.charAt(0).toUpperCase() + word.slice(1).replace(/_/g, ' ');
+}
+
+/** What is said of a document the person may not open (the server sends no title for it): never its number. */
+export const HIDDEN_DOCUMENT = 'A document you cannot open';
+
+/**
+ * The document an exception is about, as the page draws it: its title (the older `policy_name` when that is all there is), its kind as a word and its code.
+ * A document the person may not open has an id and no title: it is named by HIDDEN_DOCUMENT and still has its kind. null: about no document.
+ */
+export function documentOf(e: Pick<ExceptionFields, 'document_title' | 'policy_name' | 'document_id' | 'document_type' | 'document_code'>): { title: string; hidden: boolean; type: string; code: string } | null {
+  const title = (e.document_title || e.policy_name || '').trim();
+  if (!title && !e.document_id) return null;
+  return { title: title || HIDDEN_DOCUMENT, hidden: !title, type: docTypeLabel(e.document_type), code: (e.document_code ?? '').trim() };
+}
+
+/** What the By document view calls the exceptions about no document at all. */
+export const NO_DOCUMENT = 'No document';
+
+/**
+ * What a document of the By document view is called: its title; HIDDEN_DOCUMENT when the person may not open it (the server sends its kind but no title and no
+ * number); NO_DOCUMENT for the exceptions about none (neither a title nor a kind: a document always has a kind).
+ */
+export function documentGroupName(group: { title: string | null; doc_type: string | null }): string {
+  if (group.title !== null) return group.title;
+  return group.doc_type ? HIDDEN_DOCUMENT : NO_DOCUMENT;
+}
+
+/** The document's name for a sort, the CSV and a search: '' when there is none. */
+export const documentText = (e: Parameters<typeof documentOf>[0]): string => documentOf(e)?.title ?? '';
+
+/**
+ * The document's kind and code, for the CSV only (the table shows them as a chip and a line under the title): right after the Document column, so a sheet can be
+ * filtered by the kind of document an exception is about.
+ */
+export function withDocumentDetail<T extends Parameters<typeof documentOf>[0]>(cols: DataCol<T>[]): DataCol<T>[] {
+  const at = cols.findIndex((c) => c.id === 'document');
+  if (at === -1) return cols;
+  const detail: DataCol<T>[] = [
+    { id: 'document_type', header: 'Document type', csv: (e) => documentOf(e)?.type ?? '' },
+    { id: 'document_code', header: 'Document code', csv: (e) => documentOf(e)?.code ?? '' },
+  ];
+  return [...cols.slice(0, at + 1), ...detail, ...cols.slice(at + 1)];
+}
+
+/** The unit an exception is raised for, "Operations › Support"; '' when it has none. */
+export const unitText = (e: { department_path?: string[]; department_inherited?: boolean }): string => departmentOf(e)?.text ?? '';
+
+// ─── The three views, and what the address keeps ─────────────────────────────────────────────────────────────────────────
+
+export const VIEWS = ['list', 'unit', 'document'] as const;
+export type ViewId = (typeof VIEWS)[number];
+export const VIEW_OPTIONS: ReadonlyArray<{ value: ViewId; label: string }> = [
+  { value: 'list', label: 'List' }, { value: 'unit', label: 'By unit' }, { value: 'document', label: 'By document' },
+];
+
+/** A unit in the address is its number: anything else (a word, 0, a negative, a fraction) is no unit, so a link can never make the server answer 422. */
+const unitInAddress: ParamSpec<string> = {
+  default: '',
+  read: ([first]) => {
+    const raw = (first ?? '').trim();
+    return /^[1-9]\d{0,9}$/.test(raw) ? raw : undefined;
+  },
+  write: (value) => (value ? [value] : []),
+};
+
+/**
+ * What the page keeps in its address (components/ui/ds/useAddressState): the view (absent is the list), the filters, "Waiting for me" and the search.
+ * `?open=` (an alert's link) is not in it: that name is left alone and used up by the page.
+ */
+export const ADDRESS = {
+  view: oneOf(VIEWS, 'list'),
+  q: text(),
+  status: oneOf(['', ...exceptionStatus.words], ''),
+  priority: oneOf<string>(['', 'critical', 'high', 'medium', 'low'], ''),
+  unit: unitInAddress,
+  doctype: oneOf(['', ...DOC_TYPES.map((t) => t.value)], ''),
+  waiting: flag(),
+};
+
+/** The removable chip a unit filter shows: "Unit: Support and below" (a unit covers everything under it). */
+export const unitChipText = (name: string | null | undefined): string => `Unit: ${(name ?? '').trim() || 'This unit'} and below`;
 
 // ─── Order ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -86,6 +196,13 @@ export const shownCols = <C extends { id: string; always?: boolean }>(cols: C[],
 
 /** The Columns menu ticking a column off, or on again. */
 export const toggleHidden = (hidden: string[], id: string): string[] => (hidden.includes(id) ? hidden.filter((x) => x !== id) : [...hidden, id]);
+
+/** From this window width the table has room for every column beside a readable title (the sidebar takes 240px of it); below it the least used columns wait. */
+export const WIDE_WINDOW = 1536;
+export const NARROW_HIDDEN: readonly string[] = ['type', 'requester', 'created'];
+
+/** The columns that are left out: the person's own choice from the Columns menu once they made one (null: none yet), else the narrow window's. */
+export const hiddenColumns = (picked: string[] | null, wide: boolean): string[] => picked ?? (wide ? [] : [...NARROW_HIDDEN]);
 
 /** Narrowest the table goes: the Title column keeps at least this much beside the other columns' fixed widths; below it the card scrolls sideways. */
 export const TITLE_MIN_WIDTH = 240;
@@ -128,10 +245,10 @@ export function toCsv<T>(cols: DataCol<T>[], rows: T[]): string {
 export const requesterOf = (e: Pick<ExceptionFields, 'requester_name' | 'requested_by_name'>): string => (e.requester_name || e.requested_by_name || '').trim();
 
 /**
- * What a search keeps: the exceptions whose title, policy or requester has the words in it, in any case. A blank search keeps all of
- * them (the very same array). The policy is the document's title, else the policy's name; the requester is the name, else (older
- * payloads that carry a user name there) the user. The server's `requested_by` is the user's NUMBER: it is never searched, and never
- * called as text (it used to be, and a search that matched no title took the page down).
+ * What a search keeps: the exceptions whose title, document (its title or code), unit or requester has the words in it, in any case. A blank search keeps
+ * all of them (the very same array). The document is its title, else the policy's name; the requester is the name, else (older payloads that carry a
+ * user name there) the user. The server's `requested_by` is the user's NUMBER: it is never searched, and never called as text (it used to be, and a
+ * search that matched no title took the page down).
  */
 export function searchExceptions<T extends ExceptionFields>(list: T[], term: string): T[] {
   if (!term.trim()) return list;
@@ -140,6 +257,8 @@ export function searchExceptions<T extends ExceptionFields>(list: T[], term: str
     (e) =>
       String(e.title ?? '').toLowerCase().includes(q) ||
       (e.document_title || e.policy_name || '').toLowerCase().includes(q) ||
+      (e.document_code ?? '').toLowerCase().includes(q) ||
+      unitText(e).toLowerCase().includes(q) ||
       (requesterOf(e) || (typeof e.requested_by === 'string' ? e.requested_by : '')).toLowerCase().includes(q),
   );
 }
@@ -172,8 +291,21 @@ export function formatDate(dateStr: string | null | undefined): string {
  */
 export const SERVER_LIMIT = 100;
 
-/** The filters that go to the server (the only two it takes); '' is no filter. */
-export interface Filters { status: string; priority: string }
+/**
+ * The filters that go to the server: status, priority, a unit (its number: the unit and everything under it) and the kind of document; '' is no filter.
+ * `unitPath` (the names from the top down to that unit) is only for "Waiting for me", whose list the server does not filter.
+ */
+export interface Filters { status: string; priority: string; unit?: string; documentType?: string; unitPath?: readonly string[] }
+
+/** What GET asks for: only the filters that are set (the unit as the number the server reads). Never a limit: the list is cut at SERVER_LIMIT and says so. */
+export function listParams(filters: Filters): Record<string, string | number> {
+  const params: Record<string, string | number> = {};
+  if (filters.status) params.status = filters.status;
+  if (filters.priority) params.priority = filters.priority;
+  if (filters.unit) params.unit = Number(filters.unit);
+  if (filters.documentType) params.document_type = filters.documentType;
+  return params;
+}
 
 /** The counts of GET /policy-exceptions/analytics: they cover every exception of the organisation, whatever the list was cut to. */
 export interface ExceptionCounts { total: number; by_status: Record<string, number>; by_priority: Record<string, number> }
@@ -184,12 +316,13 @@ export interface ServerList { cut: boolean; total: number | null }
 /**
  * Whether the loaded rows are all there is, and how many there are in all. Fewer rows than the server sends at most is the whole list (and the count
  * is then always current). A full page is read against the counts: every exception, those with the status, or those with the priority; both filters
- * at once cannot be read from them (null: "100 or more"), nor can anything before they have loaded.
+ * at once cannot be read from them (null: "100 or more"), nor can a unit or a kind of document (the counts do not hold them), nor anything before they
+ * have loaded.
  */
 export function serverList(loaded: number, filters: Filters, counts?: ExceptionCounts | null, limit: number = SERVER_LIMIT): ServerList {
   if (loaded < limit) return { cut: false, total: loaded };
   let held: number | null = null;
-  if (counts && !(filters.status && filters.priority)) {
+  if (counts && !(filters.status && filters.priority) && !filters.unit && !filters.documentType) {
     held = filters.status ? counts.by_status?.[filters.status] ?? 0 : filters.priority ? counts.by_priority?.[filters.priority] ?? 0 : counts.total;
   }
   if (held == null || !Number.isFinite(held)) return { cut: true, total: null };
@@ -272,12 +405,26 @@ export function departmentOf(e: { department_path?: string[]; department_inherit
 
 // ─── Waiting for me, and an alert's link ─────────────────────────────────────────────────────────────────────────────────
 
+/** What a row of "Waiting for me" waits for: the person's decision, or for them to carry it out once approved. */
+export type WaitingKind = 'decision' | 'implementation';
+
+/** The chip on such a row: "Decide" or "Implement"; null for a row that waits for nothing. */
+export const waitingKindLabel = (kind: string | null | undefined): string | null => (kind === 'decision' ? 'Decide' : kind === 'implementation' ? 'Implement' : null);
+
+/** Whether a unit's path (from the top down) is `top` or runs under it. */
+const runsUnder = (path: readonly string[] | undefined, top: readonly string[]): boolean =>
+  top.length > 0 && !!path && path.length >= top.length && top.every((name, i) => path[i] === name);
+
 /**
- * The exceptions waiting for the person's decision now (GET /waiting-for-me: the ones under an approval rule they are asked about), narrowed by the status
- * and priority the page also offers: those filters are the server's for the list, and cannot reach this one.
+ * The exceptions waiting for the person now (GET /waiting-for-me: what they are asked to decide under an approval rule, and what is theirs to implement),
+ * narrowed by the status and priority the page also offers, and by the kind of document and the unit (and everything under it): those filters are the
+ * server's for the list, and cannot reach this one.
  */
-export function waitingRows<T extends { status: string; priority: string }>(rows: readonly T[], filters: Filters): T[] {
-  return rows.filter((e) => (!filters.status || e.status === filters.status) && (!filters.priority || e.priority === filters.priority));
+export function waitingRows<T extends { status: string; priority: string; document_type?: string | null; department_path?: string[] }>(rows: readonly T[], filters: Filters): T[] {
+  return rows.filter((e) =>
+    (!filters.status || e.status === filters.status) && (!filters.priority || e.priority === filters.priority)
+    && (!filters.documentType || (e.document_type ?? '') === filters.documentType)
+    && (!filters.unit || runsUnder(e.department_path, filters.unitPath ?? [])));
 }
 
 /**
@@ -289,7 +436,7 @@ export function longRefusal(error: unknown, kept = 240): string | null {
   return full.length > kept ? full : null;
 }
 
-/** The quick filter's label: "Waiting for me · 3". */
+/** The quick filter's label: "Waiting for me · 3" (what waits to be decided and what waits to be implemented, together). */
 export const waitingLabel = (count: number): string => `Waiting for me${count > 0 ? ` · ${formatCount(count)}` : ''}`;
 
 /**
@@ -309,16 +456,53 @@ export function withoutOpen(search: string | null | undefined): string {
   return rest ? `?${rest}` : '';
 }
 
+// ─── By unit and by document ─────────────────────────────────────────────────────────────────────────────────────────────
+
+/** A count in a cell: the number, or a dash for none. */
+export const countText = (n: number | null | undefined): string => (n && n > 0 ? formatCount(n) : EMPTY);
+
+/** "5 exceptions · 2 open · 1 expiring": the total, then each count the unit or document has (a zero is left out). */
+export function countsSummary(c: Counts): string {
+  const parts = [`${formatCount(c.total)} ${c.total === 1 ? 'exception' : 'exceptions'}`];
+  if (c.open > 0) parts.push(`${formatCount(c.open)} open`);
+  if (c.approved > 0) parts.push(`${formatCount(c.approved)} approved`);
+  if (c.expiring > 0) parts.push(`${formatCount(c.expiring)} expiring`);
+  if (c.to_implement > 0) parts.push(`${formatCount(c.to_implement)} to implement`);
+  return parts.join(' · ');
+}
+
+/**
+ * The units a tree draws when some are closed. The server lists them in tree order with their depth, so the units under a closed one are the ones that
+ * follow it with a greater depth, up to the next that is not deeper; they are left out. A closed unit itself stays.
+ */
+export function visibleUnits<T extends { department_id: number; depth: number }>(units: readonly T[], closed: ReadonlySet<number>): T[] {
+  const out: T[] = [];
+  let hiddenBelow: number | null = null;
+  for (const unit of units) {
+    if (hiddenBelow !== null) {
+      if (unit.depth > hiddenBelow) continue;
+      hiddenBelow = null;
+    }
+    out.push(unit);
+    if (closed.has(unit.department_id)) hiddenBelow = unit.depth;
+  }
+  return out;
+}
+
 // ─── The form ────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
+/**
+ * What the person raising an exception writes. The two long texts that used to be here, "Potential risks" and "Compensating controls", are not the requester's
+ * to write any more (the people who judge the risks and the person who implements the controls record them as rows): the form neither shows nor sends them.
+ */
 export interface ExceptionForm {
   title: string;
   document_id: string | number;
   justification: string;
-  risk_assessment: string;
-  compensating_controls: string;
+  /** what refusing it would mean for the business */
+  business_impact: string;
   priority: string;
-  /** the department it is raised for; '' leaves it to its policy's (the approval rules read it) */
+  /** the unit it is raised for; '' leaves it to its document's (the approval rules read it) */
   department_id: string | number;
   /** a value of the organisation's list of types; '' is none (the approval rules may read it) */
   exception_type: string;
@@ -329,25 +513,24 @@ export interface ExceptionForm {
 }
 
 export const emptyForm = (): ExceptionForm => ({
-  title: '', document_id: '', justification: '', risk_assessment: '', compensating_controls: '', priority: 'medium', department_id: '', exception_type: '', effective_date: '', expiry_date: '', asset_ids: [],
+  title: '', document_id: '', justification: '', business_impact: '', priority: 'medium', department_id: '', exception_type: '', effective_date: '', expiry_date: '', asset_ids: [],
 });
 
 /** A date field's value from what the server stored ("2026-11-15T08:22:49"): the day as written, "YYYY-MM-DD"; '' for none. A date field shows nothing for a value with a time. */
 export const toDateInput = (value: string | null | undefined): string => /^\d{4}-\d{2}-\d{2}/.exec(String(value ?? ''))?.[0] ?? '';
 
-/** What Edit starts with: the exception's own values, its long texts as tidy numbered lines, its dates as the day they are. */
+/** What Edit starts with: the exception's own values, its justification as tidy numbered lines when it is a list, its dates as the day they are. */
 export function formFrom(e: {
-  title: string; document_id: number | null; justification?: unknown; risk_assessment?: unknown; compensating_controls?: unknown;
+  title: string; document_id: number | null; justification?: unknown; business_impact?: string | null;
   priority?: string; department_id?: number | null; exception_type?: string | null; effective_date?: string | null; expiry_date?: string | null; linked_asset_ids?: number[];
 }): ExceptionForm {
   return {
     title: e.title,
     document_id: e.document_id || '',
     justification: toEditableText(e.justification),
-    risk_assessment: toEditableText(e.risk_assessment),
-    compensating_controls: toEditableText(e.compensating_controls),
+    business_impact: e.business_impact ?? '',
     priority: e.priority || 'medium',
-    department_id: e.department_id || '',                             // its own: one it takes from its policy is not written into the form
+    department_id: e.department_id || '',                             // its own: one it takes from its document is not written into the form
     exception_type: e.exception_type || '',
     effective_date: toDateInput(e.effective_date),
     expiry_date: toDateInput(e.expiry_date),
@@ -355,7 +538,7 @@ export function formFrom(e: {
   };
 }
 
-/** What a new exception starts with when it is raised against a policy, or from a suggestion (its title, its reason as the justification, its priority). */
+/** What a new exception starts with when it is raised against a document, or from a suggestion (its title, its reason as the justification, its priority). */
 export function formForPolicy(documentId: number, opts?: { title?: string; justification?: string; priority?: string }): ExceptionForm {
   return { ...emptyForm(), title: opts?.title || '', document_id: documentId || '', justification: toEditableText(opts?.justification), priority: opts?.priority || 'medium' };
 }
@@ -363,8 +546,8 @@ export function formForPolicy(documentId: number, opts?: { title?: string; justi
 /** Whether two forms hold the same: what decides that closing the drawer has something to lose. The assets compare as a set. */
 export function sameForm(a: ExceptionForm, b: ExceptionForm): boolean {
   const ids = (f: ExceptionForm) => [...f.asset_ids].sort((x, y) => x - y).join(',');
-  return a.title === b.title && String(a.document_id) === String(b.document_id) && a.justification === b.justification && a.risk_assessment === b.risk_assessment
-    && a.compensating_controls === b.compensating_controls && a.priority === b.priority && String(a.department_id) === String(b.department_id) && a.exception_type === b.exception_type
+  return a.title === b.title && String(a.document_id) === String(b.document_id) && a.justification === b.justification && a.business_impact === b.business_impact
+    && a.priority === b.priority && String(a.department_id) === String(b.department_id) && a.exception_type === b.exception_type
     && a.effective_date === b.effective_date && a.expiry_date === b.expiry_date && ids(a) === ids(b);
 }
 
@@ -377,27 +560,123 @@ export function formErrors(form: ExceptionForm): { title?: string; justification
 }
 
 /**
- * What is sent. A new exception sends a date only when one is set, the policy only when one is chosen, as it always did. An edit also sends a date that
- * was emptied as null (the server clears it): the form now shows the dates the exception has, so emptying one has to mean something. The department is
- * its id, or null for none (it then follows its policy's); the server takes the same value for an unchanged one as no change.
+ * What is sent. A new exception sends a date only when one is set, the document only when one is chosen, and the business impact only when it has words,
+ * as it always did; an edit also sends one that was emptied as null (the server clears it): the form now shows the dates the exception has, so emptying one
+ * has to mean something. The unit is its id, or null for none (it then follows its document's); the server takes the same value for an unchanged one as no
+ * change. The two long texts of the older form (risk_assessment, compensating_controls) are never sent: an edit leaves what the exception holds as it is.
  */
 export function payloadOf(form: ExceptionForm, editing: boolean): Record<string, unknown> {
   const payload: Record<string, unknown> = {
     title: form.title,
     justification: form.justification,
-    risk_assessment: form.risk_assessment,
-    compensating_controls: form.compensating_controls,
     priority: form.priority,
   };
+  if (form.business_impact.trim()) payload.business_impact = form.business_impact;
+  else if (editing) payload.business_impact = null;
   if (form.document_id) payload.document_id = Number(form.document_id);
   payload.department_id = form.department_id ? Number(form.department_id) : null;
-  payload.exception_type = form.exception_type || null;            // none clears it, as the department
+  payload.exception_type = form.exception_type || null;            // none clears it, as the unit
   if (form.effective_date) payload.effective_date = form.effective_date;
   else if (editing) payload.effective_date = null;
   if (form.expiry_date) payload.expiry_date = form.expiry_date;
   else if (editing) payload.expiry_date = null;
   payload.asset_ids = form.asset_ids;
   return payload;
+}
+
+/**
+ * What the unit chooser says while no unit is chosen: the unit the exception will follow, and that it comes from the document. `documentUnit` is the chosen
+ * document's unit from the top down ([] when the document has none; undefined when it is not known: no document yet, or one the list does not hold);
+ * `inherited` is what an exception being changed already follows.
+ */
+export function unitPlaceholder(documentUnit: readonly string[] | undefined, inherited: string): string {
+  if (documentUnit !== undefined) return documentUnit.length ? `${documentUnit.join(' › ')} (from the document)` : 'No unit';
+  return inherited ? `${inherited} (from the document)` : "The document's unit";
+}
+
+// ─── What the AI helpers write into the form (drafts: nothing is saved by them) ───────────────────────────────────────────────
+
+/** What every helper of the person raising an exception is told: the title, the document and the unit chosen so far (null: none). */
+export function aiBasis(form: Pick<ExceptionForm, 'title' | 'document_id' | 'department_id'>): { title: string; document_id: number | null; department_id: number | null } {
+  return { title: form.title.trim(), document_id: form.document_id ? Number(form.document_id) : null, department_id: form.department_id ? Number(form.department_id) : null };
+}
+
+/** AI Assist writes the justification and the business impact, into the boxes that are empty: what the person already wrote is kept. */
+export function draftPatch(form: Pick<ExceptionForm, 'justification' | 'business_impact'>, answer: { justification?: string; business_impact?: string }): Partial<ExceptionForm> {
+  const out: Partial<ExceptionForm> = {};
+  if (!form.justification.trim() && answer.justification?.trim()) out.justification = toEditableText(answer.justification);
+  if (!form.business_impact.trim() && answer.business_impact?.trim()) out.business_impact = answer.business_impact.trim();
+  return out;
+}
+
+/** What "Suggest period" answers: a priority and the two days, with why. */
+export interface PeriodSuggestion { priority: string; effective_date: string; expiry_date: string; rationale: string }
+
+/** The suggestion written into the form as a draft (priority and both dates; the person edits them). */
+export const schedulePatch = (s: PeriodSuggestion): Pick<ExceptionForm, 'priority' | 'effective_date' | 'expiry_date'> => ({
+  priority: s.priority, effective_date: toDateInput(s.effective_date), expiry_date: toDateInput(s.expiry_date),
+});
+
+/** The reason for a suggested period stays under the dates only while they are still the suggested ones. */
+export const stillSuggested = (form: Pick<ExceptionForm, 'priority' | 'effective_date' | 'expiry_date'>, s: PeriodSuggestion | null): boolean =>
+  s !== null && form.priority === s.priority && form.effective_date === toDateInput(s.effective_date) && form.expiry_date === toDateInput(s.expiry_date);
+
+// ─── The document picker ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** A document as the form holds it. `unit` is the department it sits in (null: none; undefined: not known here). */
+export interface DocRef { id: number; title: string | null; type: string; code: string; unit?: number | null }
+
+/** A row of the page's list of documents (the list carries the department; PolicyOption does not say so). */
+export type DocumentOption = PolicyOption & { department_id?: number | null };
+
+/**
+ * What the form knows of the document it is raised against: what the person just chose, else the page's list, else what the exception being changed says of
+ * it (a title only when the person may read it). A document that is none of these still has its place, named without a title. null: no document.
+ */
+export function resolveDocument(
+  id: number,
+  picked: DocRef | null,
+  list: readonly DocumentOption[],
+  exception: Pick<ExceptionFields, 'document_id' | 'document_title' | 'policy_name' | 'document_type' | 'document_code'> | null,
+): DocRef | null {
+  if (!id) return null;
+  if (picked && picked.id === id) return picked;
+  const listed = list.find((d) => d.id === id);
+  if (listed) return { id, title: listed.title, type: listed.doc_type ?? '', code: (listed.document_code ?? '').trim(), unit: listed.department_id ?? null };
+  if (exception && exception.document_id === id) {
+    return { id, title: (exception.document_title || exception.policy_name || '').trim() || null, type: exception.document_type ?? '', code: (exception.document_code ?? '').trim() };
+  }
+  return { id, title: null, type: '', code: '' };
+}
+
+/** The names from the top department down to `id`; [] for none, or for one the list does not hold. */
+export function unitPathOf(departments: readonly { id: number; name: string; parent_department_id?: number | null }[] | undefined, id: number | null | undefined): string[] {
+  if (!departments || id == null) return [];
+  return departmentTree(departments).path(id).map((d) => d.name);
+}
+
+/** The chosen document's unit from the top down: [] when the document has none, undefined when that is not known (no document, or its department not read yet). */
+export function documentUnitPath(doc: DocRef | null, departments: readonly { id: number; name: string; parent_department_id?: number | null }[] | undefined): string[] | undefined {
+  if (!doc || doc.unit === undefined) return undefined;
+  if (doc.unit === null) return [];
+  return departments ? unitPathOf(departments, doc.unit) : undefined;
+}
+
+/** The most documents the picker lists at a time (it asks the server for as many). */
+export const PICKER_LIMIT = 20;
+
+/** With nothing typed: the documents of the kind chosen (any kind when none), by title, as many as the picker lists. */
+export function browseDocuments<T extends { title: string; doc_type?: string }>(docs: readonly T[], type: string, limit: number = PICKER_LIMIT): T[] {
+  return docs
+    .filter((d) => !type || String(d.doc_type ?? '').toLowerCase() === type)
+    .sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base', numeric: true }))
+    .slice(0, limit);
+}
+
+/** The search answers once for each document it found in its title, its text and its clauses: the first hit of a document is the one listed. */
+export function uniqueDocuments<T extends { document_id: number }>(hits: readonly T[]): T[] {
+  const seen = new Set<number>();
+  return hits.filter((h) => (seen.has(h.document_id) ? false : (seen.add(h.document_id), true)));
 }
 
 // ─── Dates ───────────────────────────────────────────────────────────────────────────────────────────────────────────────

@@ -1,14 +1,16 @@
 // node --test "src/lib/exceptionRules.test.ts"
 // The rules of Governance > Settings > Exception approvals, apart from the screen: what a rule says in words, what the editor starts with and sends, the
-// refusals it makes before sending (in the server's own words, modules/governance/exception_rules.py) and how the tester's answer reads.
+// refusals it makes before sending (in the server's own words, modules/governance/exception_rules.py) and how the tester's answer reads; the implementer
+// a rule may name (D62) is the last section.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync, readFileSync } from 'node:fs';
 
 import {
-  KIND_ORDER, MAX_STEPS, PRIORITY_ORDER, RULES_KEY, RULE_NOTES, TYPE_NAME_MAX, TYPE_NOTES, askOptions, blankStep, conditionChips, conditionsLong, emptyRuleForm, formFromRule, hasRuleErrors, payloadOf,
-  payloadOfRule, personFromKey, personKey, personLabel, previewSteps, ruleErrors, ruleProblem, rulesSummary, sameRuleForm, scopeOf, slotLine, slotText, stepHow, stepText, stepsLine,
-  stepsLong, turnLine, sameTypes, typeChoiceLabel, typeChoices, typeDrafts, typeLabel, typeProblem, typesPayload,
-  type ExceptionRule, type PreviewAnswer, type RuleForm, type RuleOptions, type RuleStep,
+  IMPLEMENTER_NAME, IMPLEMENT_WORD, KIND_ORDER, MAX_STEPS, PRIORITY_ORDER, RULES_KEY, RULE_NOTES, TYPE_NAME_MAX, TYPE_NOTES, askOptions, blankImplementer, blankStep, conditionChips, conditionsLong,
+  emptyRuleForm, formFromRule, hasRuleErrors, payloadOf, payloadOfRule, personFromKey, personKey, personLabel, previewImplementer, previewSteps, ruleErrors, ruleProblem, rulesSummary,
+  sameRuleForm, scopeOf, slotLine, slotText, stepHow, stepText, stepsLine, stepsLong, turnLine, sameTypes, typeChoiceLabel, typeChoices, typeDrafts, typeLabel, typeProblem, typesPayload,
+  type ExceptionRule, type PreviewAnswer, type RuleForm, type RuleImplementer, type RuleOptions, type RuleStep,
 } from './exceptionRules.ts';
 
 const step = (over: Partial<RuleStep> = {}): RuleStep => ({
@@ -19,7 +21,7 @@ const rule = (over: Partial<ExceptionRule> = {}): ExceptionRule => ({
   id: 1, name: 'Support exceptions', department_id: 11, department_path: ['Operations', 'Support'], department_level: 2, priorities: ['high', 'critical'], doc_types: ['policy'], exception_types: [],
   steps: [step({ position: 1, name: 'Review', kind: 'review', allow_reject: false, people: [{ type: 'user', id: 3, label: 'Rev1' }, { type: 'user', id: 4, label: 'Rev2' }] }),
           step({ position: 2, people: [{ type: 'unit_owner', label: 'Owner of the unit' }] })],
-  is_active: true, created_at: '2026-11-01T09:00:00', updated_at: '2026-11-01T09:00:00', ...over,
+  implementer: null, is_active: true, created_at: '2026-11-01T09:00:00', updated_at: '2026-11-01T09:00:00', ...over,
 });
 const options: RuleOptions = {
   users: [{ id: 3, name: 'Rev1', email: 'rev1@acme.test' }, { id: 7, name: 'App1', email: null }],
@@ -48,14 +50,14 @@ test('the conditions are words, in the order given; none means any', () => {
   assert.deepEqual(conditionChips(rule({ priorities: [], doc_types: [] })), []);
 });
 
-test('the conditions in a sentence for a screen reader: the priorities, the kinds of policy, or "any"', () => {
-  assert.equal(conditionsLong(rule()), 'Priority: High, Critical. Policy kind: Policy');
+test('the conditions in a sentence for a screen reader: the priorities, the document types, or "any"', () => {
+  assert.equal(conditionsLong(rule()), 'Priority: High, Critical. Document type: Policy');
   assert.equal(conditionsLong(rule({ doc_types: [] })), 'Priority: High, Critical');
-  assert.equal(conditionsLong(rule({ priorities: [], doc_types: ['policy', 'standard'] })), 'Policy kind: Policy, Standard');
-  assert.equal(conditionsLong(rule({ priorities: [], doc_types: [] })), 'Any priority, kind of policy and type');
+  assert.equal(conditionsLong(rule({ priorities: [], doc_types: ['policy', 'standard'] })), 'Document type: Policy, Standard');
+  assert.equal(conditionsLong(rule({ priorities: [], doc_types: [] })), 'Any priority, document type and exception type');
   const types = [{ value: 'technical', label: 'Technical', archived: false }, { value: 'third_party', label: 'Third party', archived: true }];
-  assert.equal(conditionsLong(rule({ priorities: [], doc_types: [], exception_types: ['technical', 'third_party'] }), types), 'Type: Technical, Third party');
-  assert.equal(conditionsLong(rule({ exception_types: ['technical'] }), types), 'Priority: High, Critical. Policy kind: Policy. Type: Technical');
+  assert.equal(conditionsLong(rule({ priorities: [], doc_types: [], exception_types: ['technical', 'third_party'] }), types), 'Exception type: Technical, Third party');
+  assert.equal(conditionsLong(rule({ exception_types: ['technical'] }), types), 'Priority: High, Critical. Document type: Policy. Exception type: Technical');
   assert.deepEqual(conditionChips(rule({ exception_types: ['technical', 'gone'] }), types), ['High', 'Critical', 'Policy', 'Technical', 'gone']);      // a type the list no longer holds is shown as it was kept
 });
 
@@ -172,6 +174,7 @@ test('what is sent: the name trimmed, the whole organisation as null, the condit
     name: 'Support', department_id: 11, priorities: ['low', 'critical'], doc_types: ['policy', 'standard'], exception_types: ['technical'], is_active: true,
     steps: [{ name: '', kind: 'approval', order: 'together', rule: 'all', min_count: null, due_days: null, allow_reject: true, allow_changes: true,
       people: [{ type: 'user', id: 7 }, { type: 'role', id: 3 }, { type: 'unit_owner' }] }],
+    implementer: null,                                                                       // a rule with no implementer ends at its approval
   });
   assert.equal(payloadOf(filled()).department_id, null);
   assert.deepEqual(PRIORITY_ORDER, ['low', 'medium', 'high', 'critical']);
@@ -335,4 +338,146 @@ test('the Types drawer starts with the list, checks the obvious, and sends every
     { value: 'technical', label: 'Technology', archived: false }, { value: 'third_party', label: 'Third party', archived: true }, { label: 'Cloud', archived: false },
   ]);
   assert.ok(TYPE_NOTES.card.length > 20 && TYPE_NOTES.removed.length > 20);
+});
+
+// ── the implementer (D62) ──
+
+const implementer = (over: Partial<RuleImplementer> = {}): RuleImplementer => ({
+  name: 'Implementation', due_days: 5, people: [{ type: 'user', id: 8, label: 'Chen' }, { type: 'user', id: 9, label: 'Bina' }], ...over,
+});
+
+test('the chain ends with the implementer ("Implement: Chen, Bina"), the tooltip adds how they answer and their days; a rule without one reads as before', () => {
+  const r = rule({ implementer: implementer() });
+  assert.equal(stepsLine(r.steps, r.implementer), 'Review: Rev1, Rev2 → Approval: Owner of the unit → Implement: Chen, Bina');
+  assert.equal(stepsLong(r.steps, r.implementer), 'Review: Rev1, Rev2 (Everyone)\nApproval: Owner of the unit\nImplement: Chen, Bina (Any one · 5 days)');
+  for (const none of [undefined, null]) {
+    assert.equal(stepsLine(rule().steps, none), 'Review: Rev1, Rev2 → Approval: Owner of the unit');
+    assert.equal(stepsLong(rule().steps, none), 'Review: Rev1, Rev2 (Everyone)\nApproval: Owner of the unit');
+  }
+  assert.equal(stepsLine(rule().steps), stepsLine(rule().steps, rule().implementer));
+  // one person is only their days; with no days nothing; many are cut to two and +N in the cell, all in the tooltip
+  const one = [{ type: 'user' as const, id: 8, label: 'Chen' }];
+  assert.equal(stepsLong([], implementer({ people: one })), 'Implement: Chen (5 days)');
+  assert.equal(stepsLong([], implementer({ people: one, due_days: 1 })), 'Implement: Chen (1 day)');
+  assert.equal(stepsLong([], implementer({ people: one, due_days: null })), 'Implement: Chen');
+  const many = ['A', 'B', 'C'].map((label, i) => ({ type: 'user' as const, id: i + 1, label }));
+  assert.equal(stepsLine([], implementer({ people: many })), 'Implement: A, B +1');
+  assert.equal(stepsLong([], implementer({ people: many, due_days: null })), 'Implement: A, B, C (Any one)');
+  assert.equal(stepsLine([], implementer({ people: [{ type: 'unit_owner', label: 'Owner of the unit' }] })), 'Implement: Owner of the unit');
+  assert.equal(IMPLEMENT_WORD, 'Implement');
+});
+
+test('the tester says who the implementer would ask now in the words of a step, and says nothing when the rule ends at its approval', () => {
+  const answer: PreviewAnswer = {
+    rule: { id: 1, name: 'Standard route', department_id: null }, steps: [], problems: [],
+    implementer: { name: 'Implementation', due_days: 5, people: [{ type: 'user', id: 8 }, { type: 'unit_owner' }], slots: [
+      { key: 'user:8', type: 'user', ref: 8, label: 'Chen', members: [8] },
+      { key: 'unit_owner:7', type: 'unit_owner', ref: null, label: 'Owner of Security', members: [3] },
+    ] },
+  };
+  assert.deepEqual(previewImplementer(answer, (id) => `P${id}`), { how: 'Any one · 5 days', who: ['Chen', 'Owner of Security · P3'] });
+  // nobody who can act: the slot says so (the server's problems say it too, in `problems`)
+  const nobody: PreviewAnswer = { ...answer, implementer: { name: 'Implementation', due_days: null, people: [{ type: 'unit_owner' }], slots: [
+    { key: 'unit_owner:4', type: 'unit_owner', ref: null, label: 'Owner of Finance (none set)', members: [] },
+  ] } };
+  assert.deepEqual(previewImplementer(nobody, (id) => `P${id}`), { how: '', who: ['Owner of Finance (none set)'] });
+  assert.equal(previewImplementer({ ...answer, implementer: null }, (id) => `P${id}`), null);
+  assert.equal(previewImplementer({ rule: null, steps: [], problems: [] }, (id) => `P${id}`), null);              // no rule applies: the server sends no implementer at all
+});
+
+test('editing starts with the implementer as saved: its people as keys, its days as typed text, a name of its own carried; a rule without one has none', () => {
+  assert.deepEqual(formFromRule(rule({ implementer: implementer() })).implementer, { name: '', people: ['user:8', 'user:9'], due_days: '5' });       // the server\'s own name is left blank
+  assert.equal(formFromRule(rule()).implementer, null);
+  assert.equal(formFromRule({ ...rule(), implementer: undefined as unknown as null }).implementer, null, 'an answer from before implementers existed');
+  assert.equal(formFromRule(rule({ implementer: implementer({ due_days: null }) })).implementer?.due_days, '');
+  assert.equal(formFromRule(rule({ implementer: implementer({ name: 'Coordination' }) })).implementer?.name, 'Coordination');
+  assert.equal(emptyRuleForm().implementer, null);
+  assert.deepEqual(blankImplementer(), { name: '', people: [], due_days: '' });
+  assert.notEqual(blankImplementer(), blankImplementer());
+});
+
+test('adding or taking off the implementer, changing its people or its days, is a change; the order its people were chosen in is not', () => {
+  const r = rule({ implementer: implementer() });
+  const a = formFromRule(r);
+  assert.ok(sameRuleForm(a, formFromRule(r)));
+  assert.ok(!sameRuleForm(a, { ...a, implementer: null }));
+  assert.ok(!sameRuleForm(formFromRule(rule()), { ...formFromRule(rule()), implementer: blankImplementer() }));
+  assert.ok(!sameRuleForm(a, { ...a, implementer: { ...a.implementer!, due_days: '6' } }));
+  assert.ok(!sameRuleForm(a, { ...a, implementer: { ...a.implementer!, people: ['user:8'] } }));
+  assert.ok(sameRuleForm(a, { ...a, implementer: { ...a.implementer!, people: ['user:9', 'user:8'] } }), 'any one of them can act');
+});
+
+test('the implementer is sent with the rule: its people as the server takes them, no name of its own making, empty days as none; no block is null', () => {
+  const sent = payloadOf(filled({ implementer: { name: '', people: ['user:8', 'unit_owner', 'role:3'], due_days: ' 5 ' } })).implementer;
+  assert.deepEqual(sent, { due_days: 5, people: [{ type: 'user', id: 8 }, { type: 'unit_owner' }, { type: 'role', id: 3 }] });
+  assert.ok(sent && !('name' in sent), 'the server calls it "Implementation"');
+  assert.equal(payloadOf(filled({ implementer: { name: '', people: ['user:8'], due_days: '' } })).implementer?.due_days, null);
+  assert.equal(payloadOf(filled()).implementer, null);
+  assert.equal(payloadOf(filled({ implementer: { name: 'Coordination', people: ['user:8'], due_days: '' } })).implementer?.name, 'Coordination', 'a name the rule already had is kept');
+  assert.equal(payloadOf(filled({ implementer: { name: IMPLEMENTER_NAME, people: ['user:8'], due_days: '' } })).implementer?.name, undefined);
+});
+
+test('switching a saved rule off or on sends its implementer too, without labels: the server replaces the whole rule, so leaving it out would take it away', () => {
+  const r = rule({ implementer: implementer({ people: [{ type: 'user', id: 8, label: 'Chen' }, { type: 'role', id: 3, label: 'Approvers' }, { type: 'unit_owner', label: 'Owner of the unit' }] }) });
+  const body = payloadOfRule(r, false);
+  assert.equal(body.is_active, false);
+  assert.deepEqual(body.implementer, { due_days: 5, people: [{ type: 'user', id: 8 }, { type: 'role', id: 3 }, { type: 'unit_owner' }] });
+  assert.equal(JSON.stringify(body).includes('label'), false);
+  assert.equal(payloadOfRule(rule(), true).implementer, null);
+  assert.equal(payloadOfRule(rule({ implementer: implementer({ name: 'Coordination' }) }), true).implementer?.name, 'Coordination');
+  // read from the server and sent back by the editor is what a switch sends
+  assert.deepEqual(payloadOf(formFromRule(r)).implementer, body.implementer);
+  const named = rule({ implementer: implementer({ name: 'Coordination', due_days: null }) });
+  assert.deepEqual(payloadOf(formFromRule(named)).implementer, payloadOfRule(named, true).implementer);
+  assert.equal(payloadOf(formFromRule(rule())).implementer, payloadOfRule(rule(), true).implementer);
+});
+
+test('an implementer block names someone, and its days are none or a whole number from 1 to 365: refused in the server\'s words, under the block', () => {
+  assert.deepEqual(ruleErrors(filled({ implementer: blankImplementer() })).implementer, { people: 'Choose who carries it out.' });
+  assert.equal(hasRuleErrors(ruleErrors(filled({ implementer: blankImplementer() }))), true);
+  assert.equal(ruleErrors(filled()).implementer, undefined);                                   // no block, nothing to refuse
+  const withDays = (due_days: string) => filled({ implementer: { name: '', people: ['user:8'], due_days } });
+  assert.equal(hasRuleErrors(ruleErrors(withDays(''))), false);
+  for (const fine of ['', ' ', '1', '365']) assert.equal(ruleErrors(withDays(fine)).implementer?.due_days, undefined, fine);
+  for (const bad of ['0', '366', '-2', '2.5']) assert.equal(ruleErrors(withDays(bad)).implementer?.due_days, 'The days to implement must be from 1 to 365.', bad);
+  assert.equal(ruleErrors(withDays('soon')).implementer?.due_days, 'The days to implement must be a number.');
+  assert.equal(hasRuleErrors(ruleErrors(withDays('0'))), true);
+  assert.deepEqual(ruleErrors(filled({ implementer: { name: '', people: [], due_days: '400' } })).implementer, { people: 'Choose who carries it out.', due_days: 'The days to implement must be from 1 to 365.' });
+  // a step's days keep their own words
+  const f = filled();
+  f.steps[0].due_days = '400';
+  assert.equal(ruleErrors(f).byStep[f.steps[0].key]?.due_days, 'The days to act must be from 1 to 365.');
+});
+
+test('the first thing wrong in the implementer reads as the server says it, after the steps\' own', () => {
+  const f = filled({ implementer: blankImplementer() });
+  assert.equal(ruleProblem(f), 'Implementer (Implementation): choose who carries it out.');
+  f.implementer = { name: '', people: ['user:8'], due_days: '400' };
+  assert.equal(ruleProblem(f), 'Implementer (Implementation): the days to implement must be from 1 to 365.');
+  f.implementer = { name: 'Coordination', people: [], due_days: '' };
+  assert.equal(ruleProblem(f), 'Implementer (Coordination): choose who carries it out.');
+  f.steps[0].people = [];                                                                       // a step is wrong too: its sentence comes first, as the steps do on the screen
+  assert.equal(ruleProblem(f), 'Step 1 (Approval): choose who is asked.');
+  assert.equal(ruleProblem(filled({ implementer: { name: '', people: ['user:8'], due_days: '3' } })), '');
+});
+
+test('the implementer\'s sentences and name are the server\'s (modules/governance/exception_rules.py, when the backend is beside the frontend)', () => {
+  assert.equal(IMPLEMENTER_NAME, 'Implementation');
+  const py = new URL('../../../backend/grc/modules/governance/exception_rules.py', import.meta.url);
+  if (!existsSync(py)) return;
+  const text = readFileSync(py, 'utf8');
+  for (const said of ['IMPLEMENTER_NAME = "Implementation"', 'where = f"Implementer ({name})"', ': choose who carries it out.', ': the days to implement must be a number.', ': the days to implement must be from 1 to 365.']) {
+    assert.ok(text.includes(said), said);
+  }
+});
+
+test('the words: a kind of document is a "Document type", a policy exception is an "exception", and the implementer\'s note is the one the user asked for', () => {
+  assert.equal(RULE_NOTES.implementer, 'Asked once the last approval is given. They record the compensating controls and mark it implemented. Any one of them can act.');
+  assert.match(RULE_NOTES.card, /^Who reviews and approves an exception, and who carries it out afterwards, for the whole organisation/);
+  assert.match(RULE_NOTES.tester, /who would implement it/);
+  for (const text of [RULE_NOTES.card, RULE_NOTES.none, RULE_NOTES.submitted, RULE_NOTES.decides, RULE_NOTES.tester, RULE_NOTES.noRule, TYPE_NOTES.card, TYPE_NOTES.removed]) {
+    assert.doesNotMatch(text, /polic(y|ies) exception|policy kind|kinds? of policy/i, text);
+  }
+  const source = readFileSync(new URL('./exceptionRules.ts', import.meta.url), 'utf8');
+  assert.doesNotMatch(source, /polic(y|ies) exception|policy kind|kinds? of policy/i);
 });

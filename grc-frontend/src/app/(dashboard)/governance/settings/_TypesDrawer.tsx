@@ -1,6 +1,6 @@
 'use client';
 
-// Governance > Settings > Exception approvals > Types: the kinds of policy exception the organisation tells apart ("Technical", "Third party"...). A person raising an
+// Governance > Settings > Exception approvals > Types: the kinds of exception the organisation tells apart ("Technical", "Third party"...). A person raising an
 // exception chooses one, and a rule may be limited to some of them. The list is the organisation's own: rename a type, add one, remove one. A removed type is kept for
 // the exceptions and rules that hold it (it is archived, still named there) and no new exception can choose it; Bring back puts it in use again. Nothing is saved until
 // Save, the drawer asks "Discard changes?" before it throws edits away, and the server's refusal is said above the Save button with everything typed kept. The rules for

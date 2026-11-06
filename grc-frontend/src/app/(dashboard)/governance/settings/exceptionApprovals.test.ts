@@ -1,8 +1,8 @@
 // node --test "src/app/(dashboard)/governance/settings/exceptionApprovals.test.ts"
 // What Governance > Settings > Exception approvals promises and a screenshot cannot hold for long (source-text tests, like settingsPage.test.ts): the card sits
 // after the Departments card on every state of the page, it is on the design-system kit, the server's `can_edit` decides who sees a control, a refusal is the
-// server's sentence, a rule is asked about before it is deleted, and the tester asks only when something is picked. (What a rule says and checks is in
-// lib/exceptionRules.ts and tested in exceptionRules.test.ts.)
+// server's sentence, a rule is asked about before it is deleted, and the tester asks only when something is picked; the last tests are the implementer (D62)
+// and the words ("Document type", "exception"). (What a rule says and checks is in lib/exceptionRules.ts and tested in exceptionRules.test.ts.)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -122,9 +122,59 @@ test('the Types drawer (D59): the organisation\'s own list, for an editor only; 
   assert.match(types, /aria-label="Type name"/);
   assert.match(types, /label=\{`Remove \$\{d\.label \|\| 'type'\}`\}/);                                                    // each button is named for its type
   assert.match(types, /Bring back/);
-  assert.match(drawer, /<MultiSelect label="Type" options=\{typeOptions\}/);
+  assert.match(drawer, /<MultiSelect label="Exception type" options=\{typeOptions\}/);
   assert.match(drawer, /typeChoices\(types, rule\?\.exception_types \?\? \[\]\)/);                                            // a type the rule names stays choosable after it is removed
   assert.match(tester, /exception_type: type \|\| null/);
   assert.match(api, /apiClient\.get<TypesAnswer>\('\/governance\/exception-approval-rules\/types'\)/);
   assert.match(api, /apiClient\.put<TypesAnswer>\('\/governance\/exception-approval-rules\/types', \{ types \}\)/);
+});
+
+// ── the implementer (D62) and the words ──
+
+test('the implementer is one optional block after the steps: Add and Remove, the steps\' chooser, the days to implement, one (i) note and no sentence under the title', () => {
+  assert.match(drawer, /<span className="text-ds-section text-ds-fg">Implementer<\/span>\s*<InfoTip text=\{RULE_NOTES\.implementer\} label="About the implementer" \/>/);
+  assert.match(drawer, /leftIcon=\{<Plus aria-hidden \/>\} onClick=\{\(\) => set\(\{ implementer: blankImplementer\(\) \}\)\}>Add implementer</);
+  assert.match(drawer, /leftIcon=\{<Trash2 aria-hidden \/>\} onClick=\{\(\) => set\(\{ implementer: null \}\)\}>Remove implementer</);
+  assert.match(drawer, /\{form\.implementer && <ImplementerEditor implementer=\{form\.implementer\} choices=\{choices\} errors=\{errors\.implementer\} onChange=\{setImplementer\} \/>\}/);
+  assert.ok(drawer.indexOf('<ol aria-label="Steps"') < drawer.indexOf('Add implementer'), 'after the steps');
+  assert.match(drawer, /^function ImplementerEditor\(/m);                                                       // at module level: a component defined inside another remounts every render
+  const editor = drawer.slice(drawer.indexOf('function ImplementerEditor'), drawer.indexOf('export function RuleDrawer'));
+  assert.ok(editor.length > 300);
+  assert.match(editor, /role="group" aria-label="Implementer"/);
+  assert.match(editor, /<FormField label="Who implements" required error=\{errors\?\.people\}/);
+  assert.match(editor, /<MultiSelect label="Implementer: who carries it out" options=\{choices\} value=\{imp\.people\}[\s\S]*?display="chips"/);
+  assert.match(editor, /<FormField label="Days to implement" optional error=\{errors\?\.due_days\}/);
+  assert.match(editor, /min=\{1\} max=\{365\}[^>]*unit="days"/);
+  assert.doesNotMatch(editor, /<p[\s>]/);                                                                         // D41: the (i) beside the title says what a sentence under it would
+  assert.doesNotMatch(editor, /label="Name"/);                                                                    // the editor names it nothing: the server calls it "Implementation"
+  assert.match(drawer, /\.\.\.\(rule\.implementer\?\.people \?\? \[\]\)/);                                         // a person the lists no longer hold still shows, and can be taken off
+  assert.match(drawer, /const setImplementer = \(patch: Partial<DraftImplementer>\) => set\(\{ implementer: form\.implementer && \{ \.\.\.form\.implementer, \.\.\.patch \} \}\)/);
+  assert.equal((drawer.match(/RULE_NOTES\.implementer/g) ?? []).length, 1);                                       // one note, not one per field
+});
+
+test('the implementer is saved with the rule through the one payload and checked the way a step is: errors under its fields after a save was tried, the sentence above Save', () => {
+  assert.match(drawer, /save\.mutate\(payloadOf\(form\)\)/);                                                      // payloadOf carries the block (exceptionRules.test.ts)
+  assert.match(drawer, /const errors = tried \? ruleErrors\(form\) : NO_ERRORS/);                                  // errors.implementer is part of it
+  assert.match(drawer, /const problem = said \?\? \(tried \? ruleProblem\(form\) : ''\)/);
+  assert.match(drawer, /dirty=\{!sameRuleForm\(form, initial\)\}/);                                               // an added or removed block is a change to lose
+  assert.match(section, /exceptionRulesApi\.update\(r\.id, payloadOfRule\(r, !r\.is_active\)\)/);                  // a switch sends the rule with its implementer
+});
+
+test('the table and the cards show the implementer after the approval, the tester says who it would ask now, and its problems are the server\'s', () => {
+  assert.match(section, /title=\{stepsLong\(r\.steps, r\.implementer\)\}>\{stepsLine\(r\.steps, r\.implementer\)\}</);
+  assert.match(section, /cardCell: \(r\) => <span[^>]*>\{stepsLong\(r\.steps, r\.implementer\)\}<\/span>/);
+  assert.match(tester, /previewImplementer\(answer\.data, nameOf\)/);
+  assert.match(tester, /<\/ol>\s*\{implementer && \(\s*<div role="group" aria-label="Implementer"[\s\S]*?\)\}\s*\{answer\.data\.problems\.map\(/);            // after the steps, before the warnings
+  assert.match(tester, /<ul aria-label="Asked to implement"/);
+  assert.match(tester, /\{implementer\.how && <span/);
+  assert.match(tester, /implementer\.who\.map\(\(w, i\) => <li key=\{i\} className=\{CHIP\}>\{w\}<\/li>\)/);
+});
+
+test('the words: "Document type" for a kind of document, "exception" for a policy exception, in the editor, the tester, the table and the types', () => {
+  for (const f of FILES) assert.doesNotMatch(src[f], /polic(y|ies) exception|policy kind|kinds? of policy/i, f);
+  assert.match(drawer, /<FormField label="Document type" optional>\s*<MultiSelect label="Document type"/);
+  assert.match(tester, /<FormField label="Document type">/);
+  assert.match(section, /conditionsLong\(r, types\)/);                                                            // the table's sentence is the library's ("Document type: Policy")
+  assert.match(section, /title="The kinds of exception your organisation tells apart"/);
+  assert.match(drawer, /label="Exception type" optional/);                                                                  // the exception type keeps its own word
 });

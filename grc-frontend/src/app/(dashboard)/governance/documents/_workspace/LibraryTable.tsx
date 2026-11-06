@@ -237,7 +237,7 @@ export function LibraryTable({
   const page = clampPage(pageNo, pageSize, top.length);
   const pageRows = drawnRows(pageOf(top, page, pageSize), at, openOf);
 
-  // The Folders view draws the folders (each open one: the folders inside it, then the first of its own documents) instead of a page.
+  // The Folders view draws the folders (each open one: the first of its own documents, then the folders inside it) instead of a page.
   // The folders open the way libraryFolders.folderIsOpen says; the person's choice is remembered by the page (not while filtering).
   const foldView: FoldView = { saved: folderOpen, shut, filtering, docCount: docs.length };
   const plan = folders
@@ -538,7 +538,7 @@ export function LibraryTable({
                             colSpan={span}
                             tick={tickFolder(node)}
                             headId={headId(node)}
-                            controls={[...node.folders.map(headId), ...(node.top.length > 0 ? [docsId(node)] : [])]}
+                            controls={[...(node.top.length > 0 ? [docsId(node)] : []), ...node.folders.map(headId)]}
                             onToggle={() => applyFold(flipFolder(foldView, node.key))}
                           />
                         </TBody>
@@ -546,7 +546,10 @@ export function LibraryTable({
                     }
                     return (
                       <TBody key={`docs-${node.key}`} id={docsId(node)}>
-                        {item.rows.map((r) => renderRow(r, node.depth + 1))}
+                        {/* A row's own cell (the pinned tick column, then the arrow) already sits one STEP right of a folder header's arrow at the same depth, so a folder's
+                            documents are drawn at the folder's depth: their arrow lines up with the arrow of a folder inside it, and with "Show N more". One level deeper
+                            put the documents of a folder under the folder INSIDE it, as if they were its own. */}
+                        {item.rows.map((r) => renderRow(r, node.depth))}
                         {node.top.length > FIRST_SHOWN && (
                           <ShowMoreRow
                             colSpan={span}
@@ -610,7 +613,7 @@ export function LibraryTable({
                         open={item.open}
                         tick={tickFolder(node)}
                         headId={cardHeadId(node)}
-                        controls={[...node.folders.map(cardHeadId), ...(node.top.length > 0 ? [cardDocsId(node)] : [])]}
+                        controls={[...(node.top.length > 0 ? [cardDocsId(node)] : []), ...node.folders.map(cardHeadId)]}
                         onToggle={() => applyFold(flipFolder(foldView, node.key))}
                       />
                     );

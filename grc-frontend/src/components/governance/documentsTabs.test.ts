@@ -20,7 +20,7 @@ type Ctx = { studio: boolean; settings: boolean };
 // ---- the old logic, as it was in DocumentsTabs.tsx ----
 const DOCUMENTS: Tab = { name: 'Documents', label: 'Documents', href: '/governance/documents' };
 const ATTESTATION: Tab = { name: 'Attestation', label: 'Attestation', href: '/governance/documents/attestation' };
-const EXCEPTIONS: Tab = { name: 'Policy exceptions', label: 'Exceptions', href: '/governance/exceptions' };
+const EXCEPTIONS: Tab = { name: 'Exceptions', label: 'Exceptions', href: '/governance/exceptions' };
 const REVIEWS: Tab = { name: 'Document Reviews', label: 'Reviews', href: '/governance/reviews' };
 const OVERVIEW: Tab = { name: 'At a glance', label: 'At a glance', href: '/governance/documents/overview' };
 const STUDIO: Tab = { name: 'Comply AI Studio', label: 'Comply AI Studio', href: '/governance/documents/studio' };
@@ -55,7 +55,7 @@ const TABLE: Array<[string, boolean, string | null, string | null]> = [
   ['/governance/documents/attestation', true, 'Attestation', 'Attestation'],
   ['/governance/reviews', true, 'Document Reviews', 'Document Reviews'],
   ['/governance/reviews/calendar', true, 'Document Reviews', 'Document Reviews'],            // the same tab: its calendar view
-  ['/governance/exceptions', true, 'Policy exceptions', 'Policy exceptions'],
+  ['/governance/exceptions', true, 'Exceptions', 'Exceptions'],
   ['/governance/settings', true, 'Settings', 'Settings'],
   // pages of the Documents family that keep the page's own title, not the tabs
   ['/governance/attestations', false, null, null],
@@ -96,10 +96,10 @@ test('the old logic and the table say the same thing (so the oracle is the behav
 test('the tabs, in order, by who sees them: the Studio where it is on, Settings with the right', () => {
   const names = ALL.map((ctx) => oracleTabs(ctx).map((t) => t.name));
   assert.deepEqual(names, [
-    ['Documents', 'At a glance', 'Comply AI Studio', 'Attestation', 'Document Reviews', 'Policy exceptions', 'Settings'],
-    ['Documents', 'At a glance', 'Attestation', 'Document Reviews', 'Policy exceptions', 'Settings'],
-    ['Documents', 'At a glance', 'Comply AI Studio', 'Attestation', 'Document Reviews', 'Policy exceptions'],
-    ['Documents', 'At a glance', 'Attestation', 'Document Reviews', 'Policy exceptions'],
+    ['Documents', 'At a glance', 'Comply AI Studio', 'Attestation', 'Document Reviews', 'Exceptions', 'Settings'],
+    ['Documents', 'At a glance', 'Attestation', 'Document Reviews', 'Exceptions', 'Settings'],
+    ['Documents', 'At a glance', 'Comply AI Studio', 'Attestation', 'Document Reviews', 'Exceptions'],
+    ['Documents', 'At a glance', 'Attestation', 'Document Reviews', 'Exceptions'],
   ]);
 });
 

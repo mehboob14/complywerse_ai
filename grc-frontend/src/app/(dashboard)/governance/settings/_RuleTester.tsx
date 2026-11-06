@@ -1,13 +1,13 @@
 'use client';
 
-// Governance > Settings > Exception approvals: "Which rule applies?" Pick what an exception is like (its department, priority, the kind of policy and its type) and the
-// card says, as the choice changes, which rule it would follow and who each step would ask now (POST .../preview: the rules as they are saved), and warns of a
-// step nobody could act at (the server's sentences, as they are). No rule: anyone allowed to approve exceptions decides, as before. Only people who can change
+// Governance > Settings > Exception approvals: "Which rule applies?" Pick what an exception is like (its department, priority, document type and exception type) and the
+// card says, as the choice changes, which rule it would follow, who each step would ask now and who the implementer would ask (POST .../preview: the rules as they are
+// saved), and warns of a step or an implementer nobody could act at (the server's sentences, as they are). No rule: anyone allowed to approve exceptions decides, as before. Only people who can change
 // the rules ask it (the server answers nobody else).
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { exceptionRulesApi } from '@/lib/api';
-import { RULES_KEY, RULE_NOTES, KIND_ORDER, PRIORITY_ORDER, previewSteps, scopeOf, typeChoiceLabel, type ExceptionRule, type ExceptionTypeOption, type RuleOptions } from '@/lib/exceptionRules';
+import { RULES_KEY, RULE_NOTES, KIND_ORDER, PRIORITY_ORDER, previewImplementer, previewSteps, scopeOf, typeChoiceLabel, type ExceptionRule, type ExceptionTypeOption, type RuleOptions } from '@/lib/exceptionRules';
 import { statusLabel } from '@/lib/format';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { ErrorState, FormField, Notice, Select, SkeletonLines } from '@/components/ui/ds';
@@ -37,7 +37,9 @@ export function RuleTester({ rules, options, types, levelLabels }: {
   const ruleId = answer.data?.rule?.id;
   const found = ruleId != null ? rules.find((r) => r.id === ruleId) : undefined;
   const scope = found ? scopeOf(found, levelLabels) : null;
-  const steps = answer.data ? previewSteps(answer.data, (id) => names.get(id) ?? `User #${id}`) : [];
+  const nameOf = (id: number) => names.get(id) ?? `User #${id}`;
+  const steps = answer.data ? previewSteps(answer.data, nameOf) : [];
+  const implementer = answer.data ? previewImplementer(answer.data, nameOf) : null;
 
   return (
     <div className="mt-[16px] border-t border-ds-border pt-[16px]">
@@ -54,12 +56,12 @@ export function RuleTester({ rules, options, types, levelLabels }: {
             {(options?.priorities?.length ? options.priorities : PRIORITY_ORDER).map((w) => <option key={w} value={w}>{statusLabel(w)}</option>)}
           </Select>
         </FormField>
-        <FormField label="Policy kind">
+        <FormField label="Document type">
           <Select placeholder="Not set" value={kind} onChange={(e) => setKind(e.target.value)}>
             {(options?.doc_types?.length ? options.doc_types : KIND_ORDER).map((w) => <option key={w} value={w}>{statusLabel(w)}</option>)}
           </Select>
         </FormField>
-        <FormField label="Type">
+        <FormField label="Exception type">
           <Select placeholder="Not set" value={type} onChange={(e) => setType(e.target.value)}>
             {types.filter((t) => !t.archived).map((t) => <option key={t.value} value={t.value}>{typeChoiceLabel(t)}</option>)}
           </Select>
@@ -94,6 +96,17 @@ export function RuleTester({ rules, options, types, levelLabels }: {
                 </li>
               ))}
             </ol>
+            {implementer && (
+              <div role="group" aria-label="Implementer" className="rounded-ds-card bg-ds-surface-subtle p-[10px]">
+                <div className="flex flex-wrap items-baseline gap-x-[8px] gap-y-[2px]">
+                  <span className="text-ds-body font-[600] text-ds-fg">Implementer</span>
+                  {implementer.how && <span className="text-ds-label text-ds-fg-muted">{implementer.how}</span>}
+                </div>
+                <ul aria-label="Asked to implement" className="mt-[4px] flex flex-wrap gap-[4px]">
+                  {implementer.who.map((w, i) => <li key={i} className={CHIP}>{w}</li>)}
+                </ul>
+              </div>
+            )}
             {answer.data.problems.map((problem, i) => <Notice key={i} tone="warning">{problem}</Notice>)}
           </div>
         ) : null}

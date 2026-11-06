@@ -4,8 +4,9 @@
 // has no `approval` and none of this is shown: it is decided as it always was.
 import { EMPTY, formatDate, formatDateTime } from '../../../../lib/format.ts';
 import { slotText } from '../../../../lib/exceptionRules.ts';
+import { exceptionStatus } from '../../../../lib/status.ts';
 import type { Tone } from '../../../../lib/status.ts';
-import type { ApprovalDecision, ApprovalHistory, ApprovalRound, ApprovalStep, ExceptionApproval, MyStep, RunStatus } from './_types.ts';
+import type { ApprovalDecision, ApprovalHistory, ApprovalRound, ApprovalStep, ExceptionApproval, Implementation, ImplementationState, MyStep, RunStatus } from './_types.ts';
 
 /** Whether the exception waits under an approval rule now: its rule's steps decide it, and only the people asked at the open step. */
 export const isRuled = (e: { approval?: { status: string } | null }): boolean => e.approval?.status === 'open';
@@ -101,3 +102,54 @@ export type DecisionOption = 'approve' | 'changes' | 'reject';
 /** What the open step lets the person asked do, in the order of the buttons: approve always, ask for changes and reject where the step allows them. Nothing for anyone else. */
 export const decisionOptions = (my: Pick<MyStep, 'can_reject' | 'can_ask_changes'> | null | undefined): DecisionOption[] =>
   my ? ['approve', ...(my.can_ask_changes ? ['changes' as const] : []), ...(my.can_reject ? ['reject' as const] : [])] : [];
+
+// ─── The assessment an approval needs ────────────────────────────────────────────────────────────────────────────────────────────
+
+/** Why Approve waits: said beside the button (a disabled button says nothing by itself). The server answers 400 with its own sentence if it is pressed anyway. */
+export const APPROVE_HINT = 'Record a potential risk, or none identified, to approve.';
+
+/**
+ * Whether the person asked cannot approve yet: under a rule an approval needs their own assessment at the open step (at least one potential risk, or "none
+ * identified"). Reject and Ask for changes need only their comment. Nobody asked, or a server that sends no assessment, blocks nothing.
+ */
+export const approveBlocked = (my: { assessment?: { recorded: boolean } | null } | null | undefined): boolean => Boolean(my?.assessment && !my.assessment.recorded);
+
+/** The same for an exception as the page holds it: only a run that is open asks anyone. */
+export const approveBlockedFor = (e: { approval?: { status: string; my_step: { assessment?: { recorded: boolean } | null } | null } | null }): boolean =>
+  e.approval?.status === 'open' && approveBlocked(e.approval.my_step);
+
+// ─── The implementation, after the last approval ─────────────────────────────────────────────────────────────────────────────────
+
+const IMPLEMENTATION_WORD: Record<ImplementationState, string> = { waiting: 'Waiting for compensating controls', in_progress: 'In progress', done: 'Implemented', cancelled: 'Cancelled' };
+const IMPLEMENTATION_TONE: Record<ImplementationState, Tone> = { waiting: 'pending', in_progress: 'progress', done: 'success', cancelled: 'neutral' };
+
+/** How the implementation stands, in words; a word nobody registered is said readably, never hidden. */
+export const implementationWord = (state: string): string =>
+  IMPLEMENTATION_WORD[state as ImplementationState] ?? (state ? state.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()) : EMPTY);
+export const implementationTone = (state: string): Tone => IMPLEMENTATION_TONE[state as ImplementationState] ?? 'neutral';
+/** Open: it still waits for the people asked (nothing recorded yet, or some). */
+export const implementationOpen = (impl: Pick<Implementation, 'state'> | null | undefined): boolean => impl?.state === 'waiting' || impl?.state === 'in_progress';
+
+/** The line in the details header: "Approved · Waiting for compensating controls"; just the status without an implementation. */
+export const statusLine = (status: string, impl: Pick<Implementation, 'state'> | null | undefined): string =>
+  impl ? `${exceptionStatus.label(status)} · ${implementationWord(impl.state)}` : exceptionStatus.label(status);
+
+/** Who the implementation waits for: "Waiting for Chen, Bina" (three names, then "and N more"), "Nobody can act" when everyone asked is gone; '' once it is over. */
+export function implementerLine(impl: Pick<Implementation, 'state' | 'stalled' | 'asked'>, max = 3): string {
+  if (!implementationOpen(impl)) return '';
+  if (impl.stalled || impl.asked.length === 0) return 'Nobody can act';
+  const names = impl.asked.map((p) => p.name);
+  return `Waiting for ${names.slice(0, max).join(', ')}${names.length > max ? ` and ${names.length - max} more` : ''}`;
+}
+
+/** "Due 14 Nov 2026", or "Overdue since 14 Nov 2026" once the days are up; '' when no days were set or it is over. */
+export function implementationDue(impl: Pick<Implementation, 'state' | 'due_at' | 'overdue'>): string {
+  if (!implementationOpen(impl) || !impl.due_at) return '';
+  return `${impl.overdue ? 'Overdue since' : 'Due'} ${formatDate(impl.due_at)}`;
+}
+
+/** "Implemented by Chen · 4 Nov 2026" once it is done; '' otherwise. */
+export function implementedLine(impl: Pick<Implementation, 'state' | 'completed_by_name' | 'completed_at'>): string {
+  if (impl.state !== 'done') return '';
+  return ['Implemented', impl.completed_by_name ? `by ${impl.completed_by_name}` : '', impl.completed_at ? `· ${formatDate(impl.completed_at)}` : ''].filter(Boolean).join(' ');
+}

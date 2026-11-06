@@ -46,6 +46,8 @@ router.include_router(regulatory_feeds_router, tags=["Regulatory Feed Management
 router.include_router(gap_analysis_router, tags=["Policy Gap Analysis"])
 router.include_router(applicability_router, tags=["Applicability Management"])
 router.include_router(reports_router, tags=["Reports & Export"])
+from .routers.exception_workflow import router as exception_workflow_router  # noqa: E402 - an exception's hierarchy, risks, controls, assets, AI (D62)
+router.include_router(exception_workflow_router, tags=["Policy Exceptions"])      # before the exception router: its fixed paths (/by-unit, /ai/draft) are not ids
 router.include_router(policy_exception_router.router, tags=["Policy Exceptions"])
 from .routers.exception_rules import router as exception_rules_router  # noqa: E402 - who reviews and approves an exception (D58)
 router.include_router(exception_rules_router, tags=["Policy Exceptions"])

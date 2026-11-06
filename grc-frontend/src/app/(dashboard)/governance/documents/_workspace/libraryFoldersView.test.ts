@@ -13,7 +13,8 @@ const popover = read('MovePopover.tsx');
 const filters = read('LibraryFilters.tsx');
 
 test('the Folders view is the same table: the same rows, columns without Department, no pager, and a folder header for each department', () => {
-  assert.ok(table.includes('renderRow(r, node.depth + 1)'));                                       // a document row, one level under its folder
+  // a folder's documents sit one step under its arrow, level with a folder inside it: a row's own cells are one step right of a folder header at the same depth
+  assert.ok(table.includes('renderRow(r, node.depth)') && !table.includes('renderRow(r, node.depth + 1)'));
   assert.ok(table.includes("filter((c) => !(folders && c.id === 'department')"));                  // the folder is the department
   assert.ok(table.includes('hasDepartmentColumn || folders ? undefined : department'));            // and the owner cell does not repeat it
   assert.ok(table.includes('{!loading && !folders && top.length > 0 && ('));                      // the pager is the table's; folders have "Show N more"
