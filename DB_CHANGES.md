@@ -72,6 +72,57 @@ Yes, at the first request of each tenant after the backend restarts (rehearsed o
 
 ---
 
+## 2026-11-06 - Framework onboarding: three new tables and a one-off backfill (auto-applied); the public attestation viewer is code-only
+
+### What
+
+- **New tables** (model `backend/grc/models/_95_framework_onboarding.py`, made by `create_all` at a tenant's first start; no column is added to any
+  existing table):
+  `grc_fw_org_profile` (one row per tenant: `tenant_id` unique, FK `grc_tenants.id` ON DELETE CASCADE; `values` JSON, `groups_reviewed` JSON,
+  `catalog_version`, `updated_by` FK `grc_users.id` ON DELETE SET NULL, timestamps),
+  `grc_framework_onboardings` (one per tenant per library framework: `tenant_id` FK CASCADE, `uploaded_framework_id` FK `grc_uploaded_frameworks.id`
+  CASCADE, `framework_slug` VARCHAR(64), `family` VARCHAR(40), `state` VARCHAR(20) draft | ready | complete | underway, `answers` JSON, `snapshot` JSON,
+  `approval_note` TEXT, `underway_kind` VARCHAR(80), `underway_reason` TEXT, `underway_source` VARCHAR(10) manual | legacy, `reopened_count`, the
+  submitted/approved/underway/created user references FK `grc_users.id` ON DELETE SET NULL; unique `uq_fw_onboarding_framework` on
+  `(tenant_id, uploaded_framework_id)`) and
+  `grc_framework_onboarding_events` (append-only history: `onboarding_id` FK CASCADE, `tenant_id` FK CASCADE, `kind` VARCHAR(30), `actor_id` FK SET NULL,
+  `detail` JSON, `created_at`; index `ix_fw_onboarding_event_order` on `(onboarding_id, id)`).
+- **One-off data backfill** (`schema_migrations._backfill_framework_onboarding_legacy`, once per tenant database at its first connect after the deploy,
+  idempotent): every certification journey whose framework has no onboarding gets one row in `grc_framework_onboardings` with `state = 'underway'`,
+  `underway_source = 'legacy'`, `underway_kind = 'Running before onboarding existed'`, the reason "A journey existed before framework onboarding." and
+  one `marked_underway` event. Nothing existing is changed or removed. (The gate never blocks a framework that already has a journey; the backfill
+  makes the register say so.)
+- **Behaviour that follows, no data involved:** `POST /certifications` answers 409 (`onboarding_required`) for a framework with no journey and no
+  completed or underway onboarding, and the Controls Automation scope sync skips such a framework and lists it under `journeys.blocked`.
+  New permissions `compliance:org_profile:view|edit` and `compliance:framework_onboarding:view|edit|approve|override` (the Administrator role passes;
+  reads need a sign-in only; `compliance:frameworks:edit` also edits).
+- **Code-only (D65):** the public attestation link now draws the document (`/public/{token}/file`, `/text`, `/pages/{n}`); no table, column or row is
+  touched, no dependency added (PyMuPDF and bs4 were already installed).
+
+### Why
+
+The user asked for onboarding steps under Compliance, before the journey of any framework starts, with a blocking gate and an "already underway"
+escape; and for the public attestation page to show the document properly.
+
+### How
+
+Nothing to run: the startup schema step creates the tables and calls the backfill. Manual replay: the three `CREATE TABLE`s from the model file (with the
+unique constraint and the index above). Rehearsed on a whole-app PostgreSQL scratch stack (2026-11-06, by the build session): the tables create, a database without them is
+upgraded and every running journey backfilled, a second run does nothing, and the longest `underway_kind` word fits its column (PostgreSQL found it
+too long at 40 characters; fixed, with a test).
+
+### Risk
+
+Additive and empty for a tenant with no journeys. After the backfill a tenant's running journeys read "already underway" in the register; to start a
+journey for a framework that has none, someone completes its onboarding or marks it underway with a reason (needs `compliance:framework_onboarding:override`).
+To undo: `DROP TABLE grc_framework_onboarding_events, grc_framework_onboardings, grc_fw_org_profile;` (nothing else refers to them).
+
+### Auto-applied?
+
+Yes: `create_all` and the startup backfill, on the first connect of each tenant database after the backend restarts.
+
+---
+
 ## 2026-11-06 — Risk Library removed from the code: nothing is dropped, changed or created (code-only)
 
 ### What
