@@ -49,20 +49,99 @@ export interface Instructions {
 
 /** What a new document can be set up with: the organisation's own data first (its departments, the regulators it follows, its
  * regulatory register, the platform's frameworks), then the usual choices. */
+export interface CountryRow {
+  code: string;
+  name: string;
+  region: string;
+  /** "Main markets" for the platform's own markets, else the region: the picker's headings */
+  group: string;
+  /** a path under /flags/ */
+  flag: string;
+  /** other names a search also matches ("Turkey", "UAE") */
+  aliases: string[];
+  blocs: string[];
+}
+
+/** One regulator or law offered for a country, and where it comes from: the country itself, its bloc (EU, EEA) or the international bodies. */
+export interface CountryItem {
+  label: string;
+  area: string;
+  kind?: string;
+  scope: 'country' | 'bloc' | 'international';
+  bloc?: string;
+}
+
+/** What choosing a country offers (`GET /setup/country`). `frameworks` hold the catalog's names of the installed frameworks. */
+export interface CountryDetail {
+  code: string;
+  name: string;
+  region: string;
+  flag: string;
+  regulators: CountryItem[];
+  laws: CountryItem[];
+  frameworks: { applies: string[]; widely_used: string[] };
+}
+
 export interface SetupOptions {
   entity_types: string[];
   countries: string[];
+  country_list?: CountryRow[];
+  international?: { regulators: CountryItem[]; laws: CountryItem[] };
   country_from_profile: string;
   regulators: Record<string, string[]>;
   regulators_followed: { label: string; country: string }[];
   regulations: { label: string; detail: string }[];
-  frameworks: { id: number; label: string; attached: boolean }[];
+  frameworks: { id: number; label: string; attached: boolean; name?: string }[];
   domains: string[];
   departments: string[];
   audiences: string[];
   lengths: { value: 'short' | 'standard' | 'comprehensive'; label: string; detail: string }[];
   classifications: string[];
   review_cycles: string[];
+}
+
+/** A document the platform suggests for a framework (`POST /governance/documents/ai-suggest-policies`), as the "From a framework" tab lists it. */
+export interface SuggestedDoc {
+  doc_type: string;
+  title: string;
+  /** one sentence on what it covers */
+  description: string;
+  priority: 'high' | 'medium' | 'low';
+  /** the framework's own references to the controls it answers ("A.5.15") */
+  relevant_controls: string[];
+}
+
+/** A suggestion left out because the organisation has the document already (or is writing it): which one, and how the two matched. */
+export interface LeftOut {
+  suggested_title: string;
+  matched_existing_id: number | null;
+  /** the studio draft that justified the skip, when it is one being written */
+  matched_session_id?: number | null;
+  matched_existing_title: string | null;
+  matched_existing_status?: string | null;
+  reason: string;
+  match_type: 'exact_normalized' | 'token_overlap' | 'semantic';
+}
+
+export interface SuggestionResult {
+  suggestions: SuggestedDoc[];
+  skipped_matches: LeftOut[];
+  already_covered: { id: number | null; session_id?: number | null; title: string; doc_type: string; status: string }[];
+  already_covered_count?: number;
+  framework_names?: string;
+}
+
+/** The body of `POST /sessions/from-suggestion`: what the person confirmed of a suggestion, and the details only they can give. */
+export interface FromSuggestionBody {
+  title: string;
+  doc_type: string;
+  description: string;
+  framework_ids: number[];
+  controls: string[];
+  details?: Record<string, string | number>;
+  /** the library document it sits under: read as context while it is written, and kept as its parent by Move to library */
+  parent_document_id?: number;
+  signoff?: { reviewers: { target_type: string; target_id: number; display?: string }[]; approvers: { target_type: string; target_id: number; display?: string }[] };
 }
 
 export interface Reference {
@@ -364,6 +443,13 @@ export interface FrameworkItem {
   domains: string[];
 }
 
+/** What the logo gateway did to an uploaded picture, or could not fix (`warn`): said once, in the answer to the upload. */
+export interface GatewayNote {
+  level: 'info' | 'warn';
+  code: string;
+  text: string;
+}
+
 export interface Asset {
   id: number;
   kind: string;
@@ -374,6 +460,7 @@ export interface Asset {
   height: number | null;
   is_default: boolean;
   created_at: string | null;
+  notes?: GatewayNote[];
 }
 
 export interface ExportNote {
@@ -469,6 +556,13 @@ export const studioApi = {
   deleteSession: (id: number) => del<{ deleted: boolean }>(`/sessions/${id}`),
   /** the choices a document can be set up with (saved as instructions) */
   setupOptions: (id: number) => get<SetupOptions>(`/sessions/${id}/setup`),
+  setupCountry: (name: string) => get<CountryDetail>('/setup/country', { name }),
+  /** The documents the organisation needs for these frameworks, by type (none: every type), without those it already has or is writing. The AI reads the
+   *  framework's controls: it takes up to a minute. */
+  suggestDocuments: async (frameworkIds: number[], docType?: string): Promise<SuggestionResult> =>
+    (await apiClient.post('/governance/documents/ai-suggest-policies', { framework_ids: frameworkIds, ...(docType ? { doc_type: docType } : {}) }, { timeout: 180_000 })).data,
+  /** A suggested document made and started: the session, and its whole text (about 4 to 8 pages) being written as a message to follow. */
+  createFromSuggestion: (body: FromSuggestionBody) => post<{ session: Session; message: Message; warnings: string[] }>('/sessions/from-suggestion', body),
   saveContent: (id: number, content: string, baseRevision?: number, summary?: string) =>
     put<{ revision: number; saved: boolean; words: number }>(`/sessions/${id}/content`, { content, base_revision: baseRevision, summary }),
 
@@ -528,10 +622,12 @@ export const studioApi = {
     post<{ document_id: number; version: string; status: string; change?: 'major' | 'minor' | null }>(`/sessions/${id}/save-to-document`, body),
 
   assets: () => get<{ items: Asset[] }>('/assets'),
-  uploadAsset: async (file: File, makeDefault = false): Promise<Asset> => {
+  /** `process` false keeps the picture as it is: no trimming, no background change ("use the original"). */
+  uploadAsset: async (file: File, makeDefault = false, process = true): Promise<Asset> => {
     const form = new FormData();
     form.append('file', file);
     form.append('make_default', String(makeDefault));
+    if (!process) form.append('process', 'false');
     return (await apiClient.post(`${base}/assets`, form, { headers: { 'Content-Type': 'multipart/form-data' } })).data;
   },
   updateAsset: (id: number, body: { name?: string; is_default?: boolean }) => put<Asset>(`/assets/${id}`, body),

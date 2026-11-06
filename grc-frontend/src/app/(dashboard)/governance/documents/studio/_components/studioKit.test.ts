@@ -65,7 +65,7 @@ test('the dialogs that hold typed input or a choice ask "Discard changes?" (dirt
   // Move to library, Save to library, Details (draft) and Save as a template; Export holds no typed input, and the details loading shell holds nothing
   assert.ok((dialogs.match(/\bdirty=\{/g)?.length ?? 0) >= 4, 'Move to library, Save to library, Details (draft), Save as a template');
   const start = read('page.tsx');
-  assert.ok(/title="Write a new document"[^>]*dirty=\{touched\}/.test(start), 'Write a new document');
+  assert.ok(/title="New document"[^>]*dirty=\{touched \|\| suggestedDirty\}/.test(start), 'New document (the Write tab and the suggested documents tab)');
   assert.ok(/title="Upload a document"[^>]*dirty=\{!!chosen\}/.test(start), 'Upload a document');
   assert.ok(/<AnimatedModal[^>]*\bdirty=\{address !== start\}/.test(readFileSync(join(DOCUMENTS, '_LinkDialog.tsx'), 'utf8')), 'the link dialog');          // [^>] spans lines
 });

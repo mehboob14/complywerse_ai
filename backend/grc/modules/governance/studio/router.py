@@ -17,7 +17,7 @@ from ....routers.auth_router import require_auth
 from ....services.ai_gateway import claude_client
 from ..permissions import can_edit, edit_filter, is_admin as _is_admin, visible_filter
 from . import blocks as B
-from . import assets, checks, exporters, gate, jobs, service, templates
+from . import assets, checks, exporters, gate, jobs, service, suggestion, templates
 from . import references as refs
 
 router = APIRouter(prefix="/studio", tags=["Governance - AI Studio"])
@@ -97,6 +97,18 @@ class MessageIn(BaseModel):
 class DraftIn(BaseModel):
     brief: Optional[str] = None                    # what the person wants, in their words (optional)
     rewrite: bool = False                          # write it again even though the document has been started
+
+
+class SuggestionIn(BaseModel):
+    """A document suggested for a framework (POST /governance/documents/ai-suggest-policies), as the person confirmed it."""
+    title: str
+    doc_type: str = "policy"
+    description: str = ""                          # what the suggestion says it covers, as the person left it
+    framework_ids: List[int] = []                  # the frameworks it was suggested for: attached as references
+    controls: List[str] = []                       # the framework's control references the suggestion answers
+    details: Optional[Dict[str, Any]] = None       # the library document's: owner_id, department_id, classification, review_cycle_months, effective_date, next_review_date
+    signoff: Optional[Dict[str, Any]] = None       # reviewers and approvers ([{target_type, target_id, display}]): chosen now, asked at submit
+    parent_document_id: Optional[int] = None       # the library document it sits under (read as context, kept as its parent by Move to library)
 
 
 class OpsIn(BaseModel):
@@ -312,6 +324,23 @@ def create_session(body: SessionIn, db: Session = Depends(get_db), user: GRCUser
     return service.session_view(db, s, user=user)          # a new document waits for the person's request: nothing is written on its own
 
 
+@router.post("/sessions/from-suggestion", dependencies=[Depends(require_studio)])
+def create_from_suggestion(body: SuggestionIn, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """A suggested document made and started: the studio session from the suggestion (its brief, the frameworks as references, the organisation's
+    profile as the setup, the person's details kept for Move to library), and the whole document, about 4 to 8 pages, written as the first draft
+    (a message to poll, like `/sessions/{id}/draft`). The answer is the session, the message and what could not be attached."""
+    if not claude_client.configured():
+        raise HTTPException(status_code=503, detail=str(claude_client.ClaudeNotConfigured()))
+    try:
+        s, warnings = suggestion.create(db, user, title=body.title, doc_type=body.doc_type, description=body.description, framework_ids=body.framework_ids,
+                                        controls=body.controls, details=body.details, signoff=body.signoff, parent_document_id=body.parent_document_id)
+        msg = service.start_turn(db, s, user, f"Write the complete {s.doc_type}.")           # what it covers is in the setup's focus areas, not said twice
+    except service.StudioError as exc:
+        raise _problem(exc)
+    jobs.launch(_slug(db), "draft", s.id, msg.id, user)
+    return {"session": service.session_view(db, s, user=user), "message": service.message_view(db.get(StudioMessage, msg.id)), "warnings": warnings}
+
+
 @router.post("/sessions/upload", dependencies=[Depends(require_studio)])
 async def create_session_from_file(file: UploadFile = File(...), title: str = Form(""), doc_type: str = Form("policy"),
                                    classification: str = Form("internal"), description: Optional[str] = Form(None),
@@ -365,6 +394,19 @@ def setup_options(session_id: int, db: Session = Depends(get_db), user: GRCUser 
     from . import setup
 
     return setup.options(db, _session(db, session_id, user))
+
+
+@router.get("/setup/country", dependencies=[Depends(require_studio)])
+def setup_country(name: str = Query(..., min_length=1, max_length=120), user: GRCUser = Depends(require_auth)):
+    """What choosing a country offers: its regulators and laws, then its bloc's (EU, EEA) and the international ones, and which installed frameworks
+    apply there. Reference data, the same for everyone; `name` may be a name, an alias or an ISO code ("Turkey", "UAE", "pk")."""
+    from . import world
+
+    found = world.lookup(name)
+    detail = world.detail(found["code"]) if found else None
+    if detail is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No lists for that country")
+    return detail
 
 
 @router.delete("/sessions/{session_id}", dependencies=[Depends(require_studio)])
@@ -820,11 +862,13 @@ def list_assets(db: Session = Depends(get_db), user: GRCUser = Depends(require_a
 
 
 @router.post("/assets", dependencies=[Depends(require_studio)])
-async def upload_asset(file: UploadFile = File(...), name: str = Form(""), make_default: bool = Form(False),
+async def upload_asset(file: UploadFile = File(...), name: str = Form(""), make_default: bool = Form(False), process: bool = Form(True),
                        db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """A logo (SVG, PNG or JPEG). `process` false keeps the picture as it is ("use the original"): no trimming, no background change.
+    The answer says what the gateway did to it in `notes`."""
     data = await file.read(assets.MAX_LOGO_BYTES + 1)
     try:
-        return assets.view(assets.add(db, user, file.filename or "", data, name=name or None, make_default=make_default))
+        return assets.view(assets.add(db, user, file.filename or "", data, name=name or None, make_default=make_default, process=process))
     except service.StudioError as exc:
         raise _problem(exc)
 

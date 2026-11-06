@@ -12,19 +12,20 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { Check, ChevronRight, Sparkles } from 'lucide-react';
 import { studioApi, type Instructions, type Session, type SetupOptions } from '@/lib/studio/api';
-import { ComboBoxInput } from '@/components/ui/ComboBoxInput';
+import { ComboBoxInput, type ComboBoxOption } from '@/components/ui/ComboBoxInput';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { MultiSelectDropdown, type MultiSelectDropdownItem } from '@/components/ui/MultiSelectDropdown';
 import { Button, ErrorState, Select, SkeletonLines, Textarea, TextInput, useNotify } from '@/components/ui/ds';
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { queueFor } from './setupPatch';
+import { countryOptions, frameworkItems, lawItems, regulatorItems, SEVERAL } from './setupCountry';
 
 /** The lists as this server sends them; the newer fields are optional so an older server still works. */
 type Options = SetupOptions & {
   entity_names?: string[];
   defaults?: { country: string; entity_type: string; regulators: string[] };
   document?: { classification: string; review_cycle: string; owner: string; department: string } | null;
-  frameworks: { id: number; label: string; attached: boolean; of_document?: boolean }[];
+  frameworks: { id: number; name?: string; label: string; attached: boolean; of_document?: boolean }[];
 };
 
 /** The document's instructions as the person edits them: saved a moment after typing, at once after a choice, one save at a time with
@@ -123,7 +124,7 @@ function Many({ label, items, value, onChange, create = true, disabled }: {
 
 /** One of a list, with search; the person may type their own. */
 export function One({ label, value, options, onChange, hint, custom = true }: {
-  label: string; value: string; options: { value: string; label: string; hint?: string; group?: string }[]; onChange: (v: string) => void; hint?: string; custom?: boolean;
+  label: string; value: string; options: ComboBoxOption[]; onChange: (v: string) => void; hint?: string; custom?: boolean;
 }) {
   return (
     <Field label={label} hint={hint}>
@@ -167,6 +168,9 @@ export function SetupFields({ session, draft, change, onReferencesChanged, first
   const [notes, setNotes] = useState(() => !!text('regulatory_notes'));
   const [more, setMore] = useState(false);
   const doc = o?.document ?? null;
+  // what choosing the country offers: its regulators, laws and frameworks, then its bloc's and the international ones (a country typed by hand has none)
+  const detail = useQuery({ queryKey: ['studio', 'country', country], queryFn: () => studioApi.setupCountry(country), enabled: !!country && country !== SEVERAL,
+    staleTime: 10 * 60_000, retry: false });
 
   // a library document's classification and review cycle are its own: the instructions follow the document, never the other way
   // (a document moved to the library takes them from the setup when it is moved: MoveToLibraryDialog)
@@ -179,14 +183,9 @@ export function SetupFields({ session, draft, change, onReferencesChanged, first
   if (options.isLoading) return <SkeletonLines lines={3} label="Loading the choices" />;
   if (!o) return <ErrorState compact title="Couldn't load the choices" message={errorMessage(options.error)} onRetry={canRetry(options.error) ? () => { void options.refetch(); } : undefined} />;
 
-  const followed = o.regulators_followed.filter((r) => !country || !r.country || r.country === country);
-  const regulatorItems: MultiSelectDropdownItem[] = [
-    ...followed.map((r) => ({ value: r.label, label: r.label, subLabel: 'Followed in Regulatory Feeds' })),
-    ...(country && o.regulators[country]
-      ? o.regulators[country].map((r) => ({ value: r, label: r }))
-      : Object.entries(o.regulators).flatMap(([c, names]) => names.map((r) => ({ value: r, label: r, subLabel: c })))),
-  ].filter((item, i, all) => all.findIndex((x) => x.value === item.value) === i);
-  const frameworks = [...o.frameworks].sort((a, b) => Number(!!b.of_document) - Number(!!a.of_document));
+  const regulatorList = regulatorItems({ followed: o.regulators_followed, country, detail: detail.data, legacy: o.regulators, international: o.international?.regulators });
+  const lawList = lawItems({ detail: detail.data, register: o.regulations, international: o.international?.laws });
+  const frameworks = frameworkItems(o.frameworks, country, detail.data);
   // each framework once, though it may be attached twice (another selection of it, or an older double click)
   const attachedIds = Array.from(new Set(session.references.filter((r) => r.kind === 'framework' && r.source_id != null).map((r) => String(r.source_id))));
   const applyFrameworks = async (next: string[]) => {
@@ -219,11 +218,11 @@ export function SetupFields({ session, draft, change, onReferencesChanged, first
       Fill from organisation
     </Button>
   );
-  const countryField = <One label="Country" value={country} options={plain(o.countries)} onChange={(v) => change({ country: v }, true)} />;
-  const regulatorsField = <Many label="Regulators" items={regulatorItems} value={list('regulators')} onChange={(v) => change({ regulators: v }, true)} />;
+  const countryField = <One label="Country" value={country} options={countryOptions(o.country_list, o.countries)} onChange={(v) => change({ country: v }, true)} />;
+  const regulatorsField = <Many label="Regulators" items={regulatorList} value={list('regulators')} onChange={(v) => change({ regulators: v }, true)} />;
   const frameworksField = o.frameworks.length ? (
     <Many label="Frameworks" create={false} disabled={fwBusy}
-      items={frameworks.map((f) => ({ value: String(f.id), label: f.label, subLabel: f.of_document ? 'This document’s' : undefined, disabled: fwBusy }))}
+      items={frameworks.map((f) => ({ value: String(f.id), label: f.label, subLabel: f.note || undefined, disabled: fwBusy }))}
       value={attachedIds} onChange={(v) => void applyFrameworks(v)} />
   ) : <p className="text-xs text-[#586472]">No frameworks available</p>;
   const lengthField = lengthOn && (
@@ -283,15 +282,14 @@ export function SetupFields({ session, draft, change, onReferencesChanged, first
           <One label="Organisation type" value={text('entity_type')} options={plain(o.entity_types)} onChange={(v) => change({ entity_type: v }, true)} />
           {countryField}
         </div>
-        <Many label="Other countries" items={plain(o.countries.filter((c) => c !== country && c !== 'Several countries'))} value={list('other_countries')}
-          onChange={(v) => change({ other_countries: v }, true)} />
+        <Many label="Other countries" items={o.country_list?.length ? o.country_list.filter((c) => c.name !== country).map((c) => ({ value: c.name, label: c.name, subLabel: c.region }))
+          : plain(o.countries.filter((c) => c !== country && c !== SEVERAL))} value={list('other_countries')} onChange={(v) => change({ other_countries: v }, true)} />
       </Section>
 
       <Section title="Rules" open={open(1)} summary={joined(list('regulators').slice(0, 2).join(', ') + (list('regulators').length > 2 ? ` +${list('regulators').length - 2}` : ''),
         count(list('regulations').length, 'law'), count(attachedIds.length, 'framework'))}>
         {regulatorsField}
-        <Many label="Laws and regulations" items={o.regulations.map((r) => ({ value: r.label, label: r.label, subLabel: r.detail || undefined }))}
-          value={list('regulations')} onChange={(v) => change({ regulations: v }, true)} />
+        <Many label="Laws and regulations" items={lawList} value={list('regulations')} onChange={(v) => change({ regulations: v }, true)} />
         {frameworksField}
         {notes ? (
           <Field label="Other requirements">

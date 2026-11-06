@@ -6,6 +6,10 @@
  * departments, audience, length, classification and review cycle), the writing style (tone, language, what to focus on), and the
  * exported file (the logo and where it sits, a watermark). Saved as you choose.
  *
+ * A logo goes through the server's logo gateway (SVG, PNG or JPEG): its empty margin is trimmed, the logo is found in a letterhead or a
+ * screenshot, a plain background is taken off, and what was done (or could not be fixed: a white logo, a low resolution) is said once under
+ * the logos, with "Use the original" to keep the picture as it was.
+ *
  * On the design-system kit: the fields, the buttons, and the logo's actions, which are always there (they used to appear only while the
  * pointer was over the logo, so a touch screen and the keyboard never saw them); deleting a logo asks first.
  */
@@ -36,10 +40,12 @@ const POSITIONS: { value: LogoPosition; label: string }[] = [
 ];
 
 /** Where things land on an exported page: the entity name at the top, the logo where it was put, the watermark across (a faint diagonal bar: the word itself is in the field beside it). */
-function PagePreview({ position, hasLogo, entity, watermark }: { position: LogoPosition; hasLogo: boolean; entity: string; watermark: string }) {
+function PagePreview({ position, hasLogo, assetId, entity, watermark }: { position: LogoPosition; hasLogo: boolean; assetId?: number | null; entity: string; watermark: string }) {
   const [where, side] = position.split('-') as ['header' | 'footer', 'left' | 'center' | 'right'];
   const justify = side === 'center' ? 'justify-center' : side === 'right' ? 'justify-end' : 'justify-start';
-  const logo = hasLogo ? <span className="h-2 w-5 rounded-sm bg-ds-primary-active opacity-70" aria-hidden /> : null;
+  const logo = hasLogo
+    ? (assetId ? <AssetImage id={assetId} alt="" className="h-[9px] max-w-[30px] object-contain" /> : <span className="h-2 w-5 rounded-sm bg-ds-primary-active opacity-70" aria-hidden />)
+    : null;
   return (
     <div className="relative flex h-[100px] w-[72px] shrink-0 flex-col overflow-hidden rounded-ds-control border border-ds-border-strong bg-ds-surface px-1.5 py-1" aria-hidden>
       <div className={`flex items-center gap-1 border-b border-ds-border pb-1 ${where === 'header' ? justify : 'justify-start'}`}>
@@ -65,12 +71,20 @@ export default function InstructionsPanel({ session, onChanged }: { session: Ses
   const { draft, change, saved } = useInstructionsDraft(session, onChanged);
   const file = useRef<HTMLInputElement>(null);
   const [focus, setFocus] = useState(() => !!String(session.instructions.focus_areas ?? '').trim());
+  // the last upload and what the gateway said about it (the file stays so "Use the original" can send it again as it is)
+  const [made, setMade] = useState<{ asset: Asset; file: File } | null>(null);
 
   const assets = useQuery({ queryKey: ['studio', 'assets'], queryFn: studioApi.assets, staleTime: 30_000 });
   const upload = useMutation({
     mutationFn: (f: File) => studioApi.uploadAsset(f, !(assets.data?.items.length)),
-    onSuccess: (a) => { qc.invalidateQueries({ queryKey: ['studio', 'assets'] }); change({ logo_asset_id: a.id }, true); },
+    onSuccess: (a, f) => { qc.invalidateQueries({ queryKey: ['studio', 'assets'] }); change({ logo_asset_id: a.id }, true); setMade(a.notes?.length ? { asset: a, file: f } : null); },
     onError: (e) => notify.error(e, { title: 'That logo could not be used' }),
+  });
+  // the picture as it was uploaded: sent again untouched, and only then is the tidied one removed (nothing is lost if it fails)
+  const keepOriginal = useMutation({
+    mutationFn: async ({ asset, file }: { asset: Asset; file: File }) => { const a = await studioApi.uploadAsset(file, !!asset.is_default, false); await studioApi.deleteAsset(asset.id); return a; },
+    onSuccess: (a) => { qc.invalidateQueries({ queryKey: ['studio', 'assets'] }); change({ logo_asset_id: a.id }, true); setMade(null); },
+    onError: (e) => notify.error(e, { title: 'The original could not be used' }),
   });
   const makeDefault = useMutation({
     mutationFn: (id: number) => studioApi.updateAsset(id, { is_default: true }),
@@ -123,7 +137,7 @@ export default function InstructionsPanel({ session, onChanged }: { session: Ses
 
       <Section title="Export" summary={[logoName ? `Logo ${POSITIONS.find((p) => p.value === position)?.label.toLowerCase()}` : 'No logo',
         watermark === NO_WATERMARK ? 'no watermark' : `watermark ${watermark}`].join(' · ')}>
-        <Field label="Logo" hint="On every page of an exported Word or PDF document. PNG or JPEG.">
+        <Field label="Logo" hint="On every page of an exported Word or PDF document. SVG, PNG or JPEG: the empty space around it is trimmed, it is found in a letterhead or screenshot, and a plain background is taken off.">
           {assets.isError && !assets.data && <ErrorState compact title="Couldn't load the logos" message={errorMessage(assets.error)} onRetry={canRetry(assets.error) ? () => { void assets.refetch(); } : undefined} />}
           <div className="flex flex-wrap gap-2">
             {assets.data?.items.map((a) => {
@@ -147,14 +161,28 @@ export default function InstructionsPanel({ session, onChanged }: { session: Ses
                 </div>
               );
             })}
-            <input ref={file} type="file" hidden aria-label="Choose a logo" accept="image/png,image/jpeg" onChange={(e) => { const f = e.target.files?.[0]; if (f) upload.mutate(f); e.target.value = ''; }} />
+            <input ref={file} type="file" hidden aria-label="Choose a logo" accept="image/svg+xml,image/png,image/jpeg,.svg" onChange={(e) => { const f = e.target.files?.[0]; if (f) upload.mutate(f); e.target.value = ''; }} />
             <button type="button" onClick={() => file.current?.click()} disabled={upload.isPending} className="flex h-12 w-[5.5rem] flex-col items-center justify-center gap-0.5 rounded-ds-control border border-dashed border-ds-border-control bg-ds-surface text-ds-label font-medium text-ds-fg-body hover:border-ds-primary hover:bg-ds-primary-soft focus-visible:outline-none focus-visible:shadow-ds-ring disabled:opacity-50">
               <Upload aria-hidden className="h-3.5 w-3.5" /> {upload.isPending ? 'Uploading…' : 'Upload'}
             </button>
           </div>
+          {made?.asset.notes?.length ? (
+            <div role="status" className="mt-2 space-y-1 rounded-ds-control bg-ds-surface-hover px-3 py-2 text-ds-label">
+              <p className="font-[600] text-ds-fg">Logo checked</p>
+              <ul className="space-y-0.5">
+                {made.asset.notes.map((n) => <li key={n.code} className={n.level === 'warn' ? 'font-[600] text-ds-warning' : 'text-ds-fg-body'}>{n.text}</li>)}
+              </ul>
+              <div className="flex gap-3">
+                {made.asset.notes.some((n) => ['trimmed', 'extracted', 'background_removed'].includes(n.code)) && (
+                  <Button variant="link" size="sm" loading={keepOriginal.isPending} onClick={() => keepOriginal.mutate(made)} title="Keep the picture exactly as you uploaded it">Use the original</Button>
+                )}
+                <Button variant="link" size="sm" onClick={() => setMade(null)}>Dismiss</Button>
+              </div>
+            </div>
+          ) : null}
         </Field>
         <div className="flex gap-3">
-          <PagePreview position={position} hasLogo={!!draft.logo_asset_id} entity={draft.entity_name ?? ''} watermark={watermark === NO_WATERMARK ? '' : watermark} />
+          <PagePreview position={position} hasLogo={!!draft.logo_asset_id} assetId={draft.logo_asset_id} entity={draft.entity_name ?? ''} watermark={watermark === NO_WATERMARK ? '' : watermark} />
           <div className="min-w-0 flex-1 space-y-2.5">
             <Field label="Position">
               <Select value={position} onChange={(e) => change({ logo_position: e.target.value as LogoPosition }, true)} aria-label="Position">

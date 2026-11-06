@@ -19,6 +19,7 @@ import re
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from . import blocks as B
+from .logo_gateway import fit_cm
 from .checks import _PLACEHOLDERS
 
 INK = "000000"                  # the title, the headings and the entity name
@@ -135,8 +136,8 @@ def to_html(markdown: str, *, title: str = "", entity_name: str = "", logo: Opti
     if img and where == "footer":
         footer = f'<footer style="text-align:{side}">{img}</footer>'
     css = ("body{font:15px/1.55 Calibri,Arial,sans-serif;max-width:820px;margin:32px auto;padding:0 20px;color:#000;background:#fff}header{display:flex;align-items:center;gap:14px;"
-           "border-bottom:2px solid #bfbfbf;padding-bottom:10px;margin-bottom:24px}header img{height:48px}footer{border-top:1px solid #bfbfbf;margin-top:32px;padding-top:12px}"
-           "footer img{height:40px}h1,h2,h3,h4{color:#000}table{border-collapse:collapse;width:100%;margin:12px 0}"
+           "border-bottom:2px solid #bfbfbf;padding-bottom:10px;margin-bottom:24px}header img{max-height:49px;max-width:227px}footer{border-top:1px solid #bfbfbf;margin-top:32px;padding-top:12px}"
+           "footer img{max-height:34px;max-width:170px}h1,h2,h3,h4{color:#000}table{border-collapse:collapse;width:100%;margin:12px 0}"
            "td,th{border:1px solid #000;padding:6px 8px;vertical-align:top}th{background:#f2f2f2;text-align:left}blockquote{border-left:4px solid #808080;margin:12px 0;padding:2px 14px;color:#404040;font-style:italic}"
            "pre{background:#f2f2f2;padding:10px;overflow:auto}code{background:#f2f2f2;padding:1px 4px}mark{background:#fff2a8}")
     mark = ""
@@ -303,6 +304,16 @@ def _style_doc(doc) -> None:
     black_headings(doc)
 
 
+def _picture_size(path: str, where: str) -> dict:
+    """The width and height Word prints the logo at (``logo_gateway.fit_cm``: the largest the header or footer box allows, shape kept)."""
+    from docx.shared import Cm
+    from PIL import Image
+
+    with Image.open(path) as im:
+        w, h = fit_cm(im.width, im.height, where)
+    return {"width": Cm(w), "height": Cm(h)}
+
+
 def _header_footer(doc, *, entity_name: str, logo_path: Optional[str], logo_position: str, footer_text: str) -> None:
     from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_ALIGNMENT
     from docx.shared import Cm, Pt, RGBColor
@@ -314,7 +325,7 @@ def _header_footer(doc, *, entity_name: str, logo_path: Optional[str], logo_posi
     has_logo = bool(logo_path and os.path.exists(logo_path))
     head.alignment = align if where == "header" else WD_ALIGN_PARAGRAPH.LEFT
     if has_logo and where == "header":
-        head.add_run().add_picture(logo_path, height=Cm(1.3))
+        head.add_run().add_picture(logo_path, **_picture_size(logo_path, "header"))
         if entity_name:
             head.add_run("   ")
     if entity_name:
@@ -335,7 +346,7 @@ def _header_footer(doc, *, entity_name: str, logo_path: Optional[str], logo_posi
         mark = sec.footer.add_paragraph()
         mark.alignment = align
         mark.paragraph_format.space_before = Pt(4)
-        mark.add_run().add_picture(logo_path, height=Cm(0.9))
+        mark.add_run().add_picture(logo_path, **_picture_size(logo_path, "footer"))
 
 
 _VML = 'xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office"'
@@ -660,8 +671,7 @@ def to_pdf(markdown: str, *, title: str = "", entity_name: str = "", logo_path: 
             x = 2.2 * cm
             if logo is not None and where == "header":
                 iw, ih = logo.getSize()
-                lh = 1.3 * cm
-                lw = lh * iw / ih
+                lw, lh = (v * cm for v in fit_cm(iw, ih, "header"))
                 x = {"center": (w - lw) / 2, "right": w - 2.2 * cm - lw}.get(side, 2.2 * cm)
                 self.drawImage(logo, x, h - 1.2 * cm - lh, width=lw, height=lh, mask="auto")
                 x = x + lw + 8 if side == "left" else 2.2 * cm
@@ -679,8 +689,7 @@ def to_pdf(markdown: str, *, title: str = "", entity_name: str = "", logo_path: 
             self.drawRightString(w - 2.2 * cm, text_y, f"Page {self._pageNumber} of {total}")
             if low:
                 iw, ih = logo.getSize()
-                lh = 0.8 * cm
-                lw = lh * iw / ih
+                lw, lh = (v * cm for v in fit_cm(iw, ih, "footer"))
                 lx = {"center": (w - lw) / 2, "right": w - 2.2 * cm - lw}.get(side, 2.2 * cm)
                 self.drawImage(logo, lx, 0.35 * cm, width=lw, height=lh, mask="auto")
 

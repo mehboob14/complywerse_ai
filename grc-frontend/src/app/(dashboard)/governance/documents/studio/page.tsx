@@ -20,13 +20,14 @@ import { truncate } from '@/lib/format';
 import { PageHeader, PageLoader } from '@/components/ui';
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
 import { InfoTip } from '@/components/ui/InfoTip';
-import { Button, EmptyState, ErrorState, FormField, IconButton, Select, SkeletonRows, Textarea, TextInput, useConfirm, useNotify, useReportedMutation } from '@/components/ui/ds';
+import { Button, EmptyState, ErrorState, FormField, IconButton, Select, SkeletonRows, TabPanel, Tabs, Textarea, TextInput, useConfirm, useNotify, useReportedMutation } from '@/components/ui/ds';
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { DOC_TYPE_LABEL, studioApi, type FrameworkItem, type LibraryDoc, type Session, type TemplateItem } from '@/lib/studio/api';
 import { ago, plural } from '@/lib/studio/text';
 import { documentApi } from '@/lib/studio/documentApi';
 import { FrameworkList, PICK_ROW } from './_components/ReferencesPanel';
 import { StudioBar } from './_components/StudioBar';
+import SuggestedDocs from './_components/SuggestedDocs';
 import { DocumentDetailsFields, titleCase, useDocumentDetails } from '../_DetailsFields';
 import { NO_SIGNOFF, ReviewerApproverFields, SIGNOFF_STATUS, saveSignoffChoice, type SignoffChoice } from '../_SignoffControl';
 import { detailsPayload } from '../_detailsRead';
@@ -103,6 +104,8 @@ function NewDocumentDialog({ onClose, onOpen, prefill }: { onClose: () => void; 
   const [fws, setFws] = useState<FrameworkItem[]>([]);
   const [picking, setPicking] = useState<'parent' | 'document' | 'framework' | null>(null);
   const [touched, setTouched] = useState(false);                         // the person changed something (what the page handed over does not count)
+  const [tab, setTab] = useState<'write' | 'suggested'>('write');
+  const [suggestedDirty, setSuggestedDirty] = useState(false);            // a suggested document's details are being filled in
   const edit = <T,>(set: (v: T) => void) => (v: T) => { setTouched(true); set(v); };
   const templates = useQuery({ queryKey: ['studio', 'templates'], queryFn: studioApi.templates, staleTime: 60_000 });
   const frameworks = useQuery({ queryKey: ['studio', 'frameworks'], queryFn: studioApi.frameworks, staleTime: 120_000, enabled: picking === 'framework' || !!prefill?.frameworks.length });
@@ -140,10 +143,12 @@ function NewDocumentDialog({ onClose, onOpen, prefill }: { onClose: () => void; 
       className={picking === key ? '!border-ds-primary !bg-ds-primary-soft !text-ds-primary-text' : ''}>{text}</Button>
   );
   return (
-    <AnimatedModal isOpen onClose={onClose} title="Write a new document" size="lg" dirty={touched}
-      footer={<div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button>
-        <Button variant="primary" leftIcon={<Sparkles aria-hidden />} loading={start.isPending} disabled={!title.trim()} onClick={() => start.mutate()}>Start writing</Button></div>}>
-      <div className={`space-y-[12px] ${BODY}`}>
+    <AnimatedModal isOpen onClose={onClose} title="New document" size={tab === 'suggested' ? 'xl' : 'lg'} dirty={touched || suggestedDirty}
+      footer={tab === 'write' ? <div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button>
+        <Button variant="primary" leftIcon={<Sparkles aria-hidden />} loading={start.isPending} disabled={!title.trim()} onClick={() => start.mutate()}>Start writing</Button></div> : undefined}>
+      <Tabs tabs={[{ key: 'write', label: 'Write' }, { key: 'suggested', label: 'From a framework' }]} value={tab} onChange={setTab} ariaLabel="How to start the document" className="px-[20px] pt-[4px]">
+      <TabPanel tabKey="write">
+      <div className="space-y-[12px] py-[16px]">
         <div className="grid gap-[12px] sm:grid-cols-[1fr_11rem]">
           <FormField label="Title" required><TextInput autoFocus value={title} onChange={(e) => edit(setTitle)(e.target.value)} placeholder="e.g. Information Security Policy" /></FormField>
           <FormField label="Type">
@@ -181,6 +186,11 @@ function NewDocumentDialog({ onClose, onOpen, prefill }: { onClose: () => void; 
           )}
         </div>
       </div>
+      </TabPanel>
+      <TabPanel tabKey="suggested" lazy>
+        <div className="py-[16px]"><SuggestedDocs onOpen={onOpen} onDirty={setSuggestedDirty} onCancel={onClose} /></div>
+      </TabPanel>
+      </Tabs>
     </AnimatedModal>
   );
 }
