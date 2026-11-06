@@ -132,7 +132,7 @@ export interface ToastContainerProps {
 export function ToastContainer({ toasts, onDismiss }: ToastContainerProps) {
   return (
     <div
-      className="fixed top-4 right-4 z-[10000] flex flex-col gap-3 pointer-events-none"
+      className="fixed top-14 right-4 z-[10000] flex flex-col gap-3 pointer-events-none"
       role="region"
       aria-live="polite"
       aria-label="Notifications"
