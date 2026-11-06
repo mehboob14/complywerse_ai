@@ -142,7 +142,15 @@ def safe_markdown(md: str) -> str:
     md = _HTML_IMG.sub("", md)
     md = _MD_IMAGE_REF.sub(lambda m: m.group(1), md)
     md = _MD_IMAGE.sub(lambda m: m.group(0) if _DATA_IMAGE.match(m.group(2)) else m.group(1), md)
-    return _MD_LINK.sub(lambda m: m.group(0) if _SAFE_LINK.match(_squash(m.group(2))) else m.group(1), md)       # a link to anything but the web, e-mail or phone is its words
+    md = _MD_LINK.sub(lambda m: m.group(0) if _SAFE_LINK.match(_squash(m.group(2))) else m.group(1), md)       # a link to anything but the web, e-mail or phone is its words
+    return _inline_tags(md)
+
+
+def _inline_tags(md: str) -> str:
+    """The two raw tags the AI Studio and the Word reader write into Markdown, which react-markdown would show as text ("<u>"): underline is
+    left out, a line break is a hard break - or a space inside a table row, where a new line would end the row."""
+    md = re.sub(r"</?u>", "", md, flags=re.I)
+    return "\n".join(re.sub(r"<br\s*/?>", " " if line.lstrip().startswith("|") else "  \n", line, flags=re.I) for line in md.split("\n"))
 
 
 _MARKDOWN_SHAPE = re.compile(r"^#{1,6}\s|^\*\*|^-\s|^\d+\.\s", re.M)     # the document viewer's own test (_DocumentViewer.tsx)

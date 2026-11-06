@@ -115,6 +115,15 @@ def test_markdown_links_go_only_to_the_web_email_or_phone():
     assert all(word in out for word in "cdefgh") and ")" not in out.replace("(https://example.com/p \"t\")", "").replace("(mailto:a@b.co)", "")
 
 
+def test_underline_and_line_break_tags_are_not_left_in_the_text_as_tags():
+    """react-markdown shows a raw <u> or <br> as text; the Word reader writes <u>**Purpose**</u> and the studio writes <br> in a table cell."""
+    out = view.safe_markdown("<u>**Purpose**</u> and line one<br>line two\n\n| A | B |\n| --- | --- |\n| one<br/>two | <U>x</U> |\n")
+    assert "<u>" not in out.lower() and "<br" not in out.lower()
+    assert out.startswith("**Purpose** and line one  \nline two")
+    assert "| one two | x |" in out and "| --- | --- |" in out                      # the row is still one line
+    assert "<Company Name>" in view.safe_markdown("keep <Company Name> as written")   # text that only looks like a tag is the document's own words
+
+
 def test_html_content_is_cleaned_with_an_allow_list(world):
     hostile = (
         "<h1 onclick=\"steal()\">Policy</h1><script>alert(1)</script><p style=\"color:red;position:fixed;background:url(http://evil/x)\">"
