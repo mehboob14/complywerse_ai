@@ -45,7 +45,7 @@
       "fields": [
         {"key": "jurisdictions", "label": "Jurisdictions", "type": "countries", "level": "required", "min_rows": 1, "note": "Countries where the organisation is established, serves customers or holds data of residents. Territorial reach (GDPR Art. 3, PDPL, NIS2 Art. 26) starts here."},
         {"key": "regulatory_scope", "label": "Regulatory scope", "type": "text", "level": "optional", "maps_to": "tenant.regulatory_scope", "note": "A short phrase for the regime the organisation says it is under (kept in Administration > Organization)."},
-        {"key": "regulators", "label": "Regulators", "type": "table", "level": "required", "min_rows": 1, "note": "Every authority that licenses, supervises or receives reports from the organisation. Applicability of most regulator frameworks follows from this list.",
+        {"key": "regulators", "label": "Regulators", "type": "table", "level": "required", "min_rows": 1, "when": {"field": "regulators_obligations.no_regulator", "ne": true}, "note": "Every authority that licenses, supervises or receives reports from the organisation. Applicability of most regulator frameworks follows from this list.",
           "columns": [
             {"key": "regulator", "label": "Regulator", "type": "text", "required": true, "suggestions": ["SAMA", "NCA", "SDAIA", "NDMO", "SBP", "CBUAE", "UAE Cyber Security Council", "DoH Abu Dhabi", "QCB", "CBSL", "MAS", "SEC", "PCAOB", "HHS OCR", "National competent authority (EU)", "Data protection authority"]},
             {"key": "country", "label": "Country", "type": "country", "required": true},
@@ -54,7 +54,7 @@
             {"key": "next_filing", "label": "Next filing", "type": "date"}
           ]},
         {"key": "no_regulator", "label": "No regulator", "type": "bool", "level": "optional", "note": "Tick when no authority supervises the organisation, so an empty list is a decision and not an omission."},
-        {"key": "certifications", "label": "Certifications", "type": "table", "level": "required", "min_rows": 1, "note": "Certificates and attestations held today, with validity. Certification bodies ask for prior certificates, transfers and expiry dates.",
+        {"key": "certifications", "label": "Certifications", "type": "table", "level": "required", "min_rows": 1, "when": {"field": "regulators_obligations.no_certifications", "ne": true}, "note": "Certificates and attestations held today, with validity. Certification bodies ask for prior certificates, transfers and expiry dates.",
           "columns": [
             {"key": "scheme", "label": "Scheme", "type": "text", "required": true, "suggestions": ["ISO/IEC 27001", "ISO 22301", "ISO/IEC 42001", "ISO 45001", "SOC 2 Type II", "PCI DSS", "HITRUST", "CSA STAR", "SWIFT CSP attestation", "Aramco CCC"]},
             {"key": "scope", "label": "Scope", "type": "text"},
@@ -64,7 +64,7 @@
             {"key": "status", "label": "Status", "type": "choice", "options": ["Valid", "Expired", "Suspended", "Withdrawn"]}
           ]},
         {"key": "no_certifications", "label": "No certifications", "type": "bool", "level": "optional", "note": "Tick when the organisation holds no certificate or attestation yet."},
-        {"key": "audit_history", "label": "Audit history", "type": "table", "level": "required", "min_rows": 1, "note": "The last audits, inspections and reports with their date and result. Assessors read previous findings first; open findings often have to be closed before a new audit.",
+        {"key": "audit_history", "label": "Audit history", "type": "table", "level": "required", "min_rows": 1, "when": {"field": "regulators_obligations.no_prior_audits", "ne": true}, "note": "The last audits, inspections and reports with their date and result. Assessors read previous findings first; open findings often have to be closed before a new audit.",
           "columns": [
             {"key": "kind", "label": "Kind", "type": "choice", "options": ["Certification audit", "Surveillance audit", "Regulator inspection", "Internal audit", "SOC report", "Penetration test", "Customer audit", "Other"], "required": true},
             {"key": "subject", "label": "Subject", "type": "text", "required": true},
@@ -104,7 +104,7 @@
         {"key": "hosting", "label": "Hosting", "type": "multichoice", "level": "required", "options": ["On premises", "Colocation", "Private cloud", "Public cloud (IaaS or PaaS)", "SaaS only", "Hybrid"], "note": "Where systems run. Cloud use switches on cloud rules (NCA CCC, SBP and QCB cloud frameworks, SAMA 3.4.3, CSA CCM)."},
         {"key": "key_systems", "label": "Key systems", "type": "asset_refs", "level": "required", "min_rows": 1, "note": "The applications and infrastructure that carry the business, picked from the asset library. Every framework scope picks a subset of these."},
         {"key": "asset_inventory", "label": "Asset inventory", "type": "choice", "level": "required", "options": ["Complete and current", "Partial", "Not started"], "note": "CIS Controls, NCA ECC and CMMC all start from an inventory. Partial is accepted, but frameworks that need it will say so."},
-        {"key": "third_parties", "label": "Third parties", "type": "table", "level": "required", "min_rows": 1, "note": "Cloud, SaaS, outsourced and processor relationships that touch in-scope systems or data. DORA registers, SBP and QCB cloud registers, PCI TPSP lists and SOC 2 subservice lists all pick from here.",
+        {"key": "third_parties", "label": "Third parties", "type": "table", "level": "required", "min_rows": 1, "when": {"field": "data_systems.no_third_parties", "ne": true}, "note": "Cloud, SaaS, outsourced and processor relationships that touch in-scope systems or data. DORA registers, SBP and QCB cloud registers, PCI TPSP lists and SOC 2 subservice lists all pick from here.",
           "columns": [
             {"key": "name", "label": "Name", "type": "text", "required": true},
             {"key": "vendor", "label": "Vendor", "type": "vendor_ref"},

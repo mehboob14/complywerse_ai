@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "family": "supplier_certification",
+  "label": "Supplier certification",
+  "summary": "Certificates a client requires from its suppliers (Saudi Aramco CCC, SABIC CyberTrust). The client assigns the classification that decides the control set, and an audit firm the client has authorised validates the evidence. Onboarding records the classification, the certificate type, the contracts it covers and the audit route before work starts.",
+  "frameworks": [
+    {"slug": "aramco_ccc", "label": "Saudi Aramco CCC", "flow_id": "aramco"},
+    {"slug": "sabic_cybertrust", "label": "SABIC CyberTrust", "flow_id": "sabic"}
+  ],
+  "requires_org": [
+    {"field": "regulators_obligations.external_requirements", "reason": "The client's certificate requirement is recorded there with its deadline."},
+    {"field": "data_systems.key_systems", "reason": "Systems connected to the client or holding its data are inside the certificate scope."},
+    {"field": "data_systems.data_types", "reason": "Client data held by the supplier is part of what the classification covers."},
+    {"field": "data_systems.third_parties", "reason": "Subcontractors that touch client data or systems must be known."}
+  ],
+  "steps": [
+    {
+      "key": "classification", "label": "Classification",
+      "source": {"ref": "Aramco CCC program page (classifications decide the control set; CCC and CCC+; certificate valid two years) and SABIC CyberTrust program page", "asked_by": "client (Aramco, SABIC)", "confidence": "verified", "urls": ["https://www.aramco.com/en/what-we-do/suppliers/supplier-resources/cybersecurity-compliance-certificate-program", "https://supplier.sabic.com/CyberTrustProgram.aspx"]},
+      "fields": [
+        {"key": "aramco_standard", "label": "Standard version", "type": "text", "level": "required", "applies_to": ["aramco_ccc"],
+          "source": {"ref": "Library file cites SACS-002; SmartSuite (secondary only) says SACS-210 replaced it in 2026; the Aramco text could not be read", "asked_by": "Aramco", "confidence": "unverified", "urls": []},
+          "note": "Record the standard and version the Aramco contract names. The library file cites SACS-002 but a secondary source says SACS-210 replaced it in 2026 (unverified). The contract decides which one applies."},
+        {"key": "sabic_standard", "label": "Standard version", "type": "text", "level": "advised", "applies_to": ["sabic_cybertrust"],
+          "source": {"ref": "The library holds one current SABIC CyberTrust edition; which edition is in force was not confirmed", "asked_by": "SABIC", "confidence": "unverified", "urls": ["https://supplier.sabic.com/CyberTrustProgram.aspx"]},
+          "note": "Record the version of the SABIC CyberTrust standard the contract names. The edition in force was not confirmed (unverified); SABIC decides which edition applies."},
+        {"key": "aramco_classes", "label": "Classifications", "type": "multichoice", "level": "required", "applies_to": ["aramco_ccc"],
+          "options": ["General Requirements", "Outsourced Infrastructure", "Customized Software", "Cloud Computing", "Operational Technology", "Network Connectivity", "Critical Data Processor"],
+          "note": "Aramco's classification decides which controls apply. Record the classes Aramco gave in the contract or its portal, using its wording. The client confirms them; the supplier does not choose them."},
+        {"key": "sabic_classes", "label": "Classifications", "type": "multichoice", "level": "required", "applies_to": ["sabic_cybertrust"],
+          "options": ["General Access to SABIC Data", "Network Connectivity", "Critical Data Processing", "Cloud Services", "Software Development"],
+          "source": {"ref": "SABIC supplier page says classification decides the control set; these class names come from the library's file and were not confirmed on SABIC's pages", "asked_by": "SABIC", "confidence": "unverified", "urls": ["https://supplier.sabic.com/CyberTrustProgram.aspx"]},
+          "note": "SABIC's classification also decides the controls. These class names come from the library's file and were not confirmed on SABIC's pages (unverified); SABIC confirms which apply."},
+        {"key": "class_confirmed", "label": "Client confirmed", "type": "bool", "level": "required",
+          "source": {"ref": "A client-signed classification letter is part of the planned design; the form Aramco or SABIC use was not confirmed", "asked_by": "Aramco, SABIC", "confidence": "unverified", "urls": []},
+          "note": "Tick when the client has confirmed the classification in writing. Whether that is a signed letter or a portal record was not confirmed (unverified); keep the document."},
+        {"key": "cert_type", "label": "Certificate type", "type": "choice", "level": "required", "applies_to": ["aramco_ccc"],
+          "options": ["CCC", "CCC+", "Not decided yet"],
+          "note": "CCC is a self-assessment with a remote check; CCC+ adds an on-site assessment. Aramco requires CCC+ for the Network Connectivity and Critical Data Processor classifications. Choose from what Aramco told you."},
+        {"key": "portal", "label": "Portal registered", "type": "bool", "level": "advised",
+          "source": {"ref": "Registration on a client supplier portal is part of the planned design; which portal Aramco or SABIC use for this was not confirmed", "asked_by": "Aramco, SABIC", "confidence": "unverified", "urls": []},
+          "note": "Tick when the supplier is registered where the client runs the certification. Which portal each client uses was not confirmed (unverified); follow the client's instruction."},
+        {"key": "contracts", "label": "Client contracts", "type": "table", "level": "required", "min_rows": 1,
+          "note": "The client contracts the certificate is needed for: client company, service given, where it runs, systems connected and data held. The classification follows the services given, so list each one.",
+          "columns": [
+            {"key": "client", "label": "Client company", "type": "text", "required": true},
+            {"key": "service", "label": "Service", "type": "text", "required": true},
+            {"key": "location", "label": "Location", "type": "text"},
+            {"key": "systems", "label": "Systems connected", "type": "text"},
+            {"key": "data", "label": "Data held", "type": "text"}
+          ]}
+      ]
+    },
+    {
+      "key": "audit", "label": "Audit",
+      "source": {"ref": "Aramco CCC program page and SABIC CyberTrust program page: validation by an authorised audit firm; certificate valid two years", "asked_by": "client (Aramco, SABIC)", "confidence": "verified", "urls": ["https://www.aramco.com/en/what-we-do/suppliers/supplier-resources/cybersecurity-compliance-certificate-program", "https://supplier.sabic.com/CyberTrustProgram.aspx"]},
+      "fields": [
+        {"key": "audit_firm", "label": "Authorised audit firm", "type": "text", "level": "required",
+          "note": "The client keeps a list of authorised audit firms that validate the evidence. Name the firm the supplier will use and check it is on the client's current list."},
+        {"key": "cert_status", "label": "Certificate status", "type": "choice", "level": "required",
+          "options": ["First certification", "Renewal of a valid certificate", "Lapsed, recertifying"],
+          "note": "Certificates are valid for two years, so a renewal has a fixed date to work back from."},
+        {"key": "cert_expiry", "label": "Current expiry", "type": "date", "level": "advised",
+          "when": {"field": "audit.cert_status", "eq": "Renewal of a valid certificate"},
+          "note": "Expiry date of the current certificate. Certificates are valid for two years; plan the new audit before this date."},
+        {"key": "audit_date", "label": "Audit date", "type": "date", "level": "advised",
+          "note": "Planned date of the audit firm's validation."},
+        {"key": "evidence_date", "label": "Evidence set date", "type": "date", "level": "advised",
+          "source": {"ref": "Recent, time-stamped evidence is part of the planned design; the clients' exact age limit was not read", "asked_by": "audit firm, client", "confidence": "unverified", "urls": []},
+          "note": "Date the evidence set is collected. Clients expect recent, time-stamped evidence, but the exact age limit was not read (unverified); check the client's manual."},
+        {"key": "flow_down", "label": "Flow-down status", "type": "choice", "level": "advised",
+          "options": ["No subcontractors", "Done", "Partly", "Not started"],
+          "source": {"ref": "Passing the client's requirements to subcontractors is part of the planned design; the Aramco and SABIC wording was not read", "asked_by": "Aramco, SABIC", "confidence": "unverified", "urls": []},
+          "note": "Whether the client's requirements are passed on to subcontractors that touch its data or systems. Expected by many clients, but not confirmed for these two (unverified)."}
+      ]
+    }
+  ],
+  "gate": [
+    {"key": "class_confirmed", "label": "The client has confirmed the classification", "level": "required", "check": {"type": "true", "field": "classification.class_confirmed"}, "hint": "Ask the client to confirm the classification in writing before starting; it decides the controls."},
+    {"key": "audit_firm_named", "label": "An audit firm is chosen", "level": "required", "check": {"type": "filled", "field": "audit.audit_firm"}, "hint": "Choose a firm from the client's authorised list."},
+    {"key": "cert_type_decided", "label": "CCC or CCC+ is decided", "level": "required", "applies_to": ["aramco_ccc"], "check": {"type": "not_equals", "field": "classification.cert_type", "value": "Not decided yet"}, "hint": "Network Connectivity and Critical Data Processor need CCC+ (on-site). Ask Aramco if unsure."},
+    {"key": "sabic_version_recorded", "label": "The standard version in the contract is recorded", "level": "advised", "applies_to": ["sabic_cybertrust"], "check": {"type": "filled", "field": "classification.sabic_standard"}, "hint": "Record the SABIC CyberTrust version the contract names."},
+    {"key": "flow_down_started", "label": "Requirements are being passed to subcontractors", "level": "advised", "check": {"type": "not_equals", "field": "audit.flow_down", "value": "Not started"}, "hint": "Start passing the client's requirements to subcontractors that touch its data."}
+  ]
+}
