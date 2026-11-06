@@ -50,3 +50,37 @@ export function placeMenu(
   const room = Math.max(0, under ? below : above);
   return { left, top: under ? anchor.bottom + gap : anchor.top - gap - Math.min(menu.height, room), maxHeight: room };
 }
+
+// ── what a menu item can say beyond its label (Kit 2): a section title above it, a check, a value at its end, a reason it cannot be chosen ──────────
+
+/** The part of a menu item these rules read. */
+export interface ItemLike { section?: string; disabled?: boolean; reason?: string }
+
+/** What the arrow keys see of the items: a disabled item is skipped, except one that says why it is disabled (`reason`): a keyboard or screen-reader user
+ *  must be able to land on it to read the reason. Without a reason nothing changes: it is skipped as before. */
+export function navEntries(items: readonly ItemLike[]): Entry[] {
+  return items.map((item) => ({ disabled: !!item.disabled && !item.reason }));
+}
+
+/** An item that cannot be chosen: a disabled one, with or without a reason. */
+export const isBlocked = (item: ItemLike): boolean => !!item.disabled;
+
+export interface Run<T> { title: string | null; items: Array<{ item: T; index: number }> }
+
+/** The items in runs: a new run starts at every item that has a `section` title, and the items before the first title are a run with no title.
+ *  `index` is the item's place in `items`, so the keys and the rows keep one numbering. */
+export function sectionRuns<T extends ItemLike>(items: readonly T[]): Array<Run<T>> {
+  const runs: Array<Run<T>> = [];
+  items.forEach((item, index) => {
+    const title = item.section?.trim() ? item.section.trim() : null;
+    const last = runs[runs.length - 1];
+    if (title !== null || !last) runs.push({ title, items: [{ item, index }] });
+    else last.items.push({ item, index });
+  });
+  return runs;
+}
+
+/** The ARIA role of an item: a plain item, a check (`checked` given) or one choice of a group (`radio`). */
+export function itemRole(item: { checked?: boolean; radio?: boolean }): 'menuitem' | 'menuitemcheckbox' | 'menuitemradio' {
+  return item.checked === undefined ? 'menuitem' : item.radio ? 'menuitemradio' : 'menuitemcheckbox';
+}

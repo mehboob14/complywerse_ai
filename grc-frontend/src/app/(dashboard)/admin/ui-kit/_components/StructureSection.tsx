@@ -4,7 +4,7 @@
 // Pager (many pages, one page, a capped list, nothing) and Menu.
 import { useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Copy, Download, FileText, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Archive, Copy, Download, FileText, FolderInput, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Button, Menu, PageHeader, Pager, StatusPill, TabPanel, Tabs, useTabParam, type MenuItem } from '@/components/ui';
 import { formatDateTime } from '@/lib/format';
 import { AddressParamsTable, AddressStateDemo } from './AddressDemo';
@@ -56,6 +56,8 @@ function TabsDemo() {
   const [tab, setTab] = useTabParam('tab', TAB_KEYS, { fallback: 'overview', aliases: { lifecycle: 'history' } });
   const search = useSearchParams()?.toString() ?? '';
   const [wide, setWide] = useState('t1');
+  const [counted, setCounted] = useState('all');
+  const [cappedTab, setCappedTab] = useState('all');
   const many = Array.from({ length: 12 }, (_, i) => ({ key: `t${i + 1}`, label: `Section ${i + 1}`, count: i === 2 ? 128 : i === 5 ? 0 : undefined }));
   return (
     <div className="space-y-[16px]">
@@ -85,6 +87,24 @@ function TabsDemo() {
           <Tabs ariaLabel="Many sections" value={wide} onChange={setWide} tabs={many}>
             {many.map((t) => <TabPanel key={t.key} tabKey={t.key} className="pt-[12px]"><p className="text-ds-body text-ds-fg-body">{t.label} is open.</p></TabPanel>)}
           </Tabs>
+        </div>
+      </Specimen>
+      <Specimen label="countFormat=&quot;exact&quot;: the counts of a register are true totals (1,247, 100, 1,234,567), not 99+; the default stays &quot;99+&quot;">
+        <div className={`${FRAME} space-y-[12px]`}>
+          <Tabs
+            ariaLabel="Library views, exact counts"
+            value={counted}
+            onChange={setCounted}
+            countFormat="exact"
+            tabs={[
+              { key: 'all', label: 'All', count: 1247 },
+              { key: 'mine', label: 'Mine', count: 12 },
+              { key: 'overdue', label: 'Review overdue', count: 100 },
+              { key: 'none', label: 'No owner', count: 0 },
+              { key: 'big', label: 'Everything', count: 1234567 },
+            ]}
+          />
+          <Tabs ariaLabel="Library views, capped counts" value={cappedTab} onChange={setCappedTab} tabs={[{ key: 'all', label: 'All', count: 1247 }, { key: 'overdue', label: 'Review overdue', count: 100 }]} />
         </div>
       </Specimen>
     </div>
@@ -131,6 +151,24 @@ function MenuDemo() {
     { key: 'secret', label: 'Hidden item', hidden: true, onSelect: () => setLast('Hidden') },
     { key: 'delete', label: 'Delete', icon: Trash2, danger: true, onSelect: () => setLast('Delete') },
   ];
+  const [sort, setSort] = useState('title');
+  const [rows, setRows] = useState('comfortable');
+  const [archived, setArchived] = useState(false);
+  const view: MenuItem[] = [
+    { key: 'sort-title', label: 'Title', section: 'Sort by', checked: sort === 'title', radio: true, trailing: sort === 'title' ? 'A to Z' : undefined, onSelect: () => setSort('title') },
+    { key: 'sort-review', label: 'Next review', checked: sort === 'review', radio: true, trailing: sort === 'review' ? 'Soonest first' : undefined, onSelect: () => setSort('review') },
+    { key: 'sort-owner', label: 'Owner', checked: sort === 'owner', radio: true, onSelect: () => setSort('owner') },
+    { key: 'rows-2', label: 'Comfortable (two lines)', section: 'Rows', checked: rows === 'comfortable', radio: true, onSelect: () => setRows('comfortable') },
+    { key: 'rows-1', label: 'Compact (one line)', checked: rows === 'compact', radio: true, onSelect: () => setRows('compact') },
+    { key: 'archived', label: 'Show archived', section: 'Show', checked: archived, trailing: '1,247', onSelect: () => setArchived((v) => !v) },
+  ];
+  const why: MenuItem[] = [
+    { key: 'open', label: 'Open document', icon: FileText, onSelect: () => setLast('Open document') },
+    { key: 'move', label: 'Move to a department', icon: FolderInput, disabled: true, reason: 'Needs the edit right, or ownership', onSelect: () => setLast('Move') },
+    { key: 'download', label: 'Download (not allowed, no reason given)', icon: Download, disabled: true, onSelect: () => setLast('Download') },
+    { key: 'archive', label: 'Archive', icon: Archive, danger: true, disabled: true, reason: 'Restore it first, or ask the owner.', onSelect: () => setLast('Archive') },
+  ];
+  const longLabel = 'Move every document of the retail banking technology risk office that is waiting for its annual review to the compliance department';
   return (
     <div className="space-y-[12px]">
       <Grid>
@@ -139,6 +177,10 @@ function MenuDemo() {
         <Specimen label="align=&quot;start&quot;: the list lines up with the left edge"><Menu label="Actions" align="start" items={items} /></Specimen>
         <Specimen label="Disabled"><Menu label="Actions" disabled items={items} /></Specimen>
         <Specimen label="Nothing to show: the menu draws nothing"><Row><Menu label="Actions" items={[{ key: 'x', label: 'Hidden', hidden: true, onSelect: () => undefined }]} /><span className="text-ds-label text-ds-fg-muted">(nothing here)</span></Row></Specimen>
+        <Specimen label="Sections, one choice of a group (radio) with a value at its end, and a check: the library's Sort menu"><Menu label="Sort and rows" items={view} /></Specimen>
+        <Specimen label="A reason under a disabled item: it stays reachable by the arrow keys, so a keyboard user reads why; one with no reason is skipped"><Menu label="Actions on a document" items={why} /></Specimen>
+        <Specimen label="size=&quot;sm&quot;: 28 px (44 px on touch), the end of a row of chips"><Menu label="+3 more" size="sm" items={items} /></Specimen>
+        <Specimen label="A 130-character label, a reason and a count that is 1,247"><Menu label="Long labels" align="start" items={[{ key: 'long', label: longLabel, trailing: '1,247', onSelect: () => setLast('Long') }, { key: 'blocked', label: longLabel, disabled: true, reason: 'This is a very long reason that explains at some length why the item above cannot be chosen by this person right now.', onSelect: () => setLast('Blocked') }]} /></Specimen>
       </Grid>
       <p className="text-ds-label text-ds-fg-muted" aria-live="polite">Last chosen: {last}. Enter, Space and the arrow keys open it; Escape closes it and gives focus back to the button.</p>
     </div>

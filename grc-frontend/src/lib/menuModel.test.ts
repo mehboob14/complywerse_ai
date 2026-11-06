@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { indexForKey, nextIndex, placeMenu } from './menuModel.ts';
+import { indexForKey, isBlocked, itemRole, navEntries, nextIndex, placeMenu, sectionRuns } from './menuModel.ts';
 
 const on = { disabled: false };
 const off = { disabled: true };
@@ -106,4 +106,41 @@ test('it prefers below when it fits there, even if there is more room above', ()
 test('a trigger scrolled off the window gives no negative room', () => {
   const p = placeMenu(anchor(500, -300), MENU, VIEW);
   assert.ok(p.maxHeight >= 0);
+});
+
+// ── Kit 2: reasons, sections, checks ────────────────────────────────────────────────────────────────────────────────────────────────────
+test('a disabled item that gives its reason can be reached by the arrow keys; one that does not is skipped, as it always was', () => {
+  const list = [{ disabled: false }, { disabled: true, reason: 'Needs the edit right' }, { disabled: true }, { disabled: false }];
+  assert.deepEqual(navEntries(list), [{ disabled: false }, { disabled: false }, { disabled: true }, { disabled: false }]);
+  assert.equal(indexForKey(navEntries(list), 0, 'ArrowDown'), 1);              // lands on the reason
+  assert.equal(indexForKey(navEntries(list), 1, 'ArrowDown'), 3);              // 2 is disabled with no reason
+  assert.equal(indexForKey(navEntries(list), 3, 'ArrowUp'), 1);
+  assert.deepEqual(navEntries([{ disabled: true }, {}]), [{ disabled: true }, { disabled: false }]);
+  assert.deepEqual(navEntries([]), []);
+});
+
+test('an item is blocked when it is disabled, with or without a reason', () => {
+  assert.equal(isBlocked({ disabled: true }), true);
+  assert.equal(isBlocked({ disabled: true, reason: 'why' }), true);
+  assert.equal(isBlocked({ reason: 'why' }), false);
+  assert.equal(isBlocked({}), false);
+});
+
+test('sections: a title starts a run; the items before the first title are a run of their own', () => {
+  const runs = sectionRuns([{ k: 'a' }, { k: 'b' }, { k: 'c', section: 'Sort by' }, { k: 'd' }, { k: 'e', section: 'Rows' }]);
+  assert.deepEqual(runs.map((r) => [r.title, r.items.map((i) => i.index)]), [[null, [0, 1]], ['Sort by', [2, 3]], ['Rows', [4]]]);
+  assert.equal(runs[1].items[0].item.k, 'c');
+  assert.deepEqual(sectionRuns([{ section: 'Only' }, {}]).map((r) => r.title), ['Only']);
+  assert.deepEqual(sectionRuns([]), []);
+  assert.deepEqual(sectionRuns([{}, {}]).map((r) => r.title), [null]);          // no sections at all: one run, today's menu
+  assert.deepEqual(sectionRuns([{ section: '  ' }, {}]).map((r) => r.title), [null]);   // a blank title is no title
+});
+
+test('roles: a plain item, a check, and one choice of a group', () => {
+  assert.equal(itemRole({}), 'menuitem');
+  assert.equal(itemRole({ radio: true }), 'menuitem');                          // radio without checked is not a choice yet
+  assert.equal(itemRole({ checked: false }), 'menuitemcheckbox');
+  assert.equal(itemRole({ checked: true }), 'menuitemcheckbox');
+  assert.equal(itemRole({ checked: true, radio: true }), 'menuitemradio');
+  assert.equal(itemRole({ checked: false, radio: true }), 'menuitemradio');
 });
