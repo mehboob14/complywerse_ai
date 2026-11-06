@@ -101,6 +101,8 @@ export interface TrProps extends Omit<HTMLAttributes<HTMLTableRowElement>, 'onCl
   onActivate?: () => void;
   /** the row is the one open or chosen: tinted, and aria-selected */
   selected?: boolean;
+  /** the row's own tick is on (a register with a selection column): tinted like the open row, but not aria-selected: the tick says it */
+  chosen?: boolean;
 }
 
 // `!bg-transparent` keeps the shell's stripe off every second row; a row never gets two important backgrounds. A row takes the keyboard
@@ -110,7 +112,8 @@ const ROW_SELECTED = '!bg-ds-primary-soft';
 const ROW_HOVER = 'hover:!bg-ds-surface-hover';
 const ROW_PRESSABLE = 'cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[color:var(--ds-focus)]';
 
-export const Tr = forwardRef<HTMLTableRowElement, TrProps>(function Tr({ onActivate, selected = false, className, ...rest }, ref) {
+export const Tr = forwardRef<HTMLTableRowElement, TrProps>(function Tr({ onActivate, selected = false, chosen = false, className, ...rest }, ref) {
+  const tinted = selected || chosen;
   return (
     <tr
       {...rest}
@@ -118,7 +121,7 @@ export const Tr = forwardRef<HTMLTableRowElement, TrProps>(function Tr({ onActiv
       tabIndex={onActivate ? 0 : undefined}
       aria-selected={selected || undefined}
       {...rowHandlers<HTMLTableRowElement>(onActivate)}
-      className={clsx(selected ? ROW_SELECTED : ROW_BASE, onActivate && ROW_PRESSABLE, onActivate && !selected && ROW_HOVER, className)}
+      className={clsx(tinted ? ROW_SELECTED : ROW_BASE, onActivate && ROW_PRESSABLE, onActivate && !tinted && ROW_HOVER, className)}
     />
   );
 });

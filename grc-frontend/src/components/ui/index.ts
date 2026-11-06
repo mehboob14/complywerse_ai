@@ -47,10 +47,10 @@ export {
   TableFrame, Table, THead, TBody, Tr, Th, Td, RowHeaderCell,
   type TableFrameProps, type TableProps, type TrProps, type ThProps, type TdProps, type RowHeaderCellProps, type CellAlign,
 } from './ds/Table';
-export { RegisterTable, type RegisterTableProps, type RegisterColumn } from './ds/RegisterTable';
+export { RegisterTable, type RegisterTableProps, type RegisterColumn, type RegisterSelection, type RegisterExpand } from './ds/RegisterTable';
 export {
-  nextSort, ariaSort, sortRows, priorityClass, rowCountText,
-  type SortState, type SortDir, type SortCycle, type SortValue, type ColumnPriority,
+  nextSort, ariaSort, sortRows, priorityClass, rowCountText, chosenState, toggleId, toggleAllListed, includesId,
+  type SortState, type SortDir, type SortCycle, type SortValue, type ColumnPriority, type RowId, type ChosenState,
 } from './ds/tableModel';
 export { SectionCard, type SectionCardProps } from './ds/SectionCard';
 export { SaveBar, type SaveBarProps } from './ds/SaveBar';
@@ -71,3 +71,11 @@ export { Sheet, type SheetProps } from './ds/Sheet';
 export type { PanelMode, PanelWidth } from './ds/sidePanelModel';
 export { FilterChips, type FilterChip, type FilterChipsProps, type ChipFlag, type FlagTone } from './ds/FilterChips';
 export { Disclosure, AccordionRow, type DisclosureProps, type AccordionRowProps } from './ds/Disclosure';
+// Kit 3 (UX revamp, Stage 2): the rows of a worklist and the wave-1 gaps
+export { WorkRow, type WorkRowProps, type WorkAction, type WorkCheck } from './ds/WorkRow';
+export { CountRow, type CountRowProps } from './ds/CountRow';
+export { ClampedText, type ClampedTextProps } from './ds/ClampedText';
+export { ChipList, type ChipListProps, type ChipListItem } from './ds/ChipList';
+export { Fact, FactList, type FactProps, type FactListProps } from './ds/Facts';
+export { TitleLink, CardLink, type TitleLinkProps, type CardLinkProps } from './ds/Links';
+export { linkClasses, type LinkTone, type LinkSize } from './ds/linkModel';

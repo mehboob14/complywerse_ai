@@ -18,10 +18,18 @@ export function countText(count: number | null | undefined): string {
   return typeof count === 'number' && Number.isFinite(count) ? formatCount(Math.max(0, count)) : '';
 }
 
-/** What a chip says as one string ("Overdue, 12, 3 overdue actions"): its tooltip when its label is cut, and what the tests compare. */
-export function chipText(chip: ChipLike): string {
-  const count = countText(chip.count);
-  return [chip.label.trim(), count, chip.flag?.label.trim() ?? ''].filter(Boolean).join(', ');
+/** The tooltip of a chip's LABEL: its whole text, only when the label is cut. It sits on the label, never on the button: a `title` on the button becomes the
+ *  button's description in the accessibility tree, and a screen reader then says the chip twice, once as its name ("Risk Committee 4, 3 overdue actions") and
+ *  again as that description. A mouse user still gets the whole label where it is cut. */
+export function labelTip(label: string, clipped: boolean): string | undefined {
+  const whole = label.trim();
+  return clipped && whole ? whole : undefined;
+}
+
+/** The tooltip of a flag's mark (the dot or the badge): its words. The mark is drawn for the eye and hidden from a screen reader (which has the same words in
+ *  the chip's name), so the tooltip is for a mouse user and is not announced a second time. */
+export function flagTip(flag: ChipFlag | undefined): string | undefined {
+  return flag?.label.trim() || undefined;
 }
 
 /** The chips that stay in the row and the ones that go to the "+N more" menu. With no `maxVisible` all stay. A cut that would leave a single chip in the

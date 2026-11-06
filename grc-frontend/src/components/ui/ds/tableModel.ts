@@ -87,6 +87,40 @@ export function shouldActivateRow({ key, targetIsRow }: { key: string; targetIsR
   return targetIsRow && (key === 'Enter' || key === ' ');
 }
 
+// ── choosing and opening rows ────────────────────────────────────────────────
+/** A row's identity: what `getRowId` returns. Compared as text (an id that comes back from an address as "7" is the row 7). */
+export type RowId = string | number;
+/** What the header's tick shows: none of the rows listed are chosen, some are (the "mixed" tick), or all are. */
+export type ChosenState = 'none' | 'some' | 'all';
+
+const same = (a: RowId, b: RowId): boolean => String(a) === String(b);
+const has = (ids: readonly RowId[], id: RowId): boolean => ids.some((x) => same(x, id));
+
+/** The state of the header's tick: only the rows LISTED count (an id chosen on another page is not a row of this one). No rows listed is none. */
+export function chosenState(listed: readonly RowId[], chosen: readonly RowId[]): ChosenState {
+  if (listed.length === 0) return 'none';
+  const n = listed.filter((id) => has(chosen, id)).length;
+  return n === 0 ? 'none' : n === listed.length ? 'all' : 'some';
+}
+
+/** The ids after one row's tick (or toggle) was pressed: the id is added at the end, or taken out; every other id and the order are kept. */
+export function toggleId(ids: readonly RowId[], id: RowId): RowId[] {
+  return has(ids, id) ? ids.filter((x) => !same(x, id)) : ids.concat([id]);
+}
+
+/** The chosen ids after the header's tick was pressed: every listed row is chosen when some or none were, none of them when all were. Ids chosen on other
+ *  pages stay as they were: this tick is "this page", never "everything" (the page offers "Select all N matching" for that). */
+export function toggleAllListed(listed: readonly RowId[], chosen: readonly RowId[]): RowId[] {
+  if (listed.length === 0) return chosen.slice();
+  if (chosenState(listed, chosen) === 'all') return chosen.filter((id) => !has(listed, id));
+  return chosen.concat(listed.filter((id) => !has(chosen, id)));
+}
+
+/** Whether a row is among the chosen (or the open) ones. */
+export function includesId(ids: readonly RowId[], id: RowId): boolean {
+  return has(ids, id);
+}
+
 // ── how many rows ────────────────────────────────────────────────────────────
 /** "25 of 312 documents" when the list is cut, "312 documents" when it is all there, "1 document". null while the list loads, after it failed,
  *  or when the total is not known: a count is never made up (0, or the size of the page that happened to load). `plural` for a noun that

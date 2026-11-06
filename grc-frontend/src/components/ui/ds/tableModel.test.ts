@@ -3,7 +3,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  INTERACTIVE_SELECTOR, ariaSort, isInteractiveTarget, nextSort, priorityClass, rowCountText, shouldActivateRow, sortRows,
+  INTERACTIVE_SELECTOR, ariaSort, chosenState, includesId, isInteractiveTarget, nextSort, priorityClass, rowCountText, shouldActivateRow, sortRows,
+  toggleAllListed, toggleId,
   type SortState, type SortValue,
 } from './tableModel.ts';
 
@@ -223,4 +224,44 @@ test('no count while the list loads or after it failed, and none for a total nob
   assert.equal(rowCountText({ shown: 25, total: null, noun: 'document' }), null);
   assert.equal(rowCountText({ shown: 25, total: undefined, noun: 'document' }), null);
   assert.equal(rowCountText({ shown: 25, total: Number.NaN, noun: 'document' }), null);
+});
+
+// ── choosing and opening rows ────────────────────────────────────────────────
+test('the header tick is none, some or all of the rows LISTED; an id chosen on another page is not counted', () => {
+  assert.equal(chosenState([1, 2, 3], []), 'none');
+  assert.equal(chosenState([1, 2, 3], [2]), 'some');
+  assert.equal(chosenState([1, 2, 3], [1, 2, 3]), 'all');
+  assert.equal(chosenState([1, 2, 3], [9, 10]), 'none');                 // chosen on another page
+  assert.equal(chosenState([1, 2, 3], [1, 2, 3, 9]), 'all');             // plus one from another page: still all of this one
+  assert.equal(chosenState([], [1]), 'none');                            // nothing listed: nothing to be all of
+});
+
+test('ids are compared as text: the row 7 and the id "7" are the same row, and the kind the page gave is kept', () => {
+  assert.equal(includesId(['7'], 7), true);
+  assert.equal(includesId([7], '7'), true);
+  assert.equal(includesId([7], 8), false);
+  assert.deepEqual(toggleId(['7', 'a'], 7), ['a']);
+  assert.deepEqual(toggleId([7], 'b'), [7, 'b']);
+  assert.equal(chosenState(['1', '2'], [1, 2]), 'all');
+});
+
+test('one tick adds the id at the end or takes it out, and touches nothing else', () => {
+  assert.deepEqual(toggleId([], 5), [5]);
+  assert.deepEqual(toggleId([5], 6), [5, 6]);
+  assert.deepEqual(toggleId([5, 6, 7], 6), [5, 7]);
+  const before = [1, 2];
+  toggleId(before, 3);
+  assert.deepEqual(before, [1, 2]);                                      // the caller's list is never changed
+});
+
+test('the header tick chooses every listed row when some or none are chosen, and none of them when all are; other pages\' ids stay', () => {
+  assert.deepEqual(toggleAllListed([1, 2, 3], []), [1, 2, 3]);
+  assert.deepEqual(toggleAllListed([1, 2, 3], [2]), [2, 1, 3]);          // "some" becomes all; the one already chosen keeps its place
+  assert.deepEqual(toggleAllListed([1, 2, 3], [1, 2, 3]), []);
+  assert.deepEqual(toggleAllListed([1, 2, 3], [9, 1, 2, 3]), [9]);       // all of this page off, the other page's choice stays
+  assert.deepEqual(toggleAllListed([1, 2, 3], [9]), [9, 1, 2, 3]);
+  assert.deepEqual(toggleAllListed([], [9]), [9]);                       // nothing listed: nothing happens
+  const before = [2];
+  toggleAllListed([1, 2, 3], before);
+  assert.deepEqual(before, [2]);
 });

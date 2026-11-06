@@ -215,6 +215,30 @@ function InlineErrorDemo() {
   );
 }
 
+/** No `success`: where the result is plain to see (the action ticks itself) nothing is said when the server confirms; a failure still is, with Retry. */
+function QuietDemo() {
+  const attempts = useRef(0);
+  const [done, setDone] = useState(false);
+  const tick = useReportedMutation<boolean, boolean>({
+    mutationFn: async (fail) => {
+      await sleep(500);
+      if (fail) { attempts.current += 1; if (attempts.current % 2 === 1) throw serverError(503, 'The server is busy. Try again.'); }
+      return !done;
+    },
+    failure: "Couldn't mark the action completed",
+    onSuccess: (next) => setDone(next),
+  });
+  return (
+    <div className="space-y-[8px]">
+      <Row>
+        <Button variant="primary" loading={tick.isPending} onClick={() => tick.mutate(false)}>{done ? 'Mark not completed' : 'Mark completed'}</Button>
+        <Button loading={tick.isPending} onClick={() => { attempts.current = 0; tick.mutate(true); }}>Mark it, failing once (Retry works)</Button>
+      </Row>
+      <p className="text-ds-label text-ds-fg-muted" aria-live="polite">The action is {done ? 'completed' : 'not completed'}. No <code className={MONO}>success</code> was given: the change is plain to see, so no toast says it; the refresh and <code className={MONO}>onSuccess</code> ran all the same.</p>
+    </div>
+  );
+}
+
 export function OverlaysSection() {
   return (
     <GuideSection id="overlays" title="Overlays and feedback" lead="How the platform asks (dialogs, drawers, the confirm question), tells (toasts) and reports (a mutation that confirms only after the server does). Focus moves in, Tab wraps, Escape closes and focus goes back; typed input is never thrown away without asking.">
@@ -229,6 +253,7 @@ export function OverlaysSection() {
       <Spec name="useReportedMutation">
         <Specimen label="Simulated success, failure and retry (no request is sent)"><MutationDemo /></Specimen>
         <Specimen label="toast=&quot;success&quot;: a failure is shown inline by the page, so it is said once, not also as a toast"><InlineErrorDemo /></Specimen>
+        <Specimen label="no success: the result is plain to see (the action ticks itself), so nothing is said when it works; a failure still is, with Retry"><QuietDemo /></Specimen>
         <p className="text-ds-label text-ds-fg-muted">Toasts appear at the top right: <code className={MONO}>role=&quot;alert&quot;</code> for an error, <code className={MONO}>role=&quot;status&quot;</code> for the rest.</p>
       </Spec>
     </GuideSection>

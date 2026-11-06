@@ -3,8 +3,9 @@
 // FilterChips: a row of quick filters, each a toggle with the number of records it would show (the library's "Mine 12", "Review overdue 3", a
 // committee with a live dot and an overdue badge). A chip is a button with `aria-pressed`; the row is a toolbar with ONE tab stop and the arrow keys
 // (Left, Right, Home, End) between its chips, and Enter or Space toggles one: an arrow never toggles. The count is the true number ("1,247", never "99+").
-// A flag (a dot, or a small badge) carries its words for a screen reader and a tooltip, so a chip is never told by colour alone. A label that does not
-// fit is cut with an ellipsis and gives its whole text as a tooltip only then. `overflow="wrap"` (the default) lets the row wrap onto more lines;
+// A flag (a dot, or a small badge) carries its words for a screen reader (in the chip's name) and a tooltip (on the mark itself), so a chip is never told by
+// colour alone. A label that does not fit is cut with an ellipsis and gives its whole text as a tooltip on the LABEL, only then. Neither tooltip is on the
+// button: a `title` there is read again as the button's description, and a screen reader would say the chip twice. `overflow="wrap"` (the default) lets the row wrap onto more lines;
 // "scroll" keeps it to one line that scrolls sideways (with room around the chips for their focus ring). With `maxVisible`, the chips past it go to a
 // "+N more" menu (the kit's Menu: each is a check with its count at its end); the trigger says how many of them are on. Decisions: filterChipsModel.ts.
 //
@@ -14,7 +15,7 @@ import { clsx } from 'clsx';
 import type { LucideIcon } from 'lucide-react';
 import { Menu } from './Menu';
 import { useClipped } from './useClipped';
-import { chipStop, chipText, countText, moreItems, moreText, nextChip, splitChips, type ChipFlag, type FlagTone } from './filterChipsModel';
+import { chipStop, countText, flagTip, labelTip, moreItems, moreText, nextChip, splitChips, type ChipFlag, type FlagTone } from './filterChipsModel';
 
 export type { ChipFlag, FlagTone };
 
@@ -34,7 +35,7 @@ export interface FilterChip {
   disabled?: boolean;
   /** Not shown at all. */
   hidden?: boolean;
-  /** A tooltip of your own; by default the whole text of the chip, when its label is cut. */
+  /** A tooltip of your own for the whole chip. A screen reader reads it as the chip's description after its name, so say something the name does not. */
   title?: string;
 }
 
@@ -80,17 +81,17 @@ function ChipButton({ chip, tabbable, onToggle, onFocus, onKeyDown, register }: 
       aria-pressed={!!chip.active}
       tabIndex={tabbable ? 0 : -1}
       disabled={chip.disabled}
-      title={chip.title ?? (clipped || flag ? chipText(chip) : undefined)}
+      title={chip.title}
       onClick={onToggle}
       onFocus={onFocus}
       onKeyDown={onKeyDown}
       className={clsx(CHIP, chip.active ? ON : OFF)}
     >
-      {flag && flag.text == null && <span aria-hidden className={clsx('h-[8px] w-[8px] shrink-0 rounded-full', DOT[flag.tone], EDGE)} />}
+      {flag && flag.text == null && <span aria-hidden title={flagTip(flag)} className={clsx('h-[8px] w-[8px] shrink-0 rounded-full', DOT[flag.tone], EDGE)} />}
       {Icon && <Icon aria-hidden className="h-[14px] w-[14px] shrink-0" strokeWidth={1.75} />}
-      <span ref={word} className="min-w-0 truncate">{chip.label}</span>
+      <span ref={word} title={labelTip(chip.label, clipped)} className="min-w-0 truncate">{chip.label}</span>
       {count && <span className={clsx('shrink-0 tabular-nums', chip.active ? 'text-ds-on-primary' : 'text-ds-fg-muted')}>{count}</span>}
-      {flag && flag.text != null && <span aria-hidden className={clsx('inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full px-[5px] text-ds-label tabular-nums text-ds-on-primary', BADGE[flag.tone], EDGE)}>{flag.text}</span>}
+      {flag && flag.text != null && <span aria-hidden title={flagTip(flag)} className={clsx('inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full px-[5px] text-ds-label tabular-nums text-ds-on-primary', BADGE[flag.tone], EDGE)}>{flag.text}</span>}
       {flag && <span className="sr-only">{`, ${flag.label}`}</span>}
     </button>
   );

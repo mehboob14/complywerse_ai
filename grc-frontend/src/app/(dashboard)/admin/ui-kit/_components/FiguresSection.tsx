@@ -82,6 +82,9 @@ function TileDemo() {
         <Specimen label="loading: a skeleton, announced to a screen reader">
           <StatTile label="Overdue actions" value={null} loading />
         </Specimen>
+        <Specimen label="denied: &quot;No access&quot; with a lock, the (i) says why; it wins over a figure that is still loading, failed or present">
+          <StatTile label="Open investigations" value="12" loading denied info="Your role cannot see investigations. Ask an administrator to add the right." />
+        </Specimen>
         <Specimen label="error: what failed and Retry, never a 0 (works on the second try)">
           <FailedTile />
         </Specimen>

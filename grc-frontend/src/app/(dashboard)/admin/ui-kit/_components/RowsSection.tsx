@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { AccordionRow, Button, Checkbox, Disclosure, FilterChips, StatusPill, TextInput, type FilterChip } from '@/components/ui';
 import { formatCount } from '@/lib/format';
 import { GuideSection, MONO, Row, Spec, Specimen, Grid } from './Guide';
+import { CountRowDemo, WorkRowDemo } from './WorkRowsDemo';
 
 const FRAME = 'rounded-ds-card border border-ds-border bg-ds-surface p-[16px]';
 const LONG_LABEL = 'Information security management system: annual review of every policy, standard and procedure owned by the technology risk office of the retail banking group';
@@ -176,6 +177,8 @@ export function RowsSection() {
         <DisclosureDemo />
         <Specimen label="AccordionRow: an agenda. A lead, a title, a line of facts, a status, a chevron; a long title repeated in full when open; controlled and uncontrolled rows side by side"><AgendaDemo /></Specimen>
       </Spec>
+      <Spec name="WorkRow"><WorkRowDemo /></Spec>
+      <Spec name="CountRow"><CountRowDemo /></Spec>
     </GuideSection>
   );
 }

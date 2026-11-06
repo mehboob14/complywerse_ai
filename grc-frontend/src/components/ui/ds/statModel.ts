@@ -1,16 +1,21 @@
-// What a StatTile and a ProgressBar decide, apart from React so `node --test` can pin it (statModel.test.ts): which of a tile's four states it is in
-// (a failure and a wait are never shown as a figure, and a missing figure is never 0), and what a bar says about its value (a stored number outside
-// 0-100 fills the track and no more, a missing one is not 0%). The components are StatTile.tsx and ProgressBar.tsx.
+// What a StatTile and a ProgressBar decide, apart from React so `node --test` can pin it (statModel.test.ts): which of a tile's five states it is in
+// (a refusal, a failure and a wait are never shown as a figure, and a missing figure is never 0), and what a bar says about its value (a stored number
+// outside 0-100 fills the track and no more, a missing one is not 0%). The components are StatTile.tsx and ProgressBar.tsx.
 import { formatPercent } from '../../../lib/format.ts';
 
 /** What a figure that has not been recorded says: not 0, not a dash that means nothing. */
 export const NOT_RECORDED = 'Not recorded';
 
-export type TileState = 'error' | 'loading' | 'empty' | 'value';
+/** What a figure the person may not see says: the figure is not zero and not missing, it is theirs to ask for. */
+export const NO_ACCESS = 'No access';
 
-/** Which of its four states a tile is in. The order matters: a failed request is said (with Retry) before a wait is shown, a wait before a missing figure,
- *  and the figure only when there is one. A tile is never a 0 that stands for "failed", "loading" or "nothing recorded". */
-export function tileState({ error, loading, value }: { error: boolean; loading: boolean; value: string | null | undefined }): TileState {
+export type TileState = 'denied' | 'error' | 'loading' | 'empty' | 'value';
+
+/** Which of its five states a tile is in. The order matters: a refusal first (the person may not see it: no wait, no retry, no figure, whatever else the
+ *  request says), then a failed request (said, with Retry) before a wait is shown, a wait before a missing figure, and the figure only when there is one. A
+ *  tile is never a 0 that stands for "refused", "failed", "loading" or "nothing recorded". `denied` is optional: a tile that never passes it is as it was. */
+export function tileState({ denied = false, error, loading, value }: { denied?: boolean; error: boolean; loading: boolean; value: string | null | undefined }): TileState {
+  if (denied) return 'denied';
   if (error) return 'error';
   if (loading) return 'loading';
   return value == null ? 'empty' : 'value';

@@ -26,10 +26,10 @@ export {
   TableFrame, Table, THead, TBody, Tr, Th, Td, RowHeaderCell,
   type TableFrameProps, type TableProps, type TrProps, type ThProps, type TdProps, type RowHeaderCellProps, type CellAlign,
 } from './Table';
-export { RegisterTable, type RegisterTableProps, type RegisterColumn } from './RegisterTable';
+export { RegisterTable, type RegisterTableProps, type RegisterColumn, type RegisterSelection, type RegisterExpand } from './RegisterTable';
 export {
-  nextSort, ariaSort, sortRows, priorityClass, rowCountText,
-  type SortState, type SortDir, type SortCycle, type SortValue, type ColumnPriority,
+  nextSort, ariaSort, sortRows, priorityClass, rowCountText, chosenState, toggleId, toggleAllListed, includesId,
+  type SortState, type SortDir, type SortCycle, type SortValue, type ColumnPriority, type RowId, type ChosenState,
 } from './tableModel';
 export { SectionCard, type SectionCardProps } from './SectionCard';
 export { SaveBar, type SaveBarProps } from './SaveBar';
@@ -50,3 +50,11 @@ export { Sheet, type SheetProps } from './Sheet';
 export type { PanelMode, PanelWidth } from './sidePanelModel';
 export { FilterChips, type FilterChip, type FilterChipsProps, type ChipFlag, type FlagTone } from './FilterChips';
 export { Disclosure, AccordionRow, type DisclosureProps, type AccordionRowProps } from './Disclosure';
+// Kit 3 (UX revamp, Stage 2): the rows of a worklist and the wave-1 gaps
+export { WorkRow, type WorkRowProps, type WorkAction, type WorkCheck } from './WorkRow';
+export { CountRow, type CountRowProps } from './CountRow';
+export { ClampedText, type ClampedTextProps } from './ClampedText';
+export { ChipList, type ChipListProps, type ChipListItem } from './ChipList';
+export { Fact, FactList, type FactProps, type FactListProps } from './Facts';
+export { TitleLink, CardLink, type TitleLinkProps, type CardLinkProps } from './Links';
+export { linkClasses, type LinkTone, type LinkSize } from './linkModel';
