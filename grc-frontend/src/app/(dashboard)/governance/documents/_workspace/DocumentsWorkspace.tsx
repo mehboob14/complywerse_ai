@@ -13,6 +13,7 @@
  */
 import { useCallback, useDeferredValue, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { withFrom } from '@/components/shell/withFrom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Archive, ArchiveRestore, CalendarClock, ChevronsDownUp, ChevronsUpDown, Download, FileText, FolderInput, LayoutTemplate, Plus, Send, Sparkles, UserPlus,
@@ -28,6 +29,7 @@ import { AppliedFilters } from '@/components/records/AppliedFilters';
 import { BoardColumns } from '@/components/records/BoardColumns';
 import { BulkBar, type BulkActionDef } from '@/components/records/BulkBar';
 import { RecordExplorer } from '@/components/records/RecordExplorer';
+import type { ExplorerFit } from '@/components/records/explorerFit';
 import { RecordTable, type RecordItem } from '@/components/records/RecordTable';
 import { countMatching, countOf, evaluate } from '@/components/records/facetEngine';
 import { moveCursor, selectAllMatching, tickState, toggleAll, toggleOne } from '@/components/records/explorerModel';
@@ -70,6 +72,7 @@ import { DocumentCard, RowMenu, documentColumns, type RowEnv } from './libraryRo
 import { buildTree, collapseAll, expandAll, flip, NOTHING_OPEN, openness, treeEntries, type Fold } from './docTree';
 import { waitingCount, waitingForMe, waitingNote } from './waitingModel';
 import { DocumentDetail } from './DocumentDetail';
+import { useHere } from './useHere';
 import { DepartmentsFailed, FoldersToolbar, NoDepartments } from './FolderRows';
 import { MovePopover } from './MovePopover';
 import DetailsDialog from '../[id]/_DetailsDialog';
@@ -100,7 +103,6 @@ const BULK_ICON = { publish: Send, 'assign-owner': UserPlus, 'set-review': Calen
 const NO_KEYS: ReadonlySet<string> = new Set<string>();
 const NO_COUNTS: Record<number, { done: number; total: number }> = {};
 const RAIL_LIMIT: Partial<Record<FacetKey, number>> = { frameworks: 7, owners: 7 };
-const MAX_HEIGHT = 'max-h-[calc(100vh-17rem)]';
 
 function download(data: BlobPart, fileName: string, type?: string) {
   const url = URL.createObjectURL(new Blob([data], type ? { type } : undefined));
@@ -397,7 +399,10 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   const pageIds = listItems.items.filter((i) => i.kind === 'row' && !i.context).map((i) => (i as { id: number }).id);
 
   // ── handlers ──
-  const openDoc = (id: number) => router.push(`/governance/documents/${id}`);
+  // every way out of the library to a document carries the library's address (?from=), so Documents stays lit and the way back is this view
+  const here = useHere();
+  const docHref = (id: number) => withFrom(`/governance/documents/${id}`, here);
+  const openDoc = (id: number) => router.push(docHref(id));
   const refreshAll = () => { REFRESH_KEYS.forEach((k) => qc.invalidateQueries({ queryKey: [...k] })); };
   const publish = useReportedMutation({
     mutationFn: (ids: number[]) => bulkPublish(ids),
@@ -551,12 +556,12 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   };
 
   const env: RowEnv = {
-    lookups, now, info: frameworkInfo, preferFrameworks: filters.frameworks, compact: prefs.density === 'compact', onPeek: setOpenId, onPickFramework: pickFramework,
+    lookups, now, info: frameworkInfo, preferFrameworks: filters.frameworks, compact: prefs.density === 'compact', onPeek: setOpenId, onPickFramework: pickFramework, hrefOf: docHref,
     rights: (d) => rowRights({ canEdit, canEditRow: mayChange, canArchiveRow: mayChange, canRestoreRow: mayRestore, canRestore: true }, d),
     canMove: (d) => !!targets.length && mayChange(d), onOpenDoc: openDoc, onEdit: onEditDoc, onDownload: onDownloadDoc, onArchive: onArchiveDoc, onRestore: onRestoreDoc,
     onMove: (d, anchor) => setMoving({ ids: [d.id], anchor: anchor ?? null }),
   };
-  const columns = useMemo(() => documentColumns(env), [env.lookups, env.now, env.info, env.preferFrameworks, env.compact]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const columns = useMemo(() => documentColumns(env), [env.lookups, env.now, env.info, env.preferFrameworks, env.compact, here]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // the keyboard: "/" searches, j and k move the cursor, Enter opens it, Escape clears the ticks
   const searchRef = useRef<HTMLInputElement>(null);
@@ -688,7 +693,6 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
           actions={(d) => <RowMenu doc={d} env={env} />}
           card={(row) => <DocumentCard row={row} env={env} />}
           compact={prefs.density === 'compact'}
-          maxHeight={MAX_HEIGHT}
         />
         {!inFolders && (
           <Pager
@@ -707,7 +711,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   })();
 
   const viewOptions = [{ value: 'table', label: 'List' }, { value: 'folders', label: 'Folders' }, { value: 'board', label: 'Board' }];
-  const head = (
+  const head = (fit: ExplorerFit) => (
     <PageHeader
       variant="page"
       title={label}
@@ -718,9 +722,9 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
           {create === 'studio-off' && <span className="shrink-0 text-ds-label text-ds-fg-muted">Creating documents needs the Comply AI Studio.</span>}
           {create === 'buttons' && (
             <>
-              {/* icon only on a phone, so the three buttons share a line (the words stay for a screen reader) */}
-              <Button onClick={onTemplates} title="Templates" leftIcon={<LayoutTemplate aria-hidden />}><span className="max-sm:sr-only">Templates</span></Button>
-              <Button onClick={onAIDraft} title="AI Draft" leftIcon={<Sparkles aria-hidden />}><span className="max-sm:sr-only">AI Draft</span></Button>
+              {/* icon only in a phone-sized room, so the three buttons share a line (the words stay for a screen reader) */}
+              <Button onClick={onTemplates} title="Templates" leftIcon={<LayoutTemplate aria-hidden />}><span className={fit.compact ? 'sr-only' : undefined}>Templates</span></Button>
+              <Button onClick={onAIDraft} title="AI Draft" leftIcon={<Sparkles aria-hidden />}><span className={fit.compact ? 'sr-only' : undefined}>AI Draft</span></Button>
               <Button variant="primary" onClick={onNewDocument} title="New document" leftIcon={<Plus aria-hidden />}>New document</Button>
             </>
           )}
@@ -747,7 +751,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
               <div className="flex flex-wrap items-start gap-2">
                 <div className="min-w-0 flex-1"><ListNotice title={missing.title}>{missing.detail}</ListNotice></div>
                 <div className="flex shrink-0 gap-2">
-                  <Button href={`/governance/documents/${openId}`}>Open its page</Button>
+                  <Button href={docHref(openId as number)}>Open its page</Button>
                   <Button variant="ghost" onClick={() => setOpenId(null)}>Dismiss</Button>
                 </div>
               </div>
@@ -763,16 +767,16 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
         searchLabel="Search documents by title, code, owner, department or framework"
         searchRef={searchRef}
         views={{ label: 'Library view', name: `${uid}-view`, options: viewOptions, value: view, onChange: (v) => changeView(v as LibraryViewId) }}
-        actions={(
+        actions={(fit) => (
           <>
-            {!inBoard && !inFolders && parents.length > 0 && !loading && (
-              <Button className="max-md:hidden" variant="ghost" onClick={() => setFold(allParentsOpen ? collapseAll(parents) : expandAll(fold))} leftIcon={allParentsOpen ? <ChevronsDownUp aria-hidden /> : <ChevronsUpDown aria-hidden />}>
-                <span className="max-lg:sr-only">{allParentsOpen ? 'Collapse all' : 'Expand all'}</span>
+            {!inBoard && !inFolders && parents.length > 0 && !loading && !fit.compact && (
+              <Button variant="ghost" onClick={() => setFold(allParentsOpen ? collapseAll(parents) : expandAll(fold))} leftIcon={allParentsOpen ? <ChevronsDownUp aria-hidden /> : <ChevronsUpDown aria-hidden />}>
+                <span className={fit.tight ? 'sr-only' : undefined}>{allParentsOpen ? 'Collapse all' : 'Expand all'}</span>
               </Button>
             )}
             {!inBoard && <Menu label="Sort" items={sortItems} />}
             <Button leftIcon={<Download aria-hidden />} onClick={exportCsv} disabled={filteredDocs.length === 0 || loading} title={words.title}>
-              <span className="max-md:sr-only">{words.label}</span>
+              <span className={fit.tight ? 'sr-only' : undefined}>{words.label}</span>
             </Button>
           </>
         )}
@@ -795,8 +799,9 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
           />
         )}
         body={body}
-        bulk={selectable && !loading && ticked.length > 0 ? (
+        bulk={selectable && !loading && ticked.length > 0 ? (fit) => (
           <BulkBar
+            iconsOnly={fit.compact}
             count={ticked.length}
             matching={filteredDocs.length}
             onSelectAll={() => selection.set(selectAllMatching(filteredDocs.map((d) => d.id)))}

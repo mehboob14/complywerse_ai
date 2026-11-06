@@ -49,9 +49,28 @@ test('the keyboard layer acts only through keyAction, and never from a field, a 
   assert.ok(keys.includes("document.addEventListener('keydown'") && keys.includes("document.removeEventListener('keydown'"));
 });
 
-test('the list draws the table OR the cards for the window, each row opens from the keyboard, and the phone targets are 44px', () => {
+test('the list draws the table OR the cards by the room its own box has, each row opens from the keyboard, and the card targets are 44px', () => {
   const table = read('RecordTable.tsx');
-  assert.ok(table.includes('useMinWidth(768)') && table.includes('wide ? ('));
+  assert.ok(table.includes('useContainerWidth(box)') && table.includes('fitColumns(asked, room, chrome)') && table.includes(') : ('));
   assert.ok(table.includes('onActivate={() => onActivate(record)}') && table.includes('data-record-row={id}'));
-  assert.ok(table.includes('min-w-[44px]') && table.includes('max-md:w-[44px]'));
+  assert.ok(table.includes('min-w-[44px]') && table.includes("'w-[44px]'"));
+});
+
+test('no part of the explorer decides its layout by the window: no breakpoint variant, no viewport height, no media query for a width (the room is the explorer\'s own box)', () => {
+  const found: string[] = [];
+  for (const name of names) lines(read(name)).forEach((line, i) => {
+    const c = code(line);
+    if (/(^|[\s"'`])(max-)?(sm|md|lg|xl|2xl):/.test(c)) found.push(`${name}:${i + 1} breakpoint variant`);
+    if (/\b\d*(d|s|l)?vh\b|calc\(100v/.test(c)) found.push(`${name}:${i + 1} viewport height`);
+    if (/matchMedia|\(min-width|\(max-width|innerWidth|innerHeight/.test(c)) found.push(`${name}:${i + 1} window width`);
+  });
+  assert.deepEqual(found, []);
+});
+
+test('nothing in the explorer is fixed to the window or pinned under a bar the page may not have: the bulk bar floats at the foot of the page\'s own scroll, the table scrolls with the page', () => {
+  const bar = read('BulkBar.tsx').replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n');
+  assert.ok(!/\bfixed\b/.test(bar));
+  assert.ok(bar.includes('sticky bottom-[12px]'));
+  assert.ok(!/sticky top-\[/.test(read('RecordExplorer.tsx')));                       // the rail is in the page's flow, not pinned under a bar
+  assert.ok(read('RecordTable.tsx').includes('overflow-clip'));                       // a rounded frame that is not a scroll box: the header sticks to the page's scroll
 });

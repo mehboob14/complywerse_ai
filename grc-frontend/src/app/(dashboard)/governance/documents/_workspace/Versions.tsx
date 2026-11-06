@@ -9,6 +9,7 @@
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
+import { withFrom } from '@/components/shell/withFrom';
 import { governanceApi } from '@/lib/api';
 import { documentChainApi } from '@/lib/documentChain';
 import { formatDate } from '@/lib/format';
@@ -16,6 +17,7 @@ import { problemOf } from '@/lib/studio/api';
 import { type GovDoc, statusLabel, verLabel } from './lib';
 import { versionGroups, versionStates, type VersionState } from './library';
 import { retryUnlessRefused } from '../_view/docRoute';
+import { useHere } from './useHere';
 
 /** px per level of the table's tree: the width of the arrow, and the gap between the arrow and the title */
 export const STEP = 24;
@@ -28,14 +30,14 @@ type VersionRow = { id: number; number: string; kind: string | null; at: string 
 /** One version of a document: number, state, size, date and who made it; it opens the document on that version. Only the current
  *  version (the document's state) and the one in force carry a badge; an earlier version needs none (the user, 2026-10-21: every
  *  older row saying "Superseded" read as an error). */
-function VersionLink({ doc, v, original }: { doc: GovDoc; v: VersionRow & { state: VersionState }; original: boolean }) {
+function VersionLink({ doc, v, original, here }: { doc: GovDoc; v: VersionRow & { state: VersionState }; original: boolean; here: string }) {
   const earlier = v.state === 'superseded';
   const word = v.state === 'in-force' ? 'In force' : earlier ? null : statusLabel(doc.status);
   const inForce = v.state === 'in-force' || (v.state === 'current' && doc.status === 'published');
   const look = inForce ? 'border-ds-primary bg-ds-primary text-ds-on-primary' : 'border-ds-border-control text-ds-fg';
   return (
     <Link
-      href={`/governance/documents/${doc.id}?read=${v.id}`}
+      href={withFrom(`/governance/documents/${doc.id}?read=${v.id}`, here)}
       className="flex min-h-ds-control flex-wrap items-center gap-x-2 gap-y-[2px] rounded-ds-control px-[6px] py-[2px] text-ds-label text-ds-fg-body hover:bg-ds-surface-hover focus-visible:outline-none focus-visible:shadow-ds-ring"
     >
       <span className="text-ds-body font-[600] tabular-nums text-ds-fg">{verLabel(v.number)}</span>
@@ -50,6 +52,7 @@ function VersionLink({ doc, v, original }: { doc: GovDoc; v: VersionRow & { stat
 /** Every version of a document, read as the document page reads them (its Change log: the change chain; where the chain is off, the
  *  version history), as a hierarchy: each major version with its minor versions under it, newest major first (library.versionGroups). */
 export function Versions({ doc, depth = 0 }: { doc: GovDoc; depth?: number }) {
+  const here = useHere();            // a version opens the document on it: the way back is this page as it is
   const chain = useQuery({ queryKey: ['document-chain', doc.id], queryFn: () => documentChainApi.chain(doc.id), staleTime: 15_000, retry: retryUnlessRefused });
   const off = chain.data?.enabled === false;
   const history = useQuery({
@@ -78,10 +81,10 @@ export function Versions({ doc, depth = 0 }: { doc: GovDoc; depth?: number }) {
     <ul aria-label={`Versions of ${doc.title}, newest major version first`} style={{ marginLeft: depth * STEP + STEP / 2 }} className="border-l border-ds-border-strong pl-2">
       {versionGroups(lines).map((g) => (
         <li key={g.head.id}>
-          <VersionLink doc={doc} v={g.head} original={g.head.id === original} />
+          <VersionLink doc={doc} v={g.head} original={g.head.id === original} here={here} />
           {g.minors.length > 0 && (
             <ul aria-label={`Minor versions after ${verLabel(g.head.number)}, newest first`} className="ml-3 border-l border-ds-border pl-2">
-              {g.minors.map((v) => <li key={v.id}><VersionLink doc={doc} v={v} original={v.id === original} /></li>)}
+              {g.minors.map((v) => <li key={v.id}><VersionLink doc={doc} v={v} original={v.id === original} here={here} /></li>)}
             </ul>
           )}
         </li>

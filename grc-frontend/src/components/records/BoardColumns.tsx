@@ -1,12 +1,18 @@
 'use client';
 
 // A read-only board: records in columns by a rule (a document's lifecycle status), each column with its true count and its first cards, "Show all N" for the rest. There is NO
-// drag: a status changes only through the workflow, so a card is something to open, never something to move. A card is a button (Enter and Space open it). On a phone the
-// columns stack; from 768px they sit side by side and the board scrolls sideways inside its frame.
-import type { ReactNode } from 'react';
+// drag: a status changes only through the workflow, so a card is something to open, never something to move. A card is a button (Enter and Space open it). Where the board's own box
+// has room for two columns they sit side by side and the board scrolls sideways inside its frame; with less, the columns stack. The board is as tall as its cards (a column shows
+// `limit` of them): the page scrolls, not the board.
+import { useRef, type ReactNode } from 'react';
+import { clsx } from 'clsx';
 import { Button } from '@/components/ui/ds';
 import { formatCount } from '@/lib/format';
 import type { BoardColumn } from './explorerModel';
+import { useContainerWidth } from './useContainerWidth';
+
+/** The room two columns of the board's minimum width (220) and its padding need. */
+const STACK_BELOW = 480;
 
 export interface BoardColumnsProps<R> {
   columns: BoardColumn<R>[];
@@ -27,8 +33,11 @@ export interface BoardColumnsProps<R> {
 }
 
 export function BoardColumns<R>({ columns, getId, renderCard, cardLabel, onOpen, activeId = null, limit = 8, onShowAll, label, empty = 'Nothing here' }: BoardColumnsProps<R>) {
+  const box = useRef<HTMLDivElement>(null);
+  const width = useContainerWidth(box);
+  const stacked = width != null && width < STACK_BELOW;
   return (
-    <div role="group" aria-label={label} className="grid max-h-[calc(100vh-15rem)] grid-flow-row auto-rows-min gap-[10px] overflow-auto p-[10px] md:grid-flow-col md:auto-cols-[minmax(220px,1fr)] md:items-start">
+    <div ref={box} role="group" aria-label={label} className={clsx('grid gap-[10px] overflow-x-auto p-[10px]', stacked ? 'grid-flow-row auto-rows-min' : 'grid-flow-col auto-cols-[minmax(220px,1fr)] items-start')}>
       {columns.map((col) => {
         const shown = col.rows.slice(0, limit);
         return (

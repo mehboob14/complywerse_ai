@@ -3,7 +3,7 @@
 /**
  * The parts of the library's Folders view that are not a document row: a folder's header row, the "Show N more" row under a folder's
  * documents, the strip above the table (Expand all / Collapse all and the counts) and the two states of a view with no folders to
- * show (no departments yet, departments that could not be read). The document rows are the table's own (LibraryTable draws them, one
+ * show (no departments yet, departments that could not be read). The document rows are the table's own (RecordTable draws them, one
  * level deeper than the folder); which folders there are and what they count is libraryFolders.ts. On a phone a folder is a card of its own (FolderHeadCard)
  * with the documents under it as cards. Written on the design-system tokens, 12px at the least.
  */
@@ -11,9 +11,11 @@ import type { ReactNode } from 'react';
 import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Folder, FolderOpen } from 'lucide-react';
 import { Button, EmptyState, ErrorState } from '@/components/ui/ds';
 import { InfoTip } from '@/components/ui/InfoTip';
+import { withFrom } from '@/components/shell/withFrom';
 import { formatCount } from '@/lib/format';
 import { folderAria, expandable, statusSummary, type FolderNode } from './libraryFolders';
 import { foldersLine } from './libraryNumbers';
+import { useHere } from './useHere';
 import { STEP } from './Versions';
 
 const FOCUS = 'focus-visible:outline-none focus-visible:shadow-ds-ring';
@@ -46,7 +48,7 @@ function FolderBody({ node, open }: { node: FolderNode; open: boolean }) {
           >
             {fmt(node.total.docs)}
           </span>
-          {summary && <span className="whitespace-nowrap text-ds-label text-ds-fg-muted">{summary}</span>}
+          {summary && <span className="text-ds-label text-ds-fg-muted">{summary}</span>}
         </>
       )}
       {node.total.overdue > 0 && (
@@ -91,7 +93,7 @@ export function FolderHeadRow({ node, open, colSpan, tick, headId, controls, onT
       className={`group/folder min-h-[44px] ${openable ? 'cursor-pointer' : ''}`}
     >
       <td colSpan={colSpan} className={`border-b border-ds-border bg-ds-surface-subtle px-[12px] align-middle ${openable ? 'group-hover/folder:bg-ds-surface-hover' : ''} [&&]:!py-[6px]`}>
-        <div className="sticky left-[12px] flex w-full max-w-[min(60rem,calc(100vw-4rem))] items-center gap-2">
+        <div className="sticky left-[12px] flex w-full items-center gap-2">
           {tick}
           <div className="flex min-w-0 flex-1 items-center" style={{ paddingLeft: node.depth * STEP }}>
             {openable ? (
@@ -165,7 +167,7 @@ export function ShowMore({ indent, hidden, step, onMore, onFewer, folder }: {
 }) {
   const more = hidden > 0;
   return (
-    <div className="sticky left-[12px] flex w-full max-w-[min(44rem,calc(100vw-4rem))] items-center gap-2" style={{ paddingLeft: indent }}>
+    <div className="sticky left-[12px] flex w-full items-center gap-2" style={{ paddingLeft: indent }}>
       <Button
         variant="link"
         size="sm"
@@ -229,13 +231,14 @@ export function FoldersToolbar({ allOpen, canFold, onToggleAll, folders, documen
 
 /** Folders chosen, but the organisation has no department in use yet: where to make them. */
 export function NoDepartments({ canAdd = true }: { canAdd?: boolean }) {
+  const here = useHere();
   return (
     <EmptyState
       kind="firstUse"
       bare
       icon={Folder}
       title="No departments yet"
-      action={canAdd ? <Button href="/governance/settings">Set up departments</Button> : undefined}
+      action={canAdd ? <Button href={withFrom('/governance/settings', here)}>Set up departments</Button> : undefined}
     />
   );
 }

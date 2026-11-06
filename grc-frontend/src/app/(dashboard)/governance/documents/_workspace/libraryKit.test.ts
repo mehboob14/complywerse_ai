@@ -30,13 +30,13 @@ test('no row action appears only on hover: nothing is opacity-0 until a group is
 });
 
 test('a row\'s menu is a kit Menu that is always drawn, and Open, Edit, Move to…, Download, Archive and Restore are in it', () => {
-  const cells = read('cells.tsx');
-  assert.ok(cells.includes("from '@/components/ui/ds'") && cells.includes('<Menu label='));
-  for (const key of ['open', 'edit', 'move', 'download', 'archive', 'restore']) assert.ok(cells.includes(`key: '${key}'`), key);
-  assert.ok(cells.includes('iconOnly'));
-  assert.ok(!/RowActionsMenu/.test(cells + read('DocumentDrawer.tsx') + read('LibraryTable.tsx')));          // the shared dropdown of other modules is not used here
-  // the title is the link that opens the document, and it is a real link (a modified click opens a new tab)
-  assert.ok(cells.includes('href={`/governance/documents/${doc.id}`}') && cells.includes('plainClick(e)'));
+  const rows = read('libraryRows.tsx');
+  assert.ok(rows.includes("from '@/components/ui/ds'") && rows.includes('<Menu label='));
+  for (const key of ['open', 'edit', 'move', 'download', 'archive', 'restore']) assert.ok(rows.includes(`key: '${key}'`), key);
+  assert.ok(rows.includes('iconOnly'));
+  assert.ok(!/RowActionsMenu/.test(rows + read('cells.tsx') + read('DocumentDrawer.tsx')));          // the shared dropdown of other modules is not used here
+  // the title is the link that opens the document, and it is a real link (a modified click opens a new tab); its address carries the library's (?from=)
+  assert.ok(rows.includes('href={env.hrefOf(doc.id)}') && rows.includes('plainClick(e)'));
 });
 
 test('no native dialog: no window.confirm, alert or prompt, and the page asks through useConfirm', () => {
@@ -82,9 +82,10 @@ test('the numbers the page states come from libraryNumbers.ts: the head, the fil
   assert.ok(!/getDocuments\(/.test(readFileSync(new URL('../page.tsx', DIR), 'utf8')));
 });
 
-test('the register is on the kit table: sortable headers with aria-sort, rows that open from the keyboard, columns by window width, cards below 768px (only the one for the width is drawn); the details open over the list', () => {
+test('the register is on the kit table: sortable headers with aria-sort, rows that open from the keyboard, columns by the width of the list\'s own box, cards where the table has no room (only the one that fits is drawn); the details open over the list', () => {
   const table = readFileSync(new URL('../../../../../components/records/RecordTable.tsx', import.meta.url), 'utf8');
-  for (const word of ['<TableFrame', '<Th', '<Tr', 'priority={c.priority}', 'sortKey={c.sortKey}', 'onActivate={() => onActivate(record)}', 'useMinWidth(768)', 'wide ? (']) assert.ok(table.includes(word), word);
+  for (const word of ['<TableFrame', '<Th', '<Tr', 'sortKey={c.sortKey}', 'onActivate={() => onActivate(record)}', 'useContainerWidth(box)', 'fitColumns(asked, room, chrome)']) assert.ok(table.includes(word), word);
+  assert.ok(!/priority=/.test(table));                                                                            // the kit's priority classes are the window's width: the fit decides
   assert.ok(!/<table\b|<th\b|<thead\b/.test(table));                                                              // no bare table elements of its own: the kit's primitives
   assert.ok(table.includes('table-fixed'));
   // the details: the kit's SidePanel as an overlay at every width (never docked), a sheet on a phone, with ONE scrolling body
@@ -93,22 +94,40 @@ test('the register is on the kit table: sortable headers with aria-sort, rows th
   assert.ok(!/useMinWidth/.test(read('DocumentsWorkspace.tsx')));
 });
 
-test('the table and the phone cards are both in the page (the width hides one), so their folder ids differ: an id may appear once, and aria-controls must name the right one', () => {
-  const table = read('LibraryTable.tsx');
-  assert.ok(table.includes('const headId =') && table.includes('const docsId =') && table.includes('const cardHeadId =') && table.includes('const cardDocsId ='));
-  const cards = table.slice(table.indexOf('<ul role="list"'));
-  assert.ok(!/\b(headId|docsId)\(|map\(headId\)/.test(cards), 'the cards use their own ids');
-  assert.ok(cards.includes('headId={cardHeadId(node)}') && cards.includes('id={cardDocsId(node)}') && cards.includes('node.folders.map(cardHeadId)'));
-});
-
 test('the files that were rewritten on the kit hold its token rules: no named text size, palette colour, hex, named shadow or radius, no text under 12px', () => {
   const rewritten = [
     'atoms.tsx', 'cells.tsx', 'DocumentDrawer.tsx', 'DocumentsWorkspace.tsx', 'FolderRows.tsx', 'FrameworkList.tsx', 'FrameworksCell.tsx', 'LibraryFilters.tsx', 'LibraryKpis.tsx',
-    'LibraryTable.tsx', 'LifecycleHover.tsx', 'MovePopover.tsx', 'Versions.tsx', 'libraryRows.tsx', 'libraryItems.tsx', 'DocumentDetail.tsx',
+    'LifecycleHover.tsx', 'MovePopover.tsx', 'Versions.tsx', 'libraryRows.tsx', 'libraryItems.tsx', 'DocumentDetail.tsx',
   ];
   const found: string[] = [];
   for (const name of rewritten) for (const v of findViolations(read(name))) found.push(`${name}:${v.line} ${v.rule} ${v.text}`);
   assert.deepEqual(found, []);
+});
+
+test('the library lays its list out by the room its explorer has, never by the window: no breakpoint variant and no viewport height in the files that draw the list, the board and the links', () => {
+  const found: string[] = [];
+  // Versions.tsx is the details panel's (its width is the kit panel's, which follows the window); BulkBar and the popovers are fixed to the window on purpose
+  for (const name of ['DocumentsWorkspace.tsx', 'libraryRows.tsx', 'DocumentDetail.tsx', 'DocumentDrawer.tsx', 'FolderRows.tsx', 'cells.tsx', 'libraryItems.tsx']) {
+    lines(read(name)).forEach((line, i) => {
+      const c = code(line);
+      if (/(^|[\s"'`])(max-)?(sm|md|lg|xl|2xl):/.test(c)) found.push(`${name}:${i + 1} breakpoint variant`);
+      if (/\b\d*(d|s|l)?vh\b|calc\(100v/.test(c)) found.push(`${name}:${i + 1} viewport height`);
+    });
+  }
+  assert.deepEqual(found, []);
+});
+
+test('every way out of the library to another page carries the library\'s address (?from=), so the shell keeps Documents lit and the way back is this view', () => {
+  const workspace = read('DocumentsWorkspace.tsx');
+  assert.ok(workspace.includes('withFrom(`/governance/documents/${id}`, here)') && workspace.includes('const openDoc = (id: number) => router.push(docHref(id));') && workspace.includes('hrefOf: docHref'));
+  assert.ok(workspace.includes('<Button href={docHref(openId as number)}>Open its page</Button>'));
+  assert.ok(read('Versions.tsx').includes('withFrom(`/governance/documents/${doc.id}?read=${v.id}`, here)'));
+  assert.ok(read('DocumentDrawer.tsx').includes("withFrom('/governance/documents/attestation', here)"));
+  assert.ok(read('FolderRows.tsx').includes("withFrom('/governance/settings', here)"));
+  const page = readFileSync(new URL('../page.tsx', DIR), 'utf8');
+  assert.equal((page.match(/router\.push\(/g) ?? []).length, (page.match(/router\.push\(withFrom\(/g) ?? []).length);             // none leaves without it
+  // and no link of the library is a bare path to a document any more
+  for (const name of ['libraryRows.tsx', 'Versions.tsx', 'DocumentDetail.tsx', 'DocumentDrawer.tsx']) assert.ok(!/href=\{?[`"']\/governance\/documents\/(\$\{|\d)/.test(read(name)), name);
 });
 
 test('no screen of the page names a model or a vendor', () => {

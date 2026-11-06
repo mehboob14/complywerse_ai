@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 // The Folders view's screens are checked in a browser; these read the sources for the few rules a later edit could break without a
 // type error (the repo's habit for the library: archive.test.ts, libraryTableLogic.test.ts).
 const read = (name: string) => readFileSync(new URL(`./${name}`, import.meta.url), 'utf8');
-const table = read('LibraryTable.tsx');
+const items = read('libraryItems.tsx');
 const rows = read('FolderRows.tsx');
 const cells = read('cells.tsx');
 const workspace = read('DocumentsWorkspace.tsx');
@@ -14,14 +14,11 @@ const libraryRows = read('libraryRows.tsx');
 const facets = read('libraryFacets.ts');
 const explorer = readFileSync(new URL('../../../../../components/records/RecordExplorer.tsx', import.meta.url), 'utf8');
 
-test('the Folders view is the same table: the same rows, columns without Department, no pager, and a folder header for each department', () => {
+test('the Folders view is the same list: the same rows one step under their folder, a folder header for each department, "Show N more" under a folder, and no pager', () => {
   // a folder's documents sit one step under its arrow, level with a folder inside it: a row's own cells are one step right of a folder header at the same depth
-  assert.ok(table.includes('renderRow(r, node.depth)') && !table.includes('renderRow(r, node.depth + 1)'));
-  assert.ok(table.includes("filter((c) => !(folders && c.id === 'department')"));                  // the folder is the department
-  assert.ok(table.includes('hasDepartmentColumn || folders ? undefined : department'));            // and the owner cell does not repeat it
-  assert.ok(table.includes('{!loading && !folders && top.length > 0 && ('));                      // the pager is the table's; folders have "Show N more"
-  assert.ok(table.includes('<FolderHeadRow') && table.includes('<ShowMoreRow'));
-  assert.ok(!table.includes('rows.map(renderRow)') && !/\.map\(renderRow\)/.test(table));          // map would pass the index as the row's depth offset
+  assert.ok(items.includes('recordRows(p.rows, node.depth + 1, i.toggleRow)') && !items.includes('recordRows(p.rows, node.depth + 2'));
+  assert.ok(items.includes("kind: 'group'") && items.includes('<FolderHeadRow') && items.includes('<ShowMoreRow'));
+  assert.ok(workspace.includes('{!inFolders && ('));                                               // the pager is the list's; folders have "Show N more"
 });
 
 test('a folder header is a real button that says whether it is open and what it controls; its tick box is not a click on the row', () => {
@@ -59,7 +56,7 @@ test('the layout is in the address, the switch is in the toolbar, and the choice
 });
 
 test('the Folders view says why it has nothing to show instead of an empty table: no departments yet (a way to make them), or none could be read', () => {
-  assert.ok(rows.includes('No departments yet') && rows.includes('href="/governance/settings"'));
+  assert.ok(rows.includes('No departments yet') && rows.includes("href={withFrom('/governance/settings', here)}"));
   assert.ok(rows.includes('Could not load departments') && rows.includes('onRetry={onRetry}'));          // the kit's error state offers its own Retry
   assert.ok(workspace.includes('departmentsQ.isError ? <DepartmentsFailed') && workspace.includes('<NoDepartments />'));
 });
