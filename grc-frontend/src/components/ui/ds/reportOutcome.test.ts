@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { MutationObserver, QueryClient } from '@tanstack/react-query';
 
 import {
-  canRetry, confirmationToast, errorMessage, errorToast, reportOutcome, reportedMutationOptions, statusOf, successWords, toastsOutcome,
+  canRetry, confirmationToast, confirmsSuccess, errorMessage, errorToast, reportOutcome, reportedMutationOptions, statusOf, successWords, toastsOutcome,
   ERROR_TITLE, SUCCESS_MS, type ReportedMutationConfig, type ToastMode,
 } from './reportOutcome.ts';
 
@@ -402,10 +402,55 @@ test('a throw in the page\'s own onSuccess is still logged and the confirmation 
   }
 });
 
-test('the option is on the mutation config, the hook re-exports its type, and no page had to change: the default is today\'s behaviour', () => {
+// ── `success` is optional: a mutation whose result is plain to see (the row changes) says nothing, and everything else is unchanged ─────────
+
+test('confirmsSuccess: a mutation confirms when the page gave `success` (a blank one still says "Done"), and says nothing when it is left out', () => {
+  assert.equal(confirmsSuccess({}), false);
+  assert.equal(confirmsSuccess({ success: undefined }), false);
+  for (const given of ['Saved', '', '   ', { title: 'Saved' }, () => 'Saved', null]) assert.equal(confirmsSuccess({ success: given }), true, String(given));
+  assert.deepEqual(successWords(''), successWords(undefined));                                // the pure wording is as it was: an explicit blank is "Done"
+  assert.deepEqual(successWords(''), { message: 'Done' });
+});
+
+test('with no `success` the server confirming says nothing, in every toast mode; the refresh and the page\'s own work still run, in the same order', async () => {
+  for (const toast of [undefined, 'always', 'success', 'errors', 'none'] as const) {
+    const order: string[] = [];
+    const quiet = run<number, number>({ mutationFn: async (v) => v, success: undefined, toast, invalidate: [['a']], onSuccess: (d, v) => { order.push(`page ${d} ${v}`); } });
+    await quiet.mutate(5);
+    assert.deepEqual(quiet.log, ['invalidate ["a"]'], String(toast));                         // refreshed, never said
+    assert.deepEqual(order, ['page 5 5'], String(toast));
+  }
+});
+
+test('with no `success` a failure is reported exactly as before, with its Retry, and a retry that works is as quiet as the first try would have been', async () => {
+  let attempts = 0;
+  const m = run<string, { id: number }>({ mutationFn: async () => { attempts += 1; if (attempts === 1) throw noAnswer(); return 'ok'; }, success: undefined, invalidate: [['rows']] });
+  await m.mutate({ id: 7 });
+  assert.deepEqual(m.log, ["error: Couldn't save | Couldn't reach the server. Check your connection and try again. | retry"]);
+  m.retries[0]?.();
+  await settle();
+  assert.deepEqual(m.log.slice(1), ['invalidate ["rows"]']);                                  // saved: refreshed, and no "Saved" nobody asked for
+  const refused = run<string, number>({ mutationFn: async () => { throw http(409, 'Locked by Rana.'); }, success: undefined });
+  await refused.mutate(1);
+  assert.deepEqual(refused.log, ["error: Couldn't save | Locked by Rana."]);                  // a refusal offers no Retry, as ever
+});
+
+test('a mutation that gives `success` is exactly as it was: the wording function still runs, and a blank one still says "Done"', async () => {
+  const words: string[] = [];
+  const said = run<string, number>({ mutationFn: async () => 'ok', toast: 'errors', success: (d, v) => { words.push(`${d} ${v}`); return 'Saved'; } });
+  await said.mutate(2);
+  assert.deepEqual(words, ['ok 2']);                                                          // computed in every mode, as before (a throw in it is still swallowed)
+  assert.deepEqual(said.log, []);
+  const blank = run<string, number>({ mutationFn: async () => 'ok', success: '' });
+  await blank.mutate(1);
+  assert.deepEqual(blank.log, ['success: Done']);
+});
+
+test('the option is on the mutation config, the hook re-exports its type, and no page had to change: the default is today\'s behaviour, and `success` may be left out', () => {
   const source = readFileSync('src/components/ui/ds/reportOutcome.ts', 'utf8').replace(/\r\n/g, '\n');
   assert.match(source, /toast\?: ToastMode;/);
-  assert.match(source, /if \(toastsOutcome\(config\.toast, 'success'\)\) \{/);
+  assert.match(source, /success\?: SuccessWords \| \(\(data: D, variables: V\) => SuccessWords\);/);
+  assert.match(source, /if \(confirmsSuccess\(config\) && toastsOutcome\(config\.toast, 'success'\)\) \{/);
   assert.match(source, /if \(toastsOutcome\(config\.toast, 'error'\)\) sinks\.notifyError\(/);
   assert.match(readFileSync('src/components/ui/ds/useReportedMutation.ts', 'utf8'), /export type \{ ReportedMutationConfig, ToastMode \};/);
   assert.match(readFileSync('src/components/ui/ds/index.ts', 'utf8'), /type ReportedMutationConfig, type ToastMode \} from '\.\/useReportedMutation';/);

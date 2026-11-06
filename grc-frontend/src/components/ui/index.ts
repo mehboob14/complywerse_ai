@@ -74,3 +74,8 @@ export { Disclosure, AccordionRow, type DisclosureProps, type AccordionRowProps 
 // Kit 3 (UX revamp, Stage 2): the rows of a worklist and the wave-1 gaps
 export { WorkRow, type WorkRowProps, type WorkAction, type WorkCheck } from './ds/WorkRow';
 export { CountRow, type CountRowProps } from './ds/CountRow';
+export { ClampedText, type ClampedTextProps } from './ds/ClampedText';
+export { ChipList, type ChipListProps, type ChipListItem } from './ds/ChipList';
+export { Fact, FactList, type FactProps, type FactListProps } from './ds/Facts';
+export { TitleLink, CardLink, type TitleLinkProps, type CardLinkProps } from './ds/Links';
+export { linkClasses, type LinkTone, type LinkSize } from './ds/linkModel';

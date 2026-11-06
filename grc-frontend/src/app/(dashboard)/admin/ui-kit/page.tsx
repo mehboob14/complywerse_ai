@@ -22,6 +22,7 @@ import { FiguresSection } from './_components/FiguresSection';
 import { OverlaysSection } from './_components/OverlaysSection';
 import { PanelsSection } from './_components/PanelsSection';
 import { RowsSection } from './_components/RowsSection';
+import { TextSection } from './_components/TextSection';
 import { FormatSection } from './_components/FormatSection';
 import { MONO } from './_components/Guide';
 
@@ -41,6 +42,7 @@ const SECTIONS = [
   { id: 'overlays', label: 'Overlays and feedback' },
   { id: 'panels', label: 'Panels and sheets' },
   { id: 'rows', label: 'Chips, disclosures and rows' },
+  { id: 'text', label: 'Text, facts and links' },
   { id: 'formatting', label: 'Formatting' },
   { id: 'matrix', label: 'States matrix' },
 ];
@@ -77,6 +79,7 @@ function Guide() {
       <OverlaysSection />
       <PanelsSection />
       <RowsSection />
+      <TextSection />
       <FormatSection />
       <StatesMatrix />
       <p className="border-t border-ds-border pt-[16px] text-ds-label text-ds-fg-muted">

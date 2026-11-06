@@ -96,8 +96,9 @@ export type SuccessWords = string | { title: string; message?: string };
 
 export interface ReportConfig<D, V> {
   /** "Document archived"; `{ title: 'Settings saved', message: 'New requests use them from now on.' }` (a headline and a second line); or a function
-   *  of what the server returned that gives either (a throw in it is ignored: the record is saved) */
-  success: SuccessWords | ((data: D, variables: V) => SuccessWords);
+   *  of what the server returned that gives either (a throw in it is ignored: the record is saved). Optional: left out, nothing is said when the server
+   *  confirms (the row changes by itself, or the page reports for itself); a failure is reported either way. An explicit blank still says "Done". */
+  success?: SuccessWords | ((data: D, variables: V) => SuccessWords);
   /** the headline of the failure: "Couldn't archive the document" */
   failure: string;
   /** said when the server gave no usable words, instead of the plain "Please try again." (what the server says always wins; same rule as errorMessage) */
@@ -144,6 +145,12 @@ export function reportOutcome<D, V>(outcome: Outcome<D, V>, config: ReportConfig
  *  see (the row changes). 'none': neither, the page reports for itself. The page's own onSuccess, onError and the refresh run in every mode. */
 export type ToastMode = 'always' | 'success' | 'errors' | 'none';
 
+/** Whether a mutation confirms itself when the server answers ok: it does when the page gave `success` (an explicit blank one still says "Done", as it
+ *  always has); left out, it says nothing. Failure reporting, `onSuccess` and `invalidate` do not depend on it. */
+export function confirmsSuccess(config: { success?: unknown }): boolean {
+  return config.success !== undefined;
+}
+
 /** Whether an outcome of `kind` is toasted in `mode`. A missing or unknown mode is 'always', so every caller that passes none is as it was. */
 export function toastsOutcome(mode: ToastMode | undefined, kind: 'success' | 'error'): boolean {
   switch (mode) {
@@ -186,7 +193,7 @@ export function reportedMutationOptions<D, V>(config: ReportedMutationConfig<D, 
     mutationFn: config.mutationFn,
     onSuccess: async (data: D, variables: V): Promise<void> => {
       const report = reportOutcome({ ok: true, data, variables }, config);
-      if (toastsOutcome(config.toast, 'success')) {
+      if (confirmsSuccess(config) && toastsOutcome(config.toast, 'success')) {
         if (report.title) sinks.notifySuccess(report.message, { title: report.title });
         else sinks.notifySuccess(report.message);
       }

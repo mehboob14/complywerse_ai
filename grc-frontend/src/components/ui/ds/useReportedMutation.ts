@@ -16,8 +16,9 @@
 // `retryable: false`: set it for a create that is not safe to repeat). It returns the mutation result unchanged. The rules are in reportOutcome.ts.
 //
 // `success` is a line, or `{ title: 'Settings saved', message: 'New requests use them from now on.' }` for a headline with a second line under it, or
-// a function of what the server returned that gives either. `fallback: "The settings could not be saved."` is what a failure says when the server
-// gave no usable words (the server's own words always win).
+// a function of what the server returned that gives either. It may be left out where the result is plain to see (the row changes, a tick stays ticked):
+// then nothing is said when the server confirms, and the failure, the refresh and the page's own `onSuccess` are as ever. `fallback: "The settings could
+// not be saved."` is what a failure says when the server gave no usable words (the server's own words always win).
 //
 // `toast` says which outcomes are toasted: 'always' (the default: the confirmation and the failure), 'success' (a drawer that shows a failure inline
 // toasts only the confirmation: one message per failure, not two; its `onError` has the words, errorMessage(error)), 'errors' or 'none'.

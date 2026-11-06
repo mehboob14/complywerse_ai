@@ -810,8 +810,8 @@ export const DOCS: Record<string, ComponentDoc> = {
   StatTile: {
     name: 'StatTile',
     importFrom: UI,
-    use: 'a page opens with the numbers that matter: one tile each, with a 24px figure, what it counts, a line of facts, an (i) for what it rests on and, when the figure opens the records behind it, a link. Four states that never read alike: the figure, "Not recorded", loading and failed.',
-    dont: 'Do not pass 0 for a figure that failed to load or that nothing recorded (pass `error`, `loading` or `value={null}`: a 0 is a number the person will believe), do not make the whole tile a button (its (i) and its link are controls of their own), and do not write a sentence in `note`: facts.',
+    use: 'a page opens with the numbers that matter: one tile each, with a 24px figure, what it counts, a line of facts, an (i) for what it rests on and, when the figure opens the records behind it, a link. Five states that never read alike: the figure, "Not recorded", loading, failed and "No access".',
+    dont: 'Do not pass 0 for a figure that failed to load, was refused or that nothing recorded (pass `error`, `denied`, `loading` or `value={null}`: a 0 is a number the person will believe), do not make the whole tile a button (its (i) and its link are controls of their own), and do not write a sentence in `note`: facts.',
     parts: [
       {
         name: 'StatTile', source: `${DS}/StatTile.tsx`, own: 'StatTileProps',
@@ -824,6 +824,7 @@ export const DOCS: Record<string, ComponentDoc> = {
           prop('link', '{ href; label }', 'The figure opens the records behind it. The label is what a screen reader says for the link ("41 documents. Open the library"): it is required with the link.'),
           prop('tone', "'default' | 'success' | 'warning' | 'danger'", 'The colour of the figure: danger for something wrong, success for something done.', "'default'"),
           prop('progress', 'number | null', 'A bar under the figure, 0 to 100, for a figure that is a share. It is a ProgressBar named by the label; null draws none.'),
+          prop('denied', 'boolean', 'The person may not see this figure: "No access" with a lock, and the (i) says why. It wins over `loading`, `error` and `value`: nothing is waited for, retried or shown. Never draw a refused figure as 0 or as "Not recorded".', 'false'),
           prop('loading', 'boolean', 'The request has not answered: a skeleton in place of the figure, announced as "Loading <label>".', 'false'),
           prop('error', '{ title; message?; onRetry? } | null', 'The request failed: what, in the server\'s words, and Retry when trying again can help. Shown in place of the figure; it wins over `loading`.', 'null'),
           prop('children', 'ReactNode', 'More under the figure: pills, links.'),
@@ -1262,6 +1263,113 @@ export const DOCS: Record<string, ComponentDoc> = {
       },
     ],
   },
+  ClampedText: {
+    name: 'ClampedText',
+    importFrom: UI,
+    use: 'a description, a rationale or a note can be long: it shows its first few lines and "Show more" opens the rest, the whole value one keyboard press away. Whether it is cut is measured, so a text that fits has no button and a wider window takes the button away. Line breaks are kept; the text is read in its own direction (Arabic beside English); a missing text is the dash.',
+    dont: 'Do not cut the text yourself with a character count (a count does not know the width), or hide the rest behind a tooltip a keyboard cannot reach. Do not use it for a title (TitleLink cuts at two lines) or for a list of names (ChipList).',
+    parts: [
+      {
+        name: 'ClampedText', source: `${DS}/ClampedText.tsx`, own: 'ClampedTextProps',
+        props: [
+          prop('text', 'string | null', 'The text; line breaks are kept. Missing or blank: a dash.'),
+          prop('lines', 'number', 'Lines shown while it is shut, 1 to 6.', '3'),
+          CLASS_NAME,
+        ],
+      },
+    ],
+  },
+  ChipList: {
+    name: 'ChipList',
+    importFrom: UI,
+    use: 'a record has related records (its frameworks, its owners, its linked assets): the first two as chips and a "+N" that opens ALL of them in a small dialog (links where an item has an address, a search box from eight items). The rule for related records everywhere: the first two and "+N", never a count that hides the names. Enter or Space on "+N" opens the list and moves focus in, Tab stays inside, Escape closes it and gives focus back; a press outside, a scroll or a resize closes it.',
+    dont: 'Do not write the count yourself ("3 frameworks") and do not show every chip and let the row grow: the row would change height with the data. Do not use it for people (PersonStack draws avatars). `label` is a plural noun in lower case: it makes "+3 more frameworks" and "All frameworks" for a screen reader.',
+    parts: [
+      {
+        name: 'ChipList', source: `${DS}/ChipList.tsx`, own: 'ChipListProps',
+        props: [
+          prop('items', '(string | ChipListItem)[]', 'The items: a name, or { label, href } for a link. A blank one is left out; none draws nothing.'),
+          prop('label', 'string', 'What the items are, a plural noun in lower case ("frameworks"): it names the list, the "+N" and the full list.'),
+          prop('shown', 'number', 'Chips shown before the "+N".', '2'),
+          prop('searchFrom', 'number', 'The full list has a search box from this many items (every word of the query in the name, any case, no accents).', '8'),
+          CLASS_NAME,
+        ],
+      },
+      {
+        name: 'ChipListItem', source: `${DS}/chipListModel.ts`, own: 'ChipListItem',
+        props: [
+          prop('label', 'string', 'The name.'),
+          prop('href', 'string', 'The item is a link to this address, in the chip and in the full list.'),
+        ],
+      },
+    ],
+  },
+  Fact: {
+    name: 'Fact',
+    importFrom: UI,
+    imports: ['Fact', 'FactList'],
+    use: 'the details of a record, or a band of figures: a label over its value, in a grid that fills the width with as many columns as fit (one on a phone, four on a wide window, no breakpoints). A fact with no value says so ("—", or "Not set" where the person can set it), never a blank. A long value wraps, an unbroken word too.',
+    dont: 'Always put Facts inside a FactList: a Fact alone is a `<div>` without its `<dl>`. Do not use it for a form (that is FormField) or for many records (RegisterTable). Do not pass 0, "None" or "N/A" for no value: leave the child out and let `empty` say it.',
+    parts: [
+      {
+        name: 'Fact', source: `${DS}/Facts.tsx`, own: 'FactProps',
+        props: [
+          prop('label', 'string', 'What the value is: "Owner". 12px, muted, above it.'),
+          prop('children', 'ReactNode', 'The value. Left out, empty or false: `empty` is drawn in muted words.'),
+          prop('empty', 'string', 'What to say when there is no value: the dash (not recorded) or "Not set" (the person can set it).', "'—'"),
+        ],
+      },
+      {
+        name: 'FactList', source: `${DS}/Facts.tsx`, own: 'FactListProps',
+        props: [
+          prop('children', 'ReactNode', 'The Facts.'),
+          prop('variant', "'plain' | 'boxed'", 'plain: label over value. boxed: each fact in its own box (a band of figures).', "'plain'"),
+          prop('min', 'number', 'The narrowest a column gets, in px: the grid has as many columns as fit.', '160'),
+          CLASS_NAME,
+        ],
+      },
+    ],
+  },
+  TitleLink: {
+    name: 'TitleLink',
+    importFrom: UI,
+    imports: ['TitleLink', 'linkClasses'],
+    use: 'a record\'s name is a link (a plan, a drill, a document): it wraps, is cut at two lines (the whole title is the tooltip only when it is cut, and always in the accessible name) and is a 24px target, 44px on a phone, without moving the line it sits in. `linkClasses` gives the same padding and colours to a link inside a sentence or a 12px line: put them on a `<Link>`.',
+    dont: 'Do not write the 24px padding trick by hand on a page again, and do not put `line-clamp` on the link itself (its third line shows through the link\'s own padding: the cut is on an inner span). Do not style a link as plain text with no hover and no ring.',
+    parts: [
+      {
+        name: 'TitleLink', source: `${DS}/Links.tsx`, own: 'TitleLinkProps',
+        props: [
+          inherited(prop('...LinkProps', 'next/link props', 'href, prefetch, onClick and the rest of next/link\'s props pass through.')),
+          prop('title', 'string', 'The words of the link: the record\'s name. Cut after `lines`; the whole of it is the tooltip only when it is cut.'),
+          prop('lines', 'number', 'Lines before the cut, 1 to 6.', '2'),
+          prop('tone', "'title' | 'text' | 'muted'", 'title: dark, the brand colour on hover. text: the brand colour. muted: grey until hovered.', "'title'"),
+          prop('size', "'body' | 'label'", 'The size of the line it sits in: 13px (body) or 12px (label). The target padding depends on it.', "'body'"),
+          CLASS_NAME,
+        ],
+      },
+      {
+        name: 'linkClasses', fn: true,
+        props: [prop('linkClasses({ tone?, size? })', 'string', 'The classes of a link in text: its colours, the ring on the link itself, and the padding that makes a 24px target (44px on a phone) with a negative margin that cancels it, so nothing moves.')],
+      },
+    ],
+  },
+  CardLink: {
+    name: 'CardLink',
+    importFrom: UI,
+    use: 'a whole card opens something: the card IS the link, so it is one tab stop with the ring on the card and a hover that says it presses. Its name for a screen reader is the card\'s text.',
+    dont: 'Do not put a link or a button inside it: an anchor in an anchor is invalid, and a second control would be a second tab stop under the first. For a card with controls inside, stretch the title\'s link over the card as WorkRow does. Do not make a whole card a link when only one word in it should be.',
+    parts: [
+      {
+        name: 'CardLink', source: `${DS}/Links.tsx`, own: 'CardLinkProps',
+        props: [
+          inherited(prop('...LinkProps', 'next/link props', 'href, prefetch, onClick, aria-label and the rest of next/link\'s props pass through.')),
+          prop('padded', 'boolean', 'Padding inside the card (16px). Turn it off for a card whose content brings its own edge-to-edge parts.', 'true'),
+          CLASS_NAME,
+        ],
+      },
+    ],
+  },
   useReportedMutation: {
     name: 'useReportedMutation',
     importFrom: UI,
@@ -1275,7 +1383,7 @@ export const DOCS: Record<string, ComponentDoc> = {
       {
         name: 'ReportConfig', source: 'src/components/ui/ds/reportOutcome.ts', own: 'ReportConfig',
         props: [
-          prop('success', "string | { title, message? } | (data, variables) => either", 'The confirmation: one line, or a headline with a second line under it ({ title: "Settings saved", message: "New requests use them from now on." }); or a function of what the server returned that gives either.'),
+          prop('success', "string | { title, message? } | (data, variables) => either", 'The confirmation: one line, or a headline with a second line under it ({ title: "Settings saved", message: "New requests use them from now on." }); or a function of what the server returned that gives either. Optional: left out where the result is plain to see (a tick stays ticked, the row changes), nothing is said when the server confirms; the failure, the refresh and `onSuccess` are as ever. An explicit blank string still says "Done".'),
           prop('failure', 'string', 'The headline of the failure ("Couldn\'t archive the document").'),
           prop('fallback', 'string', 'Said when the server gave no usable words, instead of "Please try again."; what the server says always wins.'),
           prop('retryable', 'boolean', 'False: never offer Retry.'),

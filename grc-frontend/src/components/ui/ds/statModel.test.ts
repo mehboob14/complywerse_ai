@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import { findViolations } from './kitRules.ts';
-import { NOT_RECORDED, barReading, tileState } from './statModel.ts';
+import { NOT_RECORDED, NO_ACCESS, barReading, tileState } from './statModel.ts';
 
 const read = (path: string) => readFileSync(path, 'utf8').replace(/\r\n/g, '\n');
 const strip = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/.*$/gm, '$1');
@@ -37,6 +37,23 @@ test('a wait and a failure come before the figure and before "Not recorded": a f
 
 test('both at once: the failure is said (with Retry) before the wait is shown', () => {
   assert.equal(tileState({ error: true, loading: true, value: null }), 'error');
+});
+
+test('a refusal is its own state and comes first: a person who may not see the figure is told so, never waited with, retried for or shown a number', () => {
+  assert.equal(NO_ACCESS, 'No access');
+  for (const error of [false, true]) {
+    for (const loading of [false, true]) {
+      for (const value of [null, undefined, '', '41', '0']) assert.equal(tileState({ denied: true, error, loading, value }), 'denied', JSON.stringify({ error, loading, value }));
+    }
+  }
+});
+
+test('a tile that never says `denied` is exactly as it was: the same four states in the same order', () => {
+  assert.equal(tileState({ denied: false, error: true, loading: true, value: '41' }), 'error');
+  assert.equal(tileState({ denied: false, error: false, loading: true, value: '41' }), 'loading');
+  assert.equal(tileState({ denied: false, error: false, loading: false, value: null }), 'empty');
+  assert.equal(tileState({ denied: false, error: false, loading: false, value: '41' }), 'value');
+  assert.equal(tileState({ error: false, loading: false, value: '41' }), 'value');                // the argument may be left out altogether
 });
 
 // ── the bar ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -96,9 +113,19 @@ test('the bar is a 6px track with a rounded fill, and the fill colours are token
   assert.match(bar, /primary: 'bg-ds-primary', success: 'bg-ds-success', warning: 'bg-ds-warning', danger: 'bg-ds-danger'/);
 });
 
-test('the tile shows the right thing for each state, in one place', () => {
-  assert.match(tile, /const state = tileState\(\{ error: error !== null, loading, value \}\);/);
-  for (const s of ['loading', 'error', 'empty', 'value']) assert.match(tile, new RegExp(`state === '${s}'`), s);
+test('the tile shows the right thing for each of its five states (a refusal first), in one place', () => {
+  assert.match(tile, /const state = tileState\(\{ denied, error: error !== null, loading, value \}\);/);
+  for (const s of ['denied', 'loading', 'error', 'empty', 'value']) assert.match(tile, new RegExp(`state === '${s}'`), s);
+});
+
+test('a refused figure says "No access" beside a lock (decoration), with the (i) next to those words saying why; the figure, the link and the bar are not drawn', () => {
+  const denied = tile.slice(tile.indexOf("state === 'denied'"), tile.indexOf("state === 'loading'"));
+  assert.match(denied, /<Lock aria-hidden className="h-\[14px\] w-\[14px\] shrink-0" strokeWidth=\{1\.75\} \/>/);
+  assert.match(denied, /\{NO_ACCESS\}/);
+  assert.match(denied, /\{info && <InfoTip text=\{info\} label=\{`Why \$\{label\.toLowerCase\(\)\} is not shown`\} \/>\}/);
+  assert.doesNotMatch(denied, /\{value\}|<Link|ProgressBar|ErrorState|Skeleton/);
+  assert.match(tile, /denied\?: boolean;/);
+  assert.match(tile, /denied = false, loading = false, error = null/);                       // optional: every tile that never passes it is as it was
 });
 
 test('loading is announced and says what is loading; the skeleton blocks say nothing', () => {
