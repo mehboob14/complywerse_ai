@@ -78,7 +78,7 @@ test('a request the server refused is "No access" where its numbers would be, an
   assert.match(page, /const programmeRefused = refused\(feeds\.scorecard\);/);
   assert.match(page, /layoutOf\(\{ refused: programmeRefused,/);
   assert.match(page, /title="No access to the programme scores"/);
-  const workOnly = /if \(mode === 'work-only'\) \{[\s\S]*?\n  \}\n/.exec(code(files.cockpit))?.[0] ?? '';
+  const workOnly = /if \(mode === 'work-only'\) \{[\s\S]*?\r?\n  \}\r?\n/.exec(code(files.cockpit))?.[0] ?? '';   // \r?: a Windows checkout has CRLF line ends
   assert.match(workOnly, /\{refusal\}[\s\S]*\{work\}/);
   assert.doesNotMatch(workOnly, /band|posture|breakdowns/, 'in work-only mode the frame draws the refusal and the work, nothing else');
 });
