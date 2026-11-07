@@ -337,3 +337,19 @@ export function matrixOf(rows: readonly RiskRow[], basis: Basis): Map<string, nu
 /** The fill of a matrix cell by its level (likelihood x impact), the register's own scale: >= 20 critical ... < 6 low. */
 export const cellBand = (l: number, i: number): Band => bandOf(l * i);
 
+// ── saving the form's scores ─────────────────────────────────────────────────────────────────────────────────────────────
+
+/** The four numbers the form's scores come from. */
+export interface ScoreInputs { inherent_likelihood?: number | null; inherent_impact?: number | null; residual_likelihood?: number | null; residual_impact?: number | null }
+const SCORE_KEYS = ['inherent_likelihood', 'inherent_impact', 'residual_likelihood', 'residual_impact'] as const;
+
+/** PUT /erm/risks/{id} has no score fields (it drops them), so an edit that changed a likelihood or an impact is followed by POST /erm/risks/{id}/assess, the route that takes them. A create
+ *  sends them with the risk. `original` is what the form was opened with. */
+export function scoresToAssess(original: ScoreInputs | null | undefined, sent: ScoreInputs): { inherent_likelihood: number; inherent_impact: number; residual_likelihood?: number; residual_impact?: number } | null {
+  if (!original) return null;
+  const changed = SCORE_KEYS.some((k) => (sent[k] ?? null) !== (original[k] ?? null));
+  if (!changed || !sent.inherent_likelihood || !sent.inherent_impact) return null;
+  const body: { inherent_likelihood: number; inherent_impact: number; residual_likelihood?: number; residual_impact?: number } = { inherent_likelihood: sent.inherent_likelihood, inherent_impact: sent.inherent_impact };
+  if (sent.residual_likelihood && sent.residual_impact) { body.residual_likelihood = sent.residual_likelihood; body.residual_impact = sent.residual_impact; }
+  return body;
+}

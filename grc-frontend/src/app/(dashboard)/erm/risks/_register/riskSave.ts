@@ -2,11 +2,16 @@
 // first and what follows cannot undo it: the assets that could not be linked are returned, never swallowed, so the caller says so.
 import { aiRecommendationsApi, ermApi } from '@/lib/api';
 import type { RiskModalSubmitPayload } from './RiskForm';
+import { scoresToAssess, type ScoreInputs } from './riskModel';
 
 export interface SavedRisk { id: number | undefined; created: boolean; failedAssets: number[] }
 
-export async function saveRiskForm(editingId: number | null, { riskData, linkedAssetIds, aiSuggestions }: RiskModalSubmitPayload): Promise<SavedRisk> {
+export async function saveRiskForm(editingId: number | null, { riskData, linkedAssetIds, aiSuggestions }: RiskModalSubmitPayload, original?: ScoreInputs | null): Promise<SavedRisk> {
   const saved = editingId ? await ermApi.risks.update(editingId, riskData) : await ermApi.risks.create(riskData);
+  if (editingId) {
+    const scores = scoresToAssess(original, riskData as ScoreInputs);
+    if (scores) await ermApi.risks.assess(editingId, scores);
+  }
   const id = (saved?.data as { id?: number } | undefined)?.id ?? editingId ?? undefined;
   const failedAssets: number[] = [];
   if (id) {

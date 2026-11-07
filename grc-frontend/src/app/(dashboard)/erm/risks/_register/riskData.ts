@@ -5,7 +5,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import apiClient, { assetsApi, ermApi } from '@/lib/api';
-import { canRetry } from '@/components/ui/ds/reportOutcome';
+import { canRetry, errorMessage, statusOf } from '@/components/ui/ds/reportOutcome';
 import { appetiteLimits, reviewIndex, type AppetiteConfig, type LeanRisks, type RiskRow } from './riskModel';
 
 export const RISKS_KEY = ['erm-risks-lean'] as const;
@@ -67,4 +67,12 @@ export function useTenantUsers() {
     queryFn: async () => (await assetsApi.getTenantUsers()).data as Array<{ id: number; display_name: string; email?: string }>,
     staleTime: 5 * 60 * 1000,
   });
+}
+
+/** What a failed request says: a refusal says the person has no access (and who to ask), a missing record says so, anything else says it could not be loaded, with the server's words. */
+export function failureWords(error: unknown, subject: string): { title: string; message: string } {
+  const code = statusOf(error);
+  if (code === 403) return { title: `You don't have access to ${subject}`, message: 'Ask an administrator to give you access to Risk Management.' };
+  if (code === 404) return { title: `${subject.charAt(0).toUpperCase()}${subject.slice(1)} is not there`, message: 'It may have been deleted, or it is not in your organisation.' };
+  return { title: `Couldn't load ${subject}`, message: errorMessage(error) };
 }

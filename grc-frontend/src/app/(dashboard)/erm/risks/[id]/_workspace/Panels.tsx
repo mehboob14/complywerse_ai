@@ -17,7 +17,7 @@ import { statusPill } from '@/lib/status';
 import { controlIndicator, riskActionStatus, riskLevel, riskTreatment } from '@/lib/statuses/risk';
 import { BUCKET_LABEL, STATUS_BUCKETS, type Band } from '../../_register/riskModel';
 import { registerFields } from '../../_register/RiskDrawer';
-import { assessmentPatch, assessmentProblem, draftScores, riskReduction, sameAssessment, type Assessment, type HistoryItem } from './riskPageModel';
+import { assessmentProblem, draftScores, riskReduction, sameAssessment, type Assessment, type HistoryItem } from './riskPageModel';
 
 // ── the record, as the page reads it ─────────────────────────────────────────────────────────────────────────────────────
 
@@ -141,16 +141,18 @@ export interface AssessmentProps {
   saving: boolean;
   error: string | null;
   aboveAppetite: { limit: number } | null;
-  onSave: (patch: Record<string, unknown>) => void;
+  onSave: (was: Assessment, now: Assessment) => void;
 }
 
-function ScoreSelects({ label, l, i, onL, onI, disabled }: { label: string; l: string; i: string; onL: (v: string) => void; onI: (v: string) => void; disabled: boolean }) {
+function ScoreSelects({ label, l, i, onL, onI, disabled, open }: { label: string; l: string; i: string; onL: (v: string) => void; onI: (v: string) => void; disabled: boolean; open: boolean }) {
+  // a score that is set can be changed but not cleared (the server has no way to unset one): the "Not scored" choice is offered only while there is none
+  const none = open ? 'Not scored' : undefined;
   return (
     <fieldset className="m-0 min-w-0 border-0 p-0">
       <legend className="mb-[4px] p-0 text-ds-body font-[600] text-ds-fg">{label}</legend>
       <div className="grid grid-cols-2 gap-[8px]">
-        <FormField label="Likelihood"><Select value={l} disabled={disabled} onChange={(e) => onL(e.target.value)} placeholder="Not scored">{SCALE.map((n) => <option key={n} value={String(n)}>{n}</option>)}</Select></FormField>
-        <FormField label="Impact"><Select value={i} disabled={disabled} onChange={(e) => onI(e.target.value)} placeholder="Not scored">{SCALE.map((n) => <option key={n} value={String(n)}>{n}</option>)}</Select></FormField>
+        <FormField label="Likelihood"><Select value={l} disabled={disabled} onChange={(e) => onL(e.target.value)} placeholder={none}>{SCALE.map((n) => <option key={n} value={String(n)}>{n}</option>)}</Select></FormField>
+        <FormField label="Impact"><Select value={i} disabled={disabled} onChange={(e) => onI(e.target.value)} placeholder={none}>{SCALE.map((n) => <option key={n} value={String(n)}>{n}</option>)}</Select></FormField>
       </div>
     </fieldset>
   );
@@ -162,7 +164,7 @@ export function AssessmentPanel({ risk, start, people, peopleFailed, canEdit, sa
   const [seen, setSeen] = useState(start);
   if (!sameAssessment(seen, start)) { setSeen(start); setDraft(start); }
   const dirty = !sameAssessment(draft, start);
-  const problem = assessmentProblem(draft);
+  const problem = assessmentProblem(draft, start);
   const scores = draftScores(draft);
   const reduction = riskReduction(scores.inherent, scores.residual);
   const set = (patch: Partial<Assessment>) => setDraft((d) => ({ ...d, ...patch }));
@@ -181,8 +183,8 @@ export function AssessmentPanel({ risk, start, people, peopleFailed, canEdit, sa
         </Notice>
       )}
       <div className="grid gap-[16px] md:grid-cols-2">
-        <ScoreSelects label="Inherent score" l={draft.inherentL} i={draft.inherentI} onL={(v) => set({ inherentL: v })} onI={(v) => set({ inherentI: v })} disabled={!canEdit} />
-        <ScoreSelects label="Residual score" l={draft.residualL} i={draft.residualI} onL={(v) => set({ residualL: v })} onI={(v) => set({ residualI: v })} disabled={!canEdit} />
+        <ScoreSelects label="Inherent score" l={draft.inherentL} i={draft.inherentI} onL={(v) => set({ inherentL: v })} onI={(v) => set({ inherentI: v })} disabled={!canEdit} open={start.inherentL === ''} />
+        <ScoreSelects label="Residual score" l={draft.residualL} i={draft.residualI} onL={(v) => set({ residualL: v })} onI={(v) => set({ residualI: v })} disabled={!canEdit} open={start.residualL === ''} />
       </div>
       <p className="mb-0 mt-[8px] flex flex-wrap items-center gap-x-[12px] gap-y-[4px] text-ds-body text-ds-fg-body" aria-live="polite">
         <span>Inherent <b className="tabular-nums">{scores.inherent ?? EMPTY}</b></span>
@@ -201,7 +203,7 @@ export function AssessmentPanel({ risk, start, people, peopleFailed, canEdit, sa
       {(problem || error) && <Notice tone="danger" className="mt-[12px]" title={problem ? 'Not saved yet' : 'The changes were not saved'}>{problem || error}</Notice>}
       {canEdit && (
         <div className="mt-[16px] flex flex-wrap items-center gap-[8px]">
-          <Button variant="primary" leftIcon={<Save aria-hidden />} loading={saving} disabled={!dirty || !!problem} onClick={() => onSave(assessmentPatch(start, draft))}>Save changes</Button>
+          <Button variant="primary" leftIcon={<Save aria-hidden />} loading={saving} disabled={!dirty || !!problem} onClick={() => onSave(start, draft)}>Save changes</Button>
           <Button disabled={!dirty || saving} onClick={() => setDraft(start)}>Discard</Button>
           {dirty && <span role="status" className="text-ds-label text-ds-fg-muted">Unsaved changes</span>}
         </div>

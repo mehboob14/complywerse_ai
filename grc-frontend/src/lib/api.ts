@@ -1400,6 +1400,9 @@ export const ermApi = {
       }>('/erm/risks/ai-suggest', data),
     generateTreatmentPlan: (riskId: number) =>
       apiClient.post<{ treatment_plan: string }>(`/erm/risks/${riskId}/ai-treatment-plan`),
+    /** Scores a risk (POST /erm/risks/{id}/assess): the ONLY way to change its likelihood, impact and scores. PUT /erm/risks/{id} has no score fields and ignores them. The inherent pair is required; the residual pair is optional and cannot be cleared. */
+    assess: (id: number, data: { inherent_likelihood: number; inherent_impact: number; residual_likelihood?: number; residual_impact?: number; risk_appetite?: string }) =>
+      apiClient.post<Risk>(`/erm/risks/${id}/assess`, data),
     linkAsset: (id: number, data: { asset_id: number }) =>
       apiClient.post(`/erm/risks/${id}/assets`, data),
     unlinkAsset: (id: number, linkId: number) =>
@@ -1622,7 +1625,7 @@ export const ermApi = {
     getDepartmentSummary: (departmentId: number) => 
       apiClient.get<DepartmentRiskSummary>(`/erm/reports/department/${departmentId}`),
     getAggregatedView: (groupBy?: string) => 
-      apiClient.get<AggregatedRiskView[]>('/erm/analytics/aggregated', { params: { group_by: groupBy } }),
+      apiClient.get<AggregatedRiskView[]>('/erm/reports/aggregated', { params: { group_by: groupBy } }),
     getAppetiteBreaches: () => apiClient.get<AppetiteBreach[]>('/erm/analytics/appetite-breaches'),
     getRiskTrends: (days?: number) => 
       apiClient.get<RiskTrendData[]>('/erm/analytics/trends', { params: { days } }),

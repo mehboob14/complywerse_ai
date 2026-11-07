@@ -35,18 +35,18 @@ test('the default order is the earliest due first; a tie keeps its order', () =>
   assert.deepEqual(sortReviews([rv(1, { risk_title: 'b' }), rv(2, { risk_title: 'A' })], { key: 'risk', dir: 'asc' }).map((r) => r.id), [2, 1]);
 });
 
-test('completing sends the risk new likelihood and impact WITH their scores, only where something changed, and the review its new scores and words', () => {
+test('completing scores the risk through the assess route only where something changed, and writes the review with its new scores and words', () => {
   const risk = { inherent_likelihood: 4, inherent_impact: 4, residual_likelihood: 3, residual_impact: 4 };
   const same = completeBody({ risk, inhL: '4', inhI: '4', resL: '3', resI: '4', findings: ' ', recommendations: '' });
-  assert.deepEqual(same.riskUpdate, {}, 'nothing changed: the risk is not touched');
+  assert.equal(same.assess, null, 'nothing changed: the risk is not touched');
   assert.deepEqual(same.review, { status: 'completed', new_inherent_score: 16, new_residual_score: 12, findings: undefined, recommendations: undefined });
   const changed = completeBody({ risk, inhL: '4', inhI: '4', resL: '2', resI: '4', findings: ' Controls hold ', recommendations: 'Re-test in March' });
-  assert.deepEqual(changed.riskUpdate, { residual_likelihood: 2, residual_score: 8 }, 'the residual score travels with the residual likelihood');
+  assert.deepEqual(changed.assess, { inherent_likelihood: 4, inherent_impact: 4, residual_likelihood: 2, residual_impact: 4 }, 'the server works the scores out from the likelihood and impact');
   assert.deepEqual(changed.review, { status: 'completed', new_inherent_score: 16, new_residual_score: 8, findings: 'Controls hold', recommendations: 'Re-test in March' });
   const blank = completeBody({ risk, inhL: '', inhI: '', resL: '', resI: '', findings: '', recommendations: '' });
-  assert.deepEqual(blank.riskUpdate, {});
+  assert.equal(blank.assess, null);
   assert.deepEqual(blank.review, { status: 'completed', new_inherent_score: undefined, new_residual_score: undefined, findings: undefined, recommendations: undefined });
-  assert.deepEqual(completeBody({ risk: undefined, inhL: '5', inhI: '5', resL: '', resI: '', findings: '', recommendations: '' }).riskUpdate, { inherent_likelihood: 5, inherent_impact: 5, inherent_score: 25 });
+  assert.deepEqual(completeBody({ risk: undefined, inhL: '5', inhI: '5', resL: '', resI: '', findings: '', recommendations: '' }).assess, { inherent_likelihood: 5, inherent_impact: 5 });
 });
 
 test('a draft is refused in words when a value is out of range or a pair is half given', () => {

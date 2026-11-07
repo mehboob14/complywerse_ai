@@ -13,7 +13,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Plus, RefreshCw } from 'lucide-react';
 import { PageHeader } from '@/components/ui';
 import { Button, IconButton } from '@/components/ui/ds';
-import { canRetry } from '@/components/ui/ds/reportOutcome';
+import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import type { OverviewSection } from '@/components/dashboard/score-kit';
 import { SCORECARD_QUERY_KEYS } from '@/components/dashboard/scorecard-query-keys';
 import { Cockpit, SkipToWork, type Breakdown } from '@/components/overview/Cockpit';
@@ -123,6 +123,7 @@ export default function ERMOverviewPage() {
             total={total != null ? `${formatCount(total)} in total` : undefined}
             counters={[myRisks, ...counters]}
             narrow={narrow}
+            failure={overview.isError && !payload ? { title: "Couldn't load the counters", message: errorMessage(overview.error), onRetry: canRetry(overview.error) ? refreshAll : undefined } : undefined}
           />
         )}
         work={<WorkCard id="work" items={work} now={now} sources={feeds} limit={limit} />}

@@ -48,7 +48,7 @@ import {
   FACET_TITLE, NO_FILTERS, OPEN_AT_FIRST, RAIL_ORDER, SEARCHABLE, chosenOf, filterChips, filterCount, indexRisks, isFiltering, orderedOptions, railOptions, removeChip, ruleOf,
   type FacetKey, type Filters,
 } from './riskFacets';
-import { RISK_REFRESH, useAppetite, useMeId, usePendingReviews, useRisks, useTenantUsers } from './riskData';
+import { RISK_REFRESH, failureWords, useAppetite, useMeId, usePendingReviews, useRisks, useTenantUsers } from './riskData';
 import {
   BUCKET_LABEL, QUICK_IDS, QUICK_LABEL, SORT_KEYS, SORT_LABEL, STATUS_BUCKETS, exportName, inQuick, nextSort, sortRisks, statusBucket, toCsv, type QuickId, type RiskRow, type SortKey,
 } from './riskModel';
@@ -227,7 +227,7 @@ export function RiskRegister() {
 
   const saveRisk = async (payload: RiskModalSubmitPayload) => {
     const editing = form?.mode === 'edit' ? form.risk : null;
-    const saved = await saveRiskForm(editing?.id ?? null, payload);
+    const saved = await saveRiskForm(editing?.id ?? null, payload, editing as never);
     refresh();
     setForm(null);
     notify.success(editing ? 'The changes are saved.' : 'The risk is in the register.', { title: editing ? 'Risk updated' : 'Risk added' });
@@ -299,7 +299,7 @@ export function RiskRegister() {
   } : undefined;
 
   const body = (() => {
-    if (noList) return <ErrorState title="Couldn't load the risks" message={errorMessage(risksQ.error)} onRetry={canRetry(risksQ.error) ? () => { void risksQ.refetch(); } : undefined} />;
+    if (noList) return <ErrorState {...failureWords(risksQ.error, 'the risks')} onRetry={canRetry(risksQ.error) ? () => { void risksQ.refetch(); } : undefined} />;
     if (loading) return <div aria-busy="true" className="rounded-ds-card border border-ds-border bg-ds-surface p-[12px]"><SkeletonRows rows={10} columns={5} label="Loading the risks" /></div>;
     if (nothing) {
       return (

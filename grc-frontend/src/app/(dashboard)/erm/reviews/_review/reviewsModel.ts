@@ -3,6 +3,8 @@
 // scores it is sent and does not recompute them, so a review that sent only the likelihood and impact left the risk's score as it was), and the review's own new scores, findings and
 // recommendations. The words of the review's status are the ones the page writes: pending -> in_review (Start) -> completed (Complete).
 
+import { scoresToAssess } from '../../risks/_register/riskModel.ts';
+
 export interface Review {
   id: number;
   risk_id: number;
@@ -85,22 +87,16 @@ export interface CompleteInput {
 
 const num = (s: string): number | undefined => (s === '' ? undefined : Number(s));
 
-/** What completing sends. The risk is updated only where a likelihood or impact changed, and then with BOTH scores of the pair it belongs to (likelihood x impact); the review is written
- *  completed with the new scores (when both of a pair are given) and its words. A pair with one half missing has no score. */
-export function completeBody(i: CompleteInput): { riskUpdate: Record<string, number>; review: Record<string, unknown> } {
+/** What completing sends. If a likelihood or an impact changed, the risk is scored through the assess route (POST /erm/risks/{id}/assess): PUT /erm/risks/{id} has no score fields and drops
+ *  them, so a review that sent its new likelihood and impact there left the risk's scores as they were. The review is written completed with its own new scores (when both of a pair are
+ *  given) and its words. A pair with one half missing has no score. */
+export function completeBody(i: CompleteInput): { assess: ReturnType<typeof scoresToAssess>; review: Record<string, unknown> } {
   const inhL = num(i.inhL); const inhI = num(i.inhI); const resL = num(i.resL); const resI = num(i.resI);
-  const was = i.risk;
-  const riskUpdate: Record<string, number> = {};
-  if (inhL !== undefined && inhL !== was?.inherent_likelihood) riskUpdate.inherent_likelihood = inhL;
-  if (inhI !== undefined && inhI !== was?.inherent_impact) riskUpdate.inherent_impact = inhI;
-  if (resL !== undefined && resL !== was?.residual_likelihood) riskUpdate.residual_likelihood = resL;
-  if (resI !== undefined && resI !== was?.residual_impact) riskUpdate.residual_impact = resI;
+  const assess = scoresToAssess(i.risk ?? {}, { inherent_likelihood: inhL ?? null, inherent_impact: inhI ?? null, residual_likelihood: resL ?? null, residual_impact: resI ?? null });
   const inherentScore = inhL !== undefined && inhI !== undefined ? inhL * inhI : undefined;
   const residualScore = resL !== undefined && resI !== undefined ? resL * resI : undefined;
-  if (('inherent_likelihood' in riskUpdate || 'inherent_impact' in riskUpdate) && inherentScore !== undefined) riskUpdate.inherent_score = inherentScore;
-  if (('residual_likelihood' in riskUpdate || 'residual_impact' in riskUpdate) && residualScore !== undefined) riskUpdate.residual_score = residualScore;
   return {
-    riskUpdate,
+    assess,
     review: {
       status: 'completed', new_inherent_score: inherentScore, new_residual_score: residualScore,
       findings: i.findings.trim() || undefined, recommendations: i.recommendations.trim() || undefined,

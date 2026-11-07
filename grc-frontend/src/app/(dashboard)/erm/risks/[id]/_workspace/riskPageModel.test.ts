@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { assessmentOf, assessmentPatch, assessmentProblem, draftScores, historyFeed, riskReduction, sameAssessment } from './riskPageModel.ts';
+import { assessBody, assessmentOf, assessmentProblem, draftScores, fieldsPatch, historyFeed, riskReduction, sameAssessment } from './riskPageModel.ts';
 
 test('the risk reduction is round((inherent - residual) / inherent x 100) and only with both scores', () => {
   assert.equal(riskReduction(16, 12), 25);
@@ -17,31 +17,39 @@ test('the risk reduction is round((inherent - residual) / inherent x 100) and on
 
 const RISK = { status: 'open', priority: null, owner_id: 3, business_owner_id: null, inherent_likelihood: 4, inherent_impact: 4, residual_likelihood: 3, residual_impact: 4 };
 
-test('an untouched assessment sends nothing; a change sends only what changed', () => {
+test('an untouched assessment sends nothing; a change sends only what changed, to the route that takes it', () => {
   const was = assessmentOf(RISK);
   assert.deepEqual(was, { status: 'open', priority: '', ownerId: '3', businessOwnerId: '', inherentL: '4', inherentI: '4', residualL: '3', residualI: '4' });
   assert.equal(sameAssessment(was, assessmentOf(RISK)), true);
-  assert.deepEqual(assessmentPatch(was, was), {});
-  assert.deepEqual(assessmentPatch(was, { ...was, status: 'in_treatment', priority: 'high' }), { status: 'in_treatment', priority: 'high' });
-  assert.deepEqual(assessmentPatch(was, { ...was, ownerId: '', businessOwnerId: '9' }), { owner_id: null, business_owner_id: 9 });
+  assert.deepEqual(fieldsPatch(was, was), {});
+  assert.equal(assessBody(was, was), null);
+  assert.deepEqual(fieldsPatch(was, { ...was, status: 'in_treatment', priority: 'high' }), { status: 'in_treatment', priority: 'high' });
+  assert.deepEqual(fieldsPatch(was, { ...was, ownerId: '', businessOwnerId: '9' }), { owner_id: null, business_owner_id: 9 });
+  assert.equal(assessBody(was, { ...was, status: 'closed' }), null, 'a status change is not a score change');
 });
 
-test('scores are likelihood x impact, both of the pair travel together, and clearing a pair clears its score', () => {
+test('scores go to the assess route as likelihood and impact (the server works the scores out: PUT has no score fields); the residual pair only when complete', () => {
   const was = assessmentOf(RISK);
-  assert.deepEqual(assessmentPatch(was, { ...was, residualL: '2' }), { residual_likelihood: 2, residual_impact: 4, residual_score: 8 });
-  assert.deepEqual(assessmentPatch(was, { ...was, inherentL: '5', inherentI: '5' }), { inherent_likelihood: 5, inherent_impact: 5, inherent_score: 25 });
-  assert.deepEqual(assessmentPatch(was, { ...was, residualL: '', residualI: '' }), { residual_likelihood: null, residual_impact: null, residual_score: null });
+  assert.deepEqual(assessBody(was, { ...was, residualL: '2' }), { inherent_likelihood: 4, inherent_impact: 4, residual_likelihood: 2, residual_impact: 4 });
+  assert.deepEqual(assessBody(was, { ...was, inherentL: '5', inherentI: '5' }), { inherent_likelihood: 5, inherent_impact: 5, residual_likelihood: 3, residual_impact: 4 });
+  const unscored = assessmentOf({ status: 'open' });
+  assert.deepEqual(assessBody(unscored, { ...unscored, inherentL: '3', inherentI: '3' }), { inherent_likelihood: 3, inherent_impact: 3 });
+  assert.equal(assessBody(unscored, { ...unscored, residualL: '2', residualI: '2' }), null, 'no residual without an inherent score: the server requires it');
   assert.equal(draftScores({ ...was, residualL: '2' }).residual, 8);
   assert.equal(draftScores({ ...was, residualL: '', residualI: '', inherentL: '', inherentI: '' }).band, 'none');
-  assert.equal(draftScores(was).band, 'high', 'the band is the residual score\'s, else the inherent');
+  assert.equal(draftScores(was).band, 'high', 'the band is the residual score, else the inherent');
 });
 
-test('a likelihood without an impact (or the other way round) is refused in words', () => {
+test('a half pair, a residual without an inherent, and clearing a score that is set are refused in words', () => {
   const was = assessmentOf(RISK);
-  assert.equal(assessmentProblem(was), '');
-  assert.match(assessmentProblem({ ...was, inherentI: '' }), /inherent/);
-  assert.match(assessmentProblem({ ...was, residualL: '' }), /residual/);
-  assert.equal(assessmentProblem({ ...was, residualL: '', residualI: '' }), '');
+  assert.equal(assessmentProblem(was, was), '');
+  assert.match(assessmentProblem({ ...was, inherentI: '' }, was), /inherent/);
+  assert.match(assessmentProblem({ ...was, residualL: '' }, was), /residual/);
+  assert.match(assessmentProblem({ ...was, residualL: '', residualI: '' }, was), /cannot be cleared/);
+  assert.match(assessmentProblem({ ...was, inherentL: '', inherentI: '' }, was), /cannot be cleared/);
+  const unscored = assessmentOf({ status: 'open' });
+  assert.equal(assessmentProblem(unscored, unscored), '');
+  assert.match(assessmentProblem({ ...unscored, residualL: '2', residualI: '2' }, unscored), /inherent score before/);
 });
 
 test('History: newest first, one line for each thing somebody did, nothing invented', () => {

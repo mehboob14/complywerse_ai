@@ -127,7 +127,7 @@ export function CompletePanel({ review, onClose }: { review: Review | null; onCl
     setError(null);
     try {
       const body = completeBody({ risk, inhL, inhI, resL, resI, findings, recommendations });
-      if (Object.keys(body.riskUpdate).length > 0) await ermApi.risks.update(review.risk_id, body.riskUpdate as never);
+      if (body.assess) await ermApi.risks.assess(review.risk_id, body.assess);
       if (file) {
         const form = new FormData();
         form.append('name', fileName.trim() || file.name);
@@ -140,7 +140,7 @@ export function CompletePanel({ review, onClose }: { review: Review | null; onCl
       await ermApi.reviews.update(review.id, body.review as never);
       refresh();
       void qc.invalidateQueries({ queryKey: ['erm-risk-for-review', review.risk_id] });
-      notify.success(Object.keys(body.riskUpdate).length ? 'The review is complete and the risk scores are updated.' : 'The review is complete.', { title: 'Review completed' });
+      notify.success(body.assess ? 'The review is complete and the risk scores are updated.' : 'The review is complete.', { title: 'Review completed' });
       onClose();
     } catch (e) {
       setError(errorMessage(e));

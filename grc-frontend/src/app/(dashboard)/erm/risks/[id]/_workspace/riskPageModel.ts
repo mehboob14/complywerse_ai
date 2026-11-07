@@ -34,34 +34,39 @@ export function assessmentOf(r: RiskForAssessment): Assessment {
 
 export const sameAssessment = (a: Assessment, b: Assessment): boolean => (Object.keys(a) as (keyof Assessment)[]).every((k) => a[k] === b[k]);
 
-/** What is wrong with a draft, in words ("" = nothing). A pair is both or neither: a likelihood without an impact is no score. */
-export function assessmentProblem(a: Assessment): string {
-  const half = (l: string, i: string) => (l === '' ) !== (i === '');
-  if (half(a.inherentL, a.inherentI)) return 'Choose both a likelihood and an impact for the inherent score, or neither.';
-  if (half(a.residualL, a.residualI)) return 'Choose both a likelihood and an impact for the residual score, or neither.';
+/** What is wrong with a draft, in words ("" = nothing). A pair is both or neither; the residual pair needs the inherent pair; and a score that is set cannot be cleared (the server's
+ *  assess route has no way to unset one). */
+export function assessmentProblem(a: Assessment, was?: Assessment): string {
+  const half = (l: string, i: string) => (l === '') !== (i === '');
+  if (half(a.inherentL, a.inherentI)) return 'Choose both a likelihood and an impact for the inherent score.';
+  if (half(a.residualL, a.residualI)) return 'Choose both a likelihood and an impact for the residual score.';
+  if (was && ((was.inherentL !== '' && a.inherentL === '') || (was.residualL !== '' && a.residualL === ''))) return 'A score that is set cannot be cleared here. Choose a new one.';
+  if (a.residualL !== '' && a.inherentL === '') return 'Give the inherent score before the residual score.';
   return '';
 }
 
-const pair = (l: string, i: string): { likelihood: number | null; impact: number | null; score: number | null } =>
-  l === '' || i === '' ? { likelihood: null, impact: null, score: null } : { likelihood: Number(l), impact: Number(i), score: Number(l) * Number(i) };
-
-/** The body of the save: only what changed. Scores are likelihood x impact, as the form has always computed them (the server trusts them). A priority of '' is "from the score". */
-export function assessmentPatch(was: Assessment, now: Assessment): Record<string, unknown> {
+/** The fields PUT /erm/risks/{id} takes (it has no score fields): only what changed. A priority of '' is "from the score". */
+export function fieldsPatch(was: Assessment, now: Assessment): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   if (now.status !== was.status) out.status = now.status;
   if (now.priority !== was.priority) out.priority = now.priority;
   if (now.ownerId !== was.ownerId) out.owner_id = now.ownerId === '' ? null : Number(now.ownerId);
   if (now.businessOwnerId !== was.businessOwnerId) out.business_owner_id = now.businessOwnerId === '' ? null : Number(now.businessOwnerId);
-  if (now.inherentL !== was.inherentL || now.inherentI !== was.inherentI) {
-    const p = pair(now.inherentL, now.inherentI);
-    out.inherent_likelihood = p.likelihood; out.inherent_impact = p.impact; out.inherent_score = p.score;
-  }
-  if (now.residualL !== was.residualL || now.residualI !== was.residualI) {
-    const p = pair(now.residualL, now.residualI);
-    out.residual_likelihood = p.likelihood; out.residual_impact = p.impact; out.residual_score = p.score;
-  }
   return out;
 }
+
+/** The body of POST /erm/risks/{id}/assess when a likelihood or an impact changed, else null. The server works the scores out (likelihood x impact); the residual pair travels with it only
+ *  when it is complete. */
+export function assessBody(was: Assessment, now: Assessment): { inherent_likelihood: number; inherent_impact: number; residual_likelihood?: number; residual_impact?: number } | null {
+  const changed = (['inherentL', 'inherentI', 'residualL', 'residualI'] as const).some((k) => now[k] !== was[k]);
+  if (!changed || now.inherentL === '' || now.inherentI === '') return null;
+  const body: { inherent_likelihood: number; inherent_impact: number; residual_likelihood?: number; residual_impact?: number } = { inherent_likelihood: Number(now.inherentL), inherent_impact: Number(now.inherentI) };
+  if (now.residualL !== '' && now.residualI !== '') { body.residual_likelihood = Number(now.residualL); body.residual_impact = Number(now.residualI); }
+  return body;
+}
+
+const pair = (l: string, i: string): { likelihood: number | null; impact: number | null; score: number | null } =>
+  l === '' || i === '' ? { likelihood: null, impact: null, score: null } : { likelihood: Number(l), impact: Number(i), score: Number(l) * Number(i) };
 
 /** The two scores a draft would give. */
 export function draftScores(a: Assessment): { inherent: number | null; residual: number | null; band: Band } {

@@ -28,11 +28,11 @@ import QuantificationTab from './_components/QuantificationTab';
 import LinkFrameworkRequirementModal from './_components/LinkFrameworkRequirementModal';
 import { RiskModal } from '../_register/RiskForm';
 import { assetsNotLinked, saveRiskForm } from '../_register/riskSave';
-import { RISK_REFRESH, useAppetite, usePendingReviews, useTenantUsers } from '../_register/riskData';
+import { RISK_REFRESH, failureWords, useAppetite, usePendingReviews, useTenantUsers } from '../_register/riskData';
 import { aboveAppetite, categoryKey, categoryLabel, levelOf, reviewOf, treatmentOf, type RiskRow } from '../_register/riskModel';
 import { LinkPicker, type PickItem } from './_workspace/LinkPicker';
 import { AssessmentPanel, ControlsPanel, HistoryPanel, LinksPanel, OverviewPanel, TreatmentPanel, type ActionRow, type LinkedDocument, type PageRisk, type QueryState } from './_workspace/Panels';
-import { assessmentOf, historyFeed, riskReduction } from './_workspace/riskPageModel';
+import { assessBody, assessmentOf, fieldsPatch, historyFeed, riskReduction, type Assessment } from './_workspace/riskPageModel';
 
 const TABS = ['overview', 'assessment', 'controls', 'links', 'treatment', 'quantification', 'history'] as const;
 type Tab = (typeof TABS)[number];
@@ -138,7 +138,16 @@ export default function RiskPage() {
   const unlinkObjective = useRiskMutation<number>(riskId, { fn: (id) => risksApi.unlinkGovernance(riskId, id), ok: 'Objective unlinked', bad: "Couldn't unlink the objective" });
   const unlinking = [unlinkInternal, unlinkControl, unlinkFramework, unlinkRequirement, unlinkAsset, unlinkEvidence, unlinkDocument, unlinkObjective].some((m) => m.isPending);
 
-  const saveAssessment = useRiskMutation<Record<string, unknown>>(riskId, { fn: (patch) => ermApi.risks.update(riskId, patch as never), ok: { title: 'Assessment saved', message: 'The scores and owners are updated everywhere.' }, bad: "Couldn't save the changes", toast: 'success' });
+  // the fields go to PUT /erm/risks/{id} and the scores to POST /erm/risks/{id}/assess (PUT has no score fields: it ignores them); a request that fails names itself
+  const saveAssessment = useRiskMutation<{ was: Assessment; now: Assessment }>(riskId, {
+    fn: async ({ was, now }) => {
+      const fields = fieldsPatch(was, now);
+      const scores = assessBody(was, now);
+      if (Object.keys(fields).length > 0) await ermApi.risks.update(riskId, fields as never);
+      if (scores) { try { await ermApi.risks.assess(riskId, scores); } catch (e) { if (Object.keys(fields).length > 0) notify.warning('The status, priority and owners were saved but the scores were not.', { title: 'Saved in part' }); throw e; } }
+    },
+    ok: { title: 'Assessment saved', message: 'The scores and owners are updated everywhere.' }, bad: "Couldn't save the changes", toast: 'success',
+  });
   const savePlan = useRiskMutation<string>(riskId, { fn: (plan) => risksApi.updateTreatment(riskId, plan), ok: 'Treatment plan saved', bad: "Couldn't save the plan", toast: 'success' });
   const remove = useReportedMutation({
     mutationFn: () => ermApi.risks.delete(riskId),
@@ -213,7 +222,7 @@ export default function RiskPage() {
   if (riskQ.isError || !risk) {
     return (
       <div className="flex flex-col gap-[16px]">
-        <ErrorState title="Couldn't load this risk" message={errorMessage(riskQ.error)} onRetry={canRetry(riskQ.error) ? () => { void riskQ.refetch(); } : undefined} />
+        <ErrorState {...failureWords(riskQ.error, 'this risk')} onRetry={canRetry(riskQ.error) ? () => { void riskQ.refetch(); } : undefined} />
         <div><Button href="/erm/risks">Back to the Risk Register</Button></div>
       </div>
     );
@@ -261,7 +270,7 @@ export default function RiskPage() {
         <Fact label="Residual score">{risk.residual_score != null ? `${Math.round(risk.residual_score)} (likelihood ${risk.residual_likelihood ?? '—'}, impact ${risk.residual_impact ?? '—'})${reduction != null ? ` · ${reduction}% lower` : ''}` : null}</Fact>
         <Fact label="Risk owner" empty="Unassigned">{risk.owner_name ? <PersonChip name={risk.owner_name} /> : null}</Fact>
         <Fact label="Business owner" empty="Unassigned">{risk.business_owner_name ? <PersonChip name={risk.business_owner_name} /> : null}</Fact>
-        <Fact label="Next review" empty="Not scheduled">{review?.due ? `${formatDate(review.due)}${review.state === 'overdue' ? ' (overdue)' : ''}` : null}</Fact>
+        <Fact label="Next review" empty={reviews.isError ? 'Not available' : 'Not scheduled'}>{review?.due ? `${formatDate(review.due)}${review.state === 'overdue' ? ' (overdue)' : ''}` : null}</Fact>
         <Fact label="Mitigation actions">{risk.actions_total ? `${risk.actions_total}${openActions ? ` (${openActions} open)` : ''}` : 'None'}</Fact>
       </FactList>
 
@@ -283,7 +292,7 @@ export default function RiskPage() {
             <AssessmentPanel
               risk={risk} start={assessmentOf(risk)} people={people} peopleFailed={peopleFailed} canEdit={canEditRecord} saving={saveAssessment.isPending}
               error={saveAssessment.isError ? errorMessage(saveAssessment.error) : null} aboveAppetite={breach}
-              onSave={(patch) => saveAssessment.mutate(patch)}
+              onSave={(was, now) => saveAssessment.mutate({ was, now })}
             />
           </div>
         </TabPanel>
@@ -367,7 +376,7 @@ export default function RiskPage() {
           initialRegisterType={(risk.register_type as string) || ''}
           nextOneLinkSeq={1}
           onSubmit={async (payload) => {
-            const saved = await saveRiskForm(riskId, payload);
+            const saved = await saveRiskForm(riskId, payload, form as never);
             RISK_REFRESH.concat([['risk-detail', riskId], ['erm-risk-detail', riskId]]).forEach((k) => { void qc.invalidateQueries({ queryKey: [...k] }); });
             setForm(null);
             notify.success('The changes are saved.', { title: 'Risk updated' });

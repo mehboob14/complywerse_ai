@@ -5,5 +5,5 @@ export default function RiskRegisterListRedirect({ searchParams }: { searchParam
   const query = new URLSearchParams();
   Object.entries(searchParams ?? {}).forEach(([key, value]) => (Array.isArray(value) ? value : [value]).forEach((v) => { if (v !== undefined) query.append(key, v); }));
   const qs = query.toString();
-  redirect(qs ? `/erm/risks?${qs}` : '/erm/risks');
+  redirect(`/erm/risks${qs ? `?${qs}` : ''}`);
 }

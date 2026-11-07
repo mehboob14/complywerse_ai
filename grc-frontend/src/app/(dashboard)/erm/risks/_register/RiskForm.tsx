@@ -1469,7 +1469,7 @@ export function RiskModal({
                                     </span>
                                   )}
                                   {control.control_source && (
-                                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                                    <span className={`rounded px-1.5 py-0.5 text-[12px] font-medium ${
                                       control.control_source === 'internal'
                                         ? 'bg-primary-100 text-primary-700'
                                         : 'bg-slate-100 text-slate-700'
@@ -1556,7 +1556,7 @@ export function RiskModal({
               </p>
               {systemUblRiskId && (
                 <div className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
-                  <p className="text-[11px] font-medium text-slate-500">System Risk ID</p>
+                  <p className="text-[12px] font-medium text-slate-500">System Risk ID</p>
                   <p className="text-sm font-semibold text-slate-800">{systemUblRiskId}</p>
                 </div>
               )}
