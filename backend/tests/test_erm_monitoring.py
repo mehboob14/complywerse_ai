@@ -10,7 +10,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from grc.models import (Base, GRCUser, Risk, RiskKRI, RiskMitigationAction, Role, Tenant, UserRole, get_db)
+from grc.models import (Base, GRCUser, IncidentRiskLink, Risk, RiskIncident, RiskKRI, RiskMitigationAction, Role, Tenant, UserRole, get_db)
+from grc.modules.erm.routers import incident_links as link_routes
+from grc.modules.erm.routers import incidents as incident_routes
 from grc.modules.erm.routers import kris as kri_routes
 from grc.modules.erm.routers import mitigation_actions as action_routes
 from grc.modules.erm.routers import monitoring as monitoring_routes
@@ -39,6 +41,8 @@ def client(db, username="officer"):
     app.include_router(action_routes.router, prefix="/erm")
     app.include_router(kri_routes.router, prefix="/erm")
     app.include_router(monitoring_routes.router, prefix="/erm")
+    app.include_router(link_routes.router, prefix="/erm")
+    app.include_router(incident_routes.router, prefix="/erm")
     app.dependency_overrides[get_db] = lambda: db
     app.dependency_overrides[require_auth] = lambda: db.query(GRCUser).filter_by(username=username).one()
     return TestClient(app)
@@ -98,3 +102,19 @@ def test_the_kri_report_names_the_linked_risk_and_the_owner(db, monkeypatch):
     assert by_name["Backups failing"]["risk_title"] == "Data loss" and by_name["Backups failing"]["owner_name"] == "Olu Officer"
     assert by_name["Backups failing"]["current_status"] == "red"
     assert by_name["Standalone"]["risk_title"] is None and by_name["Standalone"]["owner_name"] is None
+
+
+def test_the_incident_list_counts_links_in_grouped_queries_and_agrees_with_each_incident_s_own_links(db):
+    a, b = risk(db, title="A"), risk(db, title="B")
+    one = RiskIncident(tenant_id=1, title="One", incident_date=datetime.utcnow(), severity="high", status="open")
+    two = RiskIncident(tenant_id=1, title="Two", incident_date=datetime.utcnow() - timedelta(days=1), severity="low", status="open")
+    db.add_all([one, two])
+    db.commit()
+    db.add_all([IncidentRiskLink(incident_id=one.id, risk_id=a.id), IncidentRiskLink(incident_id=one.id, risk_id=b.id)])
+    db.commit()
+    http = client(db)
+    listed = {i["title"]: i["link_counts"] for i in http.get("/erm/incidents", params={"limit": 5000}).json()}
+    assert listed["One"] == {"assets": 0, "vulnerabilities": 0, "risks": 2, "evidence": 0}
+    assert listed["Two"] == {"assets": 0, "vulnerabilities": 0, "risks": 0, "evidence": 0}
+    own = http.get(f"/erm/incidents/{one.id}").json()["link_counts"]
+    assert own == listed["One"], "the single-incident read and the list say the same"

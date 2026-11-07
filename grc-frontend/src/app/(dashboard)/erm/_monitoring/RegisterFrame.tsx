@@ -193,7 +193,7 @@ export function RegisterFrame<R>(p: RegisterFrameProps<R>) {
   const noList = !!error && rows.length === 0;
   const refused = noList && statusOf(error) === 403;
   const noun = def.noun;
-  const cut = p.serverTotal != null && p.serverTotal > rows.length;
+  const cut = !loading && !noList && rows.length > 0 && p.serverTotal != null && p.serverTotal > rows.length;      // said once the list is in, never while it is still loading
 
   const body = (() => {
     if (refused) return <NoAccessState title={p.noAccess.title} reason={p.noAccess.reason} />;
@@ -261,6 +261,8 @@ export function RegisterFrame<R>(p: RegisterFrameProps<R>) {
   })();
 
   const chips = appliedChips(def, state, (facet) => optionLists[facet] ?? []);
+  // a person who may not see this register gets the page head and the reason, not an empty explorer around it
+  if (refused) return <div className="flex flex-col gap-[16px]">{p.head({ rail: true, list: null, compact: false, tight: false })}<NoAccessState title={p.noAccess.title} reason={p.noAccess.reason} /></div>;
   const bulk = p.bulk && ticked.length > 0 && !loading ? p.bulk(ticked, selection.clear) : null;
   const viewOptions = [{ value: 'list', label: 'List' }, { value: 'board', label: 'Board' }];
 

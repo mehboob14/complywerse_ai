@@ -13,7 +13,7 @@ import { InfoTip } from '@/components/ui/InfoTip';
 import {
   Button, ClampedText, EmptyState, Combobox, Fact, FactList, FormField, Menu, PersonChip, ReadOnlyNote, StatusPill, useConfirm, useNotify, useReportedMutation, type MenuItem,
 } from '@/components/ui/ds';
-import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
+import { canRetry, errorMessage, statusOf } from '@/components/ui/ds/reportOutcome';
 import type { RecordColumn, RecordRow } from '@/components/records/RecordTable';
 import type { BulkActionDef } from '@/components/records/BulkBar';
 import { Trash2 as TrashIcon } from 'lucide-react';
@@ -79,6 +79,7 @@ export default function KriRegister({ label, tabs }: { label: string; tabs?: Rea
     queryFn: async () => (await ermApi.kris.report(90, 'kri')).data as Report,
     retry: retryLoad,
   });
+  const refusedList = report.isError && !report.data && statusOf(report.error) === 403;
   const rows = useMemo(() => (report.data?.kris ?? []).slice().sort((a, b) => a.id - b.id), [report.data]);
   const people = useTenantUsers();
   const me = useCurrentUserId();
@@ -192,7 +193,7 @@ export default function KriRegister({ label, tabs }: { label: string; tabs?: Rea
           <>
             {canCreate && <Button leftIcon={<Upload aria-hidden />} onClick={() => setUploading(true)}>Upload</Button>}
             {canCreate && <Button variant="primary" leftIcon={<Plus aria-hidden />} onClick={() => setEditing(null)}>Add KRI</Button>}
-            {!canCreate && !canEdit && !permsLoading && (
+            {!canCreate && !canEdit && !permsLoading && !refusedList && (
               <ReadOnlyNote>View only<InfoTip text="Only people who may create or edit KRIs can change them." label="Why KRIs are view only" /></ReadOnlyNote>
             )}
           </>
