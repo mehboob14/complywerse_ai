@@ -1333,6 +1333,8 @@ export const ermApi = {
       const queryString = params.toString();
       return apiClient.get<Risk[]>(`/erm/risks${queryString ? `?${queryString}` : ''}`);
     },
+    /** Every risk of the organisation in one request, compact (`lean=1`): { items, total, truncated, frameworks }. The register, the Overview and the pickers draw from it. */
+    getLean: () => apiClient.get<{ items: unknown[]; total: number; skip: number; limit: number; truncated: boolean; frameworks: Record<string, { name: string }> }>('/erm/risks', { params: { lean: 1, limit: 10000 } }),
     getById: (id: number) => apiClient.get<Risk>(`/erm/risks/${id}`),
     getDetail: (id: number) => apiClient.get<RiskDetail>(`/erm/risks/${id}/detail`),
     getDashboard: () => apiClient.get<RiskDashboard>('/erm/risks/dashboard'),

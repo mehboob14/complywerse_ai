@@ -62,7 +62,7 @@ test('active, fully scored, unscored and critical open follow routers/dashboard.
 
 test('above appetite: a scored active risk whose residual is over the limit of its category (tolerance, else max acceptable, else 12)', () => {
   const limits = appetiteLimits([{ category: 'operational', tolerance_threshold: 10, max_acceptable_score: 15 }, { category: 'technology', max_acceptable_score: 8 }, { category: 'strategic' }]);
-  assert.deepEqual([...limits], [['operational', 10], ['technology', 8], ['strategic', 12]]);
+  assert.deepEqual(Array.from(limits), [['operational', 10], ['technology', 8], ['strategic', 12]]);
   const base = { inherent_score: 20 };
   assert.equal(aboveAppetite(risk(1, { ...base, residual_score: 11 }), limits), true);
   assert.equal(aboveAppetite(risk(2, { ...base, residual_score: 10 }), limits), false, 'equal to the limit is within it');
@@ -105,8 +105,8 @@ test('treatment is derived and never stored: a plan with the risk mitigated is C
 
 test('the matrix places a risk only with both a likelihood and an impact, as the server\'s heatmap does', () => {
   const rows = [risk(1, { residual_likelihood: 4, residual_impact: 5 }), risk(2, { residual_likelihood: 4, residual_impact: 5 }), risk(3, { residual_likelihood: 4 }), risk(4, { inherent_likelihood: 1, inherent_impact: 1 })];
-  assert.deepEqual([...matrixOf(rows, 'residual')], [['4-5', 2]]);
-  assert.deepEqual([...matrixOf(rows, 'inherent')], [['1-1', 1]]);
+  assert.deepEqual(Array.from(matrixOf(rows, 'residual')), [['4-5', 2]]);
+  assert.deepEqual(Array.from(matrixOf(rows, 'inherent')), [['1-1', 1]]);
 });
 
 test('sorting: the default is the highest level first; an empty value is last in either direction; ties keep a fixed order', () => {

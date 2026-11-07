@@ -12,7 +12,7 @@ const STRIP = 'opens from the Risk Management tab strip';
 
 export const LEAVES: Record<string, RouteExtra> = {
   '/erm': { title: 'Risk Management Overview', keywords: ['Enterprise Risk Management', 'ERM'] },
-  '/erm/risks': { keywords: ['Risks', 'Risk dashboard'] },
+  '/erm/risks': { keywords: ['Risks', 'Risk dashboard', 'Risk insights', 'Risk matrix', 'Heat map'], ownHeading: true },
   '/erm/risk-assessments': { keywords: ['Risk assessment dashboard'] },
   '/erm/rcsa': { keywords: ['RCSA Dashboard', 'Risk and control self-assessment'] },
   '/erm/analytics': { keywords: ['Advanced Risk Analytics'] },
@@ -35,7 +35,8 @@ export const PAGES: PageSpec[] = [
 
   // ---- Risk Register ----
   { path: '/erm/risks/dashboard', label: 'Risk Register', area: AREA, aliasOf: '/erm/risks' },
-  { path: '/erm/risks/list', label: 'Risk Register List', area: AREA, parent: '/erm/risks', hidden: 'opens from the Risk Register view switcher and from the Overview tiles that count open risks', keywords: ['Upload risk register'] },
+  // The old register page forwards to the register (parameters kept: ?new=1, ?upload=1, ?edit=<id>, ?register_type=<name>); the old dashboard is its Insights view.
+  { path: '/erm/risks/list', label: 'Risk Register', area: AREA, aliasOf: '/erm/risks' },
   { path: '/erm/risks/:id', label: 'Risk', area: AREA, parent: '/erm/risks', hidden: 'opens from a Risk Register row and from the records that link a risk (assets, assessments, evidence, frameworks, exceptions, reports)' },
   { path: '/erm/risks/nca/:id', label: 'NCA risk entry', area: AREA, parent: '/erm/risks', hidden: 'no link opens it: reached by a typed or saved address' },
 

@@ -1,18 +1,9 @@
 'use client';
 
-// The Risk Register landing page now renders the dashboard so users
-// land on a meaningful overview (per-register breakdowns, source mix,
-// status distribution) instead of an immediate flat list.
-//
-// The original list — including all template-specific tabs (UBL, NCA,
-// PCI, etc.), upload flows, and create / edit / close modals — has
-// moved verbatim to /erm/risks/list and is still reachable via the
-// "View all risks" button on the dashboard or via /erm/risks/list directly.
-//
-// Single source of truth at dashboard/page.tsx; both URLs render it.
+// Risk Management > Risk Register. The sidebar's "Risk Register" opens the register itself (it used to open a dashboard, with the register behind a dropdown): the facet explorer, with the
+// old dashboard folded in as its Insights view. /erm/risks/dashboard and /erm/risks/list forward here, with their old parameters.
+import { RiskRegister } from './_register/RiskRegister';
 
-import DashboardPage from './dashboard/page';
-
-export default function RisksRootPage() {
-  return <DashboardPage />;
+export default function RiskRegisterPage() {
+  return <RiskRegister />;
 }
