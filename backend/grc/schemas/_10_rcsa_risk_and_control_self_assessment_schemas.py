@@ -106,6 +106,8 @@ class RCSATemplateResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     question_count: int = 0
+    # additive (UX revamp, RCSA): in how many campaigns the template is used (a template in use cannot be deleted)
+    campaign_count: int = 0
 
     class Config:
         from_attributes = True
@@ -162,6 +164,10 @@ class RCSACampaignResponse(BaseModel):
     updated_at: Optional[datetime] = None
     assessment_count: int = 0
     completed_count: int = 0
+    # additive (UX revamp, RCSA): the register's owner, the units by state and the findings still open
+    created_by_name: Optional[str] = None
+    status_counts: Dict[str, int] = {}
+    open_findings: int = 0
 
     class Config:
         from_attributes = True
@@ -210,6 +216,7 @@ class RCSAQuestionWithResponse(BaseModel):
     ai_suggestion_enabled: bool = False
     risk_category: Optional[str] = None
     control_objective: Optional[str] = None
+    options: List[str] = []
 
 
 class RCSAEvidenceFile(BaseModel):
@@ -232,6 +239,16 @@ class RCSAResponseDetail(BaseModel):
     evidence: List[RCSAEvidenceFile] = []
 
 
+class RCSAApprovalStep(BaseModel):
+    """One line of an assessment's review trail (who did what, when, with which words)."""
+    action: str
+    tier_number: int = 0
+    performer_name: Optional[str] = None
+    delegate_name: Optional[str] = None
+    comments: Optional[str] = None
+    performed_at: Optional[datetime] = None
+
+
 class RCSAAssessmentDetailResponse(BaseModel):
     id: int
     campaign_id: int
@@ -243,6 +260,18 @@ class RCSAAssessmentDetailResponse(BaseModel):
     progress: float = 0
     questions: List[RCSAQuestionWithResponse] = []
     responses: List[RCSAResponseDetail] = []
+    # additive (UX revamp, RCSA): what the workspace needs to say who, which step and what was said
+    business_unit_id: Optional[int] = None
+    assessor_id: Optional[int] = None
+    template_name: Optional[str] = None
+    campaign_status: Optional[str] = None
+    current_approval_tier: int = 0
+    total_tiers: int = 1
+    submitted_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    overall_risk_score: Optional[float] = None
+    overall_control_score: Optional[float] = None
+    approval_history: List[RCSAApprovalStep] = []
 
     class Config:
         from_attributes = True
@@ -341,6 +370,13 @@ class RCSAFindingResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     closed_at: Optional[datetime]
+    # additive (UX revamp, RCSA): the words the register and its drawer show instead of ids
+    campaign_id: Optional[int] = None
+    campaign_name: Optional[str] = None
+    business_unit_name: Optional[str] = None
+    linked_risk_title: Optional[str] = None
+    linked_control_name: Optional[str] = None
+    linked_action_title: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -443,6 +479,8 @@ class RCSADashboardSummary(BaseModel):
     completion_rate: float
     avg_risk_score: Optional[float]
     avg_control_score: Optional[float]
+    pending_assessments: int = 0
+    open_findings: int = 0
 
 
 class RCSAFindingsBySeverity(BaseModel):
