@@ -103,13 +103,9 @@ def _journey(db: Session, tenant_id: int, framework_id: int) -> Optional[Dict[st
     return {"id": j.id, "status": j.status, "name": j.name} if j else None
 
 
-def _readiness(db: Session, ob: FrameworkOnboarding, org_values: Optional[Dict[str, Any]] = None,
-               org_eval: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def _readiness(db: Session, ob: FrameworkOnboarding, org_values: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     org_values = org_values if org_values is not None else profile.merged_values(db, ob.tenant_id)
-    if org_eval is None:
-        org_row = profile._row(db, ob.tenant_id)
-        org_eval = engine.evaluate_org(org_values, (org_row.groups_reviewed if org_row else None) or {})
-    return engine.evaluate(catalog.resolve(ob.framework_slug), ob.answers or {}, org_values, org_eval)
+    return engine.evaluate(catalog.resolve(ob.framework_slug), ob.answers or {}, org_values)
 
 
 def _person(db: Session, uid: Optional[int]) -> Optional[str]:
@@ -144,9 +140,7 @@ def view(db: Session, ob: FrameworkOnboarding) -> Dict[str, Any]:
     fw = db.query(UploadedFramework).filter(UploadedFramework.id == ob.uploaded_framework_id).first()
     res = catalog.resolve(ob.framework_slug)
     org_values = profile.merged_values(db, ob.tenant_id)
-    org_row = profile._row(db, ob.tenant_id)
-    org_eval = engine.evaluate_org(org_values, (org_row.groups_reviewed if org_row else None) or {})
-    readiness = engine.evaluate(res, ob.answers or {}, org_values, org_eval)
+    readiness = engine.evaluate(res, ob.answers or {}, org_values)
     refs = profile.refs_for(db, ob.tenant_id, org_values)
     for k, v in profile._names(db, ob.tenant_id, *_answer_refs(res, ob.answers or {})).items():
         refs.setdefault(k, {}).update(v)
@@ -159,7 +153,7 @@ def view(db: Session, ob: FrameworkOnboarding) -> Dict[str, Any]:
         "approved_by": _person(db, ob.approved_by), "submitted_by": _person(db, ob.submitted_by), "approval_note": ob.approval_note,
         "underway_by": _person(db, ob.underway_by),
         "steps": res["steps"], "requires_org": res.get("requires_org") or [], "answers": ob.answers or {},
-        "readiness": readiness, "org_summary": {"complete": org_eval["complete"], "groups": org_eval["groups"]},
+        "readiness": readiness,
         "refs": refs, "org_rows": _org_rows(org_values), "journey": _journey(db, ob.tenant_id, ob.uploaded_framework_id),
         "events": _events(db, ob), "catalog_version": ob.catalog_version, "current_catalog_version": catalog.catalog_version(),
     }
@@ -220,8 +214,6 @@ def register(db: Session, tenant_id: int) -> Dict[str, Any]:
         if j.uploaded_framework_id:
             journeys[j.uploaded_framework_id] = {"id": j.id, "status": j.status}
     org_values = profile.merged_values(db, tenant_id)
-    org_row = profile._row(db, tenant_id)
-    org_eval = engine.evaluate_org(org_values, (org_row.groups_reviewed if org_row else None) or {})
     rows: List[Dict[str, Any]] = []
     for fw in seen.values():
         slug = framework_slug(fw)
@@ -235,7 +227,7 @@ def register(db: Session, tenant_id: int) -> Dict[str, Any]:
             "progress": None, "updated_at": _iso(ob.updated_at) if ob else None, "underway": None,
         }
         if ob is not None:
-            counts = engine.evaluate(catalog.resolve(ob.framework_slug), ob.answers or {}, org_values, org_eval)["counts"]
+            counts = engine.evaluate(catalog.resolve(ob.framework_slug), ob.answers or {}, org_values)["counts"]
             row["progress"] = {"done": counts["required_ok"], "total": counts["required_total"]}
             if ob.state == "underway":
                 row["underway"] = {"kind": ob.underway_kind, "at": _iso(ob.underway_at), "legacy": ob.underway_source == "legacy"}
@@ -244,7 +236,7 @@ def register(db: Session, tenant_id: int) -> Dict[str, Any]:
     tally = {s: 0 for s in ("not_started",) + STATES}
     for r in rows:
         tally[r["state"]] = tally.get(r["state"], 0) + 1
-    return {"frameworks": rows, "counts": tally, "org": {"complete": org_eval["complete"], "groups": org_eval["groups"]},
+    return {"frameworks": rows, "counts": tally,
             "meta": {"underway_kinds": UNDERWAY_KINDS, "min_underway_reason": MIN_UNDERWAY_REASON, "min_reopen_reason": MIN_REOPEN_REASON}}
 
 

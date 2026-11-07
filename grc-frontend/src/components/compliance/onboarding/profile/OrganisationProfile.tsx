@@ -178,9 +178,9 @@ export default function OrganisationProfile() {
     <div className={SHELL}>
       <PageHeading
         title="Organisation profile"
-        info="Asked once and reused by every framework's onboarding. A framework asks only for what is specific to it and picks sites, systems, third parties and data types from here."
+        info="General facts about the organisation, kept once. Nothing here holds a framework back: a framework's onboarding asks its own questions and only picks sites, systems, third parties and data types from here."
         meta={state !== 'idle' ? <span role="status" aria-live="polite">{SAVE_WORDS[state]}</span> : undefined}
-        actions={locked ? <ReadOnlyNote>View only <InfoTip label="Why this page is view only" text="Your last change was not saved. Only people who can edit frameworks can change the organisation profile." /></ReadOnlyNote> : undefined}
+        actions={locked ? <ReadOnlyNote>View only <InfoTip label="Why this page is view only" text="Your last change was not saved. Only administrators and people who can edit frameworks can change the organisation profile." /></ReadOnlyNote> : undefined}
       />
       {halt && (
         <Notice
@@ -194,7 +194,7 @@ export default function OrganisationProfile() {
       <ProfileStages base={tabsBase} groups={groups} states={view.evaluation.groups} current={group.key} onPick={pick} />
       <div className="grid min-w-0 gap-[16px] xl:grid-cols-[minmax(0,1fr)_19rem]">
         <div role="tabpanel" id={panelId(tabsBase, group.key)} aria-labelledby={tabId(tabsBase, group.key)} tabIndex={0} className="min-w-0 focus-visible:outline-none focus-visible:shadow-ds-ring">
-          <SectionCard id={`stage-${group.key}`} title={group.label} meta={progress.text ? `${progress.text} required` : undefined}>
+          <SectionCard id={`stage-${group.key}`} title={group.label} meta={progress.text ? `${progress.text} filled` : undefined}>
             {group.source && <div className="mb-[12px]"><SourceChip source={group.source} /></div>}
             <div className="grid min-w-0 gap-x-[16px] gap-y-[20px] md:grid-cols-2">
               {fields.map((f) => {
@@ -214,7 +214,7 @@ export default function OrganisationProfile() {
               {!locked && (progress.reviewed
                 ? <StatusPill tone="success" label="Reviewed" />
                 : <Button leftIcon={<Check aria-hidden />} loading={review.isPending} disabled={!progress.complete || dirty} onClick={() => review.mutate(group.key)}>Mark stage reviewed</Button>)}
-              {!locked && !progress.reviewed && !progress.complete && <span className="text-ds-label text-ds-fg-muted">Fill the required fields first.</span>}
+              {!locked && !progress.reviewed && !progress.complete && <span className="text-ds-label text-ds-fg-muted">Fill the key fields first.</span>}
               {next && <Button className="ml-auto" rightIcon={<ChevronRight aria-hidden />} onClick={() => pick(next)}>Next stage</Button>}
             </div>
           </SectionCard>

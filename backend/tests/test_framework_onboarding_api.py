@@ -75,8 +75,9 @@ def fill_profile(http):
 
 def rows_of(profile):
     v = profile["values"]
-    return {"entities": [r["id"] for r in v["entities_sites"]["legal_entities"]], "sites": [r["id"] for r in v["entities_sites"]["sites"]],
-            "third_parties": [r["id"] for r in v["data_systems"]["third_parties"]], "data_types": [r["id"] for r in v["data_systems"]["data_types"]]}
+    rows = lambda group, key: [r["id"] for r in (v.get(group) or {}).get(key) or []]   # noqa: E731 - a list the profile never got is empty
+    return {"entities": rows("entities_sites", "legal_entities"), "sites": rows("entities_sites", "sites"),
+            "third_parties": rows("data_systems", "third_parties"), "data_types": rows("data_systems", "data_types")}
 
 
 def fill_onboarding(http, ob_id, slug, profile, overrides=None):
@@ -191,7 +192,7 @@ def test_a_row_a_completed_onboarding_picked_cannot_be_removed(w):
     db, as_, http = w
     http = as_(ADMIN)
     ob_id, view = ready_iso(http)
-    assert view["readiness"]["ready"], [c for c in view["readiness"]["checks"] + view["readiness"]["org_checks"] if c["required"] and not c["ok"]]
+    assert view["readiness"]["ready"], [c for c in view["readiness"]["checks"] if c["required"] and not c["ok"]]
     assert http.post(f"{O}/{ob_id}/submit").status_code == 200 and http.post(f"{O}/{ob_id}/approve", json={}).status_code == 200
     sites = http.get(P).json()["values"]["entities_sites"]["sites"]
     r = http.put(P, json={"values": {"entities_sites.sites": []}})
@@ -235,7 +236,7 @@ def test_an_onboarding_is_saved_per_step_submitted_approved_and_locked(w):
     assert bad.status_code == 422 and {e["field"] for e in bad.json()["detail"]["errors"]} == {"route.goal", "route.nope"}
     assert http.put(f"{O}/{ob['id']}/answers", json={"step": "nowhere", "values": {}}).status_code == 422
     view = fill_onboarding(http, ob["id"], "iso_27001", prof, ISO_DATES)
-    assert view["readiness"]["ready"], [c for c in view["readiness"]["checks"] + view["readiness"]["org_checks"] if c["required"] and not c["ok"]]
+    assert view["readiness"]["ready"], [c for c in view["readiness"]["checks"] if c["required"] and not c["ok"]]
     assert view["state"] == "draft" and view["readiness"]["hidden"] == ["route.prior_cert_ref"]   # only for a transfer or a recertification
     # submit, then editing sends it back to draft, then submit and approve
     assert http.post(f"{O}/{ob['id']}/submit").json()["state"] == "ready"
@@ -285,7 +286,7 @@ def test_a_custom_framework_gets_the_general_steps(w):
     view = fill_onboarding(http, ob["id"], None, prof)
     assert not view["readiness"]["ready"] and [c["key"] for c in view["readiness"]["checks"] if c["required"] and not c["ok"]] == ["scope_has_target"]
     view = fill_onboarding(http, ob["id"], None, prof, {"scope": {"sites": rows_of(prof)["sites"][:1]}})        # the scope must name a site, a system or a unit
-    assert view["readiness"]["ready"], [c for c in view["readiness"]["checks"] + view["readiness"]["org_checks"] if c["required"] and not c["ok"]]
+    assert view["readiness"]["ready"], [c for c in view["readiness"]["checks"] if c["required"] and not c["ok"]]
 
 
 # ---------------------------------------------------------------- already underway
@@ -442,3 +443,38 @@ def test_every_word_the_server_stores_fits_its_column():
     assert max(len(k) for k in catalog.families()) <= cols.family.type.length
     kinds = ["created", "saved", "submitted", "approved", "reopened", "marked_underway", "journey_started", "journey_blocked"]
     assert max(len(k) for k in kinds) <= m.FrameworkOnboardingEvent.__table__.c.kind.type.length
+
+
+# ---------------------------------------------------------------- the organisation profile gates nothing
+def test_a_framework_is_approved_without_the_rest_of_the_organisation_profile(w):
+    """ISO 27001 needs its own scope answers and the sites it picks from the profile: not regulators, certifications, audits, risk appetite or people."""
+    db, as_, http = w
+    http = as_(ADMIN)
+    prof = http.put(P, json={"values": {"entities_sites.sites": [{"name": "Karachi HQ", "kind": "Head office", "country": "Pakistan"}]}}).json()
+    assert not prof["evaluation"]["complete"] and prof["evaluation"]["groups"]["regulators_obligations"]["required_ok"] == 0
+    ob = http.post(O, json={"uploaded_framework_id": ISO}).json()
+    view = fill_onboarding(http, ob["id"], "iso_27001", prof, ISO_DATES)
+    assert view["readiness"]["ready"] and view["readiness"]["org_checks"] == [], view["readiness"]["checks"]
+    assert http.post(f"{O}/{ob['id']}/submit").json()["state"] == "ready"
+    assert http.post(f"{O}/{ob['id']}/approve", json={}).json()["state"] == "complete"
+    assert http.post("/certifications", json={"framework_id": ISO, "name": "ISO journey"}).status_code == 201
+    assert "org" not in http.get(O).json()                                  # the register no longer reports the profile's completeness
+
+
+def test_a_framework_that_picks_from_an_empty_list_waits_for_that_list_only(w):
+    db, as_, http = w
+    http = as_(ADMIN)
+    ob = http.post(O, json={"uploaded_framework_id": ISO}).json()
+    view = http.get(f"{O}/{ob['id']}").json()
+    open_now = {c["key"] for c in view["readiness"]["checks"] if c["required"] and not c["ok"]}
+    assert "scope.sites" in open_now and "scope.statement" in open_now      # its own questions, the sites it picks...
+    assert not any(k.startswith("org.") for k in open_now)                  # ...and nothing the organisation profile asks
+    assert view["requires_org"] == [] and view["readiness"]["org_checks"] == []
+
+
+def test_an_organisation_administrator_may_edit_the_profile_that_now_lives_in_administration(w):
+    db, as_, http = w
+    perm = m.Permission(id=9, name="admin:organization:edit", resource="admin:organization", action="edit")
+    db.add_all([perm, m.Role(id=9, tenant_id=1, name="Organisation editors"), m.RolePermission(role_id=9, permission_id=9), m.UserRole(user_id=PLAIN, role_id=9, tenant_id=1)])
+    db.commit()
+    assert as_(PLAIN).put(P, json={"values": {"entities_sites.headcount": 40}}).status_code == 200

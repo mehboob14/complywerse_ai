@@ -89,7 +89,7 @@ def test_the_same_person_is_the_same_user_or_the_same_email():
 
 # ---------------------------------------------------------------- readiness on a small catalog
 MINI = {
-    "slug": "mini", "requires_org": [],
+    "slug": "mini",
     "steps": [
         {"key": "route", "label": "Route", "fields": [
             fld("choice", key="goal", label="Goal", options=["Certify", "Align"]),
@@ -118,7 +118,7 @@ MINI = {
 
 
 def ev(answers, org=None):
-    return engine.evaluate(MINI, answers, org or {}, engine.evaluate_org(org or {}))
+    return engine.evaluate(MINI, answers, org or {})
 
 
 def by_key(r):
@@ -161,19 +161,12 @@ def test_a_table_rule_fails_on_the_row_that_breaks_it():
     assert not by_key(ev(bad))["carve"]["ok"] and by_key(ev(good))["carve"]["ok"] and not by_key(ev(unfilled))["carve"]["ok"]
 
 
-def test_advice_never_blocks_and_a_complete_draft_is_ready_once_the_profile_is_too():
+def test_advice_never_blocks_and_the_organisation_profile_gates_nothing():
     done = {"route": {"goal": "Align", "cats": ["Security"]}, "people": {"owner": {"user_id": 7}}}
-    r = ev(done)
-    assert not r["ready"]                                               # the profile is empty
+    r = ev(done)                                                        # no organisation profile at all
+    assert r["ready"] and r["org_checks"] == []
     assert [c["key"] for c in r["checks"] if c["required"] and not c["ok"]] == []
-    assert any(not c["ok"] for c in r["org_checks"] if c["required"])
-    assert r["counts"]["advised_open"] >= 1
-    full = {}
-    for key, v in profile_values().items():
-        g, k = key.split(".")
-        full.setdefault(g, {})[k] = engine.normalise(catalog.profile_fields()[key], v)
-    r = engine.evaluate(MINI, done, full, engine.evaluate_org(full))
-    assert r["ready"], [c for c in r["checks"] + r["org_checks"] if c["required"] and not c["ok"]]
+    assert r["counts"]["advised_open"] >= 1 and r["counts"]["required_ok"] == r["counts"]["required_total"]
 
 
 def test_the_profile_counts_a_list_as_answered_when_the_none_tick_is_set_and_asks_for_it_otherwise():
@@ -189,20 +182,6 @@ def test_the_profile_counts_a_list_as_answered_when_the_none_tick_is_set_and_ask
     assert ev1["groups"]["regulators_obligations"]["complete"] and ev1["complete"], ev1["missing"]
 
 
-def test_a_framework_can_need_an_advised_profile_field_and_says_why():
-    res = {**MINI, "requires_org": [{"field": "risk_people.ciso", "reason": "The CISO signs the scope."}]}
-    org = {}
-    for key, v in profile_values().items():
-        g, k = key.split(".")
-        org.setdefault(g, {})[k] = engine.normalise(catalog.profile_fields()[key], v)
-    r = engine.evaluate(res, {}, org, engine.evaluate_org(org))
-    need = next(c for c in r["org_checks"] if c["key"] == "org.need.risk_people.ciso")
-    assert not need["ok"] and need["required"] and need["hint"] == "The CISO signs the scope."
-    org["risk_people"]["ciso"] = {"user_id": 9}
-    r = engine.evaluate(res, {}, org, engine.evaluate_org(org))
-    assert next(c for c in r["org_checks"] if c["key"] == "org.need.risk_people.ciso")["ok"]
-
-
 # ---------------------------------------------------------------- every framework of the catalog
 ALL_SLUGS = sorted({fw["slug"] for fam in catalog.families().values() for fw in fam["frameworks"]})
 
@@ -212,7 +191,7 @@ def test_every_framework_can_be_filled_and_evaluated(slug):
     """A filled draft normalises without an error and evaluates; an empty one has required checks (the sweep that finds an engine gap)."""
     res = catalog.resolve(slug)
     assert res["steps"], slug
-    empty = engine.evaluate(res, {}, {}, engine.evaluate_org({}))
+    empty = engine.evaluate(res, {}, {})
     assert empty["counts"]["required_total"] > 0 and not empty["ready"]
     sampler = Sampler(org_rows={"entities": ["e1"], "sites": ["s1"], "third_parties": ["t1"], "data_types": ["d1"]})
     answers = answers_for(slug, sampler, levels=("required", "advised"))
@@ -221,33 +200,13 @@ def test_every_framework_can_be_filled_and_evaluated(slug):
         for f in st["fields"]:
             if st["key"] in answers and f["key"] in answers[st["key"]]:
                 answers[st["key"]][f["key"]] = engine.normalise(f, answers[st["key"]][f["key"]], kn)
-    r = engine.evaluate(res, answers, {}, engine.evaluate_org({}))
+    r = engine.evaluate(res, answers, {})
     open_fields = [c["key"] for c in r["checks"] if c["kind"] == "field" and c["required"] and not c["ok"]]
     assert open_fields == [], open_fields
-    assert all(isinstance(c["ok"], bool) for c in r["checks"] + r["org_checks"])
+    assert all(isinstance(c["ok"], bool) for c in r["checks"])
 
 
 # ---------------------------------------------------------------- gaps the independent review found
-def _org_without(*dropped):
-    org = {}
-    for key, v in profile_values().items():
-        if key in dropped:
-            continue
-        g, k = key.split(".")
-        org.setdefault(g, {})[k] = engine.normalise(catalog.profile_fields()[key], v)
-    return org
-
-
-def test_a_family_may_require_a_list_the_organisation_declared_empty():
-    """requires_org on third parties was impossible to meet for an organisation that ticked "nothing is outsourced"."""
-    res = {**MINI, "requires_org": [{"field": "data_systems.third_parties", "reason": "The providers are listed."}]}
-    org = _org_without("data_systems.third_parties")
-    need = lambda r: next(c for c in r["org_checks"] if c["key"] == "org.need.data_systems.third_parties")["ok"]   # noqa: E731
-    assert not need(engine.evaluate(res, {}, org, engine.evaluate_org(org)))
-    org["data_systems"]["no_third_parties"] = True
-    assert need(engine.evaluate(res, {}, org, engine.evaluate_org(org)))
-
-
 def test_a_minimum_of_zero_rows_asks_for_nothing_and_a_number_may_have_a_ceiling():
     assert engine.answered(fld("org_pick", of="sites", min_rows=0), []) and not engine.answered(fld("org_pick", of="sites"), [])
     score = fld("number", min=0, max=3)

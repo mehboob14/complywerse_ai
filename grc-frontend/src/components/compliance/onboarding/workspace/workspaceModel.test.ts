@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   actionRefusal, actionsOf, aiChange, aiKindsAfter, aiOrigin, appendRows, bannerOf, editsByStep, errorsByField, eventSentence, exclusionQuestions, gapQuestions, isLockedRefusal,
-  jumpOf, jumpToRef, labelOfRef, mergeRefs, needsDepartments, neighbours, openCount, openingStage, reasonProblem, refusalLines, REVIEW, resolveStage, splitChecks, splitOrgChecks,
+  jumpOf, jumpToRef, labelOfRef, mergeRefs, needsDepartments, neighbours, openCount, openingStage, reasonProblem, refusalLines, REVIEW, resolveStage, splitChecks,
   splitRef, stageCount, stagesOf, suggestedRows, valueOf, visibleFields,
 } from './workspaceModel.ts';
 
@@ -86,12 +86,9 @@ test('checks: required first, advice after; each is put right where it is filled
   const stages = stagesOf(steps);
   assert.deepEqual(jumpOf(checks[0], stages), { kind: 'field', stage: 'scope', field: 'statement' });
   assert.deepEqual(jumpOf(checks[3], stages), { kind: 'none' });
-  assert.deepEqual(jumpOf({ key: 'org.entities_sites', kind: 'org' }, stages), { kind: 'org', href: '/compliance/organisation' });
   assert.deepEqual(jumpOf({ key: 'roles_distinct', kind: 'gate', step: 'scope' }, stages), { kind: 'stage', stage: 'scope' });   // a rule opens the stage it reads
   assert.deepEqual(jumpOf({ key: 'roles_distinct', kind: 'gate' }, stages), { kind: 'none' });
   assert.deepEqual(jumpOf({ key: 'gone.field', kind: 'field', step: 'gone' }, stages), { kind: 'none' });
-  const org = splitOrgChecks([{ key: 'org.entities_sites' }, { key: 'org.need.data_systems.key_systems' }, { key: 'sponsor_differs' }] as never);
-  assert.deepEqual([org.needed.map((c) => c.key), org.profile.map((c) => c.key)], [['org.need.data_systems.key_systems'], ['org.entities_sites', 'sponsor_differs']]);
   assert.deepEqual(jumpToRef('scope.statement', steps), { stage: 'scope', field: 'statement' });
   assert.equal(jumpToRef('roles_distinct', steps), null);                                              // a gate key is not a field
 });

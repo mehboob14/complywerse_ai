@@ -19,7 +19,7 @@ import { oneOf, text } from '@/lib/addressState';
 import { formatRelative } from '@/lib/format';
 import { ONBOARDING_KEYS, onboardingApi, problemOf, STATE_LABEL, type RegisterRow } from '@/lib/frameworkOnboarding';
 import {
-  actionOf, countsOf, familiesOf, filterRows, journeyWords, knownFamily, orgStages, progressPercent, progressWords, sortValue, startRefusalWords, STATE_FILTERS, STATE_TONE,
+  actionOf, countsOf, familiesOf, filterRows, journeyWords, knownFamily, progressPercent, progressWords, sortValue, startRefusalWords, STATE_FILTERS, STATE_TONE,
   underwayWords, workspaceHref, type StateFilter,
 } from './registerModel';
 
@@ -78,8 +78,6 @@ export default function OnboardingRegister() {
   });
 
   const chips = STATE_FILTERS.map((s) => ({ value: s, label: `${s === 'all' ? 'All' : STATE_LABEL[s]} ${counts[s]}` }));
-  const org = register.data?.org;
-  const stages = orgStages(org?.groups);
 
   const columns: RegisterColumn<RegisterRow>[] = [
     { key: 'name', header: 'Framework', sortable: true, isRowHeader: true, cell: (r) => <NameCell row={r} /> },
@@ -108,15 +106,6 @@ export default function OnboardingRegister() {
   const clear = () => setAddress({ state: 'all', family: '', q: '' });
   return (
     <div className="flex flex-col gap-[16px]">
-      {org && !org.complete && (
-        <Notice tone="warning" role="status" title="Complete the organisation profile first" action={<Button size="sm" href="/compliance/organisation">Open profile</Button>}>
-          {stages.length > 0 && (
-            <ul className="flex flex-wrap gap-x-[16px] gap-y-[2px]">
-              {stages.map((s) => <li key={s.key} className="text-ds-label text-ds-fg-body">{s.label}: {s.done} of {s.total}{s.complete ? ' (done)' : ''}</li>)}
-            </ul>
-          )}
-        </Notice>
-      )}
       <SectionCard
         id="onboarding" title="Onboarding"
         info="Each framework needs its onboarding finished and approved before its journey can start. A framework that is already running can be marked underway, with a reason."

@@ -10,13 +10,13 @@ import { findViolations } from '../../../ui/ds/kitRules.ts';
 
 const ROOT = 'src/components/compliance/onboarding';
 const FOLDERS = [`${ROOT}/inputs`, `${ROOT}/profile`];
-const FILES = [`${ROOT}/FieldInput.tsx`, `${ROOT}/FieldBlock.tsx`, `${ROOT}/SourceChip.tsx`, 'src/app/(dashboard)/compliance/organisation/page.tsx'];
+const FILES = [`${ROOT}/FieldInput.tsx`, `${ROOT}/FieldBlock.tsx`, `${ROOT}/SourceChip.tsx`];
 
 const mine = (): string[] => [...FOLDERS.flatMap((d) => readdirSync(d).filter((n) => /\.tsx$/.test(n)).map((n) => `${d}/${n}`)), ...FILES];
 
 test('every file of the field inputs and the organisation profile follows the kit rules', () => {
   const files = mine();
-  assert.ok(files.length >= 12, 'the screens are there');
+  assert.ok(files.length >= 11, 'the screens are there');
   const bad = files.flatMap((f) => findViolations(readFileSync(f, 'utf8')).map((v) => `${f}:${v.line} ${v.rule}: ${v.text}`));
   assert.deepEqual(bad, []);
 });

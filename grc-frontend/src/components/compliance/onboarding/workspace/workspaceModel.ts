@@ -7,7 +7,6 @@
 import type { AiKind, Check, OnboardingEvent, OnboardingState, OnboardingView, Problem, Readiness, Refs, Step } from '@/lib/frameworkOnboarding';
 
 export const REVIEW = 'review';
-export const ORG_HREF = '/compliance/organisation';
 
 export interface Stage { key: string; label: string; review: boolean }
 
@@ -112,16 +111,10 @@ export function splitChecks(checks: readonly Check[]): { required: Check[]; advi
   return { required: checks.filter((c) => c.required && !c.ok), advice: checks.filter((c) => !c.required && !c.ok), done: checks.filter((c) => c.ok) };
 }
 
-/** The organisation checks, in two lists: what this framework itself asks of the profile (key org.need.*), and the profile's own. */
-export function splitOrgChecks(checks: readonly Check[]): { needed: Check[]; profile: Check[] } {
-  return { needed: checks.filter((c) => c.key.startsWith('org.need.')), profile: checks.filter((c) => !c.key.startsWith('org.need.')) };
-}
+export type Jump = { kind: 'field'; stage: string; field: string } | { kind: 'stage'; stage: string } | { kind: 'none' };
 
-export type Jump = { kind: 'field'; stage: string; field: string } | { kind: 'stage'; stage: string } | { kind: 'org'; href: string } | { kind: 'none' };
-
-/** Where a check is put right: a field of a stage, the stage a rule reads its first answer from, the organisation profile, or nowhere. */
+/** Where a check is put right: a field of a stage, the stage a rule reads its first answer from, or nowhere. */
 export function jumpOf(check: Pick<Check, 'key' | 'kind' | 'step'>, stages: readonly Stage[]): Jump {
-  if (check.kind === 'org') return { kind: 'org', href: ORG_HREF };
   if (check.kind === 'field' && check.step && stages.some((s) => s.key === check.step && !s.review)) {
     const { field } = splitRef(check.key);
     return field ? { kind: 'field', stage: check.step, field } : { kind: 'none' };

@@ -3,7 +3,7 @@
  * a row, the words of its progress and of its journey. The state of a framework (not started, draft, ready, complete, underway) is the server's; this only
  * arranges its answer.
  */
-import type { OnboardingState, OrgGroupState, RegisterRow } from '@/lib/frameworkOnboarding';
+import type { OnboardingState, RegisterRow } from '@/lib/frameworkOnboarding';
 import type { Tone } from '@/lib/status';
 
 export const STATE_ORDER: readonly OnboardingState[] = ['not_started', 'draft', 'ready', 'complete', 'underway'];
@@ -100,13 +100,6 @@ export function sortValue(row: RegisterRow, key: string): string | number | null
     case 'journey': return row.journey ? 1 : 0;
     default: return row.updated_at;
   }
-}
-
-export interface OrgStage { key: string; label: string; done: number; total: number; complete: boolean }
-
-/** The stages of the organisation profile with how many required items each has, for the notice at the top ("Sites 3 of 5"). */
-export function orgStages(groups: Record<string, OrgGroupState> | undefined): OrgStage[] {
-  return Object.entries(groups ?? {}).map(([key, g]) => ({ key, label: g.label, done: g.required_ok, total: g.required_total, complete: g.complete }));
 }
 
 /** Words for an onboarding that could not be started (the server's refusal, in plain words). */

@@ -176,8 +176,6 @@ test('the pages of an Overview\'s area light the entries beside it, never the Ov
   assert.notEqual(activeNavHref('/erm/risks/12', navigation), '/erm');
   assert.notEqual(activeNavHref('/compliance/access-reviews/4', navigation), '/compliance');
   assert.equal(activeNavHref('/compliance/access-reviews/4', navigation), '/compliance/access-reviews');
-  assert.equal(activeNavHref('/compliance/organisation', navigation), '/compliance/organisation', 'the organisation profile has its own entry, after Frameworks');
-  assert.notEqual(activeNavHref('/compliance/organisation', navigation), '/compliance');
   assert.equal(activeNavHref('/erm/analytics/scenario', navigation), '/erm/analytics/scenario', 'the deeper entry beats Advanced Analytics');
   assert.equal(activeNavHref('/erm/analytics/heatmap', navigation), '/erm/analytics');
 });
