@@ -253,6 +253,7 @@ def get_risk_detail(
             detail="Risk not found"
         )
     
+    from grc.modules.erm import risk_lean
     linked_controls = []
     from grc.modules.scf.risk_links import control_status_indicator
     for link in risk.control_links:
@@ -366,7 +367,8 @@ def get_risk_detail(
         "linked_framework_requirements": linked_framework_requirements,
         "linked_assets": linked_assets,
         "linked_evidence": linked_evidence,
-        "linked_governance": linked_governance
+        "linked_governance": linked_governance,
+        **risk_lean.detail_extras(db, risk),
     }
 
 

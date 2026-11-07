@@ -128,7 +128,8 @@ test('a forward is another URL of an entry that is a page of its own, under the 
     ['/erm/internal-controls', '/controls'],
     ['/erm/internal-controls/:id', '/controls'],
     ['/erm/ai-risk-assessment', '/erm/risk-assessments/ai-risk-assessment'],
-    ['/erm/risks/dashboard', '/erm/risks'],                                  // not a forward: /erm/risks renders this page
+    ['/erm/risks/dashboard', '/erm/risks'],                                  // forwards to /erm/risks?view=insights (the old dashboard is the register's Insights view)
+    ['/erm/risks/list', '/erm/risks'],                                       // forwards to /erm/risks with its parameters (?new, ?upload, ?edit, ?register_type)
     ['/erm/risk-assessments/dashboard', '/erm/risk-assessments'],            // not a forward: /erm/risk-assessments renders this page
     ['/vendor-risk/procurement', '/vendor-risk'],
     ['/vendor-risk/shadow-saas', '/vendor-risk'],

@@ -1021,13 +1021,20 @@ def list_risks(
     max_score: Optional[float] = None,
     skip: int = 0,
     limit: int = 100,
+    lean: bool = False,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    """The risks of the organisation, newest first. ``lean=1`` is the complete compact load the register draws from
+    (``risk_lean.py``): ``{items, total, skip, limit, truncated, frameworks}``, ``limit`` up to 10,000, no long text and no query per
+    row. Without it the answer is the bare array it always was (``limit`` defaults to 100)."""
+    from .. import risk_lean
     ensure_register_labels(db)
     user_tenants = get_user_tenants(current_user, db)
+    if lean:
+        skip, limit = max(skip, 0), max(min(limit, risk_lean.LEAN_LIMIT), 0)
     if not user_tenants:
-        return []
+        return risk_lean.empty(skip, limit) if lean else []
     
     query = db.query(Risk).filter(Risk.tenant_id.in_(user_tenants))
     
@@ -1083,6 +1090,9 @@ def list_risks(
     if max_score is not None:
         query = query.filter(Risk.inherent_score <= max_score)
     
+    if lean:
+        return risk_lean.list_lean(db, query, query.count(), skip, limit)
+
     risks = query.order_by(Risk.created_at.desc()).offset(skip).limit(limit).all()
     _attach_source_labels(db, risks)
     _attach_sla(db, risks)
@@ -1509,6 +1519,7 @@ def get_risk_detail(
             detail="Risk not found"
         )
     
+    from .. import risk_lean
     linked_controls = []
     from grc.modules.scf.risk_links import control_status_indicator
     for link in risk.control_links:
@@ -1625,7 +1636,8 @@ def get_risk_detail(
         "linked_framework_requirements": linked_framework_requirements,
         "linked_assets": linked_assets,
         "linked_evidence": linked_evidence,
-        "linked_governance": linked_governance
+        "linked_governance": linked_governance,
+        **risk_lean.detail_extras(db, risk),
     }
 
 
