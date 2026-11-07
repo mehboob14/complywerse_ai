@@ -403,6 +403,11 @@ def kri_report(days: int = 90, kind: Optional[str] = None, db: Session = Depends
     items = []
     counts = {"green": 0, "amber": 0, "red": 0, "unknown": 0}
     by_category: dict = {}
+    # names a register row shows (added fields only): the linked risk's title and the owner's name
+    risk_ids = {k.risk_id for k in kris if k.risk_id}
+    owner_ids = {k.owner_id for k in kris if k.owner_id}
+    risk_titles = {r.id: r.title for r in db.query(Risk.id, Risk.title).filter(Risk.id.in_(risk_ids)).all()} if risk_ids else {}
+    owner_names = {u.id: (u.display_name or u.username) for u in db.query(GRCUser).filter(GRCUser.id.in_(owner_ids)).all()} if owner_ids else {}
     for kri in kris:
         data = _hydrate(db, kri, user_tenants)
         st = data.current_status or "unknown"
@@ -412,6 +417,8 @@ def kri_report(days: int = 90, kind: Optional[str] = None, db: Session = Depends
         bc[st] = bc.get(st, 0) + 1
         bc["total"] += 1
         d = data.model_dump()
+        d["risk_title"] = risk_titles.get(kri.risk_id)
+        d["owner_name"] = owner_names.get(kri.owner_id)
         if getattr(kri, "metric_key", None):
             d["history"] = kri_feeds.history(db, user_tenants, kri.metric_key, days=days)
         else:

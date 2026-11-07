@@ -5,7 +5,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import and_
+from sqlalchemy import and_, func
 from openai import OpenAI
 
 from ....models import (
@@ -184,6 +184,57 @@ def get_risk_for_user(risk_id: int, db: Session, current_user: GRCUser):
         Risk.tenant_id.in_(user_tenants)
     ).first()
     return risk
+
+
+class MitigationActionRow(RiskMitigationActionResponse):
+    """One action of the tenant-wide list: the action plus what a register row shows without more requests."""
+    risk_title: Optional[str] = None
+    risk_category: Optional[str] = None
+    evidence_count: int = 0
+
+
+@router.get("")
+def list_all_actions(
+    status_filter: Optional[str] = None,
+    risk_id: Optional[int] = None,
+    owner_id: Optional[int] = None,
+    skip: int = 0,
+    limit: int = 5000,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Every mitigation action of the tenant in one request (the per-risk list needs one request per risk). `total` is the real count; `items`
+    are in creation order, cut at `limit` (at most 5,000). Same tenant scoping as the per-risk list."""
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return {"items": [], "total": 0}
+    limit = max(1, min(limit, 5000))
+    query = db.query(RiskMitigationAction).join(Risk).filter(Risk.tenant_id.in_(user_tenants))
+    if status_filter:
+        query = query.filter(RiskMitigationAction.status == status_filter)
+    if risk_id:
+        query = query.filter(RiskMitigationAction.risk_id == risk_id)
+    if owner_id:
+        query = query.filter(RiskMitigationAction.owner_id == owner_id)
+    total = query.count()
+    actions = query.options(joinedload(RiskMitigationAction.owner), joinedload(RiskMitigationAction.risk)).order_by(
+        RiskMitigationAction.id.asc()).offset(max(0, skip)).limit(limit).all()
+    ids = [a.id for a in actions]
+    counts = {}
+    if ids:
+        for action_id, n in db.query(
+            RiskMitigationActionEvidence.mitigation_action_id, func.count(RiskMitigationActionEvidence.id)
+        ).filter(RiskMitigationActionEvidence.mitigation_action_id.in_(ids)).group_by(RiskMitigationActionEvidence.mitigation_action_id).all():
+            counts[action_id] = n
+    items = []
+    for action in actions:
+        row = MitigationActionRow.model_validate(action)
+        row.owner_name = action.owner.display_name if action.owner else None
+        row.risk_title = action.risk.title if action.risk else None
+        row.risk_category = action.risk.category if action.risk else None
+        row.evidence_count = counts.get(action.id, 0) or (1 if action.evidence_id else 0)
+        items.append(row)
+    return {"items": items, "total": total}
 
 
 @router.get("/overdue", response_model=List[RiskMitigationActionResponse])
