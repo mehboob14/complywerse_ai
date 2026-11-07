@@ -45,7 +45,7 @@ export default function OrgPickInput({ id, label, field, value, onChange, refs, 
 
   const rows = orgRowsOf(orgRows, of);
   const picked = (Array.isArray(value) ? value : []).filter((x): x is string => typeof x === 'string');
-  if (rows.length === 0 && picked.length === 0) return <Empty href={`/compliance/organisation?stage=${STAGE_OF[of]}`}>Add them in the organisation profile</Empty>;
+  if (rows.length === 0 && picked.length === 0) return <Empty href={`/admin?tab=profile&stage=${STAGE_OF[of]}`}>Add them under Administration, Organisation Profile</Empty>;
   const gone = picked.filter((p) => !rows.some((r) => r.id === p));
   return (
     <div role="group" aria-label={label} className="space-y-[2px]">
@@ -58,8 +58,8 @@ export default function OrgPickInput({ id, label, field, value, onChange, refs, 
           />
         );
       })}
-      {gone.map((p) => <Checkbox key={p} label="No longer in the organisation profile" checked disabled={readOnly} onChange={() => onChange(toggleId(picked, p, false))} />)}
-      {!readOnly && <p className="pt-[4px] text-ds-label text-ds-fg-muted"><Link href={`/compliance/organisation?stage=${STAGE_OF[of]}`} className={LINK}>Edit the list in the organisation profile</Link></p>}
+      {gone.map((p) => <Checkbox key={p} label="No longer in the list" checked disabled={readOnly} onChange={() => onChange(toggleId(picked, p, false))} />)}
+      {!readOnly && <p className="pt-[4px] text-ds-label text-ds-fg-muted"><Link href={`/admin?tab=profile&stage=${STAGE_OF[of]}`} className={LINK}>Edit the list in Administration</Link></p>}
     </div>
   );
 }

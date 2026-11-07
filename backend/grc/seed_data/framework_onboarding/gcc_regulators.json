@@ -15,12 +15,6 @@
     {"slug": "nca_otcc", "label": "NCA Operational Technology Controls", "not_in_library": true},
     {"slug": "nca_tcc", "label": "NCA Telework Cybersecurity Controls", "not_in_library": true}
   ],
-  "requires_org": [
-    {"field": "regulators_obligations.regulators", "reason": "The regulator, its reference and the date the regime became binding are taken from the profile."},
-    {"field": "risk_people.cyber_reporting_line", "reason": "Independence of the cyber function is judged from the line it reports on."},
-    {"field": "data_systems.third_parties", "applies_to": ["sama_csf", "qcb_technology_risks", "nca_ccc"], "reason": "Outsourcing and cloud approvals work from the list of providers."},
-    {"field": "data_systems.classification_scheme", "applies_to": ["sama_csf", "qcb_technology_risks"], "reason": "SAMA and QCB start from the organisation's data classification levels."}
-  ],
   "steps": [
     {
       "key": "applicability", "label": "Applicability",

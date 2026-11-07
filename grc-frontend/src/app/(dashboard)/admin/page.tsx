@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Building2, Users as UsersIcon, ShieldCheck, ScrollText, Bot, GitPullRequest, KeyRound, Lock, Cloud, UsersRound, Plug, PlugZap } from 'lucide-react';
+import { Building2, ClipboardList, Users as UsersIcon, ShieldCheck, ScrollText, Bot, GitPullRequest, KeyRound, Lock, Cloud, UsersRound, Plug, PlugZap } from 'lucide-react';
 import OrganizationProfilePage from './organization/page';
+import OrganisationProfile from '@/components/compliance/onboarding/profile/OrganisationProfile';
 import UsersManagementPage from './users/page';
 import RolesManagementPage from './roles/page';
 import DepartmentsAdminPage from './departments/page';
@@ -16,10 +17,10 @@ import IntegrationsConnectionsPage from '../integrations/connections/page';
 import WorkflowEnginePage from '../workflow-engine/page';
 import { IdentityProvidersCard } from '@/components/integrations/IdentityProvidersCard';
 
-type AdminTab = 'company' | 'users' | 'roles' | 'departments' | 'password-policy' | 'integrations' | 'cloud-connectors' | 'connectors' | 'evidence-collectors' | 'identity' | 'workflow' | 'audit';
+type AdminTab = 'company' | 'profile' | 'users' | 'roles' | 'departments' | 'password-policy' | 'integrations' | 'cloud-connectors' | 'connectors' | 'evidence-collectors' | 'identity' | 'workflow' | 'audit';
 
 const VALID_ADMIN_TABS = new Set<AdminTab>([
-  'company','users','roles','departments','password-policy','integrations',
+  'company','profile','users','roles','departments','password-policy','integrations',
   'cloud-connectors','connectors','evidence-collectors','identity','workflow','audit',
 ]);
 
@@ -46,6 +47,8 @@ export default function AdminPage() {
 
   const adminTabs: { id: AdminTab; label: string; icon: typeof Building2 }[] = [
     { id: 'company', label: 'Company', icon: Building2 },
+    // The general organisation profile (entities, regulators, data and systems, risk and people): optional, reused by every framework's onboarding.
+    { id: 'profile', label: 'Organisation Profile', icon: ClipboardList },
     { id: 'users', label: 'User Management', icon: UsersIcon },
     { id: 'roles', label: 'Role Management', icon: ShieldCheck },
     // Org departments — the one list the document, sign-off, asset, assessment and risk pickers read.
@@ -91,6 +94,7 @@ export default function AdminPage() {
 
       <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-4 sm:space-y-6">
         {activeTab === 'company' && <OrganizationProfilePage />}
+        {activeTab === 'profile' && <OrganisationProfile />}
         {activeTab === 'users' && <UsersManagementPage />}
         {activeTab === 'roles' && <RolesManagementPage />}
         {activeTab === 'departments' && <DepartmentsAdminPage />}

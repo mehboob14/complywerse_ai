@@ -28,11 +28,11 @@ function Item({ item, stage, tone, onJump }: { item: Needed; stage: string; tone
 export default function StillNeeded({ groups, required, advice, onJump }: { groups: readonly Pick<Group, 'key' | 'label'>[]; required: Needed[]; advice: Needed[]; onJump: (item: Needed) => void }) {
   const stage = (key: string) => groups.find((g) => g.key === key)?.label ?? '';
   return (
-    <SectionCard id="needed" title="Still needed" meta={required.length > 0 ? `${required.length} required` : undefined} info="Every framework's onboarding reads this profile. The required items must be filled before a framework can be approved; advised items make the answers more useful to an auditor.">
+    <SectionCard id="needed" title="Not filled yet" meta={required.length > 0 ? `${required.length} key` : undefined} info="Nothing here holds a framework back. The key items are the ones frameworks use most; the rest is extra detail.">
       {required.length === 0 && (
-        <p className="flex items-center gap-[8px] text-ds-body text-ds-fg-body"><Check aria-hidden className="h-[14px] w-[14px] shrink-0 text-ds-success" strokeWidth={2} />Everything required is filled</p>
+        <p className="flex items-center gap-[8px] text-ds-body text-ds-fg-body"><Check aria-hidden className="h-[14px] w-[14px] shrink-0 text-ds-success" strokeWidth={2} />Every key item is filled</p>
       )}
-      {required.length > 0 && <ul className="space-y-[4px]" aria-label="Required">{required.map((n) => <Item key={n.key} item={n} stage={stage(n.stage)} tone="required" onJump={onJump} />)}</ul>}
+      {required.length > 0 && <ul className="space-y-[4px]" aria-label="Key items">{required.map((n) => <Item key={n.key} item={n} stage={stage(n.stage)} tone="required" onJump={onJump} />)}</ul>}
       {advice.length > 0 && (
         <details className="group mt-[12px] border-t border-ds-border pt-[8px]">
           <summary className="flex cursor-pointer list-none items-center gap-[4px] rounded-ds-control text-ds-body font-medium text-ds-fg-body focus-visible:outline-none focus-visible:shadow-ds-ring [&::-webkit-details-marker]:hidden">

@@ -7,11 +7,6 @@
     {"slug": "pci_dss", "label": "PCI DSS v4.0.1", "flow_id": "pcidss"},
     {"slug": "swift_cscf", "label": "SWIFT CSCF", "flow_id": "swift"}
   ],
-  "requires_org": [
-    {"field": "data_systems.data_types", "reason": "Payment card data (or SWIFT messages) must be listed with where it lives."},
-    {"field": "data_systems.third_parties", "reason": "Payment third parties and service bureaus are part of the scope."},
-    {"field": "data_systems.data_flows", "reason": "Account data flows are the basis of PCI scope."}
-  ],
   "steps": [
     {
       "key": "validation", "label": "Level and route",

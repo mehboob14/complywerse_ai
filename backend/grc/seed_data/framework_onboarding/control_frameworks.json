@@ -11,11 +11,6 @@
     {"slug": "cis_controls", "label": "CIS Controls v8", "flow_id": "cisv8"},
     {"slug": "cobit", "label": "COBIT 2019", "flow_id": "cobit2019"}
   ],
-  "requires_org": [
-    {"field": "data_systems.key_systems", "reason": "The scope is drawn around systems."},
-    {"field": "data_systems.asset_inventory", "reason": "CIS Control 1 is the asset inventory, and CMMC asset categorisation needs one."},
-    {"field": "risk_people.risk_appetite", "reason": "Priorities and targets follow the board's risk tolerance."}
-  ],
   "steps": [
     {
       "key": "scope", "label": "Purpose and scope",
@@ -38,7 +33,7 @@
         {"key": "tier_management", "label": "Management tier", "type": "choice", "level": "advised", "applies_to": ["nist_csf"], "options": ["Not using Tiers", "Partial (Tier 1)", "Risk Informed (Tier 2)", "Repeatable (Tier 3)", "Adaptive (Tier 4)"], "note": "Target tier for risk management."},
         {"key": "community_profile", "label": "Community profile", "type": "text", "level": "advised", "applies_to": ["nist_csf"], "note": "A sector or use-case baseline to start from. Leave empty if there is none."},
         {"key": "rating_scale", "label": "Rating scale", "type": "choice", "level": "required", "applies_to": ["nist_csf"], "options": ["Low, medium, high", "1 to 5", "Red, yellow, green"], "note": "Scale for current and target ratings and for priority. Fix it before rating."},
-        {"key": "requirements_ok", "label": "Requirements listed", "type": "bool", "level": "advised", "applies_to": ["nist_csf"], "note": "Legal, regulatory and contractual requirements were reviewed in the organisation profile (GV.OC-03)."},
+        {"key": "requirements_ok", "label": "Requirements listed", "type": "bool", "level": "advised", "applies_to": ["nist_csf"], "note": "Legal, regulatory and contractual requirements were reviewed (GV.OC-03)."},
         {"key": "system_name", "label": "System name", "type": "text", "level": "required", "applies_to": ["nist_800_53"], "source": {"ref": "NIST RMF (SP 800-37 Rev 2): prepare, categorize, select; FIPS 199; SP 800-53B baselines; roles crosswalk", "asked_by": "authorizing official", "confidence": "verified", "urls": ["https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-37r2.pdf", "https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.199.pdf", "https://csrc.nist.gov/projects/risk-management/about-rmf"]}, "note": "The system the authorization is for. The boundary is drawn per system."},
         {"key": "boundary", "label": "Authorization boundary", "type": "longtext", "level": "required", "applies_to": ["nist_800_53"], "note": "What is inside the boundary, with its connections and support systems. A boundary drawn around the product but not its supporting systems is the usual mistake."},
         {"key": "info_types", "label": "Information types", "type": "table", "level": "advised", "min_rows": 1, "applies_to": ["nist_800_53"], "note": "Information types processed, each with an impact level for confidentiality, integrity and availability (FIPS 199). The system level is the highest of them.", "columns": [{"key": "type", "label": "Type", "type": "text", "required": true}, {"key": "confidentiality", "label": "Confidentiality", "type": "choice", "options": ["Low", "Moderate", "High", "Not applicable"], "required": true}, {"key": "integrity", "label": "Integrity", "type": "choice", "options": ["Low", "Moderate", "High"], "required": true}, {"key": "availability", "label": "Availability", "type": "choice", "options": ["Low", "Moderate", "High"], "required": true}]},
@@ -95,7 +90,7 @@
     {"key": "cui_ssp", "label": "A system security plan exists", "level": "advised", "applies_to": ["nist_800_171"], "check": {"type": "not_equals", "field": "csf.ssp", "value": "Not started"}, "hint": "Start the plan before any self-score."},
     {"key": "cui_assets", "label": "Assets are split into the five categories", "level": "advised", "applies_to": ["nist_800_171"], "check": {"type": "true", "field": "csf.asset_categories"}, "hint": "Inventory by category before scoring."},
     {"key": "ai_inventory_rows", "label": "At least one AI system is listed", "level": "advised", "applies_to": ["nist_airmf"], "check": {"type": "count_at_least", "field": "csf.ai_inventory", "n": 1}, "hint": "List AI systems before mapping them."},
-    {"key": "csf_requirements", "label": "Requirements were reviewed", "level": "advised", "applies_to": ["nist_csf"], "check": {"type": "true", "field": "csf.requirements_ok"}, "hint": "Review obligations in the organisation profile first."},
+    {"key": "csf_requirements", "label": "Requirements were reviewed", "level": "advised", "applies_to": ["nist_csf"], "check": {"type": "true", "field": "csf.requirements_ok"}, "hint": "Review the legal, regulatory and contractual requirements first."},
     {"key": "scope_owner_approver", "label": "Scope owner and approver are different people", "level": "advised", "check": {"type": "distinct", "fields": ["scope.owner", "scope.approver"]}, "hint": "Someone other than the owner approves the scope."}
   ]
 }

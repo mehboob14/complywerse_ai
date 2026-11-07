@@ -2,7 +2,7 @@
 its validator, and the resolver that turns a framework slug into its steps.
 
 The catalog is data, not code (plan D9): ``seed_data/framework_onboarding/*.json``.
-Field references are ``step.field`` inside a family and ``org.group.field`` for the profile.
+Field references are ``step.field`` inside a family and ``org.group.field`` for the profile (a ``when`` or a prefill may read it; nothing requires it).
 Nothing here touches a database.
 """
 from __future__ import annotations
@@ -150,7 +150,7 @@ def resolve(slug: Optional[str]) -> Dict[str, Any]:
         "slug": slug, "family": entry["family"], "family_label": fam.get("label"), "summary": fam.get("summary"),
         "label": entry.get("label"), "flow_id": entry.get("flow_id"), "not_in_library": bool(entry.get("not_in_library")),
         "version": fam.get("version", 1),
-        "requires_org": [r for r in fam.get("requires_org") or [] if _applies(r, s)],
+        "requires_org": [],               # kept in the answer, empty: the profile gates nothing (a framework asks its own questions)
         "steps": steps,
         "gate": [copy.deepcopy(g) for g in fam.get("gate") or [] if _applies(g, s)],
     }
@@ -455,11 +455,6 @@ def validate(flow_ids: Optional[Set[str]] = None) -> List[str]:
                         errs.append(f"{loc}: prefill_from {f['prefill_from']!r} not found")
                     elif tgt.get("type") != f.get("type"):
                         errs.append(f"{loc}: prefill_from type {tgt.get('type')} differs from {f.get('type')}")
-        for r in fam.get("requires_org", []):
-            if r.get("field") not in org_idx:
-                errs.append(f"{fw}: requires_org {r.get('field')!r} is not a profile field")
-            if not str(r.get("reason") or "").strip():
-                errs.append(f"{fw}: requires_org {r.get('field')} has no reason")
         gkeys2: Set[str] = set()
         for g in fam.get("gate", []):
             if g.get("key") in gkeys2:

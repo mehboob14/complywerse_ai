@@ -19,7 +19,7 @@ from . import ai, catalog, gate, profile, service
 
 router = APIRouter(prefix="/compliance", tags=["Framework Onboarding"])
 
-EDIT_PROFILE = require_tenant_permission("compliance:org_profile:edit", "compliance:frameworks:edit")
+EDIT_PROFILE = require_tenant_permission("compliance:org_profile:edit", "compliance:frameworks:edit", "admin:organization:edit")   # it lives in Administration
 EDIT_ONBOARDING = require_tenant_permission("compliance:framework_onboarding:edit", "compliance:frameworks:edit")
 APPROVE = require_tenant_permission("compliance:framework_onboarding:approve")
 OVERRIDE = require_tenant_permission("compliance:framework_onboarding:override")

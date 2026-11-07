@@ -1,9 +1,8 @@
 """The pure rules of framework onboarding: normalise a saved value, say whether a field is filled, evaluate readiness.
 
 No database here (the caller passes what must exist as ``Known``). A field is *answered* (a yes/no question has an answer, even "no")
-or has a *value* (a tick that says "none" counts only when ticked). Readiness follows the plan, section 4:
-(a) the organisation profile is complete for what the framework needs, (b) every required field of every applicable step is filled,
-(c) the family's gate checks hold, (d) a recorded approval (the service adds this one). Advised items advise and never block.
+or has a *value* (a tick that says "none" counts only when ticked). Readiness: (a) every required field of every applicable step is filled, (b) the family's gate checks hold, (c) a recorded approval (the
+service adds this one). Advised items advise and never block. The organisation profile (Administration) is general and gates nothing.
 """
 from __future__ import annotations
 
@@ -399,17 +398,18 @@ def evaluate_org(org_values: Dict[str, Any], reviewed: Optional[Dict[str, Any]] 
     return {"complete": complete, "groups": groups, "checks": checks, "missing": missing}
 
 
-def evaluate(resolved: Dict[str, Any], answers: Dict[str, Any], org_values: Dict[str, Any],
-             org_eval: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """Readiness of ONE framework's onboarding: ``{ready, checks, org_checks, steps, counts}``."""
-    org_eval = org_eval or evaluate_org(org_values)
+def evaluate(resolved: Dict[str, Any], answers: Dict[str, Any], org_values: Dict[str, Any]) -> Dict[str, Any]:
+    """Readiness of ONE framework's onboarding: ``{ready, checks, org_checks, steps, hidden, counts}``.
+
+    Only this framework's own required answers and its gate checks decide ``ready``. The organisation profile gates nothing: a person who
+    needs one of its lists (sites, systems, third parties) in a pick is sent to it; ``org_values`` only feeds the ``when`` of a question and the
+    prefill. ``org_checks`` stays in the answer, empty, so nothing that read it breaks."""
     org_fields = catalog.profile_fields()
     fam_fields: Dict[str, Dict[str, Any]] = {}
     for st in resolved["steps"]:
         for f in st["fields"]:
             fam_fields[f"{st['key']}.{f['key']}"] = f
     look = make_lookup(fam_fields, answers, org_fields, org_values)
-    # the visibility of a family field may depend on a profile field (org.x.y): profile fields are always shown here
     visible = make_visible({**fam_fields}, look)
 
     checks: List[Dict[str, Any]] = []
@@ -431,30 +431,16 @@ def evaluate(resolved: Dict[str, Any], answers: Dict[str, Any], org_values: Dict
             elif f["level"] == "advised" and not good:
                 checks.append({"key": ref, "label": f["label"], "ok": False, "required": False, "hint": f.get("note"), "step": st["key"], "kind": "field"})
         steps.append({"key": st["key"], "label": st["label"], "required_total": req, "required_ok": ok_n, "complete": ok_n == req})
+    step_keys = {s["key"] for s in resolved["steps"]}
     for g in resolved["gate"]:
         if g.get("when") and not condition(g["when"], look, visible):
             continue
         ok, _ = _check(g["check"], look)
-        checks.append(_gate_entry(g, ok, _gate_step(g["check"], {s["key"] for s in resolved["steps"]})))
+        checks.append(_gate_entry(g, ok, _gate_step(g["check"], step_keys)))
 
-    org_checks: List[Dict[str, Any]] = []
-    for key, grp in org_eval["groups"].items():
-        if grp["required_total"]:
-            org_checks.append({"key": f"org.{key}", "label": grp["label"], "ok": grp["complete"], "required": True, "kind": "org",
-                               "hint": None if grp["complete"] else f"{grp['required_total'] - grp['required_ok']} required items are open in the organisation profile."})
-    org_checks.extend({**c, "kind": "org"} for c in org_eval["checks"] if c["required"] or not c["ok"])
-    org_look = make_lookup({}, {}, org_fields, org_values, bare_is_org=True)
-    org_visible = make_visible(org_fields, org_look)
-    for r in resolved.get("requires_org") or []:
-        fdef = org_fields.get(r["field"])
-        v = (org_values.get(r["field"].split(".")[0]) or {}).get(r["field"].split(".")[1])
-        # a list the organisation declared "none" for (the tick hides it) is a complete answer
-        good = bool(fdef) and (not org_visible(r["field"]) or (answered(fdef, v) if fdef["type"] not in ("departments_derived",) else bool(v)))
-        org_checks.append({"key": f"org.need.{r['field']}", "label": fdef["label"] if fdef else r["field"], "ok": good, "required": True,
-                           "hint": r.get("reason"), "kind": "org"})
-    required = [c for c in checks + org_checks if c["required"]]
+    required = [c for c in checks if c["required"]]
     return {
-        "ready": all(c["ok"] for c in required), "checks": checks, "org_checks": org_checks, "steps": steps, "hidden": hidden,
+        "ready": all(c["ok"] for c in required), "checks": checks, "org_checks": [], "steps": steps, "hidden": hidden,
         "counts": {"required_total": len(required), "required_ok": sum(1 for c in required if c["ok"]),
                    "advised_open": sum(1 for c in checks if not c["required"] and not c["ok"])},
     }

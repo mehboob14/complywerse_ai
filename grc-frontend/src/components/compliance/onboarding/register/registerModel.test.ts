@@ -1,7 +1,7 @@
 // node --test "src/components/compliance/onboarding/register/registerModel.test.ts"
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { actionOf, countsOf, familiesOf, filterRows, journeyWords, knownFamily, orgStages, progressPercent, progressWords, sortValue, startRefusalWords, underwayWords, workspaceHref } from './registerModel.ts';
+import { actionOf, countsOf, familiesOf, filterRows, journeyWords, knownFamily, progressPercent, progressWords, sortValue, startRefusalWords, underwayWords, workspaceHref } from './registerModel.ts';
 
 const row = (over: Record<string, unknown>) => ({
   uploaded_framework_id: 1, name: 'ISO/IEC 27001:2022', version: '2022', slug: 'iso_27001', family: 'iso_management', family_label: 'ISO management systems', label: 'ISO 27001',
@@ -55,12 +55,6 @@ test('columns sort by state order, name and progress', () => {
   assert.equal(sortValue(rows[0], 'name'), 'iso 27001');
   assert.equal(sortValue(rows[0], 'progress'), null);
   assert.equal(sortValue(rows[1], 'progress'), 40);
-});
-
-test('the profile stages keep the server order and say how far each is', () => {
-  const stages = orgStages({ entities_sites: { label: 'Entities and sites', required_total: 5, required_ok: 3, advised_open: 1, complete: false, reviewed: false }, risk_people: { label: 'Risk and people', required_total: 2, required_ok: 2, advised_open: 0, complete: true, reviewed: true } });
-  assert.deepEqual(stages.map((s) => [s.label, s.done, s.total, s.complete]), [['Entities and sites', 3, 5, false], ['Risk and people', 2, 2, true]]);
-  assert.deepEqual(orgStages(undefined), []);
 });
 
 test('a refused start says who can do it, and a 404 says the framework is gone', () => {
