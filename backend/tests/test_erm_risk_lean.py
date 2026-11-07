@@ -23,7 +23,7 @@ LEAN_KEYS = {
     "id", "tenant_id", "title", "description_preview", "category", "risk_category", "risk_sub_category", "register_type", "source_type", "status",
     "priority", "effective_priority", "closure_status", "is_material", "inherent_likelihood", "inherent_impact", "inherent_score",
     "residual_likelihood", "residual_impact", "residual_score", "owner_id", "owner_name", "business_owner_id", "business_owner_name",
-    "business_unit_id", "business_unit_name", "due_date", "review_date", "has_plan", "sla", "framework_ids", "actions_total", "actions_open",
+    "business_unit_id", "business_unit_name", "due_date", "review_date", "has_plan", "sla", "framework_ids", "in_assessment", "actions_total", "actions_open",
     "created_at", "updated_at",
 }
 NEW_DETAIL_KEYS = {"priority", "effective_priority", "sla", "root_cause", "consequences", "recommendations", "business_owner_id", "business_owner_name",

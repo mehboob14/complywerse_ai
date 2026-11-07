@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import case, func
 from sqlalchemy.orm import Session, aliased
 
-from ...models import (BusinessUnit, GRCUser, Risk, RiskFrameworkRequirementLink, RiskMitigationAction, UploadedFramework)
+from ...models import (BusinessUnit, GRCUser, Risk, RiskAssessmentRisk, RiskFrameworkRequirementLink, RiskMitigationAction, UploadedFramework)
 
 # the most rows one lean request returns (a larger ``limit`` is clamped and the envelope echoes the clamped value)
 LEAN_LIMIT = 10_000
@@ -76,6 +76,7 @@ def list_lean(db: Session, query, total: int, skip: int, limit: int) -> JSONResp
     frameworks_of: Dict[int, List[int]] = {}
     names: Dict[str, Dict[str, str]] = {}
     actions: Dict[int, List[int]] = {}
+    assessed: set = set()
     for chunk in chunks(ids):
         L = RiskFrameworkRequirementLink
         for rid, fid in db.query(L.risk_id, L.uploaded_framework_id).filter(L.risk_id.in_(chunk)).distinct().order_by(L.risk_id, L.uploaded_framework_id):
@@ -84,6 +85,7 @@ def list_lean(db: Session, query, total: int, skip: int, limit: int) -> JSONResp
         for rid, total_n, open_n in (db.query(A.risk_id, func.count(A.id), func.sum(case((A.status.in_(_OPEN_ACTION), 1), else_=0)))
                                      .filter(A.risk_id.in_(chunk)).group_by(A.risk_id)):
             actions[rid] = [int(total_n or 0), int(open_n or 0)]
+        assessed.update(rid for (rid,) in db.query(RiskAssessmentRisk.risk_id).filter(RiskAssessmentRisk.risk_id.in_(chunk)).distinct())
     fw_ids = sorted({f for fs in frameworks_of.values() for f in fs})
     for chunk in chunks(fw_ids):
         for fid, name in db.query(UploadedFramework.id, UploadedFramework.name).filter(UploadedFramework.id.in_(chunk)):
@@ -104,7 +106,7 @@ def list_lean(db: Session, query, total: int, skip: int, limit: int) -> JSONResp
             "business_unit_id": r.business_unit_id, "business_unit_name": r.business_unit_name,
             "due_date": _iso(r.due_date), "review_date": _iso(r.review_date), "has_plan": bool(r.has_plan),
             "sla": {"state": s.get("state"), "days_overdue": s.get("days_overdue"), "due_in_days": s.get("due_in_days"), "due_date": s.get("due_date")},
-            "framework_ids": frameworks_of.get(r.id, []),
+            "framework_ids": frameworks_of.get(r.id, []), "in_assessment": r.id in assessed,
             "actions_total": (actions.get(r.id) or [0, 0])[0], "actions_open": (actions.get(r.id) or [0, 0])[1],
             "created_at": _iso(r.created_at), "updated_at": _iso(r.updated_at),
         })
