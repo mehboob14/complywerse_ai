@@ -70,6 +70,10 @@ def http(db):
 
     app.dependency_overrides[get_db] = lambda: db
     app.dependency_overrides[require_auth] = lambda: db.get(m.GRCUser, 7)
+    # the IT asset API asks the whole router for assets:asset_inventory:view (a QA fix of the cyber line); this file tests the assessment hub's own read of the library
+    from grc.routers.assets_router import router as assets_router
+    for gate in assets_router.dependencies:
+        app.dependency_overrides[gate.dependency] = lambda: True
     try:
         yield TestClient(app)
     finally:
