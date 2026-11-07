@@ -255,8 +255,7 @@ export function RiskRegister() {
   // ── rows, handlers ──
   const hrefOf = (id: number) => `/erm/risks/${id}`;
   const openRisk = (id: number, tab?: string) => router.push(tab ? `${hrefOf(id)}?tab=${tab}` : hrefOf(id));
-  const [compact] = useState(false);
-  const env: RowEnv = { now, reviews: reviewsQ.index, compact, hrefOf, onPeek: setOpenId, onOpen: openRisk, canEdit, canDelete, onEdit: (r) => { void openEdit(r); }, onDelete: (r) => { void askDelete(r); } };
+  const env: RowEnv = { now, reviews: reviewsQ.index, compact: false, hrefOf, onPeek: setOpenId, onOpen: openRisk, canEdit, canDelete, onEdit: (r) => { void openEdit(r); }, onDelete: (r) => { void askDelete(r); } };
   const columns = useMemo(() => riskColumns(env), [env.now, env.reviews, env.canEdit, env.canDelete]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const items: RecordItem<RiskRow>[] = useMemo(() => pageRows.map((record) => ({ kind: 'row' as const, id: record.id, record, depth: 0 })), [pageRows]);

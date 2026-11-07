@@ -99,7 +99,7 @@ export default function ReviewsPage() {
       cell: (r) => <Link href={`/erm/risks/${r.risk_id}`} title={r.risk_title || undefined} className="line-clamp-2 break-words text-ds-body font-[600] text-ds-fg [overflow-wrap:anywhere] hover:text-ds-primary-text hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring">{r.risk_title || 'A risk that was deleted'}</Link>,
     },
     {
-      key: 'status', header: 'Status', sortable: true, width: 'w-[160px]',
+      key: 'status', header: 'Status', sortable: true, width: 'w-[200px]',
       cell: (r) => (
         <span className="inline-flex flex-wrap items-center gap-[6px]">
           <StatusPill size="sm" {...statusPill(riskReviewStatus, r.status)} />
