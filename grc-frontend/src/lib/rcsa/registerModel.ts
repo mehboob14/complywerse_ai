@@ -223,6 +223,13 @@ export function isForbidden(error: unknown): boolean {
   return (error as { response?: { status?: number } } | null)?.response?.status === 403;
 }
 
+/** React Query's `retry`: a request the server refused (400 to 499: no access, not found) will be refused again, so the error is shown at once; anything else is tried twice more. */
+export function retryUnlessRefused(failures: number, error: unknown): boolean {
+  const status = (error as { response?: { status?: number } } | null)?.response?.status;
+  if (typeof status === 'number' && status >= 400 && status < 500) return false;
+  return failures < 2;
+}
+
 export function evidenceText(n: number | null | undefined): string {
   const c = n ?? 0;
   return c === 0 ? 'None' : c === 1 ? '1 file' : `${c} files`;

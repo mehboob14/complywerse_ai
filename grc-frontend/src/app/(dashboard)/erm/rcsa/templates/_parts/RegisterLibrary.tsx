@@ -15,7 +15,7 @@ import { errorMessage } from '@/components/ui/ds/reportOutcome';
 import { formatCount, formatDate, truncate } from '@/lib/format';
 import { csvName, toCsv } from '@/lib/rcsa/csv';
 import { saveBlob } from '@/lib/rcsa/saveBlob';
-import { isForbidden, levelWord, scoreText } from '@/lib/rcsa/registerModel';
+import { isForbidden, levelWord, retryUnlessRefused, scoreText } from '@/lib/rcsa/registerModel';
 import { plural } from '@/lib/rcsa/templatesModel';
 import { statusPill } from '@/lib/status';
 import { registerLevel } from '@/lib/statuses/rcsa';
@@ -97,20 +97,20 @@ const card = (row: RecordRow<Register>) => (
 const SHOWN = 5;
 
 function AssignedToMe() {
-  const q = useQuery({ queryKey: [...KEYS.registers, 'assigned'], queryFn: async () => (await rcsaApi.customTemplates.listMyAssignments()).data as Assigned[] });
+  const q = useQuery({ queryKey: [...KEYS.registers, 'assigned'], retry: retryUnlessRefused, queryFn: async () => (await rcsaApi.customTemplates.listMyAssignments()).data as Assigned[] });
   const [all, setAll] = useState(false);
   if (q.isError && isForbidden(q.error)) return null;
   const items = q.data ?? [];
   const shown = all ? items : items.slice(0, SHOWN);
+  // nothing assigned is the usual answer: one quiet line, not a card
+  if (q.isSuccess && items.length === 0) return <p className="rounded-ds-card border border-ds-border bg-ds-surface px-[16px] py-[10px] text-ds-body text-ds-fg-muted">Assigned to me: nothing is assigned to you.</p>;
   return (
     <SectionCard id="assigned-to-me" title="Assigned to me" meta={q.data ? plural(items.length, 'item') : undefined} info="Register items the risk team gave you to update. Open one to change its fields, add evidence or ask for an AI explanation.">
       {q.isLoading ? (
         <SkeletonRows rows={2} columns={3} label="Loading your items" />
       ) : q.isError ? (
         <ErrorState compact title="Couldn't load your items" message={errorMessage(q.error)} onRetry={() => { void q.refetch(); }} />
-      ) : items.length === 0 ? (
-        <p className="text-ds-body text-ds-fg-muted">Nothing is assigned to you.</p>
-      ) : (
+      ) : items.length === 0 ? null : (
         <>
           <ul className="m-0 flex list-none flex-col p-0">
             {shown.map((a) => {
@@ -145,7 +145,7 @@ export function RegisterLibrary({ head }: { head: RenderHead }) {
   const router = useRouter();
   const { manage } = useRcsaRights();
   const { confirm, confirmDialog } = useConfirm();
-  const list = useQuery({ queryKey: KEYS.registers, queryFn: async () => (await rcsaApi.customTemplates.list(false)).data as Register[] });
+  const list = useQuery({ queryKey: KEYS.registers, retry: retryUnlessRefused, queryFn: async () => (await rcsaApi.customTemplates.list(false)).data as Register[] });
   const rows = useMemo(() => list.data ?? [], [list.data]);
   const [uploading, setUploading] = useState(false);
 

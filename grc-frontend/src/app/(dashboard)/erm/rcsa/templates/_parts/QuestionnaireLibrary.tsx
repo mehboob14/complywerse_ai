@@ -8,12 +8,13 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowUpRight, Copy, Download, Eye, FileUp, Plus, Trash2 } from 'lucide-react';
-import { Button, ClampedText, EmptyState, Fact, FactList, Menu, Notice, SidePanel, StatusPill, TitleLink, useConfirm, useReportedMutation, type MenuItem } from '@/components/ui/ds';
+import { Button, ClampedText, EmptyState, Fact, FactList, Menu, NoAccessState, Notice, SidePanel, StatusPill, TitleLink, useConfirm, useReportedMutation, type MenuItem } from '@/components/ui/ds';
 import type { RecordColumn, RecordRow } from '@/components/records/RecordTable';
 import { rcsaApi } from '@/lib/api';
 import { errorMessage } from '@/components/ui/ds/reportOutcome';
 import { formatCount, formatDate, truncate } from '@/lib/format';
 import { csvName, toCsv } from '@/lib/rcsa/csv';
+import { isForbidden, retryUnlessRefused } from '@/lib/rcsa/registerModel';
 import { saveBlob } from '@/lib/rcsa/saveBlob';
 import { deleteBlock, inUseText, plural, templateFileName, whoOf } from '@/lib/rcsa/templatesModel';
 import { RcsaExplorer, type ExplorerFacet, type ExplorerQuick, type ExplorerSort } from '../../_parts/RcsaExplorer';
@@ -99,7 +100,7 @@ export function QuestionnaireLibrary({ head }: { head: RenderHead }) {
   const router = useRouter();
   const { manage } = useRcsaRights();
   const { confirm, confirmDialog } = useConfirm();
-  const list = useQuery({ queryKey: KEYS.templates, queryFn: () => fetchAll<Tpl>('/erm/rcsa/templates') });
+  const list = useQuery({ queryKey: KEYS.templates, retry: retryUnlessRefused, queryFn: () => fetchAll<Tpl>('/erm/rcsa/templates') });
   const rows = useMemo(() => list.data ?? [], [list.data]);
   const [making, setMaking] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -131,6 +132,15 @@ export function QuestionnaireLibrary({ head }: { head: RenderHead }) {
     });
     if (ok) remove.mutate(t);
   };
+
+  if (list.isError && isForbidden(list.error)) {
+    return (
+      <div className="flex min-w-0 flex-col gap-[12px]">
+        {head({ fit: { rail: true, list: null, compact: false, tight: false } })}
+        <NoAccessState title="You don't have access to the questionnaires" reason="Ask your administrator to give you access to RCSA." />
+      </div>
+    );
+  }
 
   const menu = (t: Tpl) => {
     const block = deleteBlock(t);

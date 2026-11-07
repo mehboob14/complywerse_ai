@@ -37,7 +37,7 @@ function QuestionRow({ draft, q, number, editable, actions }: { draft: Draft; q:
       <span aria-hidden className="w-[28px] shrink-0 pt-[2px] text-right text-ds-body tabular-nums text-ds-fg-muted">{number}</span>
       <div className="min-w-0 flex-1 basis-[14rem]">
         {editable ? (
-          <button type="button" onClick={() => actions.onEdit(q)} className="block w-full min-w-0 rounded-ds-control py-[1px] text-left text-ds-body text-ds-fg [overflow-wrap:anywhere] hover:text-ds-primary-text focus-visible:outline-none focus-visible:shadow-ds-ring" aria-label={`Edit question ${number}: ${short}`}>
+          <button type="button" onClick={() => actions.onEdit(q)} className="block min-h-ds-control w-full min-w-0 rounded-ds-control py-[1px] text-left text-ds-body text-ds-fg [overflow-wrap:anywhere] hover:text-ds-primary-text focus-visible:outline-none focus-visible:shadow-ds-ring" aria-label={`Edit question ${number}: ${short}`}>
             <span dir="auto" className="line-clamp-2">{q.text.trim() || 'Untitled question'}</span>
           </button>
         ) : (

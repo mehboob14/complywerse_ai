@@ -25,8 +25,7 @@ export function FilePicker({ file, onChange, accept, disabled = false }: { file:
       />
       {file && (
         <div className="flex min-w-0 items-center gap-[8px] text-ds-label text-ds-fg-muted">
-          <span className="min-w-0 truncate" title={file.name}>{file.name}</span>
-          <span className="shrink-0">{sizeText(file.size)}</span>
+          <span className="min-w-0 truncate">{`${sizeText(file.size)} chosen`}</span>
           <IconButton label="Remove the chosen file" onClick={() => { onChange(null); if (input.current) input.current.value = ''; }}><X aria-hidden /></IconButton>
         </div>
       )}

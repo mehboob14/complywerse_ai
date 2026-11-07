@@ -12,7 +12,7 @@ import { Button, ErrorState, NoAccessState, Notice, Skeleton, SkeletonRows, useR
 import { errorMessage } from '@/components/ui/ds/reportOutcome';
 import { rcsaApi } from '@/lib/api';
 import { formatCount } from '@/lib/format';
-import { exportFileName, flatColumns, isForbidden, safeFileName, type ColumnSchema } from '@/lib/rcsa/registerModel';
+import { exportFileName, flatColumns, isForbidden, retryUnlessRefused, safeFileName, type ColumnSchema } from '@/lib/rcsa/registerModel';
 import { saveBlob } from '@/lib/rcsa/saveBlob';
 import { plural } from '@/lib/rcsa/templatesModel';
 import { KEYS } from '../../_parts/rcsaData';
@@ -40,8 +40,8 @@ function Workspace() {
   const { edit } = useRegisterRights();
   const [adding, setAdding] = useState(false);
   const [addNonce, setAddNonce] = useState(0);
-  const reg = useQuery({ queryKey: KEYS.register(id), enabled: id > 0, queryFn: async () => (await rcsaApi.customTemplates.get(id)).data as Register });
-  const items = useQuery({ queryKey: KEYS.rows(id), enabled: id > 0 && reg.isSuccess, queryFn: () => fetchItems(id) });
+  const reg = useQuery({ queryKey: KEYS.register(id), enabled: id > 0, retry: retryUnlessRefused, queryFn: async () => (await rcsaApi.customTemplates.get(id)).data as Register });
+  const items = useQuery({ queryKey: KEYS.rows(id), enabled: id > 0 && reg.isSuccess, retry: retryUnlessRefused, queryFn: () => fetchItems(id) });
 
   const original = useReportedMutation({
     mutationFn: async () => { const r = await rcsaApi.customTemplates.download(id); saveBlob(r.data as Blob, safeFileName(reg.data?.original_filename ?? '', 'register.xlsx')); },

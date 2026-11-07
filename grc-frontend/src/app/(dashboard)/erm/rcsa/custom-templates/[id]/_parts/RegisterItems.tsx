@@ -59,7 +59,7 @@ function columnsFor(keys: KeyColumns): RecordColumn<RegisterRow>[] {
     { key: 'inherent', header: 'Inherent', sortKey: 'inherent', firstDir: 'desc', fit: { px: 140, dropRank: 4 }, cell: (row) => <Level name="Inherent" text={row.record.inherent_overall_label} score={row.record.inherent_overall_score} /> },
     { key: 'residual', header: 'Residual', sortKey: 'residual', firstDir: 'desc', fit: { px: 140 }, cell: (row) => <Level name="Residual" text={row.record.residual_overall_label} score={row.record.residual_overall_score} /> },
     {
-      key: 'owner', header: 'Owner', sortKey: 'owner', fit: { px: 68, dropRank: 6, wide: { px: 168, titleMin: 520 } },
+      key: 'owner', header: 'Owner', sortKey: 'owner', fit: { px: 88, dropRank: 6, wide: { px: 176, titleMin: 520 } },
       cell: (row, look) => (look.wide ? <PersonChip name={row.record.assigned_user_name} /> : (
         <span title={row.record.assigned_user_name || 'Unassigned'}>
           <Avatar name={row.record.assigned_user_name} size={24} />

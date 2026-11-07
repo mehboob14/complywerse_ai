@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 
 import {
   csvRow, evidenceText, evidenceValue, exportFileName, fieldGroups, hasEdits, inputKind, isForbidden, keyColumns, levelOptions, levelSort, levelValue, levelWord, linkedValue, mergedData,
-  ownerOptions, ownerValue, referenceOf, safeFileName, scoreText, searchTextOf, sizeText, storedValue, titleOf, type ColumnSchema, type RegisterRow,
+  ownerOptions, ownerValue, referenceOf, retryUnlessRefused, safeFileName, scoreText, searchTextOf, sizeText, storedValue, titleOf, type ColumnSchema, type RegisterRow,
 } from './registerModel.ts';
 
 const col = (key: string, extra = {}) => ({ key, label: key.replace(/_/g, ' '), data_type: 'text', ...extra });
@@ -115,4 +115,12 @@ test('words: forbidden is a 403, evidence and sizes read as a person would say t
   assert.equal(isForbidden(null), false);
   assert.deepEqual([evidenceText(0), evidenceText(1), evidenceText(4)], ['None', '1 file', '4 files']);
   assert.deepEqual([sizeText(500), sizeText(2048), sizeText(1.5 * 1024 * 1024), sizeText(null)], ['500 B', '2 KB', '1.5 MB', '']);
+});
+
+test('a refused request is shown at once, a failing one is tried twice more', () => {
+  assert.equal(retryUnlessRefused(0, { response: { status: 403 } }), false);
+  assert.equal(retryUnlessRefused(0, { response: { status: 404 } }), false);
+  assert.equal(retryUnlessRefused(0, { response: { status: 500 } }), true);
+  assert.equal(retryUnlessRefused(1, new Error('network')), true);
+  assert.equal(retryUnlessRefused(2, new Error('network')), false);
 });

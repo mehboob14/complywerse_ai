@@ -9,9 +9,10 @@ import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Copy, Download, FolderPlus, Pencil, Plus } from 'lucide-react';
 import { PageHeader } from '@/components/ui';
-import { Button, ErrorState, FormError, SaveBar, SectionCard, SegmentedControl, Skeleton, SkeletonRows, StatusPill, useConfirm, useReportedMutation } from '@/components/ui/ds';
+import { Button, ErrorState, FormError, NoAccessState, SaveBar, SectionCard, SegmentedControl, Skeleton, SkeletonRows, StatusPill, useConfirm, useReportedMutation } from '@/components/ui/ds';
 import { errorMessage } from '@/components/ui/ds/reportOutcome';
 import { rcsaApi } from '@/lib/api';
+import { isForbidden, retryUnlessRefused } from '@/lib/rcsa/registerModel';
 import { saveBlob } from '@/lib/rcsa/saveBlob';
 import {
   addQuestion, addSection, blankQuestion, deleteCost, draftProblems, duplicateQuestion, fromServer, inUseText, isDirty, moveQuestion, moveSection, plural, questionCount, readOnlyReason,
@@ -48,6 +49,7 @@ export default function QuestionnaireWorkspacePage() {
   const query = useQuery({
     queryKey: KEYS.template(id),
     enabled: id > 0,
+    retry: retryUnlessRefused,
     queryFn: async () => (await rcsaApi.getTemplate(id)).data as Detail,
   });
   // how many campaigns use it is the library's number (the detail does not carry it): the same cached list the library reads. A failure to read it is not a failure of the page, but
@@ -159,11 +161,15 @@ export default function QuestionnaireWorkspacePage() {
     return (
       <div className="flex min-w-0 flex-col gap-[16px]">
         <PageHeader variant="page" title="Questionnaire" back={{ href: '/erm/rcsa/templates', label: 'Back to templates' }} />
-        <ErrorState
-          title={status === 404 ? 'This questionnaire was not found' : "Couldn't load the questionnaire"}
-          message={status === 404 ? 'It may have been deleted. Go back to the library to pick another.' : errorMessage(query.error)}
-          onRetry={status === 404 ? undefined : () => { void query.refetch(); }}
-        />
+        {isForbidden(query.error) ? (
+          <NoAccessState title="You don't have access to this questionnaire" reason="Ask your administrator to give you access to RCSA." />
+        ) : (
+          <ErrorState
+            title={status === 404 ? 'This questionnaire was not found' : "Couldn't load the questionnaire"}
+            message={status === 404 ? 'It may have been deleted. Go back to the library to pick another.' : errorMessage(query.error)}
+            onRetry={status === 404 ? undefined : () => { void query.refetch(); }}
+          />
+        )}
       </div>
     );
   }
@@ -192,7 +198,7 @@ export default function QuestionnaireWorkspacePage() {
         actions={(
           <>
             {editable && <Button leftIcon={<Pencil aria-hidden />} onClick={() => { setDetailsNonce((n) => n + 1); setDetailsOpen(true); }}>Details</Button>}
-            {manage && <Button leftIcon={<Copy aria-hidden />} onClick={() => setCloning(true)}>Clone</Button>}
+            {manage && !readOnly && <Button leftIcon={<Copy aria-hidden />} onClick={() => setCloning(true)}>Clone</Button>}
             <Button leftIcon={<Download aria-hidden />} loading={download.isPending} onClick={() => download.mutate()}>Download</Button>
           </>
         )}
