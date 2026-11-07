@@ -76,13 +76,13 @@ export function KriTriggersTool() {
             <li key={k.id} className="min-w-0 rounded-ds-card border border-ds-border bg-ds-surface p-[12px]">
               <div className="flex flex-wrap items-start gap-x-[10px] gap-y-[4px]">
                 <StatusPill size="sm" {...statusPill(kriStatus, kriState(k))} />
-                <Link href={`/erm/kris?id=${k.id}`} className="inline-flex min-w-0 flex-1 items-center gap-[4px] text-ds-body font-[600] text-ds-fg underline-offset-2 hover:text-ds-primary-text hover:underline"><span className="break-words [overflow-wrap:anywhere]">{k.name}</span><ArrowUpRight aria-hidden size={14} className="shrink-0" /></Link>
+                <Link href={`/erm/kris?id=${k.id}`} className="inline-flex min-w-0 flex-1 items-center gap-[4px] text-ds-body font-[600] text-ds-fg underline-offset-2 hover:text-ds-primary-text hover:underline min-h-ds-control"><span className="break-words [overflow-wrap:anywhere]">{k.name}</span><ArrowUpRight aria-hidden size={14} className="shrink-0" /></Link>
                 <span className="whitespace-nowrap text-[18px] font-[600] tabular-nums text-ds-fg">{formatMetricValue(k.current_value, k.unit)}</span>
               </div>
               <div className="mt-[8px] max-w-[560px]"><ThresholdBar kri={k} unit={k.unit} /></div>
               {gap && <p className="mt-[6px] text-ds-body text-ds-fg-body">{`${k.threshold_direction?.startsWith('higher') ? 'Raise' : 'Reduce'} it by at least ${gap.amount}${k.unit === '%' || k.unit === 'pct' ? ' points' : k.unit && k.unit !== 'count' ? ` ${k.unit}` : ''} to get back to ${kriStatus.label(gap.to)}.`}</p>}
               <p className="mt-[6px] flex flex-wrap items-center gap-x-[12px] gap-y-[4px] text-ds-label text-ds-fg-muted">
-                {k.risk_id ? <Link href={`/erm/risks/${k.risk_id}`} className="text-ds-primary-text underline-offset-2 hover:underline">{k.risk_title || `Risk ${k.risk_id}`}</Link> : <span>Not linked to a risk</span>}
+                {k.risk_id ? <Link href={`/erm/risks/${k.risk_id}`} className="inline-flex min-h-ds-control items-center text-ds-primary-text underline-offset-2 hover:underline">{k.risk_title || `Risk ${k.risk_id}`}</Link> : <span>Not linked to a risk</span>}
                 <PersonChip name={k.owner_name} size={20} />
                 <span>{k.last_measured_at ? `Measured ${formatDate(k.last_measured_at)}` : k.is_live ? 'Live value' : 'Never measured'}</span>
               </p>

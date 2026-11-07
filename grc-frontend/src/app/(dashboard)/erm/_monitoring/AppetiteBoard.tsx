@@ -31,7 +31,7 @@ const KEY = ['erm-appetite-configs'] as const;
 const PAGE = 10;
 const LEVELS = ['averse', 'minimal', 'cautious', 'moderate', 'open', 'hungry'] as const;
 const MUTED = 'text-ds-fg-muted';
-const retryLoad = (failures: number, error: unknown): boolean => canRetry(error) && failures < 3;
+const retryLoad = (failures: number, error: unknown): boolean => canRetry(error) && failures < 2;
 const ROW2 = 'grid gap-[12px] sm:grid-cols-2';
 
 const num = (raw: string): number | null | undefined => {
@@ -92,7 +92,7 @@ export default function AppetiteBoard({ label }: { label: string }) {
   const overColumns: RegisterColumn<Breach>[] = [
     {
       key: 'risk', header: 'Risk', isRowHeader: true,
-      cell: (b) => <Link href={`/erm/risks/${b.risk.id}`} className="inline-flex max-w-full items-center gap-[4px] font-[600] text-ds-fg underline-offset-2 hover:text-ds-primary-text hover:underline"><span className="line-clamp-2 break-words" title={b.risk.title}>{b.risk.title}</span><ArrowUpRight aria-hidden size={14} className="shrink-0" /></Link>,
+      cell: (b) => <Link href={`/erm/risks/${b.risk.id}`} className="inline-flex max-w-full items-center gap-[4px] font-[600] text-ds-fg underline-offset-2 hover:text-ds-primary-text hover:underline min-h-ds-control"><span className="line-clamp-2 break-words" title={b.risk.title}>{b.risk.title}</span><ArrowUpRight aria-hidden size={14} className="shrink-0" /></Link>,
     },
     { key: 'category', header: 'Category', width: 'w-[140px]', card: 'meta', cell: (b) => <span className="text-ds-body text-ds-fg-body">{categoryLabel(b.category)}</span> },
     { key: 'score', header: 'Residual vs limit', width: 'w-[150px]', card: 'meta', cell: (b) => <span className="whitespace-nowrap tabular-nums text-ds-body text-ds-fg">{`${b.score} vs ${b.limit}`}</span> },
@@ -163,7 +163,7 @@ export default function AppetiteBoard({ label }: { label: string }) {
               loading={!ready && !failed}
               error={failed}
               empty={<EmptyState bare kind="firstUse" title="Nothing is over tolerance" description="Every scored risk in a category with an appetite is within its limit." />}
-              cardTitle={(b) => <Link href={`/erm/risks/${b.risk.id}`} className="font-[600] text-ds-fg underline-offset-2 hover:underline">{truncate(b.risk.title, 90).text}</Link>}
+              cardTitle={(b) => <Link href={`/erm/risks/${b.risk.id}`} className="inline-flex min-h-ds-control items-center font-[600] text-ds-fg underline-offset-2 hover:underline">{truncate(b.risk.title, 90).text}</Link>}
               cardActions={(b) => <Menu iconOnly label={`Actions for ${truncate(b.risk.title, 60).text}`} items={[{ key: 'add', label: 'Add action', icon: ListPlus, onSelect: () => setActing(b.risk.id) }]} />}
               footer={over.length > PAGE ? <Pager page={pages} pageSize={PAGE} total={over.length} onPage={setPage} noun={{ one: 'risk', other: 'risks' }} /> : undefined}
             />

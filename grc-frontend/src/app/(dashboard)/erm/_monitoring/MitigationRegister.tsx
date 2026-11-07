@@ -253,7 +253,7 @@ function ActionDetail({ a }: { a: ActionRow }) {
     <div className="flex flex-col gap-[16px]">
       <div className="flex flex-wrap items-center gap-[8px]"><StatePill a={a} /><PriorityPill a={a} /><StatusPill size="sm" {...statusPill(treatmentType, a.action_type)} /></div>
       <FactList min={150}>
-        <Fact label="Risk">{<Link href={`/erm/risks/${a.risk_id}`} className="inline-flex items-center gap-[4px] text-ds-primary-text underline-offset-2 hover:underline">{a.risk_title || `Risk ${a.risk_id}`}<ArrowUpRight aria-hidden size={14} /></Link>}</Fact>
+        <Fact label="Risk">{<Link href={`/erm/risks/${a.risk_id}`} className="inline-flex items-center gap-[4px] text-ds-primary-text underline-offset-2 hover:underline min-h-ds-control">{a.risk_title || `Risk ${a.risk_id}`}<ArrowUpRight aria-hidden size={14} /></Link>}</Fact>
         <Fact label="Owner"><PersonChip name={a.owner_name} /></Fact>
         <Fact label="Due" empty="Not set">{a.due_date ? <DueText a={a} /> : null}</Fact>
         <Fact label="Completed">{a.completed_at ? formatDate(a.completed_at) : null}</Fact>

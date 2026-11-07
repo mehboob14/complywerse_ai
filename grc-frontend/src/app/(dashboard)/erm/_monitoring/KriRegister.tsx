@@ -36,7 +36,7 @@ import { personOptions, riskOptions, useCurrentUserId, useLeanRisks, useTenantUs
 type Report = { kris: KriRow[]; summary: { total: number } };
 const KEY = ['metric-report', 'kri'] as const;
 const OTHER_KEYS = [['erm-kris'], ['erm-kri-alerts']] as const;
-const retryLoad = (failures: number, error: unknown): boolean => canRetry(error) && failures < 3;
+const retryLoad = (failures: number, error: unknown): boolean => canRetry(error) && failures < 2;
 const MUTED = 'text-ds-fg-muted';
 
 function SourceText({ k }: { k: KriRow }) {
@@ -331,7 +331,7 @@ function KriDetail({ k }: { k: KriRow }) {
         <p className="mt-[4px] text-ds-label text-ds-fg-muted">{describeTrend(k.history, k.unit)}</p>
       </div>
       <FactList min={150}>
-        <Fact label="Linked risk">{k.risk_id ? <Link href={`/erm/risks/${k.risk_id}`} className="inline-flex items-center gap-[4px] text-ds-primary-text underline-offset-2 hover:underline">{k.risk_title || `Risk ${k.risk_id}`}<ArrowUpRight aria-hidden size={14} /></Link> : <span className={MUTED}>Not linked to a risk</span>}</Fact>
+        <Fact label="Linked risk">{k.risk_id ? <Link href={`/erm/risks/${k.risk_id}`} className="inline-flex items-center gap-[4px] text-ds-primary-text underline-offset-2 hover:underline min-h-ds-control">{k.risk_title || `Risk ${k.risk_id}`}<ArrowUpRight aria-hidden size={14} /></Link> : <span className={MUTED}>Not linked to a risk</span>}</Fact>
         <Fact label="Owner"><PersonChip name={k.owner_name} /></Fact>
         <Fact label="Category" empty={NOT_SET}>{k.category}</Fact>
         <Fact label="Frequency">{k.frequency ? k.frequency.charAt(0).toUpperCase() + k.frequency.slice(1) : null}</Fact>

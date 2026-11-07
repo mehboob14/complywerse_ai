@@ -128,7 +128,7 @@ export function HeatMapTool() {
           <ul className="m-0 flex list-none flex-col gap-[8px] p-0" aria-label={`${open.count} risks`}>
             {open.risks.map((r) => (
               <li key={r.id} className="rounded-ds-card border border-ds-border bg-ds-surface px-[12px] py-[8px]">
-                <Link href={`/erm/risks/${r.id}`} className="inline-flex max-w-full items-center gap-[4px] text-ds-body font-[600] text-ds-fg underline-offset-2 hover:text-ds-primary-text hover:underline"><span className="break-words">{r.title}</span><ArrowUpRight aria-hidden size={14} className="shrink-0" /></Link>
+                <Link href={`/erm/risks/${r.id}`} className="inline-flex max-w-full items-center gap-[4px] text-ds-body font-[600] text-ds-fg underline-offset-2 hover:text-ds-primary-text hover:underline min-h-ds-control"><span className="break-words">{r.title}</span><ArrowUpRight aria-hidden size={14} className="shrink-0" /></Link>
                 <p className="mt-[2px] text-ds-label text-ds-fg-muted">{[categoryLabel(r.category), r.business_unit].filter(Boolean).join(' · ')}</p>
                 <div className="mt-[4px] flex flex-wrap items-center gap-x-[12px] gap-y-[4px]"><PersonChip name={r.owner} size={20} /><span className="text-ds-label tabular-nums text-ds-fg-body">{`Inherent ${r.inherent_score ?? '—'} · Residual ${r.residual_score ?? '—'}`}</span></div>
               </li>

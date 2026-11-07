@@ -224,7 +224,7 @@ function IncidentDetail({ i }: { i: IncidentRow }) {
         <Fact label="Assigned to"><PersonChip name={i.assignee_name} /></Fact>
         <Fact label="Financial impact">{i.financial_impact != null ? formatImpact(i.financial_impact) : null}</Fact>
         <Fact label="Resolved">{i.resolved_at ? formatDate(i.resolved_at) : null}</Fact>
-        <Fact label="Risk">{i.risk_id ? <Link href={`/erm/risks/${i.risk_id}`} className="inline-flex items-center gap-[4px] text-ds-primary-text underline-offset-2 hover:underline">{i.risk_title || `Risk ${i.risk_id}`}<ArrowUpRight aria-hidden size={14} /></Link> : null}</Fact>
+        <Fact label="Risk">{i.risk_id ? <Link href={`/erm/risks/${i.risk_id}`} className="inline-flex items-center gap-[4px] text-ds-primary-text underline-offset-2 hover:underline min-h-ds-control">{i.risk_title || `Risk ${i.risk_id}`}<ArrowUpRight aria-hidden size={14} /></Link> : null}</Fact>
         <Fact label="Tags"><ChipList items={i.tags} label="tags" shown={3} /></Fact>
       </FactList>
       {i.description && <div><p className="mb-[4px] text-ds-label text-ds-fg-muted">What happened</p><ClampedText text={i.description} lines={5} /></div>}

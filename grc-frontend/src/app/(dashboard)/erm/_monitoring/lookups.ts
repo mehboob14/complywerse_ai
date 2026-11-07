@@ -27,6 +27,7 @@ export function useLeanRisks(enabled = true) {
     queryFn: async () => (await apiClient.get<{ items: LeanRisk[]; total: number }>('/erm/monitoring/risks')).data,
     enabled,
     staleTime: 60_000,
+    retry: 1,                      // one more try, then say so (three tries kept the page on its skeleton for seven seconds)
   });
 }
 
@@ -38,6 +39,7 @@ export function useTenantUsers(enabled = true) {
     queryFn: async () => (await assetsApi.getTenantUsers()).data as Person[],
     enabled,
     staleTime: 5 * 60_000,
+    retry: 1,
   });
 }
 

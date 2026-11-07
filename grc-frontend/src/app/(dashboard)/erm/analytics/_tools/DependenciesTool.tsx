@@ -60,15 +60,15 @@ export function DependenciesTool() {
   const refused = statusOf(deps.error) === 403;
 
   const columns: RegisterColumn<Dep>[] = [
-    { key: 'source', header: 'Risk', isRowHeader: true, cell: (d) => <Link href={`/erm/risks/${d.source_risk_id}`} className="line-clamp-2 break-words font-[600] text-ds-fg underline-offset-2 hover:underline">{d.source_risk_title || `Risk ${d.source_risk_id}`}</Link> },
+    { key: 'source', header: 'Risk', isRowHeader: true, cell: (d) => <Link href={`/erm/risks/${d.source_risk_id}`} className="inline-flex min-h-ds-control items-center font-[600] text-ds-fg underline-offset-2 hover:underline"><span className="line-clamp-2 break-words">{d.source_risk_title || `Risk ${d.source_risk_id}`}</span></Link> },
     { key: 'type', header: 'Relation', width: 'w-[150px]', card: 'meta', cell: (d) => <span className="flex items-center gap-[6px]"><StatusPill size="sm" {...statusPill(dependencyType, d.dependency_type)} /><ArrowRight aria-hidden size={14} className="text-ds-fg-muted" /></span> },
-    { key: 'target', header: 'Affects', card: 'meta', cell: (d) => <Link href={`/erm/risks/${d.target_risk_id}`} className="line-clamp-2 break-words text-ds-body text-ds-fg-body underline-offset-2 hover:underline">{d.target_risk_title || `Risk ${d.target_risk_id}`}</Link> },
+    { key: 'target', header: 'Affects', card: 'meta', cell: (d) => <Link href={`/erm/risks/${d.target_risk_id}`} className="inline-flex min-h-ds-control items-center text-ds-body text-ds-fg-body underline-offset-2 hover:underline"><span className="line-clamp-2 break-words">{d.target_risk_title || `Risk ${d.target_risk_id}`}</span></Link> },
     { key: 'strength', header: 'Strength', width: 'w-[140px]', card: 'meta', cell: (d) => <span className={num}>{strengthWords(d.impact_factor)}</span> },
     {
       key: 'cascade', header: 'Actions', width: 'w-[180px]', align: 'right',
       cell: (d) => (
         <span className="inline-flex items-center gap-[4px]">
-          <Button size="sm" onClick={() => set({ risk: d.source_risk_id })}>See cascade</Button>
+          <Button size="sm" onClick={() => { set({ risk: d.source_risk_id }); window.scrollTo({ top: 0 }); }}>See cascade</Button>
           {canDelete && <IconButton label={`Remove the dependency of ${truncate(d.source_risk_title ?? 'this risk', 40).text}`} onClick={() => { void askRemove(d); }}><Trash2 aria-hidden /></IconButton>}
         </span>
       ),
@@ -85,8 +85,20 @@ export function DependenciesTool() {
 
   if (refused) return <NoAccessState title="You don't have access to risk dependencies" reason={errorMessage(deps.error)} />;
 
+  const cascadeSection = (
+    <section aria-labelledby="dep-cascade" className="flex min-w-0 flex-col gap-[12px] rounded-ds-card border border-ds-border bg-ds-surface p-[16px]">
+        <h2 id="dep-cascade" className="!text-ds-section !text-ds-fg">Cascade</h2>
+        <FormField label="Risk" info="Choose a risk to see every risk its dependencies reach, with the score each would carry.">
+          <Combobox label="Risk" options={riskOptions(risks.data?.items)} value={a.risk ? String(a.risk) : null} onChange={(v) => set({ risk: v ? Number(v) : 0 })} clearable searchable placeholder={risks.isError ? 'The risks could not be loaded' : 'Choose a risk'} disabled={risks.isError} />
+        </FormField>
+        {a.risk > 0 && cascade.isLoading && <SkeletonRows rows={3} columns={3} label="Working out the cascade" />}
+        {a.risk > 0 && cascade.isError && <ErrorState compact title="Couldn't work out the cascade" message={errorMessage(cascade.error)} onRetry={() => { void cascade.refetch(); }} />}
+        {cascade.data && a.risk > 0 && <CascadeCard result={cascade.data} />}
+      </section>
+  );
   return (
     <div className="flex min-w-0 flex-col gap-[16px]">
+      {a.risk > 0 && cascadeSection}
       {head}
       <RegisterTable
         caption="Risk dependencies"
@@ -103,15 +115,8 @@ export function DependenciesTool() {
         footer={matches.length > PAGE ? <Pager page={pages} pageSize={PAGE} total={matches.length} onPage={setPage} noun={{ one: 'dependency', other: 'dependencies' }} /> : undefined}
       />
 
-      <section aria-labelledby="dep-cascade" className="flex min-w-0 flex-col gap-[12px] rounded-ds-card border border-ds-border bg-ds-surface p-[16px]">
-        <h2 id="dep-cascade" className="!text-ds-section !text-ds-fg">Cascade</h2>
-        <FormField label="Risk" info="Choose a risk to see every risk its dependencies reach, with the score each would carry.">
-          <Combobox label="Risk" options={riskOptions(risks.data?.items)} value={a.risk ? String(a.risk) : null} onChange={(v) => set({ risk: v ? Number(v) : 0 })} clearable searchable placeholder={risks.isError ? 'The risks could not be loaded' : 'Choose a risk'} disabled={risks.isError} />
-        </FormField>
-        {a.risk > 0 && cascade.isLoading && <SkeletonRows rows={3} columns={3} label="Working out the cascade" />}
-        {a.risk > 0 && cascade.isError && <ErrorState compact title="Couldn't work out the cascade" message={errorMessage(cascade.error)} onRetry={() => { void cascade.refetch(); }} />}
-        {cascade.data && a.risk > 0 && <CascadeCard result={cascade.data} />}
-      </section>
+
+      {a.risk === 0 && cascadeSection}
 
       {adding && <DependencyForm risks={riskOptions(risks.data?.items)} risksFailed={risks.isError} saving={create.isPending} onClose={() => setAdding(false)} onSubmit={(payload) => create.mutate(payload)} />}
       {confirmDialog}
@@ -132,7 +137,7 @@ function CascadeCard({ result }: { result: CascadeResult }) {
         <ul className="m-0 flex list-none flex-col gap-[4px] p-0" aria-label="Risks reached">
           {rows.map(({ node, depth }, i) => (
             <li key={`${node.risk_id}-${i}`} style={{ marginLeft: (depth - 1) * 20 }} className="flex flex-wrap items-center gap-x-[10px] gap-y-[2px] rounded-ds-control border border-ds-border px-[10px] py-[6px]">
-              <Link href={`/erm/risks/${node.risk_id}`} className="inline-flex min-w-0 flex-1 items-center gap-[4px] text-ds-body font-[600] text-ds-fg underline-offset-2 hover:underline"><span className="break-words">{node.risk_title}</span><ArrowUpRight aria-hidden size={14} className="shrink-0" /></Link>
+              <Link href={`/erm/risks/${node.risk_id}`} className="inline-flex min-w-0 flex-1 items-center gap-[4px] text-ds-body font-[600] text-ds-fg underline-offset-2 hover:underline min-h-ds-control"><span className="break-words">{node.risk_title}</span><ArrowUpRight aria-hidden size={14} className="shrink-0" /></Link>
               {node.dependency_type && <StatusPill size="sm" {...statusPill(dependencyType, node.dependency_type)} />}
               <span className="text-ds-label text-ds-fg-muted">{`${depth === 1 ? 'direct' : `level ${depth}`} · ${strengthWords(node.impact_factor)}`}</span>
               <span className="tabular-nums text-ds-body font-[600] text-ds-fg">{node.cascade_score}</span>

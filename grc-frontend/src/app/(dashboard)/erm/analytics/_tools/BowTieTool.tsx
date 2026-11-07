@@ -76,7 +76,7 @@ export function BowTieTool() {
           <div className="rounded-ds-card border border-ds-border bg-ds-surface p-[16px]">
             <div className="flex flex-wrap items-start gap-[8px]">
               <h2 className="m-0 min-w-0 flex-1 !text-ds-section !text-ds-fg [overflow-wrap:anywhere]">{b.risk_title}</h2>
-              <Link href={`/erm/risks/${b.risk_id}`} className="inline-flex items-center gap-[4px] text-ds-body text-ds-primary-text underline-offset-2 hover:underline">Open the risk<ArrowUpRight aria-hidden size={14} /></Link>
+              <Link href={`/erm/risks/${b.risk_id}`} className="inline-flex items-center gap-[4px] text-ds-body text-ds-primary-text underline-offset-2 hover:underline min-h-ds-control">Open the risk<ArrowUpRight aria-hidden size={14} /></Link>
             </div>
             <p className="mt-[2px] text-ds-label text-ds-fg-muted">{categoryLabel(b.risk_category)}</p>
             <dl className="m-0 mt-[12px] grid grid-cols-2 gap-[12px] sm:grid-cols-3">
