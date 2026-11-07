@@ -52,3 +52,14 @@ test('by date by default with the dateless last, priority highest first, and the
   assert.deepEqual(def.facets.find((f) => f.key === 'owner')!.options(rows).map((o) => o.label), ['Amina', 'Unassigned']);
   assert.deepEqual(def.facets.find((f) => f.key === 'risk')!.options(rows).map((o) => o.label), ['Outage', 'Risk 1']);
 });
+
+test('a "pending" action (what POST /erm/risks/{id}/mitigation-actions writes for every new action) is an open one: to do, overdue when late, in the Open column', () => {
+  const more = [...rows, a(9, { status: 'pending', due_date: '2026-11-02T00:00:00' }), a(10, { status: 'pending', due_date: '2026-12-20T00:00:00', owner_id: 7 })];
+  const idx = indexRegister(def, more);
+  const at = (search: string) => evaluateRegister(def, idx, stateOf(def, readAddress(ACTION_SCHEMA, search) as Record<string, unknown>), now);
+  assert.deepEqual(at('?quick=overdue').result.matches.map((r) => r.id), [1, 7, 9]);
+  assert.deepEqual(at('?quick=open').result.matches.map((r) => r.id), [1, 2, 3, 8, 9, 10]);
+  assert.deepEqual(groupBoard(more, def.board!.columns)[0].rows.map((r) => r.id), [1, 3, 7, 8, 9, 10]);
+  assert.equal(def.facets.find((f) => f.key === 'status')!.options(more).some((o) => o.value === 'pending'), true);
+  assert.equal(at('?status=pending').result.matches.length, 2);
+});

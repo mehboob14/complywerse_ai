@@ -26,6 +26,8 @@ export const incidentStatus = defineStatuses('incident', {
 /** RiskMitigationAction.status. "overdue" is also what an open action past its date reads (lib/erm/mitigation.ts `shownStatus`). */
 export const mitigationStatus = defineStatuses('mitigation action', {
   open: 'pending',
+  // what a new action is written as by POST /erm/risks/{id}/mitigation-actions (modules/erm/routers/risks.py); read as an open action (lib/erm/mitigation.ts PENDING)
+  pending: { tone: 'pending', label: 'Pending' },
   in_progress: { tone: 'progress', label: 'In progress' },
   completed: 'success',
   overdue: 'danger',

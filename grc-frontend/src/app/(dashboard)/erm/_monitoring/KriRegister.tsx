@@ -14,7 +14,7 @@ import {
   Button, ClampedText, EmptyState, Combobox, Fact, FactList, FormField, Menu, PersonChip, ReadOnlyNote, StatusPill, useConfirm, useNotify, useReportedMutation, type MenuItem,
 } from '@/components/ui/ds';
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
-import { RowLead, type RecordColumn, type RecordRow } from '@/components/records/RecordTable';
+import type { RecordColumn, RecordRow } from '@/components/records/RecordTable';
 import type { BulkActionDef } from '@/components/records/BulkBar';
 import { Trash2 as TrashIcon } from 'lucide-react';
 import { ermApi } from '@/lib/api';
@@ -27,6 +27,7 @@ import { MeasureDialog } from '../../governance/_metrics/MeasureDialog';
 import { MetricForm, type Feed } from '../../governance/_metrics/MetricForm';
 import { Sparkline } from '../../governance/_metrics/Sparkline';
 import { ImportDialog } from './ImportDialog';
+import { OwnerCell } from './cells';
 import { RecordDetail, RegisterFrame } from './RegisterFrame';
 import { ThresholdBar } from './ThresholdBar';
 import { KRI_SCHEMA, KRI_NONE, kriDef, stateOfRow, type KriRow } from './kriModel';
@@ -43,7 +44,7 @@ function SourceText({ k }: { k: KriRow }) {
   return (
     <span className={`inline-flex items-center gap-[6px] text-ds-body ${MUTED}`}>
       <Icon aria-hidden size={14} className="shrink-0" />
-      <span className="min-w-0 break-words">{k.is_live ? k.module_label || 'Live' : 'Entered by hand'}</span>
+      <span className="min-w-0 break-words">{k.is_live ? k.module_label || 'Live' : 'Manual'}</span>
     </span>
   );
 }
@@ -149,18 +150,18 @@ export default function KriRegister({ label, tabs }: { label: string; tabs?: Rea
     {
       key: 'name', header: 'KRI', sortKey: 'name',
       cell: (row) => (
-        <RowLead row={row}>
+        <div className="min-w-0">
           <span className="line-clamp-2 break-words text-ds-body font-[600] text-ds-fg" title={row.record.name}>{row.record.name}</span>
           <span className={`block truncate text-ds-label ${MUTED}`} title={row.record.risk_title ?? undefined}>{row.record.risk_title || 'Not linked to a risk'}</span>
-        </RowLead>
+        </div>
       ),
     },
     { key: 'status', header: 'Status', sortKey: 'status', fit: { px: 112 }, cell: (row) => <StatePill k={row.record} /> },
     { key: 'value', header: 'Value', sortKey: 'value', firstDir: 'desc', fit: { px: 88 }, cell: (row) => <ValueText k={row.record} /> },
-    { key: 'due', header: 'Next due', sortKey: 'due', fit: { px: 136, dropRank: 2 }, cell: (row) => <DueText k={row.record} /> },
+    { key: 'due', header: 'Next due', sortKey: 'due', fit: { px: 136 }, cell: (row) => <DueText k={row.record} /> },
     { key: 'trend', header: 'Trend', fit: { px: 140, dropRank: 1 }, cell: (row) => <Sparkline points={row.record.history} unit={row.record.unit} /> },
-    { key: 'owner', header: 'Owner', sortKey: 'owner', fit: { px: 72, dropRank: 4, wide: { px: 168, titleMin: 360 } }, cell: (row, look) => (look.wide ? <PersonChip name={row.record.owner_name} /> : <PersonChip name={row.record.owner_name} className="[&>span:last-child]:sr-only" />) },
-    { key: 'source', header: 'Source', fit: { px: 130, dropRank: 3 }, cell: (row) => <SourceText k={row.record} /> },
+    { key: 'owner', header: 'Owner', sortKey: 'owner', fit: { px: 96, dropRank: 3, wide: { px: 168, titleMin: 400 } }, cell: (row, look) => <OwnerCell name={row.record.owner_name} wide={look.wide} /> },
+    { key: 'source', header: 'Source', fit: { px: 110, dropRank: 2 }, cell: (row) => <SourceText k={row.record} /> },
   ];
 
   const card = (row: RecordRow<KriRow>) => {
@@ -187,7 +188,6 @@ export default function KriRegister({ label, tabs }: { label: string; tabs?: Rea
         variant="page"
         title={label}
         info="Key risk indicators: early-warning signals of exposure, rated against thresholds. Off target is past the amber threshold; the Overview counts the same ones."
-        meta={report.data ? `${formatCount(report.data.summary?.total ?? rows.length)} ${rows.length === 1 ? 'KRI' : 'KRIs'}` : undefined}
         actions={(
           <>
             {canCreate && <Button leftIcon={<Upload aria-hidden />} onClick={() => setUploading(true)}>Upload</Button>}

@@ -1,6 +1,6 @@
 // The mitigation-action register's definition (facets, quick chips, sorts, board), apart from React (`mitigationModel.test.ts`). The rows are GET /erm/mitigation-actions (every
 // action of the tenant with its risk's title, the owner's name and the evidence count). "Overdue" is derived (lib/erm/mitigation.ts), never a status the page sets.
-import { ACTION_PRIORITIES, ACTION_TYPES, isOpenAction, isOverdueAction, shownStatus } from '../../../../lib/erm/mitigation.ts';
+import { ACTION_PRIORITIES, ACTION_TYPES, PENDING, isOpenAction, isOverdueAction, shownStatus } from '../../../../lib/erm/mitigation.ts';
 import { mitigationStatus, severity, treatmentType } from '../../../../lib/statuses/monitoring.ts';
 import { parseUtc } from '../../../../lib/serverTime.ts';
 import { buildSchema, type RegisterDef } from './registerModel.ts';
@@ -28,7 +28,7 @@ export interface ActionRow {
 const NONE = 'none';
 const DAY = 86_400_000;
 const PRIORITY_RANK: Readonly<Record<string, number>> = { critical: 0, high: 1, medium: 2, low: 3 };
-const STATUS_ORDER = ['open', 'in_progress', 'overdue', 'completed', 'cancelled'];
+const STATUS_ORDER = ['open', PENDING, 'in_progress', 'overdue', 'completed', 'cancelled'];
 
 /** Still to do and due within the next seven days (not yet late). */
 export function dueThisWeek(a: ActionRow, now: Date): boolean {
@@ -37,7 +37,8 @@ export function dueThisWeek(a: ActionRow, now: Date): boolean {
   return !!due && due.getTime() - now.getTime() <= 7 * DAY;
 }
 
-const column = (a: ActionRow): string => (a.status === 'overdue' ? 'open' : STATUS_ORDER.includes(a.status) ? a.status : 'cancelled');
+/** The board column: a flagged-overdue and a pending action are open ones; a word nobody listed goes with the cancelled. */
+const column = (a: ActionRow): string => (a.status === 'overdue' || a.status === PENDING ? 'open' : STATUS_ORDER.includes(a.status) ? a.status : 'cancelled');
 
 function people<R>(rows: readonly R[], idOf: (r: R) => number | null | undefined, nameOf: (r: R) => string | null | undefined, noneLabel: string, fallback: string) {
   const seen = new Map<string, string>();
@@ -53,7 +54,7 @@ export function actionDef(me: number | null): RegisterDef<ActionRow> {
     idOf: (a) => a.id,
     text: (a) => [a.title, a.risk_title, a.owner_name, a.description, a.notes].filter(Boolean).join(' '),
     facets: [
-      { key: 'status', label: 'Status', defaultOpen: true, values: (a) => [a.status], options: () => ['open', 'in_progress', 'completed', 'cancelled'].map((value) => ({ value, label: mitigationStatus.label(value) })) },
+      { key: 'status', label: 'Status', defaultOpen: true, values: (a) => [a.status], options: () => ['open', PENDING, 'in_progress', 'completed', 'cancelled'].map((value) => ({ value, label: mitigationStatus.label(value) })) },
       { key: 'priority', label: 'Priority', defaultOpen: true, values: (a) => [a.priority], options: () => ACTION_PRIORITIES.map((value) => ({ value, label: severity.label(value) })) },
       { key: 'type', label: 'Treatment', values: (a) => [a.action_type], options: () => ACTION_TYPES.map((value) => ({ value, label: treatmentType.label(value) })) },
       { key: 'owner', label: 'Owner', searchable: true, limit: 7, values: (a) => [a.owner_id ? String(a.owner_id) : NONE], options: (rows) => people(rows, (a) => a.owner_id, (a) => a.owner_name, 'Unassigned', 'User') },
@@ -67,9 +68,9 @@ export function actionDef(me: number | null): RegisterDef<ActionRow> {
       },
     ],
     quick: [
-      { key: 'overdue', label: 'Overdue', test: (a, now) => isOverdueAction(a, now), title: 'Still to do and past its date: the Overview counts the same ones' },
+      { key: 'overdue', label: 'Overdue', test: (a, now) => isOverdueAction(a, now), title: 'Still to do and past its date' },
       { key: 'week', label: 'Due this week', test: (a, now) => dueThisWeek(a, now) },
-      { key: 'open', label: 'To do', test: (a) => a.status === 'open' || a.status === 'in_progress', title: 'Open or in progress' },
+      { key: 'open', label: 'To do', test: (a) => a.status === 'open' || a.status === PENDING || a.status === 'in_progress', title: 'Open, pending or in progress' },
       { key: 'noowner', label: 'Unassigned', test: (a) => !a.owner_id && isOpenAction(a) },
       { key: 'noevidence', label: 'No evidence', test: (a) => a.status === 'completed' && !a.evidence_count, title: 'Completed with nothing attached' },
       ...(me != null ? [{ key: 'mine', label: 'Mine', test: (a: ActionRow) => a.owner_id === me }] : []),

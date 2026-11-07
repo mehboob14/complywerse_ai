@@ -11,7 +11,7 @@ import { PageHeader } from '@/components/ui';
 import {
   Button, ChipList, ClampedText, EmptyState, ErrorState, Fact, FactList, Menu, PersonChip, StatusPill, useConfirm, useNotify, useReportedMutation, type MenuItem,
 } from '@/components/ui/ds';
-import { RowLead, type RecordColumn, type RecordRow } from '@/components/records/RecordTable';
+import type { RecordColumn, RecordRow } from '@/components/records/RecordTable';
 import type { BulkActionDef } from '@/components/records/BulkBar';
 import { ermApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -25,6 +25,7 @@ import { IncidentAnalysis } from './IncidentAnalysis';
 import { IncidentForm } from './IncidentForm';
 import { INCIDENT_SCHEMA, incidentDef, linked, type IncidentRow } from './incidentModel';
 import { useCurrentUserId } from './lookups';
+import { OwnerCell } from './cells';
 import { RecordDetail, RegisterFrame } from './RegisterFrame';
 
 const KEY = ['erm-incidents', 'all'] as const;
@@ -96,16 +97,16 @@ export default function IncidentRegister({ label }: { label: string }) {
     {
       key: 'title', header: 'Incident', sortKey: 'title',
       cell: (row) => (
-        <RowLead row={row}>
+        <div className="min-w-0">
           <span className="line-clamp-2 break-words text-ds-body font-[600] text-ds-fg" title={row.record.title}>{row.record.title}</span>
           <span className={`block truncate text-ds-label ${MUTED}`}>{row.record.risk_title || 'Not linked to a risk'}</span>
-        </RowLead>
+        </div>
       ),
     },
     { key: 'severity', header: 'Severity', sortKey: 'severity', fit: { px: 104 }, cell: (row) => <SeverityPill i={row.record} /> },
-    { key: 'status', header: 'Status', sortKey: 'status', fit: { px: 124 }, cell: (row) => <StatePill i={row.record} /> },
+    { key: 'status', header: 'Status', sortKey: 'status', fit: { px: 140 }, cell: (row) => <StatePill i={row.record} /> },
     { key: 'date', header: 'Date', sortKey: 'date', firstDir: 'desc', fit: { px: 116 }, cell: (row) => <span className="whitespace-nowrap text-ds-body text-ds-fg-body">{formatDate(row.record.incident_date, { calendar: true })}</span> },
-    { key: 'assignee', header: 'Assigned to', sortKey: 'assignee', fit: { px: 72, dropRank: 3, wide: { px: 168, titleMin: 360 } }, cell: (row, look) => <PersonChip name={row.record.assignee_name} className={look.wide ? undefined : '[&>span:last-child]:sr-only'} /> },
+    { key: 'assignee', header: 'Assignee', sortKey: 'assignee', fit: { px: 96, dropRank: 3, wide: { px: 168, titleMin: 400 } }, cell: (row, look) => <OwnerCell name={row.record.assignee_name} wide={look.wide} /> },
     { key: 'impact', header: 'Impact', sortKey: 'impact', firstDir: 'desc', fit: { px: 112, dropRank: 2 }, cell: (row) => <span className={`whitespace-nowrap tabular-nums text-ds-body ${row.record.financial_impact == null ? MUTED : 'text-ds-fg-body'}`}>{formatImpact(row.record.financial_impact)}</span> },
     { key: 'linked', header: 'Links', sortKey: 'linked', firstDir: 'desc', fit: { px: 72, dropRank: 1 }, cell: (row) => <span className={`tabular-nums text-ds-body ${MUTED}`}>{formatCount(linked(row.record))}</span> },
   ];

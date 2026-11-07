@@ -12,7 +12,7 @@ import { AnimatedModal, PageHeader } from '@/components/ui';
 import {
   Button, ClampedText, Combobox, EmptyState, ErrorState, Fact, FactList, FormField, Menu, PersonChip, StatusPill, TextInput, useConfirm, useNotify, useReportedMutation, type MenuItem,
 } from '@/components/ui/ds';
-import { RowLead, type RecordColumn, type RecordRow } from '@/components/records/RecordTable';
+import type { RecordColumn, RecordRow } from '@/components/records/RecordTable';
 import type { BulkActionDef } from '@/components/records/BulkBar';
 import { ermApi, evidenceApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -24,6 +24,7 @@ import { mitigationStatus, severity, treatmentType } from '@/lib/statuses/monito
 import { ActionForm } from './ActionForm';
 import { ACTION_SCHEMA, actionDef, type ActionRow } from './mitigationModel';
 import { useCurrentUserId } from './lookups';
+import { OwnerCell } from './cells';
 import { RecordDetail, RegisterFrame } from './RegisterFrame';
 
 type Listed = { items: ActionRow[]; total: number };
@@ -105,16 +106,16 @@ export default function MitigationRegister({ label }: { label: string }) {
     {
       key: 'title', header: 'Action', sortKey: 'title',
       cell: (row) => (
-        <RowLead row={row}>
+        <div className="min-w-0">
           <span className="line-clamp-2 break-words text-ds-body font-[600] text-ds-fg" title={row.record.title}>{row.record.title}</span>
           <span className={`block truncate text-ds-label ${MUTED}`} title={row.record.risk_title ?? undefined}>{row.record.risk_title || `Risk ${row.record.risk_id}`}</span>
-        </RowLead>
+        </div>
       ),
     },
     { key: 'status', header: 'Status', sortKey: 'status', fit: { px: 116 }, cell: (row) => <StatePill a={row.record} /> },
     { key: 'due', header: 'Due', sortKey: 'due', fit: { px: 124 }, cell: (row) => <DueText a={row.record} /> },
     { key: 'priority', header: 'Priority', sortKey: 'priority', fit: { px: 96, dropRank: 2 }, cell: (row) => <PriorityPill a={row.record} /> },
-    { key: 'owner', header: 'Owner', sortKey: 'owner', fit: { px: 72, dropRank: 3, wide: { px: 168, titleMin: 360 } }, cell: (row, look) => <PersonChip name={row.record.owner_name} className={look.wide ? undefined : '[&>span:last-child]:sr-only'} /> },
+    { key: 'owner', header: 'Owner', sortKey: 'owner', fit: { px: 96, dropRank: 3, wide: { px: 168, titleMin: 400 } }, cell: (row, look) => <OwnerCell name={row.record.owner_name} wide={look.wide} /> },
     { key: 'reduction', header: 'Reduction', fit: { px: 120, dropRank: 1 }, cell: (row) => <span className={`whitespace-nowrap text-ds-body ${MUTED}`}>{reductionWords(row.record)}</span> },
   ];
   const card = (row: RecordRow<ActionRow>) => {
@@ -130,7 +131,7 @@ export default function MitigationRegister({ label }: { label: string }) {
   const boardCard = (a: ActionRow) => (
     <>
       <span className="line-clamp-2 text-ds-body font-[600] text-ds-fg [overflow-wrap:anywhere]">{a.title}</span>
-      <span className="flex flex-wrap items-center gap-[8px]">{isOverdueAction(a) && <StatePill a={a} />}<PriorityPill a={a} /></span>
+      <span className="flex flex-wrap items-center gap-[8px]">{(isOverdueAction(a) || a.status === 'pending') && <StatePill a={a} />}<PriorityPill a={a} /></span>
       <span className={`truncate text-ds-label ${MUTED}`}>{[a.risk_title || `Risk ${a.risk_id}`, a.due_date ? formatDate(a.due_date, { calendar: true }) : 'no date'].join(' · ')}</span>
     </>
   );
@@ -139,7 +140,7 @@ export default function MitigationRegister({ label }: { label: string }) {
     <PageHeader
       variant="page"
       title={label}
-      info="What is being done to treat each risk. Overdue means still to do and past its date; the Overview counts the same ones."
+      info="What is being done to treat each risk. Overdue means still to do and past its date. A new action is Pending until someone starts it."
       meta={list.data ? `${formatCount(list.data.total)} actions · ${formatCount(tiles.open)} to do · ${formatCount(tiles.overdue)} overdue · ${formatCount(tiles.completedThisMonth)} completed this month` : undefined}
       actions={canCreate ? <Button variant="primary" leftIcon={<Plus aria-hidden />} onClick={() => setEditing(null)}>Add action</Button> : undefined}
     />

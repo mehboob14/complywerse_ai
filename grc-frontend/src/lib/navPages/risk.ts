@@ -1,7 +1,7 @@
 // Navigation-registry entries of the Risk Management (ERM) pages (see navPages/index.ts for the contract). Written by R-REG, 2026-11-01, from the pages and the
 // links that open them (G6_registry_inventory.md); the group's builder adds `ownHeading: true` to an entry the day its page draws PageHeader variant="page".
 // KRIs (/erm/kris) is a sidebar leaf of the Governance group and Incidents (/erm/incidents) of Issue & Incident Management: their entries are in navRegistry.ts and issues.ts.
-// The area's own tab strip (erm/layout.tsx: Risk Register, Risk Library, Appetite, Mitigation Actions, Reviews, Dependencies) and the RCSA strip (erm/rcsa/layout.tsx) are not
+// The area's own tab strip (erm/layout.tsx: Risk Register, Appetite, Mitigation Actions, Reviews, Dependencies) and the RCSA strip (erm/rcsa/layout.tsx) are not
 // modelled as `tab`s: nothing draws them from the registry, and the Work panel lists the area's pages (pagesForArea). The Overview leaf lights for the strip's pages (navAccess activeMatch).
 import type { PageSpec, RouteExtra } from '../navRegistry.ts';
 
@@ -15,17 +15,20 @@ export const LEAVES: Record<string, RouteExtra> = {
   '/erm/risks': { keywords: ['Risks', 'Risk dashboard'] },
   '/erm/risk-assessments': { keywords: ['Risk assessment dashboard'] },
   '/erm/rcsa': { keywords: ['RCSA Dashboard', 'Risk and control self-assessment'] },
-  '/erm/analytics': { keywords: ['Advanced Risk Analytics'] },
-  '/erm/analytics/bowtie': { keywords: ['Bow-Tie Risk Analysis', 'Bowtie'] },
-  '/erm/analytics/scenario': { keywords: ['What-if scenarios'] },
+  // Advanced Analytics is ONE page with a strip of tools (G9 monitoring): each tool keeps its address and draws the shared frame, whose head is the kit's page head.
+  '/erm/analytics': { keywords: ['Advanced Risk Analytics', 'Heat map', 'Heatmap'], ownHeading: true },
+  '/erm/analytics/bowtie': { keywords: ['Bow-Tie Risk Analysis', 'Bowtie'], ownHeading: true },
+  '/erm/analytics/scenario': { keywords: ['What-if scenarios'], ownHeading: true },
+  '/erm/kris': { ownHeading: true },
 };
 
 export const PAGES: PageSpec[] = [
   // ---- the Overview's pages: its tab strip and its tiles ----
-  { path: '/erm/appetite', label: 'Risk Appetite Management', area: AREA, parent: '/erm', hidden: `${STRIP} (Appetite) and from the Appetite breaches tile of the Overview`, keywords: ['Appetite', 'Risk appetite'] },
-  { path: '/erm/mitigation-actions', label: 'Mitigation Actions', area: AREA, parent: '/erm', hidden: `${STRIP} and from the Overdue mitigation actions tile of the Overview` },
+  { path: '/erm/appetite', label: 'Risk Appetite', area: AREA, parent: '/erm', hidden: `${STRIP} (Appetite) and from the Appetite breaches tile of the Overview`, keywords: ['Appetite', 'Risk appetite', 'Risk appetite management', 'Tolerance'], ownHeading: true },
+  { path: '/erm/mitigation-actions', label: 'Mitigation Actions', area: AREA, parent: '/erm', hidden: `${STRIP} and from the Overdue mitigation actions tile of the Overview`, ownHeading: true },
   { path: '/erm/reviews', label: 'Risk Reviews', area: AREA, parent: '/erm', hidden: `${STRIP} (Reviews) and from the Overdue risk reviews tile of the Overview`, keywords: ['Reviews', 'Review schedule'] },
-  { path: '/erm/dependencies', label: 'Risk Dependencies', area: AREA, parent: '/erm', hidden: `${STRIP} (Dependencies)`, keywords: ['Dependencies', 'Cascade analysis'] },
+  // Dependencies became a tool of Advanced Analytics: the old address forwards to it.
+  { path: '/erm/dependencies', label: 'Risk Dependencies', area: AREA, aliasOf: '/erm/analytics/dependencies' },
   { path: '/erm/reports', label: 'Reports & Analytics', area: AREA, parent: '/erm', hidden: 'no link opens it: reached by a typed or saved address (the Overview lights for it)', keywords: ['ERM reports'] },
   { path: '/erm/framework-controls/:id', label: 'Framework control', area: AREA, parent: '/erm', hidden: 'no link opens it: reached by a typed or saved address (the Overview lights for it)' },
   // The Internal Controls pages were merged into the Control Catalog: both forward to it (its Internal view).
@@ -62,8 +65,9 @@ export const PAGES: PageSpec[] = [
   { path: `${RCSA}/approvals`, label: 'RCSA Approvals', area: AREA, parent: RCSA, hidden: 'a page of the RCSA strip' },
   { path: `${RCSA}/approvals/:id`, label: 'RCSA approval', area: AREA, parent: `${RCSA}/approvals`, hidden: 'opens from an RCSA Approvals row' },
 
-  // ---- Advanced Analytics: the cards of its hub page ----
-  { path: '/erm/analytics/heatmap', label: 'Interactive Risk Heat Map', area: AREA, parent: '/erm/analytics', hidden: 'opens from a card of Advanced Analytics', keywords: ['Heat map', 'Heatmap'] },
-  { path: '/erm/analytics/aggregation', label: 'Risk Aggregation', area: AREA, parent: '/erm/analytics', hidden: 'opens from a card of Advanced Analytics' },
-  { path: '/erm/analytics/kri-triggers', label: 'Automated KRI Triggers', area: AREA, parent: '/erm/analytics', hidden: 'opens from a card of Advanced Analytics', keywords: ['KRI alerts'] },
+  // ---- Advanced Analytics: the tools of its strip (the hub page with its cards is gone; /erm/analytics is the Heat map) ----
+  { path: '/erm/analytics/heatmap', label: 'Advanced Analytics', area: AREA, aliasOf: '/erm/analytics' },
+  { path: '/erm/analytics/aggregation', label: 'Risk Aggregation', area: AREA, parent: '/erm/analytics', hidden: 'a tool of Advanced Analytics (its strip)', keywords: ['Aggregation', 'Risk totals'], ownHeading: true },
+  { path: '/erm/analytics/kri-triggers', label: 'KRI Triggers', area: AREA, parent: '/erm/analytics', hidden: 'a tool of Advanced Analytics (its strip) and where the KRI register links the KRIs that are past a threshold', keywords: ['KRI alerts', 'Automated KRI Triggers'], ownHeading: true },
+  { path: '/erm/analytics/dependencies', label: 'Risk Dependencies', area: AREA, parent: '/erm/analytics', hidden: 'a tool of Advanced Analytics (its strip); the old Dependencies address forwards here', keywords: ['Dependencies', 'Cascade analysis'], ownHeading: true },
 ];

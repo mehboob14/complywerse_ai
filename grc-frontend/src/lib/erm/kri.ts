@@ -89,3 +89,19 @@ export function thresholdWords(k: KriLike, unit?: string | null): string {
     ? `On track at ${k.green_threshold}${u} or more; Watch down to ${k.amber_threshold}${u}; below that Off target`
     : `On track at ${k.green_threshold}${u} or less; Watch up to ${k.amber_threshold}${u}; above that Off target`;
 }
+
+export interface KriGap { /** how far the value is from the next better state, in the KRI's own unit */ amount: number; /** the state it would reach */ to: 'amber' | 'green' }
+
+/**
+ * How far a red or amber KRI is from the next better state: a red one from the amber threshold, an amber one from the green threshold (the figure the KRI triggers page has always
+ * recommended: "reduce it by at least N to return within threshold"). null for a KRI that is not red or amber.
+ */
+export function kriGap(k: KriLike): KriGap | null {
+  const state = kriState(k);
+  if (state !== 'red' && state !== 'amber') return null;
+  const v = k.current_value as number;
+  const target = (state === 'red' ? k.amber_threshold : k.green_threshold) as number;
+  if (!num(target)) return null;
+  const amount = Math.round((higherIsBetter(k) ? target - v : v - target) * 100) / 100;
+  return amount > 0 ? { amount, to: state === 'red' ? 'amber' : 'green' } : null;
+}

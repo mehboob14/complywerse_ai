@@ -4,6 +4,9 @@
 import { parseUtc } from '../serverTime.ts';
 
 export const ACTION_STATUSES = ['open', 'in_progress', 'completed', 'overdue', 'cancelled'] as const;
+/** What POST /erm/risks/{id}/mitigation-actions actually writes: the route in risks.py (which answers before the one in mitigation_actions.py) creates every action as "pending", a word the model's own list
+ *  does not have. It is an action still to do, so the pages read it as open (and say so); the Overview's timeliness does not count it (dashboard.py reads open, in progress and overdue only): a finding for the owner. */
+export const PENDING = 'pending';
 export const ACTION_TYPES = ['mitigate', 'transfer', 'avoid', 'accept'] as const;
 export const ACTION_PRIORITIES = ['critical', 'high', 'medium', 'low'] as const;
 /** What the edit form may set: completing goes through "Mark complete" (it stamps the completion date), and "overdue" is derived. */
@@ -11,12 +14,12 @@ export const SETTABLE_STATUSES = ['open', 'in_progress', 'cancelled'] as const;
 
 export interface ActionLike { status?: string | null; due_date?: string | null; completed_at?: string | null; expected_residual_reduction?: number | null; actual_residual_reduction?: number | null }
 
-/** Still to do: open, in progress, or flagged overdue. */
-export const isOpenAction = (a: ActionLike): boolean => a.status === 'open' || a.status === 'in_progress' || a.status === 'overdue';
+/** Still to do: open, pending (what a new action is written as), in progress, or flagged overdue. */
+export const isOpenAction = (a: ActionLike): boolean => a.status === 'open' || a.status === PENDING || a.status === 'in_progress' || a.status === 'overdue';
 
 /**
- * Overdue, by the rule the Overview scores timeliness with (dashboard.py): an action still to do whose status says overdue or whose due date has passed. The server's own
- * /overdue list stops at open and in-progress; this also keeps the ones a workflow flagged. A due date is a day stored at midnight: it is overdue from that midnight.
+ * Overdue: an action still to do whose status says overdue or whose due date has passed. The Overview scores timeliness the same way over open, in-progress and overdue actions (dashboard.py);
+ * the server's own /overdue list stops at open and in-progress; this also keeps the ones a workflow flagged and the pending ones. A due date is a day stored at midnight: it is overdue from that midnight.
  */
 export function isOverdueAction(a: ActionLike, now: Date = new Date()): boolean {
   if (!isOpenAction(a)) return false;
@@ -35,7 +38,7 @@ export function actionTiles(actions: readonly ActionLike[], now: Date = new Date
   let overdue = 0;
   let completedThisMonth = 0;
   actions.forEach((a) => {
-    if (a.status === 'open' || a.status === 'in_progress') open += 1;
+    if (a.status === 'open' || a.status === PENDING || a.status === 'in_progress') open += 1;
     if (isOverdueAction(a, now)) overdue += 1;
     const done = parseUtc(a.completed_at ?? undefined);
     if (a.status === 'completed' && done && done.getFullYear() === now.getFullYear() && done.getMonth() === now.getMonth()) completedThisMonth += 1;

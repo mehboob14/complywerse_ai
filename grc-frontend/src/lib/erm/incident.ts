@@ -21,16 +21,19 @@ export interface IncidentTiles {
   totalImpact: number;
 }
 
+/** Resolved in the current calendar month (the viewer's): its resolution date is in this month. */
+export function resolvedThisMonth(i: { resolved_at?: string | null }, now: Date = new Date()): boolean {
+  const at = parseUtc(i.resolved_at ?? undefined);
+  return !!at && at.getFullYear() === now.getFullYear() && at.getMonth() === now.getMonth();
+}
+
 export function incidentTiles(dashboard: IncidentDashboard | undefined, incidents: ReadonlyArray<{ status?: string | null; resolved_at?: string | null }>, now: Date = new Date()): IncidentTiles {
   const by = dashboard?.by_status ?? {};
-  const resolvedThisMonth = incidents.filter((i) => {
-    const at = parseUtc(i.resolved_at ?? undefined);
-    return !!at && at.getFullYear() === now.getFullYear() && at.getMonth() === now.getMonth();
-  }).length;
+  const resolved = incidents.filter((i) => resolvedThisMonth(i, now)).length;
   return {
     open: dashboard?.open_incidents ?? (by.open ?? 0) + (by.investigating ?? 0),
     investigating: by.investigating ?? 0,
-    resolvedThisMonth,
+    resolvedThisMonth: resolved,
     totalImpact: dashboard?.total_financial_impact ?? 0,
   };
 }

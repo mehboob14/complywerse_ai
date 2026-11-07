@@ -150,3 +150,12 @@ test('P-2: the cascade card reads the fields the server sends, nested, and the f
   assert.equal(dependencyError(2, 2), 'A risk cannot depend on itself.');
   assert.equal(dependencyError(1, 2), undefined);
 });
+
+test('a pending action (the word a new action is written with) is still to do, counted as open and overdue when late', () => {
+  assert.equal(isOverdueAction({ status: 'pending', due_date: '2026-11-01T00:00:00' }, NOW), true);
+  assert.equal(isOverdueAction({ status: 'pending', due_date: '2026-12-01T00:00:00' }, NOW), false);
+  assert.equal(shownStatus({ status: 'pending', due_date: '2026-12-01T00:00:00' }, NOW), 'pending');
+  assert.deepEqual(actionTiles([{ status: 'pending' }, { status: 'open' }, { status: 'completed' }], NOW), { total: 3, open: 2, overdue: 0, completedThisMonth: 0 });
+  const route = readFileSync(here('../../../../backend/grc/modules/erm/routers/risks.py'), 'utf8');
+  assert.match(route, /def create_risk_mitigation_action[\s\S]*?status="pending"/, 'the route that answers writes pending: if this changes, the page can stop reading it as open');
+});

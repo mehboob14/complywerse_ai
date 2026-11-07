@@ -58,3 +58,16 @@ export function useCurrentUserId(): number | null {
   });
   return data ?? null;
 }
+
+/** The organisation's id as the server reports it (/auth/me), for the one request that names it (creating an appetite). null until it answers or when it cannot: never a guess. */
+export function useTenantId(): number | null {
+  const { data } = useQuery({
+    queryKey: ['current-tenant-id'],
+    queryFn: async () => {
+      const me = (await apiClient.get('/auth/me')).data;
+      return (me?.tenant?.id ?? me?.user?.primary_tenant_id ?? null) as number | null;
+    },
+    staleTime: 10 * 60_000,
+  });
+  return data ?? null;
+}

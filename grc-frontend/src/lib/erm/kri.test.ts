@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { higherIsBetter, isBreach, isWatch, kriCounts, kriState, ragWord, thresholdBar, thresholdWords, type KriLike } from './kri.ts';
+import { higherIsBetter, isBreach, isWatch, kriCounts, kriGap, kriState, ragWord, thresholdBar, thresholdWords, type KriLike } from './kri.ts';
 
 const k = (over: Partial<KriLike>): KriLike => ({ current_value: 0, green_threshold: 5, amber_threshold: 10, threshold_direction: 'lower_is_better', ...over });
 
@@ -90,4 +90,14 @@ test('the thresholds are said for the direction', () => {
   assert.match(thresholdWords(k({}), '%'), /On track at 5% or less; Watch up to 10%; above that Off target/);
   assert.match(thresholdWords(k({ threshold_direction: 'higher_is_better', green_threshold: 80, amber_threshold: 50 })), /80 or more; Watch down to 50; below that Off target/);
   assert.equal(thresholdWords(k({ amber_threshold: null })), 'Thresholds not set');
+});
+
+test('the gap to the next better state: a red KRI to amber, an amber one to green, in the direction of the KRI', () => {
+  assert.deepEqual(kriGap(k({ current_value: 14 })), { amount: 4, to: 'amber' });
+  assert.deepEqual(kriGap(k({ current_value: 7.5 })), { amount: 2.5, to: 'green' });
+  assert.deepEqual(kriGap(k({ threshold_direction: 'higher_is_better', green_threshold: 80, amber_threshold: 50, current_value: 30 })), { amount: 20, to: 'amber' });
+  assert.deepEqual(kriGap(k({ threshold_direction: 'higher_is_better', green_threshold: 80, amber_threshold: 50, current_value: 65 })), { amount: 15, to: 'green' });
+  assert.equal(kriGap(k({ current_value: 1 })), null);
+  assert.equal(kriGap(k({ current_value: null })), null);
+  assert.equal(kriGap(k({ green_threshold: null, current_value: 7 })), null, 'amber with no green threshold has nowhere to go');
 });
