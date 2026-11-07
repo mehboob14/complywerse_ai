@@ -11,7 +11,7 @@ const ASSESSMENTS = '/erm/risk-assessments';
 const STRIP = 'opens from the Risk Management tab strip';
 
 export const LEAVES: Record<string, RouteExtra> = {
-  '/erm': { title: 'Risk Management Overview', keywords: ['Enterprise Risk Management', 'ERM'] },
+  '/erm': { title: 'Risk Management Overview', keywords: ['Enterprise Risk Management', 'ERM'], ownHeading: true },
   '/erm/risks': { keywords: ['Risks', 'Risk dashboard', 'Risk insights', 'Risk matrix', 'Heat map'], ownHeading: true },
   '/erm/risk-assessments': { keywords: ['Risk assessment dashboard'] },
   '/erm/rcsa': { keywords: ['RCSA Dashboard', 'Risk and control self-assessment'] },
@@ -24,9 +24,9 @@ export const PAGES: PageSpec[] = [
   // ---- the Overview's pages: its tab strip and its tiles ----
   { path: '/erm/appetite', label: 'Risk Appetite Management', area: AREA, parent: '/erm', hidden: `${STRIP} (Appetite) and from the Appetite breaches tile of the Overview`, keywords: ['Appetite', 'Risk appetite'] },
   { path: '/erm/mitigation-actions', label: 'Mitigation Actions', area: AREA, parent: '/erm', hidden: `${STRIP} and from the Overdue mitigation actions tile of the Overview` },
-  { path: '/erm/reviews', label: 'Risk Reviews', area: AREA, parent: '/erm', hidden: `${STRIP} (Reviews) and from the Overdue risk reviews tile of the Overview`, keywords: ['Reviews', 'Review schedule'] },
+  { path: '/erm/reviews', label: 'Risk Reviews', area: AREA, parent: '/erm', hidden: `${STRIP} (Reviews) and from the Overdue risk reviews tile of the Overview`, keywords: ['Reviews', 'Review schedule'], ownHeading: true },
   { path: '/erm/dependencies', label: 'Risk Dependencies', area: AREA, parent: '/erm', hidden: `${STRIP} (Dependencies)`, keywords: ['Dependencies', 'Cascade analysis'] },
-  { path: '/erm/reports', label: 'Reports & Analytics', area: AREA, parent: '/erm', hidden: 'no link opens it: reached by a typed or saved address (the Overview lights for it)', keywords: ['ERM reports'] },
+  { path: '/erm/reports', label: 'Reports & Analytics', area: AREA, parent: '/erm', hidden: 'no link opens it: reached by a typed or saved address (the Overview lights for it)', keywords: ['ERM reports'], ownHeading: true },
   { path: '/erm/framework-controls/:id', label: 'Framework control', area: AREA, parent: '/erm', hidden: 'no link opens it: reached by a typed or saved address (the Overview lights for it)' },
   // The Internal Controls pages were merged into the Control Catalog: both forward to it (its Internal view).
   { path: '/erm/internal-controls', label: 'Control Catalog', area: AREA, aliasOf: '/controls' },
@@ -37,7 +37,7 @@ export const PAGES: PageSpec[] = [
   { path: '/erm/risks/dashboard', label: 'Risk Register', area: AREA, aliasOf: '/erm/risks' },
   // The old register page forwards to the register (parameters kept: ?new=1, ?upload=1, ?edit=<id>, ?register_type=<name>); the old dashboard is its Insights view.
   { path: '/erm/risks/list', label: 'Risk Register', area: AREA, aliasOf: '/erm/risks' },
-  { path: '/erm/risks/:id', label: 'Risk', area: AREA, parent: '/erm/risks', hidden: 'opens from a Risk Register row and from the records that link a risk (assets, assessments, evidence, frameworks, exceptions, reports)' },
+  { path: '/erm/risks/:id', label: 'Risk', area: AREA, parent: '/erm/risks', hidden: 'opens from a Risk Register row and from the records that link a risk (assets, assessments, evidence, frameworks, exceptions, reports)', ownHeading: true },
   { path: '/erm/risks/nca/:id', label: 'NCA risk entry', area: AREA, parent: '/erm/risks', hidden: 'no link opens it: reached by a typed or saved address' },
 
   // ---- Risk Assessments ----

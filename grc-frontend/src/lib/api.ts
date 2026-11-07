@@ -1469,6 +1469,8 @@ export const ermApi = {
     metricOptions: () => apiClient.get('/erm/kris/metric-options'),
     templates: () => apiClient.get('/erm/kris/templates'),
     due: () => apiClient.get('/erm/kris/due'),
+    /** The KRIs and KPIs this person must report a value for now (manual, active, due): { items, total, overdue }. */
+    myUpdates: () => apiClient.get<{ items: Array<{ id: number; name: string; kind?: string; next_due_date?: string | null; overdue?: boolean }>; total: number; overdue: number }>('/erm/kri-workflow/my-updates'),
     upload: (file: File) => {
       const formData = new FormData();
       formData.append('file', file);
@@ -1587,7 +1589,7 @@ export const ermApi = {
       }>('/erm/incidents/ai-suggest', data),
   },
   reviews: {
-    getAll: (params?: { risk_id?: number; status_filter?: string; reviewer_id?: number }) => 
+    getAll: (params?: { risk_id?: number; status_filter?: string; reviewer_id?: number; skip?: number; limit?: number }) => 
       apiClient.get<RiskReview[]>('/erm/reviews', { params }),
     getById: (id: number) => apiClient.get<RiskReview>(`/erm/reviews/${id}`),
     create: (data: RiskReviewCreate) => apiClient.post<RiskReview>('/erm/reviews', data),
@@ -1603,6 +1605,8 @@ export const ermApi = {
     create: (data: RiskDependencyCreate) => apiClient.post<RiskDependency>('/erm/dependencies', data),
     delete: (id: number) => apiClient.delete(`/erm/dependencies/${id}`),
     getCascadeAnalysis: (riskId: number) => apiClient.get<CascadeAnalysis>(`/erm/dependencies/${riskId}/cascade`),
+    /** The scores recorded for a risk over time (review approvals write them): the History tab's score lines. */
+    getScoreHistory: (riskId: number, days = 3650) => apiClient.get(`/erm/dependencies/history/${riskId}`, { params: { days } }),
     getGraph: (riskId?: number) => 
       apiClient.get(`/erm/dependencies/graph`, { params: { risk_id: riskId } }),
   },

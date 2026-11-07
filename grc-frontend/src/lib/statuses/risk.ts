@@ -50,8 +50,11 @@ export const riskTreatment = defineStatuses('risk treatment', {
 export const riskReviewStatus = defineStatuses('risk review', {
   pending: 'pending',
   in_review: { tone: 'progress', label: 'In review' },
+  completed: 'success',          // what the Reviews page writes when a review is completed
   approved: 'success',
   rejected: 'danger',
+  skipped: 'neutral',
+  overdue: 'danger',             // never written by the server: the page works it out from the due date
 });
 
 /** RiskMitigationAction.status. */
@@ -74,4 +77,19 @@ export const riskSource = defineStatuses('risk source', {
   risk_library: { tone: 'neutral', label: 'Added from a standard' },
   ubl_import: { tone: 'neutral', label: 'UBL register' },
   nca_import: { tone: 'neutral', label: 'NCA register' },
+});
+
+/** The indicator a linked control carries on the risk page (derived from its checks' latest runs; the residual score is never changed by it). Labels are the control pages' own. */
+export const controlIndicator = defineStatuses('control indicator', {
+  passed: { tone: 'success', label: 'Passing' },
+  failed: { tone: 'danger', label: 'Failing' },
+  partial: { tone: 'warning', label: 'Partial' },
+  error: { tone: 'warning', label: 'Error' },
+  expired: { tone: 'warning', label: 'Expired' },
+  collection_failed: { tone: 'pending', label: 'Not collected' },
+  running: { tone: 'progress', label: 'Running' },
+  not_run: { tone: 'neutral', label: 'Not run' },
+  connect_one: { tone: 'neutral', label: 'Connect a source' },
+  unbound: { tone: 'neutral', label: 'No check yet' },
+  manual: { tone: 'neutral', label: 'Manual' },
 });

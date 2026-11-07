@@ -33,7 +33,7 @@ import { useSelection } from '@/components/records/useSelection';
 import ModuleSettingsPanel from '@/components/settings/ModuleSettingsPanel';
 import NcaRiskQuickAddModal from '@/components/risks/NcaRiskQuickAddModal';
 import { usePermissions } from '@/hooks/usePermissions';
-import { aiRecommendationsApi, ermApi } from '@/lib/api';
+import { ermApi } from '@/lib/api';
 import { formatCount, truncate } from '@/lib/format';
 import { routeFor } from '@/lib/navRegistry';
 import type { Risk } from '@/types';
@@ -41,6 +41,7 @@ import { ImportPanel } from './ImportPanel';
 import { InsightsView } from './InsightsView';
 import { RiskDrawer, type RiskFull } from './RiskDrawer';
 import { RiskModal, type RiskModalSubmitPayload } from './RiskForm';
+import { assetsNotLinked, saveRiskForm } from './riskSave';
 import { LevelCell, OwnerCell, RiskCard, RowMenu, riskColumns, type RowEnv } from './RiskRows';
 import { REGISTER_SCHEMA, arrivedPatch, filtersPatch, openPatch, pageOf, type RegisterAddress, type RegisterView } from './riskAddress';
 import {
@@ -224,22 +225,14 @@ export function RiskRegister() {
     setAddress(arrivedPatch());
   }, [arrive, loading, rows, filters.register, openEdit, notify, setAddress]);
 
-  const saveRisk = async ({ riskData, linkedAssetIds, aiSuggestions }: RiskModalSubmitPayload) => {
+  const saveRisk = async (payload: RiskModalSubmitPayload) => {
     const editing = form?.mode === 'edit' ? form.risk : null;
-    const saved = editing ? await ermApi.risks.update(editing.id, riskData) : await ermApi.risks.create(riskData);
-    const riskId = (saved?.data as { id?: number } | undefined)?.id ?? editing?.id;
-    const failed: number[] = [];
-    if (riskId) for (const assetId of linkedAssetIds ?? []) { try { await ermApi.risks.linkAsset(riskId, { asset_id: assetId }); } catch { failed.push(assetId); } }
-    if (!editing && riskId && aiSuggestions) {
-      aiRecommendationsApi.save({
-        module: 'erm_risk_suggestion', recommendation_type: 'ai_suggestion', entity_type: 'risk', entity_id: String(riskId),
-        title: `AI suggestion · ${(riskData as { title?: string }).title || 'risk'}`, output: aiSuggestions as unknown as Record<string, unknown>,
-      }).catch(() => { /* the suggestion is a convenience; the risk is saved */ });
-    }
+    const saved = await saveRiskForm(editing?.id ?? null, payload);
     refresh();
     setForm(null);
     notify.success(editing ? 'The changes are saved.' : 'The risk is in the register.', { title: editing ? 'Risk updated' : 'Risk added' });
-    if (failed.length) notify.warning(`${failed.length} linked ${failed.length === 1 ? 'asset' : 'assets'} could not be linked. Open the risk and link ${failed.length === 1 ? 'it' : 'them'} again.`, { title: 'Some assets were not linked' });
+    const missed = assetsNotLinked(saved.failedAssets);
+    if (missed) notify.warning(missed, { title: 'Some assets were not linked' });
   };
 
   const remove = useReportedMutation({

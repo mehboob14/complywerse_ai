@@ -6,9 +6,9 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 
 import { TONE, statusPill } from '../status.ts';
-import { riskActionStatus, riskLevel, riskReviewStatus, riskSla, riskSource, riskStatus, riskTreatment } from './risk.ts';
+import { controlIndicator, riskActionStatus, riskLevel, riskReviewStatus, riskSla, riskSource, riskStatus, riskTreatment } from './risk.ts';
 
-const ALL = [riskStatus, riskLevel, riskSla, riskTreatment, riskReviewStatus, riskActionStatus, riskSource];
+const ALL = [riskStatus, riskLevel, riskSla, riskTreatment, riskReviewStatus, riskActionStatus, riskSource, controlIndicator];
 
 test('every word has a tone of the platform\'s families and a readable label', () => {
   for (const reg of ALL) for (const w of reg.words) {
@@ -25,7 +25,7 @@ test('every status word the server folds is registered', () => {
   const known = new Set(Array.from(fn.matchAll(/"([a-z_]{2,})"/g), (m) => m[1]));
   for (const w of ['closed', 'resolved', 'cancelled', 'in_treatment', 'under_review', 'mitigating', 'mitigated', 'accepted']) assert.ok(known.has(w), `the server no longer writes "${w}"?`);
   const spellings = ['canceled', 'treating', 'under_treatment', 'in_progress', 'open'];          // folded spellings that are not words a risk is shown with
-  for (const w of known) if (!spellings.includes(w)) assert.ok(riskStatus.has(w), `register "${w}" in lib/statuses/risk.ts`);
+  Array.from(known).forEach((w) => { if (!spellings.includes(w)) assert.ok(riskStatus.has(w), `register "${w}" in lib/statuses/risk.ts`); });
 });
 
 test('the colours keep their meaning: open amber, moving blue, done green, a decision purple, closed grey; critical red, high amber, medium blue, low green', () => {
