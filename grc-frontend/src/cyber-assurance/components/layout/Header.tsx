@@ -13,6 +13,47 @@ const navIconProps = {
   strokeWidth: 1.5,
 };
 
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'];
+
+// The advisory detail's place in the hierarchy, shown in the global bar:
+// Advisories / Region / Source / Year / Month. Reads the same advisory the detail
+// page fetched (shared query cache), so it is instant and never blocks the page.
+function AdvisoryBreadcrumb({ id }: { id: string }) {
+  const { data } = useQuery({
+    queryKey: ['advisory', Number(id)],
+    queryFn: () => apiClient.get(`/advisories/${id}`).then((r) => r.data),
+    enabled: !!id,
+  });
+  const a = data as {
+    region?: string; origin?: string; source_name?: string;
+    external_id?: string; published_at?: string; created_at?: string;
+  } | undefined;
+  const crumbs: string[] = [];
+  if (a) {
+    if (a.region && a.region !== 'Unclassified') crumbs.push(a.region);
+    const issuer = a.origin === 'upload'
+      ? ((a.external_id || '').replace(/\d.*$/, '').replace(/[-_.:\s]+$/, '').trim()
+         || a.external_id || 'Uploaded document')
+      : a.source_name;
+    if (issuer) crumbs.push(issuer);
+    const d = a.published_at || a.created_at;
+    const dt = d ? new Date(d) : null;
+    if (dt && !isNaN(dt.getTime())) { crumbs.push(String(dt.getFullYear())); crumbs.push(MONTHS[dt.getMonth()]); }
+  }
+  return (
+    <div className="flex items-center gap-1.5 min-w-0 text-sm leading-none">
+      <Link href="/cyber-assurance/advisories" className="font-medium text-[var(--color-muted)] truncate">Advisories</Link>
+      {crumbs.map((c, i) => (
+        <span key={i} className="flex items-center gap-1.5 min-w-0">
+          <span className="text-[var(--color-muted)]">/</span>
+          <span className={`truncate ${i === crumbs.length - 1 ? 'font-semibold text-[var(--color-text)]' : 'font-medium text-[var(--color-muted)]'}`}>{c}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 const PAGE_TITLES: Record<string, { title: string; subtitle?: string; section?: string }> = {
   '/vulnerabilities': { title: 'Vulnerability Register', subtitle: 'Track, manage, and remediate security vulnerabilities across your organization', section: 'Cybersecurity Assurance' },
   '/vulnerabilities/dashboard': { title: 'Vulnerability Dashboard', subtitle: 'Real-time security posture' },
@@ -53,10 +94,15 @@ const PAGE_TITLES: Record<string, { title: string; subtitle?: string; section?: 
   '/auditor-portal/statutory-audit': { title: 'Statutory Audit', subtitle: 'Register and track regulator requirements and audit observations' },
   '/assets': { title: 'IT Asset Inventory', subtitle: 'Manage and track IT assets with CIA ratings and valuations.', section: 'Cybersecurity Assurance' },
   '/asset-discovery': { title: 'IT Asset Discovery', subtitle: 'Find devices on the network, decide what to adopt, and see what changed.', section: 'Cybersecurity Assurance' },
+  // No `section`: the page has no body heading of its own, so the bar carries the page name.
+  '/licenses': { title: 'Licenses', subtitle: 'Software entitlements vs what is installed — compliance, exposure and renewals.' },
+  '/risk-posture': { title: 'Assets Risk Posture', subtitle: 'Risk = weighted blend of vulnerabilities, hardening, control gap and business impact' },
+  '/pentest': { title: 'AI Pentest' },
+  '/advisories': { title: 'Security advisories', subtitle: 'CERT/vendor bulletins — each names the CVEs to check against your assets.' },
   '/integrations': { title: 'Integrations', subtitle: 'Configure and manage third-party integrations.' },
   '/integrations/connections': { title: 'Scanner Connections', subtitle: 'Manage vulnerability scanner connections and sync schedules.' },
   '/integrations/exceptions': { title: 'Integration Exceptions', subtitle: 'Review and manage integration exceptions.' },
-  '/scan-flows/hosted': { title: 'Scan', subtitle: 'Complyverse drives your Nessus against IT inventory assets' },
+  '/scan-flows/hosted': { title: 'Scan', subtitle: 'ComplyVerse drives your Nessus against IT inventory assets' },
   '/tasks': { title: 'Task Board' },
   '/reports': { title: 'Reports', subtitle: 'Explore datasets, build and share reports' },
   '/reports/saved': { title: 'Saved Reports', subtitle: 'Manage, share and organize your report library' },
@@ -176,6 +222,64 @@ export default function Header() {
                 <Link href="/cyber-assurance/assets" className="font-semibold text-[var(--color-text)]">IT Asset Inventory</Link>
               </div>
             );
+          }
+          // Pentest run workspace (/pentest/runs/<id>) has no static entry — show
+          // the run-identity breadcrumb so the otherwise-empty top bar is used.
+          if (!info && /^\/pentest\/runs\/[^/]+$/.test(pathname ?? '')) {
+            const rid = (pathname ?? '').split('/').pop();
+            return (
+              <div className="flex items-center gap-1.5 min-w-0 text-sm leading-none">
+                <Link href="/cyber-assurance/pentest" className="font-medium text-[var(--color-muted)] truncate">AI Pentest</Link>
+                <span className="text-[var(--color-muted)]">/</span>
+                <span className="font-semibold text-[var(--color-text)] truncate">Run #{rid}</span>
+              </div>
+            );
+          }
+          // Help Desk pages have no PAGE_TITLES entry and render their own body
+          // header, so the global bar sat empty. Show a section breadcrumb
+          // (Help Desk / <section> / <page or #id>) so the bar tracks where you are.
+          if (!info && (pathname ?? '').startsWith('/helpdesk')) {
+            const parts = (pathname ?? '').split('/').filter(Boolean); // ['helpdesk','tickets','80']
+            const LABEL: Record<string, string> = {
+              dashboard: 'Dashboard', tickets: 'Tickets', incidents: 'Incidents', problems: 'Problems',
+              changes: 'Changes', 'service-requests': 'Service Requests', agents: 'Agents',
+              customers: 'Customers', contacts: 'Contacts', kb: 'Knowledge Base', canned: 'Canned Responses',
+              catalogue: 'Service Catalogue', cmdb: 'CMDB', governance: 'Governance', settings: 'Settings',
+              report: 'Report an issue', request: 'Request something', 'my-requests': 'My Requests',
+              'my-approvals': 'My Approvals',
+            };
+            const seg = parts[1] || '';
+            const id = parts[2] || '';
+            let section = 'Agent Console';
+            let crumb = LABEL[seg] || (seg ? seg[0].toUpperCase() + seg.slice(1) : '');
+            if (seg === 'portal') { section = 'Portal'; crumb = LABEL[id] || 'Portal'; }
+            else if (seg === 'admin') { section = 'Service Desk Admin'; crumb = LABEL[id] || ''; }
+            else if (seg === 'settings') { section = 'Service Desk Admin'; crumb = 'Settings'; }
+            else if (seg === 'tickets' && id) crumb = `Ticket #${id}`;
+            else if (['incidents', 'problems', 'changes', 'service-requests'].includes(seg) && id) crumb = `${LABEL[seg]} #${id}`;
+            return (
+              <div className="flex items-center gap-1.5 min-w-0 text-sm leading-none">
+                <Link href="/cyber-assurance/helpdesk/dashboard" className="font-medium text-[var(--color-muted)] truncate">Help Desk</Link>
+                <span className="text-[var(--color-muted)]">/</span>
+                <span className="font-medium text-[var(--color-muted)] truncate">{section}</span>
+                {crumb && <><span className="text-[var(--color-muted)]">/</span><span className="font-semibold text-[var(--color-text)] truncate">{crumb}</span></>}
+              </div>
+            );
+          }
+          // Match history full page — breadcrumb instead of an empty bar.
+          if (!info && (pathname ?? '') === '/advisories/history') {
+            return (
+              <div className="flex items-center gap-1.5 min-w-0 text-sm leading-none">
+                <Link href="/cyber-assurance/advisories" className="font-medium text-[var(--color-muted)] truncate">Advisories</Link>
+                <span className="text-[var(--color-muted)]">/</span>
+                <span className="font-semibold text-[var(--color-text)] truncate">Match history</span>
+              </div>
+            );
+          }
+          // Advisory detail (/advisories/<id>): show the hierarchy path the list
+          // uses — Advisories / Region / Source / Year / Month — in the global bar.
+          if (!info && /^\/advisories\/\d+$/.test(pathname ?? '')) {
+            return <AdvisoryBreadcrumb id={(pathname ?? '').split('/').pop() as string} />;
           }
           if (!info) return null;
           // Pages that render their own big heading in the body (redesign kit)

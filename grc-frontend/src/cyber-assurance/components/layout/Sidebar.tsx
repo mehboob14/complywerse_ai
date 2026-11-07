@@ -6,9 +6,9 @@ import {
   LayoutDashboard,
   Shield,
   ScrollText,
+  Plug,
   FileText,
   ClipboardCheck,
-  GitPullRequest,
   Rss,
   AlertTriangle,
   Users,
@@ -23,11 +23,9 @@ import {
   Activity,
   AlertCircle,
   Bug,
-  Crosshair,
+  GitPullRequest,
   Clock,
-  Layers,
   Workflow,
-  Globe,
   Calendar,
   CheckCircle,
   Bot,
@@ -43,6 +41,13 @@ import {
   PlayCircle,
   Bookmark,
   Building2,
+  Ticket,
+  UsersRound,
+  Contact,
+  BookOpen,
+  MessageSquareText,
+  Home,
+  KeyRound,
   type LucideIcon,
 } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -62,6 +67,9 @@ interface NavItem {
   requiredModules?: string[];
   /** Path prefix for active-highlighting when it differs from href. */
   activeMatch?: string;
+  /** Visible only to requester-only users: hidden for admins and for anyone who
+   *  holds the agent-console permission (helpdesk:tickets:view). */
+  requesterOnly?: boolean;
 }
 
 interface NavGroup {
@@ -95,26 +103,89 @@ const extractModuleFromPerm = (perm: string): string => {
 };
 
 const navigation: NavEntry[] = [
+  // Cross-product home — no perm gate: always visible.
+  { name: 'Performance', href: '/cyber-assurance/dashboard', icon: LayoutDashboard },
   {
-    name: 'Cybersecurity Assurance',
-    icon: ShieldCheck,
+    name: 'IT Asset',
+    icon: Server,
     items: [
-      // Performance dashboard — Admin + Team views across all Complyverse modules.
-      // No perm gate: it's the product's home surface, always visible.
-      { name: 'Performance',               href: '/cyber-assurance/dashboard',                     icon: LayoutDashboard },
-      // IT Asset Discovery — from feat/pdpl-ndmo-assessment.
-      // Preview UI wired into nav; confirm discovery endpoints before customer demos.
       { name: 'IT Asset Discovery',        href: '/cyber-assurance/asset-discovery',               icon: Radar,         requiredPermissions: ['assets:asset_inventory:*'] },
-      // CIS Benchmark merged into IT Asset Inventory as a tab (/assets?tab=cis).
       { name: 'IT Asset Inventory',        href: '/cyber-assurance/assets',                        icon: Server,        requiredPermissions: ['assets:asset_inventory:*'] },
+      { name: 'Licenses',                  href: '/cyber-assurance/licenses',                      icon: KeyRound,      requiredPermissions: ['assets:asset_inventory:*'] },
       { name: 'Assets Risk Posture',       href: '/cyber-assurance/risk-posture',                  icon: Activity,      requiredPermissions: ['erm:risks:*'] },
-      // Hidden until wired to real data (was showing demo/seed assessments). Route + feature stay intact at /assets/criticality-assessments.
-      // { name: 'Criticality Assessments',   href: '/cyber-assurance/assets/criticality-assessments', icon: ClipboardCheck, requiredPermissions: ['assets:criticality_assessments:view'] },
-      { name: 'Vulnerabilities',           href: '/cyber-assurance/vulnerabilities',               icon: Bug,           requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
-      { name: 'Vulnerability Scanning',    href: '/cyber-assurance/scan-flows',                    icon: Crosshair,     requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
-      { name: 'AI Pentest',                href: '/cyber-assurance/pentest',                       icon: Bot },
     ],
   },
+  {
+    name: 'Cybersecurity',
+    icon: ShieldCheck,
+    items: [
+      { name: 'Vulnerabilities',           href: '/cyber-assurance/vulnerabilities',               icon: Bug,           requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
+      { name: 'Advisories',                href: '/cyber-assurance/advisories',                    icon: AlertCircle,   requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
+      { name: 'AI Pentest',                href: '/cyber-assurance/pentest',                       icon: Bot,           activeMatch: '/pentest' },
+    ],
+  },
+  {
+    // Help Desk — ComplyVerse-native ITIL-lite service desk, one FastAPI engine
+    // (modules/helpdesk_native). Findings become remediation Incidents.
+    // Teams live in Administration (grc_teams); Home is dropped (Dashboard only).
+    name: 'Help Desk',
+    icon: LifeBuoy,
+    // Role-aware (OR gate — hasPermission uses `.some`): agent-console items need
+    // helpdesk:tickets:view; the three requester items need only the end-user
+    // perms, so a requester-only user sees JUST those three, an agent the console.
+    items: [
+      // Three sub-dropdowns for the three Help Desk audiences, gated by role:
+      //   Agent Console  → helpdesk:tickets:view  (agents + admin)
+      //   Administration → helpdesk:settings:manage (admin / settings role)
+      //   End-user Portal→ helpdesk:requests:*     (requesters; agents too when
+      //                    their role carries it; admin via isAdmin superset)
+      // Admin sees all three (isAdmin short-circuit in hasPermission).
+      {
+        name: 'Agent Console',
+        icon: LayoutDashboard,
+        defaultOpen: true,
+        items: [
+          { name: 'Dashboard',        href: '/cyber-assurance/helpdesk/dashboard',  icon: LayoutDashboard, requiredPermissions: ['helpdesk:tickets:view'] },
+          { name: 'Tickets',          href: '/cyber-assurance/helpdesk/tickets',    icon: Ticket,          requiredPermissions: ['helpdesk:tickets:view'] },
+          { name: 'Incidents',        href: '/cyber-assurance/helpdesk/incidents',  icon: AlertCircle,     requiredPermissions: ['helpdesk:tickets:view'] },
+          { name: 'Problems',         href: '/cyber-assurance/helpdesk/problems',   icon: Bug,             requiredPermissions: ['helpdesk:tickets:view'] },
+          { name: 'Changes',          href: '/cyber-assurance/helpdesk/changes',    icon: GitPullRequest,  requiredPermissions: ['helpdesk:tickets:view'] },
+          { name: 'Service Requests', href: '/cyber-assurance/helpdesk/service-requests', icon: ClipboardList, requiredPermissions: ['helpdesk:tickets:view'] },
+          { name: 'Agents',           href: '/cyber-assurance/helpdesk/agents',     icon: Users,           requiredPermissions: ['helpdesk:tickets:view'] },
+          { name: 'Customers',        href: '/cyber-assurance/helpdesk/customers',  icon: Building2,       requiredPermissions: ['helpdesk:tickets:view'] },
+          { name: 'Contacts',         href: '/cyber-assurance/helpdesk/contacts',   icon: Contact,         requiredPermissions: ['helpdesk:tickets:view'] },
+          { name: 'Knowledge Base',   href: '/cyber-assurance/helpdesk/kb',         icon: BookOpen,        requiredPermissions: ['helpdesk:tickets:view'] },
+          { name: 'Canned Responses', href: '/cyber-assurance/helpdesk/canned',     icon: MessageSquareText, requiredPermissions: ['helpdesk:tickets:view'] },
+        ],
+      },
+      {
+        // 'Service Desk Admin' not 'Administration' — the global platform admin
+        // popover (bottom of the sidebar) is the real 'Administration'; two
+        // identically-labelled entries confused QA. This is the help-desk config.
+        name: 'Service Desk Admin',
+        icon: Settings,
+        items: [
+          { name: 'Service Catalogue', href: '/cyber-assurance/helpdesk/admin/catalogue',  icon: Bookmark, requiredPermissions: ['helpdesk:settings:manage'] },
+          { name: 'CMDB',              href: '/cyber-assurance/helpdesk/admin/cmdb',        icon: Server,   requiredPermissions: ['helpdesk:settings:manage'] },
+          { name: 'Governance',        href: '/cyber-assurance/helpdesk/admin/governance',  icon: Shield,   requiredPermissions: ['helpdesk:settings:manage'] },
+          { name: 'Settings',          href: '/cyber-assurance/helpdesk/settings',          icon: Settings, requiredPermissions: ['helpdesk:settings:manage'] },
+        ],
+      },
+      {
+        name: 'End-user Portal',
+        icon: ClipboardCheck,
+        items: [
+          { name: 'Request something', href: '/cyber-assurance/helpdesk/portal/request',     icon: ClipboardCheck,    requiredPermissions: ['helpdesk:requests:create', 'helpdesk:requests:view_own'] },
+          { name: 'My Requests',       href: '/cyber-assurance/helpdesk/portal/my-requests', icon: ListTodo,          requiredPermissions: ['helpdesk:requests:view_own', 'helpdesk:requests:create'] },
+          { name: 'My Approvals',      href: '/cyber-assurance/helpdesk/portal/my-approvals', icon: ShieldCheck,      requiredPermissions: ['helpdesk:requests:view_own', 'helpdesk:requests:create'] },
+          { name: 'Report an issue',   href: '/cyber-assurance/helpdesk/portal/report',      icon: MessageSquareText, requiredPermissions: ['helpdesk:requests:create', 'helpdesk:requests:view_own'] },
+          { name: 'Help / Knowledge Base', href: '/cyber-assurance/helpdesk/portal/kb',      icon: BookOpen,          requiredPermissions: ['helpdesk:requests:view_own', 'helpdesk:requests:create'] },
+        ],
+      },
+    ],
+  },
+  // Reports — its own top-level module.
+  { name: 'Reports', href: '/cyber-assurance/reports', icon: FileText, requiredPermissions: ['assets:asset_inventory:*'] },
 ];
 
 function isGroup(item: NavEntry): item is NavGroup {
@@ -158,7 +229,7 @@ function NavSubGroup({ group, activeHref }: { group: NavGroup; activeHref?: stri
         )}
       >
         {Icon && <Icon size={16} strokeWidth={1.75} className={clsx('flex-shrink-0', hasActive ? 'text-[var(--color-base)]' : 'text-[var(--sidebar-icon)]')} />}
-        <span className="flex-1 text-left leading-tight break-words">{group.name}</span>
+        <span className="flex-1 min-w-0 truncate text-left">{group.name}</span>
         <ChevronDown size={13} className={clsx('flex-shrink-0 text-[var(--sidebar-icon)] transition-transform duration-200', !open && '-rotate-90')} />
       </button>
       <div className={clsx('grid transition-[grid-template-rows] duration-300 ease-out', open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
@@ -180,7 +251,7 @@ function NavSubGroup({ group, activeHref }: { group: NavGroup; activeHref?: stri
                   )}
                 >
                   <item.icon size={15} strokeWidth={1.75} className={clsx('flex-shrink-0', childActive ? 'text-[var(--color-base)]' : 'text-[var(--sidebar-icon)]')} />
-                  <span className="leading-tight break-words">{item.name}</span>
+                  <span className="min-w-0 flex-1 truncate">{item.name}</span>
                 </Link>
               );
             })}
@@ -215,7 +286,7 @@ function NavItemLink({ item, collapsed }: { item: NavItem; collapsed: boolean })
           isActive ? 'text-[var(--color-base)]' : 'text-[var(--sidebar-icon)] group-hover:text-[var(--color-text)]'
         )}
       />
-      {!collapsed && <span className="leading-tight break-words">{item.name}</span>}
+      {!collapsed && <span className="min-w-0 flex-1 truncate">{item.name}</span>}
     </Link>
   );
 }
@@ -277,10 +348,10 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
       <button
         onClick={() => setIsOpen(prev => !prev)}
         className={clsx(
-          'group flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[13px] transition-colors duration-150',
+          'group flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[14px] font-semibold transition-colors duration-150',
           hasActiveChild
-            ? 'font-semibold text-[var(--color-text)]'
-            : 'font-normal text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]'
+            ? 'text-[var(--color-text)]'
+            : 'text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]'
         )}
       >
         {GroupIcon && (
@@ -290,7 +361,7 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
               hasActiveChild ? 'text-[var(--color-base)]' : 'text-[var(--sidebar-icon)] group-hover:text-[var(--color-text)]')}
           />
         )}
-        <span className="flex-1 text-left leading-tight break-words">{group.name}</span>
+        <span className="flex-1 min-w-0 truncate text-left">{group.name}</span>
         <ChevronDown
           size={15}
           className={clsx('flex-shrink-0 text-[var(--sidebar-icon)] transition-transform duration-200', !isOpen && '-rotate-90')}
@@ -333,7 +404,7 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
                     className={clsx('flex-shrink-0',
                       childActive ? 'text-[var(--color-base)]' : 'text-[var(--sidebar-icon)] group-hover:text-[var(--color-text)]')}
                   />
-                  <span className="leading-tight break-words">{item.name}</span>
+                  <span className="min-w-0 flex-1 truncate">{item.name}</span>
                 </Link>
               );
             })}
@@ -358,20 +429,16 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
 // Most items deep-link into the admin tab bar via `/admin?tab=<id>`. Items
 // that live at their own standalone route set `href` to override that.
 const ADMIN_POPOVER_ITEMS: Array<{ id: string; label: string; icon: LucideIcon; href?: string }> = [
-  { id: 'company',          label: 'Company',            icon: Settings },
-  { id: 'users',            label: 'User Management',    icon: Users },
-  { id: 'ai-usage',         label: 'Token usage',        icon: BarChart3, href: '/cyber-assurance/admin/ai-usage' },
-  { id: 'roles',            label: 'Role Management',    icon: ShieldCheck },
-  { id: 'departments',      label: 'Departments',        icon: Users },
-  { id: 'password-policy',  label: 'Password Policy',    icon: Shield },
-  { id: 'integrations',     label: 'Integrations',       icon: Bot },
-  { id: 'cloud-connectors', label: 'Cloud Connectors',   icon: Globe },
-  { id: 'connectors',       label: 'Connectors',         icon: Layers },
-  { id: 'evidence-collectors', label: 'Connections', icon: Radar },
-  { id: 'identity',         label: 'Identity Providers', icon: Shield },
-  { id: 'workflow',         label: 'Workflow Engine',    icon: GitPullRequest },
-  { id: 'usage',            label: 'Usage Monitoring',   icon: Activity, href: '/cyber-assurance/admin/usage' },
-  { id: 'audit',            label: 'Audit Logs',         icon: ScrollText },
+  { id: 'company',          label: 'Company',               icon: Settings },
+  { id: 'users',            label: 'User Management',       icon: Users },
+  { id: 'roles',            label: 'Role Management',       icon: ShieldCheck },
+  { id: 'teams',            label: 'Teams',                 icon: Users },
+  { id: 'departments',      label: 'Departments',           icon: Building2 },
+  { id: 'password-policy',  label: 'Password Policy',       icon: Shield },
+  // Unified Connectors tab — External Connectors, Vulnerability Scanners, Cloud,
+  // Discovery Hosts and Identity/SSO now live here as categories.
+  { id: 'connectors',       label: 'Connectors',            icon: Plug },
+  { id: 'audit',            label: 'Audit Logs',            icon: ScrollText },
 ];
 
 function AdministrationPopover({
@@ -569,6 +636,14 @@ export default function Sidebar() {
 
   const canAccessItem = (item: NavItem & { requiredModules?: string[]; adminOnly?: boolean }) => {
     if (item.adminOnly && !isAdmin) return false;
+    if (item.requesterOnly) {
+      // Requester-portal items: never for admins, never for agents (anyone who can
+      // use the console). Otherwise only if the user truly holds the item's own
+      // perms — deliberately NO admin shortcut here.
+      if (isAdmin) return false;
+      if (matchesPermission('helpdesk:tickets:view')) return false;
+      return (item.requiredPermissions ?? []).some((perm) => matchesPermission(perm));
+    }
     if (!hasModuleAccess(item.requiredModules)) return false;
     return hasPermission(item.requiredPermissions);
   };
@@ -587,9 +662,9 @@ export default function Sidebar() {
       if (canAccessItem(item)) acc.push(item);
       return acc;
     }, []);
-  // Complyverse is a cybersecurity-assurance product only. Show just that section; the
+  // ComplyVerse is a cybersecurity-assurance product only. Show just that section; the
   // rest of the cloned GRC nav (Governance, Compliance, ERM, …) is hidden.
-  const CYBER_SECTIONS = new Set(['Cybersecurity Assurance']);
+  const CYBER_SECTIONS = new Set(['Performance', 'IT Asset', 'Cybersecurity', 'Help Desk', 'Reports']);
   const filteredNavigation: NavEntry[] = loaded
     ? filterEntries(navigation).filter((e) => CYBER_SECTIONS.has(e.name))
     : [];
@@ -608,7 +683,7 @@ export default function Sidebar() {
       )}>
         {!collapsed && (
           <span className="whitespace-nowrap text-base font-semibold text-[var(--color-text)] flex items-baseline gap-0.5">
-            Complyverse
+            ComplyVerse
             <span className="ml-1 text-xs font-medium text-[var(--color-base)] opacity-70">AI</span>
           </span>
         )}

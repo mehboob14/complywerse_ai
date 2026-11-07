@@ -19,7 +19,7 @@ export default function Flow2ConnectPage() {
           <h1 className="text-xl font-semibold text-slate-900">Flow 2 — Client&apos;s own Nessus</h1>
         </div>
         <p className="text-sm text-slate-500 mt-1">
-          Add the client&apos;s Nessus connection — URL + access key + secret key — then <b>Sync Now</b> on it to pull their findings into Complyverse.
+          Add the client&apos;s Nessus connection — URL + access key + secret key — then <b>Sync Now</b> on it to pull their findings into ComplyVerse.
         </p>
       </div>
       <ConnectionsPage />

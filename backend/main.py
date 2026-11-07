@@ -1,3 +1,4 @@
+import logging
 import os
 from dotenv import load_dotenv
 
@@ -61,6 +62,42 @@ def on_startup():
     ensure_startup_seed_data()
     if os.getenv("DISABLE_EMBEDDED_WORKFLOW_RUNTIME", "").strip().lower() not in ("1", "true", "yes", "on"):
         start_workflow_engine_runtime()
+    # Help Desk per-tenant boot heal (schema columns + reference data). Here, not in
+    # grc/main.py: grc_app is mounted, and a mounted app's startup never fires.
+    try:
+        from grc.modules.helpdesk_native.itsm_seed import run_boot_heal
+        run_boot_heal()
+    except Exception:  # noqa: BLE001
+        logging.getLogger(__name__).warning("helpdesk boot heal skipped", exc_info=True)
+    _resume_inflight_scans_all_tenants()
+
+
+def _resume_inflight_scans_all_tenants():
+    """Hosted (Flow 1) scans and pentest Find scans run in in-process threads that die on restart.
+    Re-attach / honestly fail them for EVERY active tenant in the registry, not just a default one."""
+    log = logging.getLogger(__name__)
+    try:
+        from grc.db import MasterSession
+        from grc.models import Tenant
+        m = MasterSession()
+        try:
+            slugs = [t.slug for t in m.query(Tenant).filter(Tenant.is_active.is_(True)).all() if t.slug]
+        finally:
+            m.close()
+    except Exception:  # noqa: BLE001
+        log.warning("tenant enumeration for scan resume failed; using DEFAULT_TENANT_SLUG only", exc_info=True)
+        slugs = [s for s in [os.getenv("DEFAULT_TENANT_SLUG", "").strip()] if s]
+    for slug in slugs:
+        try:
+            from grc.modules.integrations.services.hosted_scan import resume_inflight_hosted_scans
+            resume_inflight_hosted_scans(slug)
+        except Exception:  # noqa: BLE001
+            log.warning("hosted-scan resume skipped for %s", slug, exc_info=True)
+        try:
+            from grc.modules.pentest.service import resume_inflight_scans
+            resume_inflight_scans(slug)
+        except Exception:  # noqa: BLE001
+            log.warning("pentest resume skipped for %s", slug, exc_info=True)
 
 
 @app.on_event("shutdown")

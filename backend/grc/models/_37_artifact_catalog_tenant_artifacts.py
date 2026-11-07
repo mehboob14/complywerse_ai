@@ -807,6 +807,12 @@ class ComplianceAgent(Base):
     enrollment_uses = Column(Integer, nullable=False, server_default="0")
     enrollment_expires_at = Column(DateTime, nullable=True)
     spawned_from_agent_id = Column(Integer, ForeignKey("grc_compliance_agents.id"), nullable=True)
+    # Domain binding: when set, enrollment is REFUSED unless the enrolling
+    # machine reports membership in this AD domain (case-insensitive). This is
+    # how "only our bank's PCs can join" is enforced — a leaked install command
+    # run on a home/WORKGROUP PC reports a non-matching domain and is rejected.
+    # NULL = no domain check (any machine with a valid token may enroll).
+    allowed_domain = Column(String(255), nullable=True)
 
     # ─── Scan-now push (set by the asset page's Scan-now button) ─────────
     # When set, the next /jobs poll from this agent skips its normal 30s
@@ -1033,6 +1039,15 @@ class TenantRiskWeights(Base):
     weight_cia  = Column(Numeric(5, 2), nullable=False, default=15)
     weight_ctrl = Column(Numeric(5, 2), nullable=False, default=15)
     weight_risk = Column(Numeric(5, 2), nullable=False, default=15)
+    # EASM (external asset) weights — the outside-in model uses a SEPARATE set of
+    # dimensions (hygiene/exploitability/exposure/business), so internal CIS/CIA/
+    # ctrl/risk weights don't apply to external assets. Nullable: when all four
+    # are NULL the compute falls back to the fixed defaults in service.py, so
+    # existing rows keep scoring exactly as before until a tenant tunes them.
+    weight_easm_hygiene  = Column(Numeric(5, 2), nullable=True)
+    weight_easm_exploit  = Column(Numeric(5, 2), nullable=True)
+    weight_easm_exposure = Column(Numeric(5, 2), nullable=True)
+    weight_easm_business = Column(Numeric(5, 2), nullable=True)
     preset_name = Column(String(40), nullable=True)
     updated_at  = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     updated_by  = Column(Integer, ForeignKey("grc_users.id", ondelete="SET NULL"), nullable=True)

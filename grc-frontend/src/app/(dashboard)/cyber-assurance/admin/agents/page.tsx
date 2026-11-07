@@ -2,15 +2,12 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
-import apiClient, { agentsApi } from '@/cyber-assurance/lib/api';
-import EmptyState from '@/cyber-assurance/components/common/EmptyState';
+import { Download, RefreshCw, CheckCircle2, Copy } from 'lucide-react';
+import { agentsApi } from '@/cyber-assurance/lib/api';
 import { useToast } from '@/cyber-assurance/components/ui/ToastProvider';
 import { usePermissions } from '@/cyber-assurance/hooks/usePermissions';
-import SetupWizard from './_setup-wizard';
 
 type Agent = {
   id: number;
@@ -66,49 +63,11 @@ export default function AgentsAdminPage() {
   const toast = useToast();
   const { hasPermission, isLoading: permsLoading } = usePermissions();
   const canManageAgents = hasPermission('compliance:agents:manage');
-  // Wizard launch state — the Setup Wizard handles both single + bulk + discovery
-  // handoff in one progressive flow, so the page only tracks open/closed +
-  // any prefilled hostnames coming from /admin/discover.
-  const [showWizard, setShowWizard] = useState(false);
-  const [wizardPrefill, setWizardPrefill] = useState<{
-    hostnames: string[];
-    mode?: 'collector' | 'endpoint';
-    osFamily?: string;
-  } | null>(null);
   // Custom revoke modal state — replaces browser prompt+confirm
   const [revokeTarget, setRevokeTarget] = useState<Agent | null>(null);
   const [revokeReason, setRevokeReason] = useState('');
 
-  // Pick up prefill from Discovery's "Send to Bulk Enroll" handoff: sessionStorage
-  // + ?bulkEnroll=1 query param. We forward both into the wizard so the user
-  // lands directly on the Configure step with hostnames already loaded.
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('bulkEnroll') !== '1') return;
-    const raw = sessionStorage.getItem('ava.bulkEnroll.prefill');
-    if (!raw) return;
-    try {
-      const prefill = JSON.parse(raw) as { hostnames?: string[]; mode?: string; os_family?: string };
-      if (prefill.hostnames?.length) {
-        setWizardPrefill({
-          hostnames: prefill.hostnames,
-          mode: prefill.mode === 'collector' || prefill.mode === 'endpoint' ? prefill.mode : 'endpoint',
-          osFamily: prefill.os_family,
-        });
-        setShowWizard(true);
-      }
-    } catch {
-      // Swallow malformed prefill — user can still launch the wizard manually
-    } finally {
-      sessionStorage.removeItem('ava.bulkEnroll.prefill');
-      const url = new URL(window.location.href);
-      url.searchParams.delete('bulkEnroll');
-      window.history.replaceState({}, '', url.toString());
-    }
-  }, []);
-
-  const q = useQuery<{ agents: Agent[] }>({
+  const q = useQuery<{ items: Agent[] }>({
     queryKey: ['agents'],
     queryFn: async () => (await agentsApi.list()).data,
     refetchInterval: 5000,
@@ -127,202 +86,139 @@ export default function AgentsAdminPage() {
     onError: () => toast.toast({ title: 'Revoke failed', type: 'error' }),
   });
 
-  const agents = q.data?.agents ?? [];
+  const agents = q.data?.items ?? [];
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div className="min-w-0 max-w-3xl">
-          <h1 className="text-2xl font-semibold text-slate-900">Compliance Agents</h1>
+      <div className="min-w-0">
+        <h1 className="text-xl font-semibold text-slate-900">Compliance Agents</h1>
+        <p className="mt-1 max-w-3xl text-sm text-slate-500">
+          Install a lightweight agent on a host — it enrols, inventories the machine, and runs
+          CIS benchmarks locally, then reports to ComplyVerse. Built for endpoints you can&apos;t reach
+          over the network: roaming laptops, NAT&apos;d or firewalled boxes, and cloud VMs. Pick an OS or a cloud provider to install.
+        </p>
+      </div>
+
+      {!permsLoading && !canManageAgents && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+          You need the <code className="rounded bg-amber-100 px-1">compliance:agents:manage</code> permission to install or revoke agents.
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <Link
-            href="/cyber-assurance/admin/integrations/connect"
-            title={!canManageAgents && !permsLoading
-              ? "You don't have permission to open the Connect Wizard"
-              : 'Open the agentless Connect Wizard (Windows / Linux / Cloud)'}
-            aria-disabled={!canManageAgents}
-            onClick={(e) => {
-              if (!canManageAgents) {
-                e.preventDefault();
-                toast.toast({
-                  title: 'Permission required',
-                  message: 'Only Scanning Admins / Administrators can open the Connect Wizard. Ask your tenant admin for "compliance:agents:manage".',
-                  type: 'warning',
-                });
-              }
-            }}
-            className={`px-4 py-2 text-sm font-medium rounded-md whitespace-nowrap border ${
-              canManageAgents
-                ? 'border-primary-200 bg-white text-primary-700 hover:bg-primary-50'
-                : 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'
-            }`}
+      )}
+
+      {/* Agent installers — one self-contained binary per OS. It enrols,
+          inventories the host, reports to ComplyVerse, and (on Linux) runs CIS
+          benchmarks locally. One file works on any host of the same OS family. */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {([
+          { os: 'windows' as const, glyph: '🪟', title: 'Windows agent',
+            meta: 'x64 · runs as LocalSystem',
+            caps: ['Full hardware + software inventory', 'Auto-enrols, heartbeats & reports on schedule'],
+            run: 'Run in Windows PowerShell as Administrator — not Command Prompt.',
+            support: 'Windows 10 / 11 · Server 2016 – 2022' },
+          { os: 'linux' as const, glyph: '🐧', title: 'Linux agent',
+            meta: 'x64 · systemd service',
+            caps: ['Full hardware + software inventory', 'Runs CIS benchmarks locally (OpenSCAP)', 'Auto-enrols, heartbeats & re-scans on schedule'],
+            run: 'Run in a terminal as root (sudo).',
+            support: 'Ubuntu 20/22/24 · Debian 11/12 · RHEL/Alma 8/9 · Amazon Linux' },
+          { os: 'macos' as const, glyph: '💻', title: 'macOS agent',
+            meta: 'Apple Silicon + Intel · LaunchDaemon',
+            caps: ['Full hardware + software inventory', 'Auto-enrols, heartbeats & reports on schedule'],
+            run: 'Run in Terminal as root (sudo).',
+            support: 'macOS 12 Monterey and later' },
+        ]).map((c) => (
+          <div
+            key={c.os}
+            className="flex flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-primary-300 hover:shadow"
           >
-            {canManageAgents ? '🔌 Open Connect Wizard →' : '🔒 Open Connect Wizard'}
-          </Link>
+            <div className="flex items-center gap-3">
+              <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary-50 text-2xl">{c.glyph}</div>
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-slate-900">{c.title}</div>
+                <div className="text-[11px] text-slate-500">{c.meta}</div>
+              </div>
+            </div>
+            <ul className="mt-4 space-y-1.5 text-xs text-slate-600">
+              {c.caps.map((f) => (
+                <li key={f} className="flex items-start gap-1.5">
+                  <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                  <span>{f}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] font-semibold text-amber-800">
+              {c.run}
+            </p>
+            <div className="mt-auto pt-4">
+              <InstallAgent
+                os={c.os}
+                canManage={canManageAgents}
+                toast={toast}
+              />
+              <p className="mt-2 text-center text-[10px] text-slate-400">{c.support}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Cloud agents — the SAME collector, run on a cloud VM. Cloud hosts are
+          Linux, so these install the Linux agent (os="linux"); the only thing
+          that differs per provider is WHERE you run the one-liner. Labelled by
+          provider via enrollName so each shows up as "aws agent" etc. */}
+      <div>
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-slate-900">Cloud</h2>
+          <span className="text-xs text-slate-500">— run the agent on a cloud instance; it inventories that VM like any host.</span>
+        </div>
+        <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {([
+            { key: 'aws', title: 'AWS', meta: 'EC2 · Amazon Linux / Ubuntu', enrollName: 'aws agent',
+              hint: 'Run on an EC2 instance, or paste into the instance User data (runs at first boot).' },
+            { key: 'azure', title: 'Microsoft Azure', meta: 'Azure VM · Linux', enrollName: 'azure agent',
+              hint: 'Run on an Azure VM, or add it as a Custom Script Extension.' },
+            { key: 'digitalocean', title: 'DigitalOcean', meta: 'Droplet · Linux', enrollName: 'digitalocean agent',
+              hint: 'Run on your Droplet, or paste into the Droplet User data (cloud-init).' },
+            { key: 'gcp', title: 'Google Cloud', meta: 'Compute Engine · Linux', enrollName: 'gcp agent',
+              hint: 'Run on a Compute Engine VM, or set it as a startup-script.' },
+          ]).map((c) => (
+            <div
+              key={c.key}
+              className="flex flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-primary-300 hover:shadow"
+            >
+              <div className="flex items-center gap-3">
+                <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary-50 text-2xl">☁️</div>
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-slate-900">{c.title}</div>
+                  <div className="text-[11px] text-slate-500">{c.meta}</div>
+                </div>
+              </div>
+              <p className="mt-4 text-xs text-slate-600">{c.hint}</p>
+              <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] font-semibold text-amber-800">
+                Run on the cloud VM as root (sudo).
+              </p>
+              <div className="mt-auto pt-4">
+                <InstallAgent os="linux" enrollName={c.enrollName} canManage={canManageAgents} toast={toast} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Installed agents */}
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-5 py-3">
+          <h2 className="text-sm font-semibold text-slate-900">
+            Installed agents
+            {agents.length > 0 && (
+              <span className="ml-2 rounded-full bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-600">{agents.length}</span>
+            )}
+          </h2>
           <button
-            onClick={() => {
-              if (!canManageAgents) {
-                toast.toast({
-                  title: 'Permission required',
-                  message: 'Only Scanning Admins / Administrators can enroll agents. Ask your tenant admin for "compliance:agents:manage".',
-                  type: 'warning',
-                });
-                return;
-              }
-              setWizardPrefill(null);
-              setShowWizard(true);
-            }}
-            disabled={permsLoading}
-            title={!canManageAgents && !permsLoading ? "You don't have permission to install agents" : 'Start the guided agent setup'}
-            className={`px-4 py-2 text-sm font-medium rounded-md whitespace-nowrap disabled:opacity-50 ${
-              canManageAgents ? 'bg-primary-600 text-[#0a0a0a] hover:bg-primary-700' : 'bg-slate-300 text-slate-500 cursor-not-allowed'
-            }`}
+            onClick={() => q.refetch()}
+            className="inline-flex items-center gap-1 text-xs text-slate-500 transition hover:text-primary-700"
           >
-            {canManageAgents ? '🪄 Setup Wizard' : '🔒 Setup Wizard'}
+            <RefreshCw className="h-3.5 w-3.5" /> Refresh
           </button>
         </div>
-      </div>
-
-      <SetupWizard
-        open={showWizard}
-        onClose={() => { setShowWizard(false); setWizardPrefill(null); }}
-        discoveryPrefill={wizardPrefill}
-      />
-
-      {/* ─── ENDPOINT AGENT PACKAGES ─────────────────────────────────────
-          Surfaces the per-OS installer endpoints from the CIS Phase 3
-          backend merge. The Setup Wizard above still handles the
-          enrollment-token generation flow; these cards give operators
-          the installer binary directly when they already have their own
-          fleet-management tool (GPO / Intune / Ansible / Jamf). Cisco /
-          AWS / Oracle DB etc don't get a native agent — they use the
-          Agentless Connect Wizard surfaced below. */}
-      <div className="bg-white border border-slate-200 rounded-lg shadow-sm">
-        <div className="px-5 py-3 border-b border-slate-200">
-          <h2 className="text-sm font-semibold text-slate-900">Endpoint agent packages</h2>
-        </div>
-        <div className="grid md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-200">
-          <div className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-xl">🪟</span>
-              <span className="font-semibold text-sm text-slate-900">Windows</span>
-              <span
-                className="ml-auto text-[10px] text-slate-500"
-                title="Self-elevating .cmd wrapper that downloads setup.ps1 + agent.py. Notarised MSI is on the roadmap."
-              >
-                .cmd · x64
-              </span>
-            </div>
-            <div className="text-xs text-slate-600 mb-3">
-              Win 10 / 11 + Server 2016/19/22. Runs as
-              <code className="bg-slate-100 px-1 rounded mx-0.5">LocalSystem</code>.
-            </div>
-            <InstallerButtons
-              endpoint="installer.cmd"
-              label="Download Windows installer"
-              hint="One file. Runs on any Windows host. Will refuse to enrol on Linux/Mac."
-              toast={toast}
-            />
-            <Link href="/cyber-assurance/admin/integrations/connect?platform=windows" className="mt-1.5 block text-center text-[10px] text-slate-500 hover:text-primary-700 hover:underline">
-              or connect agentless (WinRM)
-            </Link>
-          </div>
-
-          <div className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-xl">🐧</span>
-              <span className="font-semibold text-sm text-slate-900">Linux</span>
-              <span
-                className="ml-auto text-[10px] text-slate-500"
-                title="Self-elevating .sh bootstrap that installs as systemd. Native .deb + .rpm packages are on the roadmap."
-              >
-                .sh bootstrap
-              </span>
-            </div>
-            <div className="text-xs text-slate-600 mb-3">
-              Ubuntu 20/22/24 · Debian 11/12 · RHEL 8/9 · AlmaLinux · Amazon Linux. Installs as
-              <code className="bg-slate-100 px-1 rounded mx-0.5">systemd</code> service.
-            </div>
-            <InstallerButtons
-              endpoint="installer.sh"
-              label="Download Linux installer"
-              hint="One file. Runs on any Linux host. Will refuse to enrol on Windows/Mac."
-              toast={toast}
-            />
-            <Link href="/cyber-assurance/admin/integrations/connect?platform=linux" className="mt-1.5 block text-center text-[10px] text-slate-500 hover:text-primary-700 hover:underline">
-              or connect agentless (SSH)
-            </Link>
-          </div>
-
-          <div className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-xl">🍎</span>
-              <span className="font-semibold text-sm text-slate-900">macOS</span>
-              <span
-                className="ml-auto text-[10px] text-slate-500"
-                title="Double-clickable .command bootstrap (Terminal opens, asks for sudo). Signed .pkg is on the roadmap."
-              >
-                .command
-              </span>
-            </div>
-            <div className="text-xs text-slate-600 mb-3">
-              macOS 12 Monterey or later. Notarised PKG installs as a launch daemon.
-            </div>
-            <InstallerButtons
-              endpoint="installer.command"
-              label="Download macOS installer"
-              hint="One file. Runs on any Mac. Will refuse to enrol on Windows/Linux."
-              toast={toast}
-            />
-            <p className="mt-1.5 text-center text-[10px] text-slate-400">macOS uses agent-only onboarding</p>
-          </div>
-        </div>
-      </div>
-
-      {/* ─── COLLECTOR AGENT (Linux, reaches OUT to remote targets) ─────── */}
-      <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
-        <div className="border-b border-slate-200 px-5 py-3">
-          <h2 className="text-sm font-semibold text-slate-900">Collector agent</h2>
-        </div>
-        <div className="grid md:grid-cols-2 gap-4 p-4">
-          <div className="p-4 border border-slate-200 rounded-lg">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-xl">📡</span>
-              <span className="font-semibold text-sm text-slate-900">Collector agent (Linux)</span>
-              <span className="ml-auto text-[10px] text-slate-500">SSH / SQL / LDAP drivers preinstalled</span>
-            </div>
-            <div className="text-xs text-slate-600 mb-3">
-              Same agent binary as endpoint, runs in <code className="bg-slate-100 px-1 rounded">mode=collector</code>. Installer also
-              pip-installs <code className="bg-slate-100 px-1 rounded">paramiko</code>, <code className="bg-slate-100 px-1 rounded">pymssql</code>,
-              <code className="bg-slate-100 px-1 rounded">psycopg2</code>, <code className="bg-slate-100 px-1 rounded">pymysql</code>,
-              <code className="bg-slate-100 px-1 rounded">oracledb</code>, <code className="bg-slate-100 px-1 rounded">ldap3</code> so the box
-              can execute every remote-target runner.
-            </div>
-            <InstallerButtons
-              endpoint="installer.sh"
-              label="Download collector installer"
-              hint="One file. Use on one Linux box per LAN segment. Refuses non-Linux."
-              toast={toast}
-              extraParams={{ collector: 1 }}
-            />
-          </div>
-          <div className="p-4 border border-primary-200 rounded-lg bg-primary-50">
-            <div className="text-xs font-semibold text-primary-800 mb-2">When to use a collector vs server-side agentless?</div>
-            <ul className="text-[11px] text-slate-700 space-y-1.5 list-disc list-inside">
-              <li><strong>Use the collector</strong> when the bank's firewall blocks inbound from Complyverse — collector dials OUT, then dials IN to the targets it can already reach.</li>
-              <li><strong>Use agentless</strong> when Complyverse can reach the targets directly (cloud-hosted backend + targets with public IPs / VPN).</li>
-              <li>Both paths reuse the same Connect Wizard credentials. Switching is a one-line config change.</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-
-      {/* ─── AGENTLESS TARGETS ─────────────────────────────────────────── */}
-      <AgentlessTargetsSection />
-
-      {/* Agents table */}
-      <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
@@ -340,14 +236,15 @@ export default function AgentsAdminPage() {
             <tbody className="divide-y divide-slate-100">
               {agents.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-2">
-                    <EmptyState
-                      icon="🤖"
-                      title="No agents installed yet"
-                      description="Install a collector agent to push CIS scan results back to Complyverse — useful when WinRM/SSH inbound is blocked or for endpoints behind NAT."
-                      primaryAction={{ label: '🪄 Setup Wizard', onClick: () => { setWizardPrefill(null); setShowWizard(true); } }}
-                      secondaryAction={{ label: 'Use Agentless instead', href: '/cyber-assurance/admin/discover' }}
-                    />
+                  <td colSpan={8} className="px-4 py-12 text-center">
+                    <div className="mx-auto max-w-sm">
+                      <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full bg-slate-100 text-2xl">🤖</div>
+                      <div className="text-sm font-medium text-slate-900">No agents installed yet</div>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Download an installer above and run it on a host. It appears here within a
+                        minute of enrolling, then inventories and scans on schedule.
+                      </p>
+                    </div>
                   </td>
                 </tr>
               )}
@@ -441,93 +338,178 @@ export default function AgentsAdminPage() {
   );
 }
 
-// ─── InstallerButtons ────────────────────────────────────────────────────
-// Mints a fleet enrollment token (unlimited uses, 72h TTL) and streams the
-// per-OS installer file as a download. One file works on any host of the
-// SAME OS family — the installer + agent both refuse to enrol on a
-// mismatched OS. Powered by the CIS Phase 3 backend endpoints
-// (/agents/installer.cmd | .sh | .command). Revocable any time via the
-// Agents table below.
-function InstallerButtons({
-  endpoint, label, hint, toast, extraParams,
+// ─── InstallAgent ─────────────────────────────────────────────────────────
+// Mints a one-time enrollment token and shows a COPY-PASTE install command the
+// operator runs in an elevated terminal on the target host — the way real
+// endpoint agents (Datadog/Wazuh/CrowdStrike) install. This avoids the dead-end
+// of downloading a .ps1/.sh that the OS then asks "which app should open this?".
+// The backend bakes the tenant (?tenant_slug) into the command so it works even
+// though the target host has no browser session.
+function InstallAgent({
+  os, canManage, toast, enrollName,
 }: {
-  endpoint: 'installer.cmd' | 'installer.sh' | 'installer.command';
-  label: string;
-  hint: string;
+  os: 'windows' | 'linux' | 'macos';
+  canManage: boolean;
   toast: ReturnType<typeof useToast>;
-  extraParams?: Record<string, string | number>;
+  // Overrides the auto name ("linux agent"). Cloud cards pass "aws agent" etc.
+  // so a cloud VM's agent is labelled by provider even though its OS is Linux.
+  enrollName?: string;
 }) {
-  const download = async (params: Record<string, string | number>) => {
-    if (extraParams) params = { ...extraParams, ...params };
+  const [busy, setBusy] = useState(false);
+  const [cmd, setCmd] = useState<string | null>(null);
+  // Optional AD-domain lock: when set, the backend refuses enrollment of any PC
+  // not joined to this domain — a leaked install command can't onboard an
+  // outside/home machine (it reports WORKGROUP or a different domain).
+  const [domain, setDomain] = useState('');
+  // Where the agent phones home. Public = the host this console is on (testing,
+  // reachable anywhere). Private = the production VPN/internal address the server
+  // advertises via AVA_AGENT_PRIVATE_URL (agents on the client network, not the
+  // public internet). Defaults to public until the cutover.
+  const [reach, setReach] = useState<'public' | 'private'>('public');
+  const runner = os === 'windows' ? 'an elevated PowerShell' : 'a terminal as root (sudo)';
+
+  const copyText = async (text: string) => {
+    let ok = false;
     try {
-      const resp = await apiClient.get(`/agents/${endpoint}`, {
-        params,
-        responseType: 'blob',
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        ok = true;
+      }
+    } catch { /* insecure context or denied — fall through to execCommand */ }
+    if (!ok) {
+      // On plain HTTP the Clipboard API is unavailable; use the legacy path so
+      // Copy still works until the app is behind HTTPS.
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+      } catch { ok = false; }
+    }
+    toast.toast(ok
+      ? { title: 'Command copied', message: `Paste it into ${runner} on the machine you want to add.`, type: 'success' }
+      : { title: 'Press Ctrl/Cmd+C', message: 'The command is highlighted below — copy it.', type: 'info' });
+  };
+
+  const generate = async () => {
+    if (!canManage) {
+      toast.toast({
+        title: 'Permission required',
+        message: 'You need the "compliance:agents:manage" permission to install an agent.',
+        type: 'warning',
       });
-      const blob = new Blob([resp.data], { type: 'application/octet-stream' });
-      const cd = String(resp.headers['content-disposition'] || '');
-      const m = cd.match(/filename="?([^";]+)"?/);
-      const filename = m ? m[1] : `AvaAgent.${endpoint.split('.').pop()}`;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      return filename;
+      return;
+    }
+    setBusy(true);
+    try {
+      // Mint a one-time token; the backend returns the full install command with
+      // the cloud URL + tenant + token baked in (one command per OS family).
+      const enr = await agentsApi.enroll({ agent_name: enrollName ?? `${os} agent`, os_family: os, allowed_domain: domain.trim() || undefined, reachability: reach });
+      const data = enr.data as { commands?: Record<string, string> };
+      const command = data.commands?.[os];
+      if (!command) throw new Error('No install command returned by the server');
+      setCmd(command);
+      await copyText(command);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Unknown error';
-      toast.toast({ title: 'Download failed', message: msg, type: 'error' });
-      return null;
+      // Prefer the server's reason (e.g. "Private agent reachability is not configured").
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      const msg = detail || (e instanceof Error ? e.message : 'Unknown error');
+      toast.toast({ title: 'Could not prepare installer', message: msg, type: 'error' });
+    } finally {
+      setBusy(false);
     }
   };
 
-  return (
-    <>
-      <button
-        type="button"
-        onClick={async () => {
-          const filename = await download({ fleet: 1, expires_hours: 72 });
-          if (filename) {
-            toast.toast({
-              title: 'Installer ready',
-              message: `${filename} — share with any number of hosts. Reusable for 72h, revocable any time.`,
-              type: 'success',
-            });
-          }
-        }}
-        className="block w-full text-center px-3 py-2 bg-primary-600 text-[#0a0a0a] text-xs font-medium rounded-md hover:bg-primary-700"
-      >
-        📥 {label}
-      </button>
-      <div className="mt-1 text-center text-[10px] text-slate-500">{hint}</div>
-    </>
-  );
-}
-
-// ─── AgentlessTargetsSection ─────────────────────────────────────────────
-// Single CTA card pointing operators to the Connect Wizard for non-agent
-// device classes (Cisco / AWS / Azure / DBs / AD / K8s). The package's
-// earlier version rendered a 12-tile grid; current shape is a single CTA
-// because the grouped tile UI already lives at /admin/integrations/connect
-// (one source of truth, not two pages of the same logic).
-function AgentlessTargetsSection() {
-  return (
-    <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-200 px-5 py-3">
-        <h2 className="text-sm font-semibold text-slate-900">Agentless targets</h2>
-      </div>
-      <div className="flex items-center justify-end gap-3 p-5">
-        <Link
-          href="/cyber-assurance/admin/integrations/connect"
-          className="inline-flex items-center gap-1.5 rounded-md border border-primary-200 bg-primary-50 px-3.5 py-2 text-xs font-medium text-primary-700 hover:bg-primary-100"
+  if (!cmd) {
+    return (
+      <div className="space-y-1.5">
+        <input
+          type="text"
+          value={domain}
+          onChange={(e) => setDomain(e.target.value)}
+          placeholder="Lock to AD domain (e.g. bank.local) — optional"
+          title="Only machines joined to this domain can enrol with this command. Leave blank to allow any machine."
+          className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-[11px] text-slate-800 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none"
+        />
+        {/* Reachability: the address baked into the install command the agent
+            phones home to. Public for testing; Private for production (server
+            must have AVA_AGENT_PRIVATE_URL set to the VPN/internal address). */}
+        <div className="flex items-center gap-1 rounded-md border border-slate-200 p-0.5">
+          {(['public', 'private'] as const).map((r) => (
+            <button
+              key={r}
+              type="button"
+              onClick={() => setReach(r)}
+              title={r === 'public'
+                ? 'Agent reaches the server on this console’s address — works from anywhere. Use for testing.'
+                : 'Agent reaches the server on the production VPN / internal address (AVA_AGENT_PRIVATE_URL). Use in production.'}
+              className={`flex-1 rounded px-2 py-1 text-[11px] font-medium transition ${
+                reach === r ? 'bg-primary-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              {r === 'public' ? 'Public (testing)' : 'Private (production)'}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={generate}
+          disabled={busy}
+          className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-primary-600 px-3 py-2 text-xs font-medium text-white transition hover:bg-primary-700 disabled:opacity-50"
         >
-          <Plus className="h-3.5 w-3.5" />
-          Open Connect Wizard
-        </Link>
+          <Download className="h-3.5 w-3.5" />
+          {busy ? 'Preparing…' : 'Get install command'}
+        </button>
       </div>
-    </section>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <ol className="space-y-1 text-[11px] text-slate-600">
+        <li><span className="font-semibold text-slate-800">1.</span> Copy the command below.</li>
+        <li><span className="font-semibold text-slate-800">2.</span> On the machine you want to add, open {runner}.</li>
+        <li><span className="font-semibold text-slate-800">3.</span> Paste it, press Enter — the agent installs, enrols &amp; reports.</li>
+      </ol>
+      <div className="flex items-stretch gap-1.5">
+        <code
+          onClick={(e) => {
+            const sel = window.getSelection();
+            const range = document.createRange();
+            range.selectNodeContents(e.currentTarget);
+            sel?.removeAllRanges();
+            sel?.addRange(range);
+          }}
+          title="Click to select the whole command"
+          className="flex-1 cursor-text select-all overflow-x-auto whitespace-nowrap rounded-md bg-slate-900 px-2.5 py-2 font-mono text-[10px] leading-5 text-slate-100"
+        >
+          {cmd}
+        </code>
+        <button
+          type="button"
+          onClick={() => copyText(cmd)}
+          title="Copy command"
+          className="inline-flex shrink-0 items-center gap-1 rounded-md bg-primary-600 px-2.5 text-xs font-medium text-white transition hover:bg-primary-700"
+        >
+          <Copy className="h-3.5 w-3.5" /> Copy
+        </button>
+      </div>
+      <p className="text-[10px] text-slate-400">
+        One-time token, expires in 24h. ·{' '}
+        <button
+          type="button"
+          onClick={generate}
+          disabled={busy}
+          className="underline-offset-2 hover:text-primary-700 hover:underline disabled:opacity-50"
+        >
+          {busy ? 'Regenerating…' : 'New command'}
+        </button>
+      </p>
+    </div>
   );
 }

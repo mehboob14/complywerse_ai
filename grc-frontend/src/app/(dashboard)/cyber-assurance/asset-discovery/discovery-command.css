@@ -36,6 +36,7 @@
 .disc-cc .ovtop p{font-size:13px;color:var(--muted);margin-top:8px;max-width:58ch}
 .disc-cc .ovhero{display:grid;grid-template-columns:1.05fr .95fr;gap:20px;align-items:stretch;margin-bottom:16px}
 .disc-cc .ovhero-l{display:grid}
+.disc-cc .ovhero-r{display:grid}
 .disc-cc .radar-card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:15px 17px 14px;box-shadow:var(--shadow);position:relative;overflow:hidden}
 .disc-cc .radar-card::after{content:"";position:absolute;inset:0;background:radial-gradient(120% 90% at 50% 40%,rgba(0,91,150,.05),transparent 60%);pointer-events:none}
 .disc-cc .rc-head{display:flex;justify-content:space-between;align-items:center}
@@ -45,6 +46,22 @@
 .disc-cc .radar-cv{display:block;width:100%;height:auto;margin:4px 0}
 .disc-cc .rc-foot{font-size:11.5px;color:var(--muted);border-top:1px solid var(--line2);padding-top:10px}
 .disc-cc .rc-foot b{color:var(--ink);font-family:var(--disp);font-weight:700}
+/* estate breakdown (replaces the decorative radar) — real proportions of the observed estate */
+.disc-cc .estate-card{display:flex;flex-direction:column;height:100%}
+.disc-cc .estate-eyebrow{font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.04em}
+.disc-cc .estate{display:flex;flex-direction:column;justify-content:space-between;gap:14px;flex:1;margin:16px 0}
+.disc-cc .estate-row{display:flex;flex-direction:column;gap:6px}
+.disc-cc .estate-top{display:flex;justify-content:space-between;align-items:baseline}
+.disc-cc .estate-top>span{font-size:12px;color:var(--muted)}
+.disc-cc .estate-top b{font-family:var(--disp);font-size:17px;font-weight:700;color:var(--ink);line-height:1;display:inline-flex;align-items:baseline;gap:7px}
+.disc-cc .estate-top b em{font-style:normal;font-size:10px;font-weight:700;color:var(--mint2);background:var(--mint-soft);padding:2px 7px;border-radius:999px}
+.disc-cc .estate-track{height:8px;border-radius:999px;background:var(--line2);overflow:hidden}
+.disc-cc .estate-track i{display:block;height:100%;border-radius:999px;transition:width .4s ease}
+.disc-cc .estate-track .bar-net{background:var(--slate)}
+.disc-cc .estate-track .bar-easm{background:#8b5cf6}
+.disc-cc .estate-track .bar-linked{background:var(--mint)}
+.disc-cc .estate-track .bar-conn{background:var(--mint2)}
+.disc-cc .estate-track .bar-wait{background:var(--amber)}
 .disc-cc .ov-finds{display:flex;gap:30px;margin-top:26px;flex-wrap:wrap}
 .disc-cc .ov-finds b{font-family:var(--disp);font-size:26px;font-weight:700;letter-spacing:-.02em;display:block;line-height:1}
 .disc-cc .ov-finds span{font-size:11px;color:var(--muted);display:block;margin-top:5px}
@@ -216,3 +233,29 @@
 .disc-cc .tabs a.active .count{background:var(--mint-soft);color:var(--mint2)}
 .disc-cc .live-chip{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:700;color:var(--mint2);background:var(--mint-soft);border-radius:999px;padding:7px 12px}
 .disc-cc .live-chip i{width:7px;height:7px;border-radius:50%;background:var(--mint);animation:disc-blink 1.6s infinite}
+
+/* ===== Connect-queue left filter rail =====
+   Mirrors the IT Asset Inventory register's left rail (assets/inventory-redesign.css
+   `.inv2 .rail`): a white card column of controls grouped under uppercase caps,
+   ~224px wide, #005B96 accent. Built with the discovery page's own tokens so it
+   matches that rail's look while staying consistent with this page. The rail is a
+   normal grid column (not sticky, no inner scroller) — the shell <main> scrolls. */
+.disc-cc .cq-workspace{display:grid;grid-template-columns:minmax(0,224px) minmax(0,1fr);gap:14px;align-items:start}
+.disc-cc .cq-rail{display:flex;flex-direction:column;gap:7px;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow-sm);padding:12px 11px;align-self:start}
+.disc-cc .cq-railcap{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#828E9A;padding:2px 2px 0}
+.disc-cc .cq-railcap:not(:first-child){margin-top:5px}
+/* Rail controls fill the column (the column context is flex, so cancel the
+   toolbar's flex:1 on inputs and the selects' auto/max widths). */
+.disc-cc .cq-rail .input{width:100%;min-width:0;flex:none}
+.disc-cc .cq-rail .select{width:100%;min-width:0;max-width:none}
+.disc-cc .cq-rail .cq-field button{width:100%}
+.disc-cc .cq-rail .cq-wide{width:100%;justify-content:center}
+.disc-cc .cq-hint{font-size:11px;color:var(--faint);line-height:1.45;padding:0 2px}
+/* Clean action bar atop the table — primary Connect + contextual bulk actions. */
+.disc-cc .cq-actionbar{display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid var(--line2);flex-wrap:wrap}
+.disc-cc .cq-actionbar .push{margin-left:auto}
+.disc-cc .cq-actionbar .btn{height:32px}
+.disc-cc .cq-actionbar .count{font-size:10px;font-weight:700;background:var(--mint-soft);color:var(--mint2);border-radius:999px;padding:1px 7px;margin-left:2px}
+/* Narrow screens: rail stacks above the table full-width (never hidden — it
+   holds the connect method + logins, which the flow needs). */
+@media(max-width:1050px){.disc-cc .cq-workspace{grid-template-columns:1fr}}

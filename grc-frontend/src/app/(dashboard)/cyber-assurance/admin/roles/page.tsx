@@ -286,7 +286,7 @@ export default function RolesManagementPage() {
       id: 'permissions',
       header: 'Permissions',
       accessor: (role: AdminRole) => (
-        <span className="text-slate-600">{role.permissions.length}</span>
+        <span className="text-slate-600">{role.bypasses_all ? 'Full access' : role.permissions.length}</span>
       ),
     },
     {

@@ -104,10 +104,14 @@ test('pagesForArea: the openable pages of one module, the menu\'s leaves first i
   assert.equal(paths(vendor)[0], '/vendor-risk');
   assert.ok(paths(vendor).includes('/vendor-risk/policy') && !paths(vendor).includes('/vendor-risk/shadow-saas'));
   assert.deepEqual(pagesForArea('nowhere'), []);
-  // the cyber module lists its own pages and none of the older copies
-  const cyber = paths(pagesForArea('cybersecurity-assurance'));
-  assert.deepEqual(cyber.slice(0, 7), ['/cyber-assurance/dashboard', '/cyber-assurance/asset-discovery', '/cyber-assurance/assets', '/cyber-assurance/risk-posture', '/cyber-assurance/vulnerabilities', '/cyber-assurance/scan-flows', '/cyber-assurance/pentest']);
-  assert.ok(!cyber.includes('/assets') && !cyber.includes('/vulnerabilities') && !cyber.includes('/cyber-assurance/admin'));
+  // the cyber groups list their own pages and none of the older copies
+  const itAsset = paths(pagesForArea('it-asset'));
+  assert.deepEqual(itAsset.slice(0, 4), ['/cyber-assurance/asset-discovery', '/cyber-assurance/assets', '/cyber-assurance/licenses', '/cyber-assurance/risk-posture']);
+  const cyber = paths(pagesForArea('cybersecurity'));
+  assert.deepEqual(cyber.slice(0, 3), ['/cyber-assurance/vulnerabilities', '/cyber-assurance/advisories', '/cyber-assurance/pentest']);
+  assert.ok(cyber.includes('/cyber-assurance/scan-flows'), 'scanning lives inside Vulnerabilities');
+  assert.ok(!itAsset.includes('/assets') && !cyber.includes('/vulnerabilities') && !cyber.includes('/cyber-assurance/admin'));
+  assert.deepEqual(paths(pagesForArea('help-desk')).slice(0, 2), ['/cyber-assurance/helpdesk/dashboard', '/cyber-assurance/helpdesk/tickets']);
   // every area an entry uses has a display name
   for (const area of Array.from(new Set(routes.map((e) => e.area)))) assert.ok(areaName(area), `${area} has no display name`);
   assert.equal(areaName('administration'), 'Administration');

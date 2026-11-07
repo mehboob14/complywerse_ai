@@ -294,8 +294,12 @@ function CIACard({ assetId, asset }: { assetId: number; asset: any }) {
   const [c, setC] = useState(asset.confidentiality_rating || 0);
   const [i, setI] = useState(asset.integrity_rating || 0);
   const [a, setA] = useState(asset.availability_rating || 0);
-  const [rationale, setRationale] = useState<string | null>(null);
+  const [suggestion, setSuggestion] = useState<{ text: string; source: 'ai' | 'rules'; basis: string[] } | null>(null);
   const [dirty, setDirty] = useState(false);
+  const reset = () => {
+    setC(asset.confidentiality_rating || 0); setI(asset.integrity_rating || 0); setA(asset.availability_rating || 0);
+    setSuggestion(null); setDirty(false);
+  };
 
   useEffect(() => {
     setC(asset.confidentiality_rating || 0);
@@ -306,11 +310,12 @@ function CIACard({ assetId, asset }: { assetId: number; asset: any }) {
   const suggest = useMutation({
     mutationFn: async () => (await assetsApi.getCIARecommendation({
       name: asset.name, description: asset.description, asset_type: asset.asset_type,
-      vendor: asset.vendor, location: asset.location, criticality: asset.criticality,
+      vendor: asset.vendor, location: asset.location, asset_id: assetId,
     })).data,
-    onSuccess: (r: any) => {
+    onSuccess: (r) => {
       setC(r.confidentiality_rating); setI(r.integrity_rating); setA(r.availability_rating);
-      setRationale(r.recommendation || null); setDirty(true);
+      setSuggestion({ text: r.recommendation, source: r.source === 'ai' ? 'ai' : 'rules', basis: r.basis || [] });
+      setDirty(true);
     },
   });
 
@@ -320,7 +325,7 @@ function CIACard({ assetId, asset }: { assetId: number; asset: any }) {
       qc.invalidateQueries({ queryKey: ['asset-detail', assetId] });
       qc.invalidateQueries({ queryKey: ['asset', assetId] });
       qc.invalidateQueries({ queryKey: ['asset-risk-posture', assetId] });
-      setDirty(false); setRationale(null);
+      setDirty(false); setSuggestion(null);
     },
   });
 
@@ -333,7 +338,8 @@ function CIACard({ assetId, asset }: { assetId: number; asset: any }) {
             key={n}
             onClick={() => { set(n); setDirty(true); }}
             title={CIA_LABELS[n]}
-            className="h-[22px] flex-1 rounded transition-colors"
+            aria-label={`${label}: set to ${CIA_LABELS[n]}`}
+            className="h-[22px] flex-1 cursor-pointer rounded transition-all hover:ring-2 hover:ring-[#005B96]/40"
             style={{ background: n <= value ? (value >= 4 ? '#B23A3A' : value === 3 ? '#9A6410' : '#2E63A8') : '#F0F3F5' }}
           />
         ))}
@@ -348,32 +354,44 @@ function CIACard({ assetId, asset }: { assetId: number; asset: any }) {
       title="CIA Impact Ratings"
       guide={<GuideMarker id="asset.cia" n={8} />}
       right={
-        <span className="rounded-full bg-[#F1F4F6] px-2 py-0.5 text-[10.5px] font-semibold text-[#6B7787] whitespace-nowrap">
-          {asset.criticality_manual_override ? 'manual override' : 'auto-derived'}
+        <span
+          title="Criticality is calculated from these CIA ratings plus exposure, data class and business function, unless someone overrode it."
+          className="rounded-full bg-[#F1F4F6] px-2 py-0.5 text-[10.5px] font-semibold text-[#6B7787] whitespace-nowrap"
+        >
+          {asset.criticality_manual_override ? 'Criticality: manual override' : 'Criticality: calculated from CIA'}
         </span>
       }
     >
+      <p className="mb-1 text-[11.5px] text-[#8A95A1]">Click a square to set a rating, or use AI suggest.</p>
       <Row label="Confidentiality" value={c} set={setC} />
       <Row label="Integrity" value={i} set={setI} />
       <Row label="Availability" value={a} set={setA} />
 
-      {rationale && (
-        <p className="mt-3 rounded-lg bg-[#EFF5FA] px-3 py-2 text-[12px] leading-relaxed text-[#0F1F2B]">
-          <b>AI:</b> {rationale}
-        </p>
+      {suggestion && (
+        <div className="mt-3 rounded-lg bg-[#EFF5FA] px-3 py-2 text-[12px] leading-relaxed text-[#0F1F2B]">
+          <p>
+            <b>{suggestion.source === 'ai' ? 'AI suggestion' : 'Rule-based estimate (AI unavailable)'}:</b> {suggestion.text}
+          </p>
+          {suggestion.basis.length > 0 && (
+            <p className="mt-1 text-[11px] text-[#6B7787]">Based on: {suggestion.basis.join(' · ')}</p>
+          )}
+          <p className="mt-1 text-[11px] text-[#6B7787]">Review, adjust if needed, then save.</p>
+        </div>
       )}
 
       <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[#F0F3F5] pt-3">
         <button onClick={() => suggest.mutate()} disabled={suggest.isPending} className={BTN_GHOST}>
           {suggest.isPending ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} AI suggest
         </button>
-        <button onClick={() => save.mutate()} disabled={!dirty || save.isPending} className={BTN_PRIMARY}>
+        <button onClick={() => save.mutate()} disabled={!dirty || save.isPending} className={BTN_PRIMARY}
+          title={dirty ? undefined : 'Change a rating (click a square) or use AI suggest first'}>
           {save.isPending ? <Loader2 size={12} className="animate-spin" /> : <ShieldCheck size={12} />} Save &amp; recalculate
         </button>
+        {dirty && <button onClick={reset} className="text-[12px] font-semibold text-[#6B7787] hover:text-[#0F1F2B]">Reset</button>}
         {save.isSuccess && !dirty && <span className="text-[12px] text-[#1F7A54]">Saved — risk recalculated.</span>}
       </div>
       <p className="mt-2 text-[11px] text-[#AEB8C2]">
-        Saving updates the asset’s derived criticality and re-scores its risk. CIA is edited here only — the one place it lives.
+        Saving updates the asset’s calculated criticality and re-scores its risk. The same ratings are in the asset’s Edit sidebar (Risk &amp; criticality).
       </p>
     </BigCard>
   );

@@ -7,7 +7,7 @@ import { Brain, Database, CheckCircle2, AlertCircle, Loader2, Play, RotateCcw } 
 
 // AI Rule Pre-Classification page
 // ------------------------------------------------------------------
-// Complyverse stores 4000+ CIS rules across ~25 unique benchmark
+// ComplyVerse stores 4000+ CIS rules across ~25 unique benchmark
 // PDFs. At ingest time we tag each rule with the normalised OS keys
 // it applies to (windows-11, ubuntu-22.04, cisco-asa, oracle-db-19c …),
 // so scan-time lookup is O(1) instead of running regex+AI per request.

@@ -600,6 +600,18 @@ function _heatmapColor(value: number, max: number): string {
   return `rgb(${r}, ${g}, ${b})`;
 }
 
+// WHITE text only reads on a genuinely deep tile. The old code decided this from a value
+// RATIO (value/max > 0.45), which put white text on light/medium (pink) tiles → unreadable.
+// Decide from the fill's actual luminance instead: white only when the tile is deep (lum < .2).
+function _isDarkFill(color: string): boolean {
+  const m = color.match(/\d+/g);
+  if (!m || m.length < 3) return false;              // hex fallback (#cbd5e1, light) → dark text
+  const [r, g, b] = m.slice(0, 3).map(Number);
+  const lin = (v: number) => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4); };
+  const L = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  return L < 0.2;
+}
+
 // Custom treemap content — gives us KEV ring, label, and value chip.
 // recharts passes (x, y, width, height, name, value, ...) for each node.
 interface TreemapContentProps {
@@ -617,8 +629,9 @@ function HeatmapNode(props: TreemapContentProps & { maxValue: number }) {
   const isKev = (payload.kev_count || 0) > 0;
   const labelFits = width > 60 && height > 30;
   const valueFits = width > 80 && height > 50;
-  // Light text on dark cells, dark on light. Tipping point: norm ~0.45.
-  const dark = (payload.value / (maxValue || 1)) > 0.45;
+  // Light text on dark cells, dark on light — decided from the fill's real luminance
+  // (not a value ratio, which white-washed light/medium pink tiles).
+  const dark = _isDarkFill(fill);
   return (
     <g>
       <rect

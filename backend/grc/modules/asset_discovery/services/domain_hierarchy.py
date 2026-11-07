@@ -24,20 +24,17 @@ from grc.models import ITAsset, AssetRelationship
 
 logger = logging.getLogger(__name__)
 
-# Two-level public suffixes we handle without a full Public Suffix List. Covers
-# the common ccTLD-with-second-level cases so "foo.co.uk" → "foo.co.uk", not
-# "co.uk". Not exhaustive — a domain under an unusual multi-part suffix falls
-# back to last-two-labels, which is correct for the vast majority (.com, .ca,
-# .net, .org, .io, …). Swap in `publicsuffix2` later if full PSL fidelity is
-# needed; the callers don't change.
-_TWO_LEVEL_SUFFIXES = frozenset({
-    "co.uk", "org.uk", "gov.uk", "ac.uk", "me.uk", "ltd.uk", "plc.uk", "net.uk",
-    "com.au", "net.au", "org.au", "edu.au", "gov.au", "id.au",
-    "co.nz", "net.nz", "org.nz", "govt.nz",
-    "com.br", "com.cn", "com.mx", "com.tr", "com.sg", "com.hk", "com.tw",
-    "co.in", "net.in", "org.in", "co.jp", "or.jp", "ne.jp", "co.za", "co.kr",
-    "com.pk", "net.pk", "org.pk", "gov.pk",
-})
+# Registrable-domain resolution now lives in ONE place — grc.modules.it_assets.
+# asset_rollup — so the apex grouping used for subdomain_of edges here matches the
+# dashboards and the Asset Register exactly. The old local list here was missing
+# ``edu.pk``, so EVERY ``*.superior.edu.pk`` subdomain resolved to ``edu.pk`` (not
+# an asset) and was never linked to its apex — which is why the subdomain_of table
+# had only a handful of edges and the domain score-rollup was inert. Delegating
+# fixes that. ``TWO_LEVEL_SUFFIXES`` is re-exported for any importer of this name.
+from grc.modules.it_assets.asset_rollup import (  # noqa: E402
+    TWO_LEVEL_SUFFIXES as _TWO_LEVEL_SUFFIXES,
+    registrable_domain,
+)
 
 
 def _is_ip_literal(value: str) -> bool:
@@ -47,26 +44,6 @@ def _is_ip_literal(value: str) -> bool:
         return True
     except (ValueError, AttributeError):
         return False
-
-
-def registrable_domain(name: Optional[str]) -> Optional[str]:
-    """The apex (registrable) domain of a DNS name, or None if not a domain.
-
-    'ftp.liztek.ca' → 'liztek.ca'; 'liztek.ca' → 'liztek.ca';
-    'foo.bar.co.uk' → 'bar.co.uk'; an IP or a single-label host → None.
-    """
-    if not name:
-        return None
-    host = name.strip().lower().rstrip(".")
-    if not host or _is_ip_literal(host):
-        return None
-    labels = host.split(".")
-    if len(labels) < 2:
-        return None  # a bare NetBIOS name like "desktop-ce3efjb" is not a domain
-    last_two = ".".join(labels[-2:])
-    if len(labels) >= 3 and last_two in _TWO_LEVEL_SUFFIXES:
-        return ".".join(labels[-3:])
-    return last_two
 
 
 def _asset_dns_name(asset: ITAsset) -> Optional[str]:

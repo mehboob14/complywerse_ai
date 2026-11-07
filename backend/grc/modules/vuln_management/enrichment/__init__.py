@@ -16,7 +16,7 @@ intentionally not part of the public surface — keep callers off them so the
 caching strategy can evolve without breaking imports.
 """
 
-from .enrichment_service import enrich_vulnerability
+from .enrichment_service import enrich_vulnerability, ensure_cve_enriched
 from .priority import compute_composite_priority
 
-__all__ = ["enrich_vulnerability", "compute_composite_priority"]
+__all__ = ["enrich_vulnerability", "ensure_cve_enriched", "compute_composite_priority"]

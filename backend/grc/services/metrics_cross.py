@@ -134,7 +134,10 @@ def vulnerability_samples(db: Session, tenant_ids: List[int]) -> List[dict]:
     """Open count (overall + by severity), open KEV, overdue, and MTTR — matches
     the vuln dashboard's open/overdue/mttr definitions."""
     from ..models import Vulnerability
-    rows = db.query(Vulnerability).filter(Vulnerability.tenant_id.in_(tenant_ids)).all()
+    # INVENTORY ONLY: same register rule as the vuln dashboard - drops findings that sit only on
+    # transient AI-pentest ad-hoc targets (or on no asset), so the stored trend matches the dashboard.
+    from ..modules.vuln_management._adhoc_filter import exclude_adhoc
+    rows = db.query(Vulnerability).filter(Vulnerability.tenant_id.in_(tenant_ids), exclude_adhoc(db)).all()
     open_rows = [v for v in rows if (v.status or "open") not in _VULN_RESOLVED]
     out = [_s("vuln_open", len(open_rows))]
     for sev in ("critical", "high", "medium", "low"):
@@ -179,11 +182,22 @@ def vendor_samples(db: Session, tenant_ids: List[int]) -> List[dict]:
 
 
 def asset_samples(db: Session, tenant_ids: List[int]) -> List[dict]:
-    """Total assets + high-value count — matches the asset dashboard."""
+    """Managed assets + high-value count — the SAME basis as the register / risk
+    posture, so the trend reconciles with the inventory headcount instead of
+    counting raw rows. Two corrections vs the old `len(rows)`: (1) exclude ad-hoc
+    pentest targets (same predicate as the register / estate_overview), and
+    (2) roll external subdomains under their apex domain (apex = one asset) with the
+    canonical `unit_key_for`. Raw rows counted 40; the inventory shows 6."""
     from ..models import ITAsset
-    rows = db.query(ITAsset).filter(ITAsset.tenant_id.in_(tenant_ids)).all()
+    from ..modules.it_assets.asset_rollup import unit_key_for
+    rows = db.query(ITAsset).filter(
+        ITAsset.tenant_id.in_(tenant_ids),
+        func.coalesce(ITAsset.status, "") != "adhoc",
+        func.coalesce(ITAsset.last_seen_source, "") != "pentest-adhoc",
+    ).all()
+    total = len({unit_key_for(a) for a in rows})  # rolled managed-asset count
     high = sum(1 for a in rows if (a.criticality or "").lower() in ("high", "critical"))
-    return _compact([_s("assets_total", len(rows)), _s("assets_high_value", high)])
+    return _compact([_s("assets_total", total), _s("assets_high_value", high)])
 
 
 def governance_samples(db: Session, tenant_ids: List[int]) -> List[dict]:

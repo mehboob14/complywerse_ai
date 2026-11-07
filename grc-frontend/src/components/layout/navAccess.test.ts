@@ -31,14 +31,22 @@ test('an administrator sees every entry; a client feature still needs the tenant
   assert.deepEqual(sees(me([], admin)), withoutRegister);
 });
 
-test('Cybersecurity Assurance and Reports show their entries to the rights that open them', () => {
+test('IT Asset, Cybersecurity, Help Desk and Reports show their entries to the rights that open them', () => {
   assert.deepEqual(sees(me(['vulnerabilities:vulnerability_register:view'])), [
     QUEUE,
-    ['Cybersecurity Assurance', ['Performance', 'Vulnerabilities', 'Vulnerability Scanning', 'AI Pentest']],
+    ['Cybersecurity', ['Vulnerabilities', 'Advisories']],
   ]);
+  // AI Pentest has its own right (every /pentest call checks it), not the vulnerability register's
+  assert.deepEqual(sees(me(['pentest:workspace:view'])), [QUEUE, ['Cybersecurity', ['AI Pentest']]]);
   assert.deepEqual(sees(me(['assets:asset_inventory:view'])), [
     QUEUE,
-    ['Cybersecurity Assurance', ['Performance', 'IT Asset Discovery', 'IT Asset Inventory']],
+    ['IT Asset', ['IT Asset Discovery', 'IT Asset Inventory', 'Licenses']],
+    ['Reports', ['Cyber Reports']],
+  ]);
+  // a requester sees only the end-user portal
+  assert.deepEqual(sees(me(['helpdesk:requests:create'])), [
+    QUEUE,
+    ['Help Desk', [['End-user Portal', ['Request something', 'My Requests', 'My Approvals', 'Report an issue', 'Help / Knowledge Base']]]],
   ]);
   assert.deepEqual(sees(me(['reports:analytics:view'])), [QUEUE, ['Reports', ['Analytics']]]);
   assert.deepEqual(sees(me(['reports:reports:export'])), [QUEUE, ['Reports', ['Quick export', 'Saved exports']]]);

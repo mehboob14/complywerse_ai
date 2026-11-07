@@ -33,7 +33,7 @@
  *     endpoint or query key.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ChevronRight, X, ShieldCheck, ShieldAlert, Search,
@@ -179,6 +179,31 @@ function SecurityPostureCard({ posture }: { posture: any }) {
 
 /* ─── panel ────────────────────────────────────────────────────────────── */
 
+// The detected-software endpoint reads the host's full package list and matches
+// every entry against CIS benchmarks in ONE request, so a 1000+-package host can
+// take several seconds. A bare "Loading…" read as a frozen/broken page — this
+// climbing bar (NProgress style: no true %, it eases toward 90% and the whole
+// block unmounts when data lands) makes it clear the page is working.
+function SoftwareLoadingBar() {
+  const [pct, setPct] = useState(8);
+  useEffect(() => {
+    const t = setInterval(() => setPct((p) => (p >= 90 ? p : p + Math.max(0.5, (90 - p) * 0.07))), 220);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <div className="px-5 py-8">
+      <div style={{ fontSize: 13, color: '#334155', fontWeight: 600, marginBottom: 4 }}>Loading installed software…</div>
+      <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 12, maxWidth: 520 }}>
+        Reading this host&apos;s full package inventory and matching it against CIS benchmarks. Large hosts (1000+ packages) can take a few seconds — the page is working, not stuck.
+      </div>
+      <div style={{ height: 6, background: '#eef1f3', borderRadius: 99, overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${Math.round(pct)}%`, background: '#28578f', borderRadius: 99, transition: 'width 0.22s ease' }} />
+      </div>
+      <div className="tabular-nums" style={{ fontSize: 10.5, color: FAINT, marginTop: 6 }}>{Math.round(pct)}%</div>
+    </div>
+  );
+}
+
 export default function SoftwarePanel({
   assetId,
   canEdit,
@@ -284,7 +309,7 @@ export default function SoftwarePanel({
       {/* ===== SUMMARY + CATEGORY BREAKDOWN (Software.html: .stats + .catbar) ===== */}
       <div className={CARD} style={{ overflow: 'hidden' }}>
         {detected.isLoading ? (
-          <div className="px-5 py-6"><Empty text="Loading…" /></div>
+          <SoftwareLoadingBar />
         ) : items.length === 0 ? (
           <div className="px-5 py-6">
             <Empty text="No software recorded for this asset yet." hint="Software is captured during a CIS scan or an agent heartbeat. Run a scan from the Compliance tab to populate this." />

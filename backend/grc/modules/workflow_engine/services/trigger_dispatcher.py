@@ -360,19 +360,28 @@ def _resolve_canonical_resource(module: str, entity: str) -> tuple:
 # master catalog. The embedded runtime therefore has to open a session against
 # the right tenant DB for every poll / timer / queued-item it processes.
 
-def iter_tenant_sessions():
+def iter_tenant_sessions(include_inactive: bool = False):
     """Yield ``(tenant_id, slug, session)`` for every active tenant.
 
     One short-lived session is opened per tenant and closed automatically
     after the consumer's iteration step. Quiet on errors (e.g. a tenant DB
     being unreachable must not kill the whole pass).
+
+    ``include_inactive=True`` drops the is_active filter and yields EVERY tenant.
+    is_active is a Python-side default (``default=True``, nullable, no
+    server_default), so a tenant row created outside the ORM default path has
+    ``is_active = NULL`` — and ``is_active IS TRUE`` excludes NULL. Boot-time
+    schema/data self-heal must still reach those tenants, so it passes True; the
+    workflow dispatcher keeps the active-only default.
     """
     from grc.models import Tenant, SessionLocal as _MasterSession
     from grc.db import open_tenant_session
     master = _MasterSession()
     try:
-        tenants = master.query(Tenant).filter(Tenant.is_active.is_(True)).all() \
-            if hasattr(Tenant, "is_active") else master.query(Tenant).all()
+        if include_inactive or not hasattr(Tenant, "is_active"):
+            tenants = master.query(Tenant).all()
+        else:
+            tenants = master.query(Tenant).filter(Tenant.is_active.is_(True)).all()
     finally:
         master.close()
     for t in tenants:

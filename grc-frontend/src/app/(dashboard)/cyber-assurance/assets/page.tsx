@@ -14,6 +14,8 @@ import ModuleSettingsPanel from '@/components/settings/ModuleSettingsPanel';
 import { AssetsWorkspace } from './_workspace/AssetsWorkspace';
 import InventoryScorecard from '@/cyber-assurance/components/dashboard/InventoryScorecard';
 import InventoryRedesign from './_workspace/InventoryRedesign';
+import { RowActionsMenu } from './_workspace/RowActionsMenu';
+import InventoryOverview from './_overview/InventoryOverview';
 import { SmartImportWizard } from './_import/SmartImportWizard';
 import {
   Loader2,
@@ -27,11 +29,14 @@ import {
   ShieldCheck,
   Download,
   Plus,
+  LayoutDashboard,
+  Boxes,
+  SlidersHorizontal,
 } from 'lucide-react';
 // CIS Benchmark now lives as a tab inside IT Asset Inventory (merged from the
 // former standalone /compliance-overview page). Render just the overview body —
 // not the default export's own Overview/Rules tab strip, which the design drops.
-import { OverviewTabContent as CisBenchmarkView } from '../compliance-overview/_cis-overview';
+import CisBenchmark from './_cis/CisBenchmark';
 // Design-handoff theme (warm cream + IBM Plex), scoped under .asset-suite.
 import './_suite/asset-suite.css';
 import { InventoryStats } from './_suite/InventoryStats';
@@ -44,13 +49,19 @@ export default function AssetsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   // Inventory ↔ CIS Benchmark tab (CIS merged in from /compliance-overview).
-  const [activeView, setActiveView] = useState<'inventory' | 'cis' | 'settings'>(
-    searchParams.get('tab') === 'cis' ? 'cis' : searchParams.get('tab') === 'settings' ? 'settings' : 'inventory'
-  );
-  const switchView = (v: 'inventory' | 'cis' | 'settings') => {
+  // Overview is the C-level landing; the register is one click away at ?tab=inventory. Existing
+  // deep-links to ?tab=cis (e.g. from the Performance dashboard) and ?tab=settings still resolve.
+  const [activeView, setActiveView] = useState<'overview' | 'inventory' | 'cis' | 'settings'>(() => {
+    const t = searchParams.get('tab');
+    return t === 'cis' || t === 'inventory' || t === 'settings' ? t : 'overview';
+  });
+  const switchView = (v: 'overview' | 'inventory' | 'cis' | 'settings') => {
     setActiveView(v);
-    router.replace(v === 'inventory' ? '/cyber-assurance/assets' : `/cyber-assurance/assets?tab=${v}`, { scroll: false });
+    router.replace(v === 'overview' ? '/cyber-assurance/assets' : `/cyber-assurance/assets?tab=${v}`, { scroll: false });
   };
+  // CIS Benchmark sub-view — its Dashboard/Hierarchy toggle renders on the main
+  // tab row (right-aligned), so CisBenchmark is a controlled switch on this.
+  const [cisView, setCisView] = useState<'dashboard' | 'hierarchy'>('dashboard');
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('assets:asset_inventory:create');
   const canEdit = hasPermission('assets:asset_inventory:edit');
@@ -74,13 +85,19 @@ export default function AssetsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [editingAsset, setEditingAsset] = useState<ITAsset | null>(null);
+  const [editPci, setEditPci] = useState(false);
   const [expandedAsset, setExpandedAsset] = useState<number | null>(null);
   const queryClient = useQueryClient();
 
   const { data: assets, isLoading, error } = useQuery({
     queryKey: ['assets'],
     queryFn: async () => {
-      const response = await assetsApi.getAll();
+      // Load the WHOLE register, not the backend's default first page (limit=100).
+      // The register rolls external subdomains up under their apex and shows a
+      // "N subs" badge + a total; capped at 100 rows it under-counted both (e.g.
+      // superior.edu.pk read ~90 subs instead of 234, total read "100"). A large
+      // explicit limit returns every managed asset so the roll-up is accurate.
+      const response = await assetsApi.getAll({ limit: 100000 });
       return response.data;
     },
   });
@@ -105,6 +122,17 @@ export default function AssetsPage() {
   const bulkUpdateMutation = useMutation({
     mutationFn: ({ ids, patch }: { ids: number[]; patch: Record<string, unknown> }) =>
       assetsApi.bulkUpdate(ids, patch),
+    // Optimistic: reflect the change (e.g. the PCI checkbox) instantly, then
+    // reconcile on success. A controlled checkbox with no optimistic update looks
+    // unclickable — it only flips once the refetch lands ~1s later.
+    onMutate: async ({ ids, patch }) => {
+      await queryClient.cancelQueries({ queryKey: ['assets'] });
+      const prev = queryClient.getQueryData(['assets']);
+      queryClient.setQueryData(['assets'], (old: any) =>
+        Array.isArray(old) ? old.map((a: any) => (ids.includes(a.id) ? { ...a, ...patch } : a)) : old);
+      return { prev };
+    },
+    onError: (_e, _vars, ctx: any) => { if (ctx?.prev !== undefined) queryClient.setQueryData(['assets'], ctx.prev); },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['assets'] });
       queryClient.invalidateQueries({ queryKey: ['asset-facets'] });
@@ -167,6 +195,7 @@ export default function AssetsPage() {
       queryClient.invalidateQueries({ queryKey: ['assets'] });
       queryClient.invalidateQueries({ queryKey: ['assets-dashboard'] });
       setEditingAsset(null);
+      setEditPci(false);
     },
   });
 
@@ -176,8 +205,11 @@ export default function AssetsPage() {
       queryClient.invalidateQueries({ queryKey: ['assets'] });
       queryClient.invalidateQueries({ queryKey: ['assets-dashboard'] });
     },
+    // Never swallow a failed delete again — the 409 ("still referenced …") is why
+    // the row silently stayed and the button "did nothing".
+    onError: (e: any) => alert(e?.response?.data?.detail || 'Could not delete this asset.'),
   });
-  
+
   const handleEdit = (e: React.MouseEvent, asset: ITAsset) => {
     e.stopPropagation();
     setEditingAsset(asset);
@@ -333,29 +365,39 @@ export default function AssetsPage() {
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
           <div>
             <h1 style={{ fontSize: 19, letterSpacing: '-.025em' }}>IT Asset Inventory</h1>
-            <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3, display: 'flex', alignItems: 'center', gap: 7 }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--ac)' }} />
-              Authoritative ownership, valuation &amp; assurance coverage · {(assets as ITAsset[] | undefined)?.length ?? 0} assets
+          </div>
+          {/* View switch (Overview / Inventory / CIS) + Add/Import folded into one
+              labeled top-right menu (owner request — "a clickable word" box). */}
+          <div style={{ display: 'flex', gap: 9, alignItems: 'center' }}>
+            <RowActionsMenu
+              label="Menu"
+              actions={[
+                { key: 'overview', label: 'Overview', icon: LayoutDashboard, onClick: () => switchView('overview'), active: activeView === 'overview' },
+                { key: 'inventory', label: 'Inventory', icon: Boxes, onClick: () => switchView('inventory'), active: activeView === 'inventory' },
+                { key: 'cis', label: 'CIS Benchmark', icon: ShieldCheck, onClick: () => switchView('cis'), active: activeView === 'cis' },
+                { key: 'settings', label: 'Settings', icon: SlidersHorizontal, onClick: () => switchView('settings'), active: activeView === 'settings' },
+                { key: 'add', label: 'Add asset', icon: Plus, onClick: () => setIsModalOpen(true), hidden: !canCreate },
+                { key: 'import', label: 'Import assets', icon: Upload, onClick: () => setIsImportModalOpen(true), hidden: !canCreate },
+              ]}
+            />
+          </div>
+        </div>
+        {activeView === 'cis' && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, marginTop: 9, flexWrap: 'wrap' }}>
+            <div className="segwrap">
+              <button type="button" className={cisView === 'dashboard' ? 'seg on' : 'seg'} onClick={() => setCisView('dashboard')}>Dashboard</button>
+              <button type="button" className={cisView === 'hierarchy' ? 'seg on' : 'seg'} onClick={() => setCisView('hierarchy')}>Benchmark Hierarchy</button>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 9, alignItems: 'center', flexWrap: 'wrap' }}>
-            <select className="sel"><option>Last 30 days</option><option>Last 7 days</option><option>This quarter</option></select>
-            <button type="button" className="btn"><Download size={15} />Export</button>
-            {canCreate && <button type="button" className="btn" onClick={() => setIsImportModalOpen(true)}><Upload size={15} />Import</button>}
-            {canCreate && <button type="button" className="btn btn-pri" onClick={() => setIsModalOpen(true)}><Plus size={15} />Add asset</button>}
-          </div>
-        </div>
-        <div className="segwrap" style={{ marginTop: 9 }}>
-          <button type="button" className={activeView === 'inventory' ? 'seg on' : 'seg'} onClick={() => switchView('inventory')}>Inventory</button>
-          <button type="button" className={activeView === 'cis' ? 'seg on' : 'seg'} onClick={() => switchView('cis')}>CIS Benchmark</button>
-          <button type="button" className={activeView === 'settings' ? 'seg on' : 'seg'} onClick={() => switchView('settings')}>Settings</button>
-        </div>
+        )}
       </div>
 
-      {activeView === 'settings' ? (
+      {activeView === 'overview' ? (
+        <InventoryOverview />
+      ) : activeView === 'settings' ? (
         <ModuleSettingsPanel moduleKey="assets" />
       ) : activeView === 'cis' ? (
-        <CisBenchmarkView />
+        <CisBenchmark view={cisView} />
       ) : (
       <InventoryRedesign
         hideHead
@@ -370,6 +412,7 @@ export default function AssetsPage() {
         onConnect={(asset) => handleConnect(noopEvent, asset)}
         onBulkDelete={(ids) => bulkDeleteMutation.mutate(ids)}
         onBulkUpdate={(ids, patch) => bulkUpdateMutation.mutate({ ids, patch })}
+        onMarkPci={(asset) => { setEditPci(true); setEditingAsset(asset); }}
         onBulkConnect={(ids) => {
           const next = new Set(ids);
           setSelectedAssetIds(next);
@@ -395,10 +438,12 @@ export default function AssetsPage() {
 
       {editingAsset && (
         <AssetModal
-          onClose={() => setEditingAsset(null)}
+          onClose={() => { setEditingAsset(null); setEditPci(false); }}
           onSave={(data) => updateMutation.mutate({ id: editingAsset.id, data })}
           isLoading={updateMutation.isPending}
           initialData={editingAsset}
+          forceCde={editPci}
+          focusSection={editPci ? 'compliance' : undefined}
         />
       )}
 

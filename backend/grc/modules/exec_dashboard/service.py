@@ -84,8 +84,8 @@ def summarize(
         "internet_facing": assets.get(a, ("", False))[1], "open": sum(c.values()), **c,
     } for a, c in worst_first[:8]]
 
-    # AI pentest = findings PentestGPT itself raised; every other source is a scanner lane.
-    pt = [v for v in vulns if "pentestgpt" in (v["source"] or "").lower()]
+    # AI pentest = the whole engine's output; every ai-pentest:<lane> source (zap/nuclei/nmap/pentestgpt/...) counts.
+    pt = [v for v in vulns if "ai-pentest" in (v["source"] or "").lower()]
     pt_sev = dict.fromkeys(SEVS, 0)
     for v in pt:
         if is_open(v):
@@ -163,8 +163,8 @@ if __name__ == "__main__":  # self-check on synthetic rows — no DB needed
     assert out["top_assets"][0] == {"asset_id": 10, "name": "web-01", "internet_facing": True, "open": 2,
                                     "critical": 1, "high": 1, "medium": 0, "low": 0, "info": 0}
     p = out["pentest"]
-    assert p["findings"] == {"total": 2, "open": 1, "by_severity": {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 1}}
-    assert p["targets"] == 2  # one linked asset (db-01) + one unlinked host
+    assert p["findings"] == {"total": 3, "open": 2, "by_severity": {"critical": 0, "high": 1, "medium": 0, "low": 0, "info": 1}}
+    assert p["targets"] == 3  # zap->assets 10,11 + pentestgpt->unlinked host + resolved pentestgpt->asset 11
     assert p["exploits"]["runs"] == 3 and p["exploits"]["findings_tested"] == 2
     assert p["exploits"]["confirmed"] == 1 and p["exploits"]["by_status"] == {"executed": 1, "not-exploitable": 1}
     assert summarize([], [], {}, None, now, resolved=[])["pentest"]["exploits"] is None

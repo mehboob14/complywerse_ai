@@ -382,11 +382,58 @@ def require_tenant_permission(*permission_names: str):
         if not user:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found in tenant")
 
+        # ---- H2: mirror require_auth's active + idle enforcement -----------------
+        # Permission-gated endpoints (require_view/require_edit/the granular HD
+        # gates) decode the JWT directly and used to skip BOTH the is_active
+        # recheck and the idle-timeout that require_auth performs — so a
+        # deactivated/offboarded user, or an idle/expired session, kept full
+        # write access on every permission-only route until the JWT naturally
+        # expired. We now run the SAME checks require_auth runs, BEFORE the
+        # admin/primary-contact bypass and the permission lookup, so revocation
+        # takes effect immediately on these endpoints too. (Logic mirrors
+        # require_auth exactly; keep the two in sync.)
+        if not user.is_active:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is deactivated")
+
         from ..services.ai_usage import bind_request_context
         bind_request_context(request, user)
 
-        if not user.is_active:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is deactivated")
+        # ---- Inactive-session enforcement (mirrors require_auth) ----------------
+        # Read the policy lazily so any failure (table missing, transient error)
+        # falls back to "no idle check" — auth must never break because of policy
+        # plumbing.
+        try:
+            from ..services.password_policy import (
+                get_active_password_policy,
+                is_session_idle,
+                touch_last_activity,
+            )
+            policy = get_active_password_policy(db)
+            if is_session_idle(user, policy):
+                # Force a fresh login. Reset activity so the user can immediately
+                # log in again without hitting the locked-account path.
+                user.last_activity_at = None
+                try:
+                    db.commit()
+                except Exception:
+                    db.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Session expired due to inactivity. Please log in again.",
+                )
+            # Bump activity. To keep this cheap on read-heavy endpoints we only
+            # write to the DB once per ~60s per user — the in-memory ORM state
+            # is updated every call, but the COMMIT is rate-limited.
+            from datetime import datetime as _dt, timedelta as _td
+            last = getattr(user, "last_activity_at", None)
+            if last is None or (_dt.utcnow() - last) > _td(seconds=60):
+                touch_last_activity(user, db, commit=True)
+        except HTTPException:
+            raise
+        except Exception:
+            # Never let policy plumbing break a real request.
+            pass
+
         if not has_tenant_permission(db, user, *permission_names):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
 
@@ -715,10 +762,10 @@ def get_me(
     if is_admin:
         permissions = ["*:*:*"]
         allowed_modules = [
-            "dashboard", "risks", "erm", "controls", "compliance", "evidence",
-            "governance", "vulnerabilities", "assets", "frameworks", "reports",
-            "admin", "integrations", "workflow_engine", "is_projects",
-            "critical_tasks", "bcm",
+            "dashboard", "risks", "erm", "controls", "compliance",
+            "vulnerabilities", "assets", "reports",
+            "admin", "integrations", "workflow_engine",
+            "pentest", "helpdesk",
         ]
     else:
         permissions = sorted(tenant_permission_names(db, user))

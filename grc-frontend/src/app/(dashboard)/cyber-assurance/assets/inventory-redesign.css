@@ -26,6 +26,27 @@
 .inv2 .btn-pri{border-color:var(--ac);background:var(--ac);color:#06342B;font-weight:600}
 .inv2 .btn-pri:hover{background:var(--ac-strong);border-color:var(--ac-strong)}
 .inv2 .sel{height:34px;border:1px solid var(--bd);border-radius:9px;background:#fff;padding:0 12px;font-size:12px;color:var(--sec);cursor:pointer}
+.inv2 .fchip{height:34px;border:1px solid var(--bd);border-radius:9px;background:#fff;padding:0 12px;font-size:12px;font-weight:500;color:var(--sec);cursor:pointer;white-space:nowrap}
+.inv2 .fchip:hover{border-color:#CFD6DC}
+.inv2 .fchip.on{background:#005B96;border-color:#005B96;color:#fff;font-weight:600}
+/* Custom filter dropdown (FilterSelect). Global, not .inv2-scoped, so the
+   body-portaled popup picks the option styles up. Active option = brand blue,
+   white, bold — matching the header. */
+.fsel{height:34px;display:inline-flex;align-items:center;gap:7px;border:1px solid #E2E5EC;border-radius:9px;background:#fff;padding:0 10px;font-size:12px;color:#0F172A;cursor:pointer;max-width:210px}
+.fsel:hover,.fsel.open{border-color:#005B96}
+.fsel-lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.fsel-chev{color:#94a3b8;flex:none}
+.fsel-pop{position:fixed;z-index:80;max-height:320px;overflow:auto;background:#fff;border:1px solid #E2E5EC;border-radius:10px;box-shadow:0 12px 32px rgba(15,23,42,.16);padding:4px}
+.fsel-opt{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;text-align:left;border:0;background:none;padding:8px 10px;border-radius:7px;font-size:13px;color:#0F172A;cursor:pointer}
+.fsel-opt-lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fsel-opt:hover{background:#EFF5FA}
+.fsel-opt.on{background:#005B96;color:#fff;font-weight:700}
+.fsel-opt.on:hover{background:#005B96}
+/* Prominent header bar. Must out-specify BOTH the dashboard shell's
+   `.governance-light thead th` AND the asset-suite's `.asset-suite table thead th`
+   (same specificity as a bare .inv2 rule + !important muted color → wins the tie
+   on source order). The extra `.card` class lifts specificity so white/bold win. */
+.inv2 .card table thead th{background:#005B96 !important;color:#fff !important;border-bottom-color:#0A4C84 !important;font-weight:700 !important}
 /* rail */
 .inv2 .railcap{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#828E9A;padding:2px 6px 6px}
 .inv2 .rbtn{position:relative;display:flex;align-items:center;gap:11px;padding:5px 10px;border:0;border-radius:10px;background:none;color:var(--sec);font-size:12.5px;font-weight:500;text-align:left;width:100%;cursor:pointer}

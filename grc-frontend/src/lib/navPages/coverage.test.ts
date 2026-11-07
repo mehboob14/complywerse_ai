@@ -191,8 +191,9 @@ test('duplicates: the entry a copy names exists, is a page the sidebar (or the t
   const byFamily = (prefix: RegExp) => copies.filter((c) => prefix.test(c.path)).length;
   // the GRC-native cyber pages are copies of the ones under /cyber-assurance; Ava's admin / users / ComplyChat pages are copies of the app's
   assert.equal(byFamily(/^\/(assets|asset-discovery|risk-posture|vulnerabilities|integrations|compliance-plugins|my-runs)(\/|$)/), 29, 'the GRC-native cyber pages');
-  assert.equal(byFamily(/^\/cyber-assurance\/(admin|users|complychat)(\/|$)/), 19, "Ava's copies of Administration, User Management and ComplyChat");
-  assert.equal(copies.length, 29 + 19 + 1, 'and the older Document Library');
+  assert.equal(byFamily(/^\/cyber-assurance\/(admin|users|complychat)(\/|$)/), 18, "the cyber product's copies of Administration, User Management and ComplyChat");
+  assert.equal(entry('/cyber-assurance/connectors').duplicateOf, '/admin/connectors', 'its copy of Connectors');
+  assert.equal(copies.length, 29 + 18 + 1 + 1, 'and the older Document Library');
   assert.equal(entry('/documents').duplicateOf, '/governance/documents');
   for (const c of copies.filter((x) => /^\/(assets|asset-discovery|risk-posture|vulnerabilities|integrations|compliance-plugins|my-runs)(\/|$)/.test(x.path))) {
     assert.equal(c.duplicateOf, `/cyber-assurance${c.path}`, 'a native cyber page is the copy of the same path under /cyber-assurance');
@@ -289,15 +290,18 @@ test('breadcrumbFor gives a sane trail for an example URL of every module', () =
   assert.deepEqual(labels('/users'), ['User Management']);
   assert.deepEqual(labels('/complychat'), ['Comply Agent']);
   assert.deepEqual(labels('/workflow-engine'), ['Administration', 'Workflow Engine']);
-  assert.deepEqual(labels('/cyber-assurance/assets/11'), ['Cybersecurity Assurance', 'IT Asset Inventory', 'Asset']);
-  assert.deepEqual(labels('/cyber-assurance/vulnerabilities/sla'), ['Cybersecurity Assurance', 'Vulnerabilities', 'Remediation days']);
-  assert.deepEqual(labels('/assets/11'), ['Cybersecurity Assurance', 'IT Asset Inventory', 'Asset'], 'an older copy is not repeated on the way');
-  assert.deepEqual(labels('/assets'), ['Cybersecurity Assurance', 'IT Asset Inventory'], 'a copy that is the page itself replaces the name of the page it copies');
-  assert.deepEqual(breadcrumbFor('/assets').map((c) => c.href), ['/cyber-assurance/dashboard', '/assets'], 'and keeps its own URL');
-  assert.deepEqual(labels('/my-runs'), ['Cybersecurity Assurance', 'Performance', 'My runs & team activity']);
-  assert.deepEqual(labels('/vulnerabilities/dashboard'), ['Cybersecurity Assurance', 'Vulnerabilities', 'Vulnerability Dashboard']);
-  assert.deepEqual(labels('/cyber-assurance/admin/roles'), ['Cybersecurity Assurance', 'Performance', 'Administration', 'Role Management']);
-  assert.deepEqual(labels('/compliance-overview'), ['Cybersecurity Assurance', 'Performance', 'Compliance & Scans']);
+  assert.deepEqual(labels('/cyber-assurance/assets/11'), ['IT Asset', 'IT Asset Inventory', 'Asset']);
+  assert.deepEqual(labels('/cyber-assurance/vulnerabilities/sla'), ['Cybersecurity', 'Vulnerabilities', 'Remediation days']);
+  assert.deepEqual(labels('/assets/11'), ['IT Asset', 'IT Asset Inventory', 'Asset'], 'an older copy is not repeated on the way');
+  assert.deepEqual(labels('/assets'), ['IT Asset', 'IT Asset Inventory'], 'a copy that is the page itself replaces the name of the page it copies');
+  assert.deepEqual(breadcrumbFor('/assets').map((c) => c.href), ['/cyber-assurance/asset-discovery', '/assets'], 'and keeps its own URL');
+  // the cyber product's Performance dashboard is not in the sidebar: it and its unclaimed pages hang under the platform's Performance Overview
+  assert.deepEqual(labels('/my-runs'), ['Performance Overview', 'Cybersecurity Performance', 'My runs & team activity']);
+  assert.deepEqual(labels('/vulnerabilities/dashboard'), ['Cybersecurity', 'Vulnerabilities', 'Vulnerability Dashboard']);
+  assert.deepEqual(labels('/cyber-assurance/admin/roles'), ['Performance Overview', 'Administration', 'Role Management']);
+  assert.deepEqual(labels('/compliance-overview'), ['Performance Overview', 'Cybersecurity Performance', 'Compliance & Scans']);
+  assert.deepEqual(labels('/cyber-assurance/helpdesk/42'), ['Help Desk', 'Agent Console', 'Tickets', 'Ticket detail']);
+  assert.deepEqual(labels('/cyber-assurance/scan-flows/hosted'), ['Cybersecurity', 'Vulnerabilities', 'Vulnerability Scanning', 'Hosted scanning']);
   assert.deepEqual(labels('/admin/agents'), ['Administration', 'Compliance Agents']);
   assert.deepEqual(labels('/documents'), ['Governance', 'Documents', 'Document Library']);
   // a forward shows its target's trail

@@ -803,6 +803,12 @@ def _run_backend_seed_script(script_name: str, db: Session, slug: str) -> bool:
         return True
     except Exception:
         logger.exception("Seed script %s failed for tenant %s", script_name, slug)
+        # A failed seeder must not leave the shared session needing a rollback,
+        # or every later seeder and request on it fails (PendingRollbackError).
+        try:
+            db.rollback()
+        except Exception:
+            logger.exception("Rollback after seed script %s failed", script_name)
         return False
 
 

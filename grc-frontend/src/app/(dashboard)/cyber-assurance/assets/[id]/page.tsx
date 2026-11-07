@@ -32,13 +32,14 @@ import {
   // ITAM tab-bar parity — Software / Relationships / Discovery / Lifecycle /
   // Assignments / Activity.
   Package, Radar, GitBranch, Users, Activity as ActivityIcon,
-  MessageSquare, Clock,
+  MessageSquare, Clock, KeyRound,
 } from 'lucide-react';
 import Link from 'next/link';
 
 import nextDynamic from 'next/dynamic';
 // Updated_CIS_Assests migration: host applications "room-and-chair" panel
 // rendered above the existing ComplianceTab content.
+import { AssetModal, type AssetFormSection } from '../AssetModal';
 import HostApplicationsPanel from './_host-applications-panel';
 import { PlatformDetails, PLATFORM_META } from './_platform-detail-card';
 import AssetOverviewDesign from './_overview-design';
@@ -48,17 +49,18 @@ import { ActivityPanel } from './_components/AssetWorkTabs';
 // Redesigned tab panels (Overview design language). Each is a drop-in that
 // absorbs the former inline tab renderer with the same prop contract.
 import SoftwarePanel from './_tabs/SoftwarePanel';
+import LicensesPanel from './_tabs/LicensesPanel';
 import RelationshipsPanel from './_tabs/RelationshipsPanel';
 import LifecyclePanel from './_tabs/LifecyclePanel';
 import NotesPanel from './_tabs/NotesPanel';
 import HistoryPanel from './_tabs/HistoryPanel';
 import RisksPanel from './_tabs/RisksPanel';
 import VulnerabilitiesPanel from './_tabs/VulnerabilitiesPanel';
+import AdvisoriesPanel from './_tabs/AdvisoriesPanel';
 import AttachmentsPanel from './_tabs/AttachmentsPanel';
 import CompliancePanel from './_tabs/CompliancePanel';
 import ScopeAuthorizationCard from './_ScopeAuthorizationCard';
 import TrajectoryPanel from './_tabs/TrajectoryPanel';
-import SbpInventoryPanel from './_tabs/SbpInventoryPanel';
 import CriticalityPanel from './_tabs/CriticalityPanel';
 import { RoomScanProvider, useRoomScan } from './_room-scan-context';
 import { GuideMarker, useGuide } from '@/cyber-assurance/components/guide';
@@ -93,15 +95,18 @@ const ASSET_TYPE_LABELS: Record<string, string> = {
   data: 'Data',
   cloud: 'Cloud Resource',
   third_party: 'Third-Party System',
+  repository: 'Code / Repository',
 };
 
-type TabType = 'overview' | 'details' | 'compliance' | 'controls' | 'evidence' | 'risks' | 'vulnerabilities' | 'criticality' | 'trajectory' | 'mapping-recommendations'
+type TabType = 'overview' | 'details' | 'compliance' | 'controls' | 'evidence' | 'risks' | 'vulnerabilities' | 'advisories' | 'criticality' | 'trajectory' | 'mapping-recommendations'
   // Parity with the reference ITAM asset tab bar. Each of these reads an
   // endpoint that already exists; see _components/AssetWorkTabs.tsx.
   | 'software' | 'relationships' | 'discovery' | 'lifecycle' | 'assignments' | 'activity'
   // Notes / Alerts / History — the last reference tabs, now backed by real
   // endpoints (Notes + History) and a derived feed (Alerts).
-  | 'alerts' | 'notes' | 'history' | 'sbp';
+  | 'alerts' | 'notes' | 'history'
+  // Software license status per installed product (reads /licenses/asset/{id}).
+  | 'licenses';
 
 interface LinkedControl {
   id: number;
@@ -197,6 +202,8 @@ interface AssetDetailData {
   linked_risks: Array<{ risk_id: number; title?: string; status?: string }>;
   linked_evidence: LinkedEvidence[];
   linked_vulnerabilities: LinkedVulnerability[];
+  // DISTINCT open findings (deduped across scanners) — the tab badge's "truth" number.
+  vuln_count_distinct?: number;
   risk_assessments: RiskAssessment[];
   coverage_percentage: number;
   // Phase 5 — Operational context. All optional; assets that pre-date the
@@ -265,7 +272,7 @@ interface AssetDetailData {
   }> | null;
   security_posture?: {
     has_antivirus?: boolean; antivirus_products?: string[];
-    has_edr?: boolean; edr_products?: string[];
+    has_edr?: boolean; edr_products?: string[]; edr_stopped?: string[];
     endpoint_protected?: boolean; security_tools?: string[];
     categories?: Record<string, number>; software_total?: number; computed_at?: string;
   } | null;
@@ -273,6 +280,11 @@ interface AssetDetailData {
   source_system?: string | null;
   discovery_state?: string | null;
   first_seen_at?: string | null;
+  // Two-flow scan posture (derived server-side, never null): 'surface' =
+  // evidence-only, never logged into; else 'credentialed'. Surface facts below.
+  scan_depth?: 'surface' | 'credentialed';
+  open_ports?: number[] | null;
+  device_type?: string | null;
   // Classification / cloud
   asset_role?: string | null;
   /** A promoted application's own properties — shape varies by product. */
@@ -348,10 +360,11 @@ export default function AssetDetailPage() {
     'overview', 'details', 'compliance', 'controls', 'evidence', 'risks',
     'vulnerabilities', 'criticality', 'trajectory', 'mapping-recommendations',
     'software', 'relationships', 'discovery', 'lifecycle', 'assignments',
-    'activity', 'alerts', 'notes', 'history', 'sbp',
+    'activity', 'alerts', 'notes', 'history', 'licenses',
   ]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [editSection, setEditSection] = useState<AssetFormSection | undefined>(undefined);
   const [showLifecycleModal, setShowLifecycleModal] = useState(false);
   const [setupEntry, setSetupEntry] = useState<SoftwareSetupEntry | null>(null);
   const [collectSvcOpen, setCollectSvcOpen] = useState(false);
@@ -372,6 +385,15 @@ export default function AssetDetailPage() {
     queryFn: async () => (await assetsApi.getLayoutPlan(assetId)).data?.plan ?? null,
     enabled: !!asset,
     staleTime: 5 * 60 * 1000,
+  });
+
+  // Before->After contextual vuln risk for the Overview cards (raw CVSS vs
+  // scored on this host). Server folds to DISTINCT findings; empty -> cards hide.
+  const { data: riskProfile } = useQuery({
+    queryKey: ['asset-vuln-risk-profile', assetId],
+    queryFn: async () => (await assetsApi.vulnRiskProfile(assetId)).data,
+    enabled: !!asset,
+    staleTime: 60000,
   });
 
   const { data: coverage } = useQuery({
@@ -417,7 +439,7 @@ export default function AssetDetailPage() {
         const response = await ermApi.internalControls.getAll();
         return response.data as Array<{ id: number; control_id?: string; name: string; category?: string }>;
       } catch {
-        // Complyverse's ERM control library isn't wired yet (this endpoint 404s) — degrade
+        // ComplyVerse's ERM control library isn't wired yet (this endpoint 404s) — degrade
         // to an empty list so the Risks tab renders cleanly instead of erroring.
         return [] as Array<{ id: number; control_id?: string; name: string; category?: string }>;
       }
@@ -445,6 +467,19 @@ export default function AssetDetailPage() {
     enabled: activeTab === 'vulnerabilities',
   });
 
+  // Advisory exposure for this asset — advisories whose CVEs match it (verdict=affected).
+  // Always enabled so the tab shows its count badge; degrades to {items:[],total:0}
+  // if the by-asset endpoint isn't live yet.
+  const { data: advByAsset } = useQuery({
+    queryKey: ['advisories-by-asset', assetId],
+    queryFn: async () => {
+      try { return (await apiClient.get(`/advisories/by-asset/${assetId}`)).data as { items: any[]; total: number }; }
+      catch { return { items: [], total: 0 }; }
+    },
+    enabled: !!assetId,
+  });
+  const advCount: number = advByAsset?.total ?? 0;
+
   // Enrich a DB app IN PLACE with its database inventory (a Postgres login,
   // applied to this same asset — no re-discovery).
   const collectSvc = useMutation({
@@ -456,11 +491,15 @@ export default function AssetDetailPage() {
     },
   });
 
+  // "Assess risk" = recompute the live Risk Posture (it computes on GET, no
+  // persist) and refresh the header. Replaces the retired 1-10 control-based
+  // AssetRiskAssessment heuristic, so the Overview shows the SAME score as the
+  // Risk & Controls / Risk Posture view.
   const assessRiskMutation = useMutation({
-    mutationFn: () => assetsApi.assessRisk(assetId),
-    onSuccess: () => {
+    mutationFn: () => riskPostureApi.asset(assetId),
+    onSuccess: (res: any) => {
+      queryClient.setQueryData(['asset-risk-posture', assetId], res?.data);
       queryClient.invalidateQueries({ queryKey: ['asset-detail', assetId] });
-      queryClient.invalidateQueries({ queryKey: ['asset-coverage', assetId] });
       queryClient.invalidateQueries({ queryKey: ['asset-trajectory', assetId] });
     },
   });
@@ -723,7 +762,7 @@ export default function AssetDetailPage() {
     risks: (asset?.linked_risks?.length ?? 0)
       + (asset?.linked_internal_controls?.length ?? 0)
       + (asset?.linked_framework_controls?.length ?? 0),
-    vulnerabilities: (asset?.linked_vulnerabilities ?? []).filter(isOpenVuln).length,
+    vulnerabilities: asset?.vuln_count_distinct ?? (asset?.linked_vulnerabilities ?? []).filter(isOpenVuln).length,
     alerts: alertsForCount?.length ?? 0,
     software: softwareCount,
     relationships: (ipPeers?.group ?? []).filter((g: any) => !g.is_self).length,
@@ -736,9 +775,13 @@ export default function AssetDetailPage() {
     { id: 'overview', label: 'Overview', icon: Boxes },
     { id: 'risks', label: 'Risk & Controls', icon: Shield },
     { id: 'vulnerabilities', label: 'Vulnerabilities', icon: Bug },
+    { id: 'advisories', label: 'Advisories', icon: AlertTriangle },
     // No Software tab for hosts we can only see from outside — the inventory
     // it would show cannot exist without a login.
     ...(showsSoftware ? [{ id: 'software' as TabType, label: 'Software', icon: Package }] : []),
+    // License status is derived from that same installed-software inventory, so it
+    // is hidden for exactly the hosts the Software tab is hidden for.
+    ...(showsSoftware ? [{ id: 'licenses' as TabType, label: 'Licenses', icon: KeyRound }] : []),
     { id: 'relationships', label: 'Relationships', icon: Network },
     // A domain / outside-only asset has no procurement lifecycle (planned→disposed)
     // and no host CIS benchmark — hide both, the same way Software is hidden.
@@ -750,7 +793,6 @@ export default function AssetDetailPage() {
     // CIS Module Updated drop — Compliance / room scan (HostApplicationsPanel + ComplianceTab).
     ...(!outsideOnly ? [{ id: 'compliance' as TabType, label: 'Compliance', icon: Cpu }] : []),
     { id: 'trajectory', label: 'Trajectory', icon: Network },
-    { id: 'sbp', label: 'SBP Inventory', icon: Building2 },
     // Criticality Assessments tab hidden until wired to real data (was demo/seed). Panel code kept.
     // { id: 'criticality', label: 'Criticality Assessments', icon: ShieldCheck },
   ];
@@ -773,27 +815,29 @@ export default function AssetDetailPage() {
     software,
     posture,
     kpis: {
-      openFindings: (asset?.linked_vulnerabilities ?? []).filter(isOpenVuln).length,
-      controlCoverage: asset?.coverage_percentage ?? 0,
-      blastRadius: 0,
+      // Single source of truth: the live Risk Posture composite (same number the
+      // Risk & Controls view shows), not the old 1-10 AssetRiskAssessment heuristic.
+      riskScore: assetPosture?.score ?? null,
+      riskBand: assetPosture?.band?.label ?? null,
+      openFindings: asset?.vuln_count_distinct ?? (asset?.linked_vulnerabilities ?? []).filter(isOpenVuln).length,
     },
     tabs: sections.map((s) => ({
       label: s.label,
       active: activeTab === s.id,
-      count: s.id === 'software' ? software.length : undefined,
+      count: s.id === 'software' ? software.length : s.id === 'advisories' ? (advCount || undefined) : undefined,
       onClick: () => setActiveTab(s.id),
     })),
     actions: [
       ...(dbAppKind ? [{ label: collectSvc.isPending ? 'Collecting…' : 'Collect database details', primary: true, onClick: () => setCollectSvcOpen(true) }] : []),
       // "Assess risk" opened the now-hidden Criticality Assessments tab — hidden with it.
       // { label: 'Assess risk', primary: !dbAppKind, onClick: () => setActiveTab('criticality') },
-      ...(canEdit ? [{ label: 'Edit', onClick: () => setShowEditModal(true) }] : []),
+      ...(canEdit ? [{ label: 'Edit', onClick: () => { setEditSection(undefined); setShowEditModal(true); } }] : []),
       ...(canEdit ? [{ label: 'Lifecycle', onClick: () => setShowLifecycleModal(true) }] : []),
       { label: 'CIS scans', onClick: () => router.push(`/cyber-assurance/compliance-plugins/asset/${assetId}`) },
       { label: 'Risk posture', onClick: () => router.push(`/cyber-assurance/risk-posture/asset/${assetId}`) },
       ...(canDelete ? [{ label: 'Delete', danger: true, onClick: () => setShowDeleteConfirm(true) }] : []),
     ],
-    onEdit: canEdit ? () => setShowEditModal(true) : undefined,
+    onEdit: canEdit ? (section?: AssetFormSection) => { setEditSection(section); setShowEditModal(true); } : undefined,
     onSoftwareClick: (s: any) => {
       const enr = (softwareForCount?.inventory ?? []).find((x: any) => x.software_key === s.software_key) || {};
       setSetupEntry({
@@ -809,9 +853,39 @@ export default function AssetDetailPage() {
     },
   });
 
+  // Surface (agentless) assets carry no deep telemetry — the Overview shows the
+  // sweep facts + an honest "requires credentials" gate instead of blank cards.
+  // EASM/outside-only hosts are excluded: they DO carry rich outside-in probe
+  // telemetry (DNS/TLS/HTTP/email + health breakdown), rendered by the design's
+  // own A.external path — the surface card would hide all of it.
+  const isSurface = !outsideOnly && (asset?.scan_depth ?? (asset?.discovery_state === 'unmanaged' ? 'surface' : 'credentialed')) === 'surface';
+  const _fp = (asset?.platform_properties?.fingerprint || {}) as Record<string, any>;
+  const surfaceFacts = isSurface && asset ? {
+    ip: asset.ip_address || null,
+    mac: asset.primary_mac || null,
+    ports: Array.isArray(asset.open_ports) ? asset.open_ports : null,
+    deviceType: asset.device_type || null,
+    vendor: asset.vendor || null,
+    internetFacing: !!asset.internet_facing,
+    // Credential-free intelligence the sweep already captured (banners, service
+    // versions, OS inference, device classification) — rendered so a surface
+    // asset isn't a bare IP + "requires credentials".
+    fingerprint: {
+      osGuess: _fp.os_guess || null,
+      product: _fp.product || null,
+      sshBanner: _fp.ssh_banner || null,
+      httpServer: _fp.http_server || null,
+      httpTitle: _fp.http_title || null,
+      snmpSysdescr: _fp.snmp_sysdescr || null,
+      confidence: typeof _fp.confidence === 'number' ? _fp.confidence : null,
+      evidence: Array.isArray(_fp.evidence) ? _fp.evidence : null,
+      hostname: _fp.hostname || null,
+    },
+  } : null;
+
   return (
     <>
-      <AssetRecordShell asset={asset} overviewData={overviewData} displayName={displayName} sections={sections} activeTab={activeTab} onTab={setActiveTab} tabCounts={tabCounts} canEdit={canEdit} canDelete={canDelete} getIcon={getAssetIcon} onAssessRisk={() => assessRiskMutation.mutate()} assessing={assessRiskMutation.isPending} onEdit={() => setShowEditModal(true)} onLifecycle={() => setShowLifecycleModal(true)} onCisScans={() => router.push(`/cyber-assurance/compliance-plugins/asset/${assetId}`)} onRiskPosture={() => router.push(`/cyber-assurance/risk-posture/asset/${assetId}`)} onDelete={() => setShowDeleteConfirm(true)}>
+      <AssetRecordShell asset={asset} overviewData={overviewData} displayName={displayName} sections={sections} activeTab={activeTab} onTab={setActiveTab} tabCounts={tabCounts} canEdit={canEdit} canDelete={canDelete} getIcon={getAssetIcon} onAssessRisk={() => assessRiskMutation.mutate()} assessing={assessRiskMutation.isPending} onEdit={() => { setEditSection(undefined); setShowEditModal(true); }} onLifecycle={() => setShowLifecycleModal(true)} onCisScans={() => router.push(`/cyber-assurance/compliance-plugins/asset/${assetId}`)} onRiskPosture={() => router.push(`/cyber-assurance/risk-posture/asset/${assetId}`)} onRunSurfacePentest={(isSurface || outsideOnly) ? () => router.push(`/cyber-assurance/pentest?new=run&asset=${assetId}`) : undefined} onDelete={() => setShowDeleteConfirm(true)}>
             {activeTab === 'overview' && (
               <>
                 {/* External (EASM) assets: scanning-scope authorization sits above
@@ -821,11 +895,21 @@ export default function AssetDetailPage() {
                     only implied the passive scan was incomplete. Re-enable ONLY alongside a real
                     active-scan feature (which the backend requires be authorization-gated). */}
                 {false && overviewData.external && <ScopeAuthorizationCard asset={asset} canManage={canEdit} />}
-                <AssetOverviewDesign A={overviewData} />
+                {advCount > 0 && (
+                  <button type="button" onClick={() => setActiveTab('advisories')}
+                    className="mb-3 flex w-full items-center gap-3 rounded-xl border border-[#F3C0BE] bg-[#FCEDEC] px-4 py-3 text-left transition-colors hover:bg-[#FBE2E0]">
+                    <AlertTriangle className="h-5 w-5 shrink-0 text-[#B42318]" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[13.5px] font-semibold text-[#B42318]">Affected by {advCount} published security advisor{advCount > 1 ? 'ies' : 'y'}</span>
+                      <span className="block text-[12px] text-[#9A2A22]">This asset matches a CVE in an active advisory — review the Advisories tab.</span>
+                    </span>
+                    <span className="shrink-0 text-[12.5px] font-medium text-[#B42318]">View &rarr;</span>
+                  </button>
+                )}
+                <AssetOverviewDesign A={overviewData} surface={surfaceFacts} riskProfile={riskProfile} />
               </>
             )}
             {activeTab === 'trajectory' && <TrajectoryPanel assetId={assetId} />}
-            {activeTab === 'sbp' && <SbpInventoryPanel assetId={assetId} />}
             {activeTab === 'compliance' && (
               <RoomScanProvider>
                 {/* CompliancePanel now owns the whole Compliance experience
@@ -847,6 +931,7 @@ export default function AssetDetailPage() {
                 hostIp={asset.ip_address || undefined}
               />
             )}
+            {activeTab === 'licenses' && <LicensesPanel assetId={assetId} />}
             {activeTab === 'relationships' && (
               <RelationshipsPanel asset={asset} assetId={assetId} ipPeers={ipPeers} canEdit={canEdit} />
             )}
@@ -884,17 +969,36 @@ export default function AssetDetailPage() {
               />
             )}
             {activeTab === 'vulnerabilities' && (
-              <VulnerabilitiesPanel
-                assetId={assetId}
-                canEdit={canEdit}
-                asset={asset}
-                allVulnerabilities={allVulnerabilities || []}
-                vulnsLoading={vulnsLoading}
-                onLinkVulnerability={(vulnId) => linkVulnerabilityMutation.mutate(vulnId)}
-                isLinking={linkVulnerabilityMutation.isPending}
-                onUnlinkVulnerability={(vulnId) => unlinkVulnerabilityMutation.mutate(vulnId)}
-                isUnlinking={unlinkVulnerabilityMutation.isPending}
-              />
+              <>
+                {/* Advisory exposure surfaced on the Vulnerabilities tab too — a
+                    CVE match from a published advisory is a finding beyond the
+                    linked register vulns, so flag it here with the match count. */}
+                {advCount > 0 && (
+                  <button type="button" onClick={() => setActiveTab('advisories')}
+                    className="mb-4 flex w-full items-center gap-3 rounded-xl border border-[#F3C0BE] bg-[#FCEDEC] px-4 py-3 text-left transition-colors hover:bg-[#FBE2E0]">
+                    <AlertTriangle className="h-5 w-5 shrink-0 text-[#B42318]" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[13.5px] font-semibold text-[#B42318]">Also affected by {advCount} published security advisor{advCount > 1 ? 'ies' : 'y'}</span>
+                      <span className="block text-[12px] text-[#9A2A22]">{advCount} advisory CVE match{advCount > 1 ? 'es' : ''} on this asset — beyond the open findings below. Review in the Advisories tab.</span>
+                    </span>
+                    <span className="shrink-0 text-[12.5px] font-medium text-[#B42318]">Advisories &rarr;</span>
+                  </button>
+                )}
+                <VulnerabilitiesPanel
+                  assetId={assetId}
+                  canEdit={canEdit}
+                  asset={asset}
+                  allVulnerabilities={allVulnerabilities || []}
+                  vulnsLoading={vulnsLoading}
+                  onLinkVulnerability={(vulnId) => linkVulnerabilityMutation.mutate(vulnId)}
+                  isLinking={linkVulnerabilityMutation.isPending}
+                  onUnlinkVulnerability={(vulnId) => unlinkVulnerabilityMutation.mutate(vulnId)}
+                  isUnlinking={unlinkVulnerabilityMutation.isPending}
+                />
+              </>
+            )}
+            {activeTab === 'advisories' && (
+              <AdvisoriesPanel assetId={assetId} data={advByAsset} />
             )}
             {activeTab === 'risks' && (
               // Command Center's three cards (Residual Risk / CIA / CIS) on top,
@@ -940,15 +1044,17 @@ export default function AssetDetailPage() {
           onClose={() => setShowDeleteConfirm(false)}
           onConfirm={() => deleteMutation.mutate()}
           isDeleting={deleteMutation.isPending}
+          error={deleteMutation.isError ? ((deleteMutation.error as any)?.response?.data?.detail || 'Could not delete this asset — please try again.') : undefined}
         />
       )}
 
       {showEditModal && (
-        <EditAssetModal
-          asset={asset}
+        <AssetModal
+          initialData={asset as unknown as ITAsset}
+          focusSection={editSection}
           onClose={() => setShowEditModal(false)}
-          onSave={(data) => updateAssetMutation.mutate(data)}
-          isSaving={updateAssetMutation.isPending}
+          onSave={(data) => updateAssetMutation.mutate(data as AssetUpdatePayload)}
+          isLoading={updateAssetMutation.isPending}
         />
       )}
 
@@ -1293,14 +1399,14 @@ function AssetContextRail({
         </button>
         {/* Spec cross-links: one click to CIS scan history + composite risk posture. */}
         <Link
-          href={`/compliance-plugins/asset/${assetId}`}
+          href={`/cyber-assurance/compliance-plugins/asset/${assetId}`}
           className="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
           title="View this asset's CIS plugin runs (Plugin Automation → per-asset)"
         >
           <PackageSearch className="h-3.5 w-3.5" strokeWidth={1.75} /> CIS scans
         </Link>
         <Link
-          href={`/risk-posture/asset/${assetId}`}
+          href={`/cyber-assurance/risk-posture/asset/${assetId}`}
           className="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
           title="View this asset's composite risk posture (5-dimension breakdown)"
         >
@@ -1375,588 +1481,6 @@ function AssetContextRail({
   );
 }
 
-function EditAssetModal({
-  asset,
-  onClose,
-  onSave,
-  isSaving,
-}: {
-  asset: AssetDetailData;
-  onClose: () => void;
-  onSave: (data: AssetUpdatePayload) => void;
-  isSaving: boolean;
-}) {
-  // Tenant users — drives every "pick an owner" dropdown.
-  const { data: tenantUsers } = useQuery({
-    queryKey: ['tenant-users-for-asset-edit'],
-    queryFn: () => assetsApi.getTenantUsers().then((r) => r.data),
-    staleTime: 60 * 1000,
-  });
-  // Active org departments (each as its picker record, /admin/teams) — drives the Owning department dropdown.
-  const { data: teams } = useQuery({
-    queryKey: ['teams-for-asset-edit'],
-    queryFn: () => apiClient.get('/admin/teams').then((r) => r.data as Array<{
-      id: number; name: string; is_active: boolean;
-    }>),
-    staleTime: 60 * 1000,
-  });
-
-  const [form, setForm] = useState({
-    name: asset.name || '',
-    description: asset.description || '',
-    asset_type: asset.asset_type || 'application',
-    owner_name: asset.owner_name || '',
-    host_name: asset.host_name || '',
-    ip_address: asset.ip_address || '',
-    criticality: asset.criticality || 'medium',
-    confidentiality_rating: asset.confidentiality_rating || 0,
-    integrity_rating: asset.integrity_rating || 0,
-    availability_rating: asset.availability_rating || 0,
-    valuation: asset.valuation || 0,
-    vendor: asset.vendor || '',
-    location: asset.location || '',
-    status: asset.status || 'active',
-    // Phase 5 — Operational context fields.
-    internet_facing: asset.internet_facing ?? false,
-    network_segment: asset.network_segment || '',
-    data_classification: asset.data_classification || '',
-    business_function: asset.business_function || '',
-    compliance_scope_text: (asset.compliance_scope || []).join(', '),
-    primary_owner_id: asset.primary_owner_id ?? '',
-    secondary_owner_id: asset.secondary_owner_id ?? '',
-    // Two ways to record the owning team: a structured FK to grc_teams or
-    // a free-text fallback for assets predating the Teams feature.
-    owning_team_id: asset.owning_team_id ?? '',
-    owning_team: asset.owning_team || '',
-    escalation_contact_id: asset.escalation_contact_id ?? '',
-    business_owner_id: asset.business_owner_id ?? '',
-    // ITAM parity: hardware, procurement & identity extras.
-    manufacturer: asset.manufacturer || '',
-    model: asset.model || '',
-    serial_number: asset.serial_number || '',
-    department: asset.department || '',
-    assigned_user: asset.assigned_user || '',
-    agent_version: asset.agent_version || '',
-    cpu_cores: asset.cpu_cores != null ? String(asset.cpu_cores) : '',
-    memory_gb: asset.memory_gb != null ? String(asset.memory_gb) : '',
-    storage_gb: asset.storage_gb != null ? String(asset.storage_gb) : '',
-    purchase_cost: asset.purchase_cost != null ? String(asset.purchase_cost) : '',
-    purchase_date: asset.purchase_date ? asset.purchase_date.slice(0, 10) : '',
-    warranty_expiry: asset.warranty_expiry ? asset.warranty_expiry.slice(0, 10) : '',
-    eol_date: asset.eol_date ? asset.eol_date.slice(0, 10) : '',
-    environment: asset.environment || '',
-  });
-
-  const parseId = (v: string | number): number | undefined => {
-    if (v === '' || v === null || v === undefined) return undefined;
-    const n = Number(v);
-    return Number.isFinite(n) && n > 0 ? n : undefined;
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const scope = form.compliance_scope_text
-      .split(',')
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-    onSave({
-      name: form.name,
-      description: form.description || undefined,
-      asset_type: form.asset_type as ITAsset['asset_type'],
-      owner_name: form.owner_name || undefined,
-      host_name: form.host_name || undefined,
-      ip_address: form.ip_address || undefined,
-      criticality: form.criticality as ITAsset['criticality'],
-      confidentiality_rating: Number(form.confidentiality_rating) || 0,
-      integrity_rating: Number(form.integrity_rating) || 0,
-      availability_rating: Number(form.availability_rating) || 0,
-      valuation: Number(form.valuation) || 0,
-      vendor: form.vendor || undefined,
-      location: form.location || undefined,
-      status: form.status as ITAsset['status'],
-      // Phase 5 — only included when the field actually has a value so the
-      // backend stores null for clears rather than overwriting with empty strings.
-      internet_facing: Boolean(form.internet_facing),
-      network_segment: form.network_segment || undefined,
-      data_classification: (form.data_classification || undefined) as ITAsset['data_classification'],
-      business_function: form.business_function || undefined,
-      compliance_scope: scope,
-      primary_owner_id: parseId(form.primary_owner_id),
-      secondary_owner_id: parseId(form.secondary_owner_id),
-      // Both fields go through: FK for the picker-selected team, plain
-      // text for the legacy fallback. Backend normalises on read.
-      owning_team_id: parseId(form.owning_team_id),
-      owning_team: form.owning_team || undefined,
-      escalation_contact_id: parseId(form.escalation_contact_id),
-      business_owner_id: parseId(form.business_owner_id),
-      // ITAM parity: hardware, procurement & identity extras.
-      manufacturer: form.manufacturer || undefined,
-      model: form.model || undefined,
-      serial_number: form.serial_number || undefined,
-      department: form.department || undefined,
-      assigned_user: form.assigned_user || undefined,
-      agent_version: form.agent_version || undefined,
-      cpu_cores: form.cpu_cores !== '' ? Number(form.cpu_cores) : undefined,
-      memory_gb: form.memory_gb !== '' ? Number(form.memory_gb) : undefined,
-      storage_gb: form.storage_gb !== '' ? Number(form.storage_gb) : undefined,
-      purchase_cost: form.purchase_cost !== '' ? Number(form.purchase_cost) : undefined,
-      purchase_date: form.purchase_date || undefined,
-      warranty_expiry: form.warranty_expiry || undefined,
-      eol_date: form.eol_date || undefined,
-      environment: form.environment || undefined,
-    });
-  };
-
-  // Helper component — user-picker dropdown with email shown alongside.
-  const UserPicker = ({ label, value, onChange }: {
-    label: string;
-    value: number | '';
-    onChange: (v: number | '') => void;
-  }) => (
-    <div>
-      <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
-      <select
-        value={value === '' ? '' : value}
-        onChange={(e) => onChange(e.target.value ? Number(e.target.value) : '')}
-        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-      >
-        <option value="">— None —</option>
-        {(tenantUsers || []).map((u) => (
-          <option key={u.id} value={u.id}>
-            {u.display_name} ({u.email})
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-      {/*
-        Layout: fixed-height column with sticky header + sticky footer.
-        Body scrolls internally — the modal NEVER overflows the viewport,
-        so the title and action buttons stay reachable on small screens.
-      */}
-      <div className="flex max-h-[92vh] w-full max-w-6xl flex-col rounded-xl border border-slate-200 bg-white shadow-lg">
-        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between flex-shrink-0">
-          <h2 className="text-base font-semibold text-slate-900">Edit Asset</h2>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-900">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <form
-          id="edit-asset-form"
-          onSubmit={handleSubmit}
-          className="space-y-4 px-6 py-4 overflow-y-auto flex-1"
-        >
-          <div>
-            <label className="block text-xs font-medium text-slate-600">Asset Name</label>
-            <input
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-slate-600">Description</label>
-            <textarea
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-              rows={3}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div>
-              <label className="block text-xs font-medium text-slate-600">Asset Type</label>
-              <select
-                value={form.asset_type}
-                onChange={(e) => setForm({ ...form, asset_type: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-              >
-                <option value="application">Application</option>
-                <option value="infrastructure">Infrastructure</option>
-                <option value="data">Data</option>
-                <option value="cloud">Cloud</option>
-                <option value="third_party">Third-party</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600">Owner</label>
-              <input
-                value={form.owner_name}
-                onChange={(e) => setForm({ ...form, owner_name: e.target.value })}
-                placeholder="e.g. Jane Doe"
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div>
-              <label className="block text-xs font-medium text-slate-600">Primary Component</label>
-              <input
-                value={form.host_name}
-                onChange={(e) => setForm({ ...form, host_name: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600">IP Address</label>
-              <input
-                value={form.ip_address}
-                onChange={(e) => setForm({ ...form, ip_address: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div>
-              <label className="block text-xs font-medium text-slate-600">Criticality</label>
-              <select
-                value={form.criticality}
-                onChange={(e) => setForm({ ...form, criticality: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-              >
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="critical">Critical</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600">Status</label>
-              <select
-                value={form.status}
-                onChange={(e) => setForm({ ...form, status: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-              >
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-                <option value="decommissioned">Decommissioned</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div>
-              <label className="block text-xs font-medium text-slate-600">Confidentiality (0-5)</label>
-              <input
-                type="number"
-                min={0}
-                max={5}
-                value={form.confidentiality_rating}
-                onChange={(e) => setForm({ ...form, confidentiality_rating: Number(e.target.value) })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600">Integrity (0-5)</label>
-              <input
-                type="number"
-                min={0}
-                max={5}
-                value={form.integrity_rating}
-                onChange={(e) => setForm({ ...form, integrity_rating: Number(e.target.value) })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600">Availability (0-5)</label>
-              <input
-                type="number"
-                min={0}
-                max={5}
-                value={form.availability_rating}
-                onChange={(e) => setForm({ ...form, availability_rating: Number(e.target.value) })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div>
-              <label className="block text-xs font-medium text-slate-600">Valuation</label>
-              <input
-                type="number"
-                min={0}
-                step="0.01"
-                value={form.valuation}
-                onChange={(e) => setForm({ ...form, valuation: Number(e.target.value) })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600">Vendor</label>
-              <input
-                value={form.vendor}
-                onChange={(e) => setForm({ ...form, vendor: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-slate-600">Location</label>
-            <input
-              value={form.location}
-              onChange={(e) => setForm({ ...form, location: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-            />
-          </div>
-
-          {/* ── Phase 5: Operational Context ──────────────────────────── */}
-          <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-600">
-              Operational Context
-            </h3>
-
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <label className="flex items-center gap-2 text-xs text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={Boolean(form.internet_facing)}
-                  onChange={(e) => setForm({ ...form, internet_facing: e.target.checked })}
-                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                />
-                Internet-facing
-              </label>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-600">Data Classification</label>
-                <select
-                  value={form.data_classification}
-                  onChange={(e) => setForm({ ...form, data_classification: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-                >
-                  <option value="">— Not set —</option>
-                  <option value="public">Public</option>
-                  <option value="internal">Internal</option>
-                  <option value="confidential">Confidential</option>
-                  <option value="restricted">Restricted</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-600">Network Segment</label>
-                <input
-                  value={form.network_segment}
-                  onChange={(e) => setForm({ ...form, network_segment: e.target.value })}
-                  placeholder="dmz, prod-app-tier, ..."
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-600">Business Function</label>
-                <input
-                  value={form.business_function}
-                  onChange={(e) => setForm({ ...form, business_function: e.target.value })}
-                  placeholder="Payments, HR Operations, ..."
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="mb-1 block text-xs font-medium text-slate-600">Compliance Scope</label>
-                {(() => {
-                  const selected = form.compliance_scope_text.split(',').map((s) => s.trim()).filter(Boolean);
-                  const items = Array.from(new Set([...COMPLIANCE_FRAMEWORKS, ...selected])).map((f) => ({ value: f, label: f }));
-                  return (
-                    <MultiSelectDropdown
-                      title="Frameworks"
-                      items={items}
-                      selectedValues={selected}
-                      onApply={(vals) => setForm({ ...form, compliance_scope_text: vals.join(', ') })}
-                      multiSelect
-                      forceSearch
-                      triggerVariant="input"
-                      triggerClassName="w-full"
-                      placeholder="Select applicable frameworks…"
-                      searchPlaceholder="Search frameworks"
-                      size="md"
-                    />
-                  );
-                })()}
-              </div>
-            </div>
-          </div>
-
-          {/* ── Phase 5.2: Ownership Chain ────────────────────────────── */}
-          {/* Pickers feed off the existing /assets/tenant-users endpoint;
-              the department picker uses the /admin/teams endpoint. If no
-              departments are configured yet, the user falls back to a free-text
-              field — that legacy value still saves on the backend. */}
-          <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-600">
-              Ownership Chain
-            </h3>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <UserPicker
-                label="Primary Owner"
-                value={form.primary_owner_id as number | ''}
-                onChange={(v) => setForm({ ...form, primary_owner_id: v })}
-              />
-              <UserPicker
-                label="Secondary Owner"
-                value={form.secondary_owner_id as number | ''}
-                onChange={(v) => setForm({ ...form, secondary_owner_id: v })}
-              />
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Owning department</label>
-                {teams && teams.length > 0 ? (
-                  <select
-                    value={form.owning_team_id === '' ? '' : form.owning_team_id}
-                    onChange={(e) => setForm({
-                      ...form,
-                      owning_team_id: e.target.value ? Number(e.target.value) : '',
-                      // Mirror the team name into the legacy text field so
-                      // older code paths that read `owning_team` see it too.
-                      owning_team: e.target.value
-                        ? (teams.find((t) => t.id === Number(e.target.value))?.name || '')
-                        : '',
-                    })}
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-                  >
-                    <option value="">— None —</option>
-                    {teams.filter((t) => t.is_active).map((t) => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    value={form.owning_team}
-                    onChange={(e) => setForm({ ...form, owning_team: e.target.value, owning_team_id: '' })}
-                    placeholder="Create departments in Admin → Departments"
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-                  />
-                )}
-                {teams && teams.length === 0 && (
-                  <p className="mt-1 text-[10px] text-slate-500">
-                    No departments configured yet. <a href="/cyber-assurance/admin?tab=departments" className="text-blue-600 hover:underline">Manage departments →</a>
-                  </p>
-                )}
-              </div>
-              <UserPicker
-                label="Escalation Contact"
-                value={form.escalation_contact_id as number | ''}
-                onChange={(v) => setForm({ ...form, escalation_contact_id: v })}
-              />
-              <div className="md:col-span-2">
-                <UserPicker
-                  label="Business Owner"
-                  value={form.business_owner_id as number | ''}
-                  onChange={(v) => setForm({ ...form, business_owner_id: v })}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* ── ITAM parity: Hardware, Procurement & Identity ──────────── */}
-          <div className="border-t border-slate-200 pt-4">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Hardware, Procurement & Identity</p>
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-              <div>
-                <label className="block text-xs font-medium text-slate-600">Environment</label>
-                <select value={form.environment} onChange={(e) => setForm({ ...form, environment: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900">
-                  <option value="">— None —</option>
-                  <option value="production">Production</option>
-                  <option value="staging">Staging</option>
-                  <option value="development">Development</option>
-                  <option value="test">Test</option>
-                  <option value="dr">DR</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600">Department</label>
-                <input value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600">Assigned User</label>
-                <input value={form.assigned_user} onChange={(e) => setForm({ ...form, assigned_user: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600">Agent Version</label>
-                <input value={form.agent_version} onChange={(e) => setForm({ ...form, agent_version: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600">Manufacturer</label>
-                <input value={form.manufacturer} onChange={(e) => setForm({ ...form, manufacturer: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600">Model</label>
-                <input value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600">Serial Number</label>
-                <input value={form.serial_number} onChange={(e) => setForm({ ...form, serial_number: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600">vCPU</label>
-                <input type="number" min="0" value={form.cpu_cores} onChange={(e) => setForm({ ...form, cpu_cores: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600">RAM (GB)</label>
-                <input type="number" min="0" value={form.memory_gb} onChange={(e) => setForm({ ...form, memory_gb: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600">Disk (GB)</label>
-                <input type="number" min="0" value={form.storage_gb} onChange={(e) => setForm({ ...form, storage_gb: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600">Purchase Cost</label>
-                <input type="number" min="0" step="0.01" value={form.purchase_cost} onChange={(e) => setForm({ ...form, purchase_cost: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600">Purchase Date</label>
-                <input type="date" value={form.purchase_date} onChange={(e) => setForm({ ...form, purchase_date: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600">Warranty Expiry</label>
-                <input type="date" value={form.warranty_expiry} onChange={(e) => setForm({ ...form, warranty_expiry: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600">End of Life</label>
-                <input type="date" value={form.eol_date} onChange={(e) => setForm({ ...form, eol_date: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900" />
-              </div>
-            </div>
-          </div>
-
-        </form>
-
-        {/* Sticky footer — always visible regardless of scroll position. */}
-        <div className="px-6 py-3 border-t border-slate-200 flex justify-end gap-3 flex-shrink-0 bg-white rounded-b-lg">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            form="edit-asset-form"
-            disabled={isSaving}
-            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
-            Save
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Phase 5 helpers ──────────────────────────────────────────────────────────
-
-// Shared light status-tone scale — one place for criticality / severity /
-// status pills so the whole page reads with one colour language.
 const CRITICALITY_TONES: Record<string, string> = {
   critical: 'border-rose-200 bg-rose-50 text-rose-700',
   high: 'border-orange-200 bg-orange-50 text-orange-700',
@@ -2249,7 +1773,7 @@ function DetailsTab({ asset }: { asset: AssetDetailData }) {
             <div>
               <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Replacement Asset</span>
               <p className="text-sm text-slate-700">
-                <Link href={`/assets/${asset.replacement_asset_id}`} className="text-blue-600 hover:underline">
+                <Link href={`/cyber-assurance/assets/${asset.replacement_asset_id}`} className="text-blue-600 hover:underline">
                   {asset.replacement_asset_name || `Asset #${asset.replacement_asset_id}`}
                 </Link>
               </p>
@@ -2632,9 +2156,9 @@ function VulnerabilitiesTab({
       <div className="flex items-center justify-between">
         <h3 className="flex items-center gap-2 text-base font-semibold text-slate-900">
           <Bug className="h-5 w-5 text-teal-600" />
-          Linked Vulnerabilities ({(asset.linked_vulnerabilities ?? []).filter(isOpenVuln).length} open
-          {(asset.linked_vulnerabilities ?? []).length !== (asset.linked_vulnerabilities ?? []).filter(isOpenVuln).length
-            ? ` · ${(asset.linked_vulnerabilities ?? []).length} total`
+          Linked Vulnerabilities ({asset.vuln_count_distinct ?? (asset.linked_vulnerabilities ?? []).filter(isOpenVuln).length} open
+          {asset.vuln_count_distinct != null && (asset.linked_vulnerabilities ?? []).length !== asset.vuln_count_distinct
+            ? ` · ${(asset.linked_vulnerabilities ?? []).length} scanner rows`
             : ''})
         </h3>
         <InlineLinkPicker
@@ -2694,7 +2218,7 @@ function VulnerabilitiesTab({
                     )}
                   </td>
                   <td className="whitespace-nowrap px-4 py-2.5 text-right">
-                    <Link href={`/vulnerabilities/${vuln.vulnerability_id}`} className="text-sm font-medium text-teal-600 hover:underline">
+                    <Link href={`/cyber-assurance/vulnerabilities/${vuln.vulnerability_id}`} className="text-sm font-medium text-teal-600 hover:underline">
                       View
                     </Link>
                     <button
@@ -3153,11 +2677,13 @@ function DeleteConfirmModal({
   onClose,
   onConfirm,
   isDeleting,
+  error,
 }: {
   assetName: string;
   onClose: () => void;
   onConfirm: () => void;
   isDeleting: boolean;
+  error?: string;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
@@ -3172,6 +2698,12 @@ function DeleteConfirmModal({
         <p className="mb-6 text-sm text-slate-600">
           Are you sure you want to delete <strong className="text-slate-900">{assetName}</strong>? This action cannot be undone. All linked controls, evidence, and assessments will be unlinked.
         </p>
+
+        {error && (
+          <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700" style={{ overflowWrap: 'anywhere' }}>
+            {error}
+          </div>
+        )}
 
         <div className="flex justify-end gap-3">
           <button
@@ -3410,7 +2942,7 @@ function CriticalityAssessmentsTab({ assetId }: { assetId: number }) {
       </td>
       <td className="px-3 py-2 align-top text-right">
         <Link
-          href={`/assets/criticality-assessments?open=${kind}:${item.id}`}
+          href={`/cyber-assurance/assets/criticality-assessments?open=${kind}:${item.id}`}
           className="text-xs font-medium text-blue-600 hover:underline"
         >
           Open →
@@ -3432,13 +2964,13 @@ function CriticalityAssessmentsTab({ assetId }: { assetId: number }) {
           </p>
           <div className="mt-4 inline-flex items-center gap-2">
             <Link
-              href={`/assets/criticality-assessments?create=isca&asset=${assetId}`}
+              href={`/cyber-assurance/assets/criticality-assessments?create=isca&asset=${assetId}`}
               className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
             >
               + New Information System assessment
             </Link>
             <Link
-              href={`/assets/criticality-assessments?create=iaca&asset=${assetId}`}
+              href={`/cyber-assurance/assets/criticality-assessments?create=iaca&asset=${assetId}`}
               className="inline-flex items-center gap-1.5 rounded-md border border-blue-300 bg-white px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50"
             >
               + New Infrastructure Asset assessment
@@ -3495,13 +3027,13 @@ function CriticalityAssessmentsTab({ assetId }: { assetId: number }) {
 
           <div className="flex items-center gap-2">
             <Link
-              href={`/assets/criticality-assessments?create=isca&asset=${assetId}`}
+              href={`/cyber-assurance/assets/criticality-assessments?create=isca&asset=${assetId}`}
               className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700 hover:bg-blue-100"
             >
               + New ISCA
             </Link>
             <Link
-              href={`/assets/criticality-assessments?create=iaca&asset=${assetId}`}
+              href={`/cyber-assurance/assets/criticality-assessments?create=iaca&asset=${assetId}`}
               className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700 hover:bg-blue-100"
             >
               + New IACA
@@ -3522,7 +3054,7 @@ function CriticalityAssessmentsTab({ assetId }: { assetId: number }) {
 // run history. All API calls go through compliancePluginsApi.
 
 function ComplianceTab({ asset }: { asset: AssetDetailData }) {
-  // Complyverse onboards assets via the bank's CMDB API (we do not do
+  // ComplyVerse onboards assets via the bank's CMDB API (we do not do
   // network discovery). For each onboarded asset we DO run CIS compliance
   // rules — that's our core job. This tab combines four blocks:
   //   1. AI Classification — OS profile from the asset feed
@@ -3739,8 +3271,13 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
         try {
           const r = await compliancePluginsApi.listRuns({ limit: 5000 });
           const list = Array.isArray(r.data) ? r.data : (r.data?.runs || []);
+          // Count only runs that actually REACHED a verdict. A freshly-created
+          // run is 'pending' until the agent (or a direct scan) executes it;
+          // counting created runs as done made the banner declare "complete"
+          // while the agent hadn't run anything yet (0 pass / 0 fail).
           done = list.filter((run: any) =>
-            (run.id ?? 0) > baselineMaxId && attribIds.has(run.asset_id)
+            (run.id ?? 0) > baselineMaxId && attribIds.has(run.asset_id) &&
+            !['pending', 'running', 'queued', 'dispatched', 'in_progress'].includes(String(run.status || '').toLowerCase())
           ).length;
         } catch { /* transient — keep polling */ }
 
@@ -3936,7 +3473,7 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   {hostInGroup ? (
                     <Link
-                      href={`/assets/${hostInGroup.id}?tab=compliance`}
+                      href={`/cyber-assurance/assets/${hostInGroup.id}?tab=compliance`}
                       className="inline-flex items-center gap-1.5 rounded-md bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-purple-700"
                     >
                       <Network className="h-3.5 w-3.5" />
@@ -3944,7 +3481,7 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
                     </Link>
                   ) : asset.ip_address ? (
                     <Link
-                      href={`/assets?ip_address=${encodeURIComponent(asset.ip_address)}`}
+                      href={`/cyber-assurance/assets?ip_address=${encodeURIComponent(asset.ip_address)}`}
                       className="inline-flex items-center gap-1.5 rounded-md border border-purple-300 bg-white px-3 py-1.5 text-xs font-medium text-purple-700 hover:bg-purple-50"
                       title="Find the host asset that shares this IP"
                     >

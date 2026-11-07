@@ -60,6 +60,19 @@ export const pctOf = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100
 /** Share label that never shows a real, non-zero part as "0%". */
 export const share = (n: number, d: number) => (!d ? '' : n > 0 && pctOf(n, d) === 0 ? '<1%' : `${pctOf(n, d)}%`);
 export const plural = (n: number, one: string, many = `${one}s`) => `${nfmt(n)} ${n === 1 ? one : many}`;
+/** Money in an ISO currency (`compact` → 48K / 1.2M). Falls back to "CODE 1,234" if the runtime rejects the code.
+    min/max fraction digits are always set together — a lone max below the currency default throws on older engines. */
+export const money = (n?: number | null, currency?: string | null, compact = false): string => {
+  if (n == null || !Number.isFinite(n)) return '—';
+  const code = (currency || 'USD').toUpperCase();
+  const whole = compact || Math.abs(n) >= 1000;
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency', currency: code, notation: compact ? 'compact' : 'standard',
+      minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: compact ? 1 : whole ? 0 : 2,
+    }).format(n);
+  } catch { return `${code} ${n.toLocaleString()}`; }
+};
 /** Server datetimes are naive UTC (datetime.utcnow) — pin them to UTC before showing local time. */
 export const utc = (s?: string | null) => (s ? new Date(/(Z|[+-]\d\d:?\d\d)$/i.test(s) ? s : `${s}Z`) : null);
 /** 'YYYY-MM-DD' buckets are calendar days — build them as local dates so no timezone shifts the day. */
@@ -157,12 +170,14 @@ export const Unavailable = ({ what, href }: { what: string; href?: string }) => 
 );
 
 /** Small labelled figure used inside cards. */
-export function Figure({ label, value, sub, className = '' }: { label: string; value: ReactNode; sub?: ReactNode; className?: string }) {
+export function Figure({ label, value, sub, className = '', dense = false }: { label: string; value: ReactNode; sub?: ReactNode; className?: string; dense?: boolean }) {
+  // `dense` is opt-in (default keeps every existing dashboard unchanged); it shrinks
+  // the big value + labels for screens the owner flagged as reading too large/zoomed.
   return (
     <div className={`min-w-0 ${className}`}>
-      <p className="m-0 truncate text-[11px] font-medium text-[#64748B]">{label}</p>
-      <p className="m-0 mt-0.5 text-[20px] font-semibold leading-[1.15] text-[#0F172A]">{value}</p>
-      {sub && <p className="m-0 mt-0.5 text-[11px] leading-[1.4] text-[#64748B]">{sub}</p>}
+      <p className={`m-0 truncate ${dense ? 'text-[10px]' : 'text-[11px]'} font-medium text-[#64748B]`}>{label}</p>
+      <p className={`m-0 mt-0.5 ${dense ? 'text-[16px]' : 'text-[20px]'} font-semibold leading-[1.15] text-[#0F172A]`}>{value}</p>
+      {sub && <p className={`m-0 mt-0.5 ${dense ? 'text-[10px]' : 'text-[11px]'} leading-[1.4] text-[#64748B]`}>{sub}</p>}
     </div>
   );
 }

@@ -59,8 +59,7 @@ def _is_command_safe(cmd: str) -> tuple[bool, str]:
     return True, ""
 
 
-def _evaluate_ssh(stdout: str, exit_status: int, expect: Dict[str, Any]) -> tuple[bool, str]:
-    kind = (expect or {}).get("kind", "exit_zero")
+def _eval_single(kind: str, stdout: str, exit_status: int, expect: Dict[str, Any]) -> tuple[bool, str]:
     if kind == "exit_zero":
         return exit_status == 0, f"exit_status={exit_status}"
     if kind == "stdout_contains":
@@ -69,6 +68,10 @@ def _evaluate_ssh(stdout: str, exit_status: int, expect: Dict[str, Any]) -> tupl
     if kind == "stdout_not_contains":
         v = expect.get("value", "")
         return v not in stdout, f"not contains {v!r}: {v not in stdout}"
+    if kind == "stdout_equals":
+        v = str(expect.get("value", expect.get("expected", "")))
+        actual = (stdout or "").strip()
+        return actual == v, f"equals {v!r}: {actual == v}"
     if kind == "stdout_regex":
         v = expect.get("value", "")
         ok = bool(re.search(v, stdout, re.MULTILINE))
@@ -94,6 +97,32 @@ def _evaluate_ssh(stdout: str, exit_status: int, expect: Dict[str, Any]) -> tupl
     return False, f"Unknown expect kind: {kind}"
 
 
+def _evaluate_ssh(stdout: str, exit_status: int, expect: Dict[str, Any]) -> tuple[bool, str]:
+    kind = (expect or {}).get("kind", "exit_zero")
+    # Compound kinds are pipe-separated (e.g. "exit_zero|stdout_contains"); ALL
+    # sub-conditions must hold against the same expect dict.
+    if "|" in kind:
+        parts = [k.strip() for k in kind.split("|") if k.strip()]
+        all_ok = True
+        details = []
+        for k in parts:
+            ok, d = _eval_single(k, stdout, exit_status, expect)
+            all_ok = all_ok and ok
+            details.append(f"{k}={ok}")
+        return all_ok, "; ".join(details)
+    return _eval_single(kind, stdout, exit_status, expect)
+
+
+def _sanitize_command(cmd: str) -> str:
+    """Strip a trailing dangling pipe. A known library data bug leaves commands
+    ending in `... | ` (nothing after the pipe) — a shell syntax error, so the
+    command exits non-zero with empty output and the rule always false-fails."""
+    c = cmd.rstrip()
+    while c.endswith("|"):
+        c = c[:-1].rstrip()
+    return c
+
+
 @register("linux_ssh")
 @register("netdev_ssh")  # Cisco IOS/NX-OS/ASA/Firepower — same SSH transport
 def linux_ssh_runner(check_definition: Dict[str, Any], credentials: Dict[str, Any]) -> RunnerResult:
@@ -107,6 +136,7 @@ def linux_ssh_runner(check_definition: Dict[str, Any], credentials: Dict[str, An
     command = check_definition.get("command")
     if not command or not isinstance(command, str):
         return RunnerResult(status="error", summary="Missing 'command' in check_definition.", error_message="invalid_check_definition")
+    command = _sanitize_command(command)
     safe, reason = _is_command_safe(command)
     if not safe:
         return RunnerResult(status="error", summary=reason, error_message="unsafe_command")

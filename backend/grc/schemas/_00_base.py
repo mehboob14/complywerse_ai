@@ -1070,6 +1070,32 @@ class ITAssetResponse(BaseModel):
     # (EASM) asset is discovery_state="unmanaged": internet-facing, evidence-only,
     # and not connectable, so the Connect button must not offer a login for it.
     discovery_state: Optional[str] = None
+    # OS / platform telemetry (already columns on ITAsset) — exposed on the list
+    # response so the inventory Overview can bucket the estate by OS and device
+    # category client-side. All optional; external/EASM assets carry no OS.
+    os_family: Optional[str] = None
+    os_version: Optional[str] = None
+    os_normalized: Optional[str] = None
+    platform_kind: Optional[str] = None
+    manufacturer: Optional[str] = None
+    model: Optional[str] = None
+    is_internet_facing: Optional[bool] = None
+    # Surface vs credentialed inventory view. Computed per-asset by the list/
+    # detail serializers (transient, not columns): scan_depth is 'surface' iff
+    # discovery_state=='unmanaged' (evidence-only, never logged into), else
+    # 'credentialed'. open_ports/device_type are the sweep's surface evidence,
+    # read from platform_properties['surface'] (fallback: discovery_classification).
+    scan_depth: Optional[str] = None
+    open_ports: Optional[List[int]] = None
+    device_type: Optional[str] = None
+    # Discovery category — THE authoritative contract field. Exactly one of
+    # easm | credential | uncredential (or None for manual/imported assets).
+    # Derived in assets_router._scan_mode from origin_source + discovery_state.
+    scan_mode: Optional[str] = None
+    # Transient: the AI-Pentest fleet lane this asset routes to (external | internal-host |
+    # internal-ad | cloud | code | container), computed via pentest._classify_asset so the
+    # hub's 6-lane card and the launcher's lane filter agree by construction.
+    fleet_lane: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -1149,6 +1175,9 @@ class AssetDetailResponse(BaseModel):
     linked_risks: List[dict] = []
     linked_evidence: List[dict] = []
     linked_vulnerabilities: List[dict] = []
+    # DISTINCT open findings (dedup_key fold across all sources) — the "truth" count
+    # the Vulnerabilities tab badge shows, so it matches the pentest view + register.
+    vuln_count_distinct: Optional[int] = None
     risk_assessments: List[dict] = []
     coverage_percentage: Optional[float] = None
     # Phase 5 operational context fields.
@@ -1228,10 +1257,20 @@ class AssetDetailResponse(BaseModel):
     # cannot link a child application back to its parent machine.
     parent_asset_id: Optional[int] = None
     cloud_resource_id: Optional[str] = None
+    # Without these the full Edit form reads an override as "off" and Save clears it.
+    criticality_manual_override: Optional[bool] = None
+    criticality_override_reason: Optional[str] = None
     cde_environment: Optional[bool] = None
     pci_dss: Optional[Any] = None
     ephi_environment: Optional[bool] = None
     hipaa: Optional[Any] = None
+    # Surface vs credentialed view (see ITAssetResponse) — 'surface' iff
+    # discovery_state=='unmanaged'; open_ports/device_type from the sweep.
+    scan_depth: Optional[str] = None
+    open_ports: Optional[List[int]] = None
+    device_type: Optional[str] = None
+    # Discovery category: easm | credential | uncredential (see ITAssetResponse).
+    scan_mode: Optional[str] = None
 
     class Config:
         from_attributes = True

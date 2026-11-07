@@ -42,6 +42,7 @@ import re
 import socket
 import ssl
 from datetime import datetime
+from html import unescape
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
@@ -92,13 +93,14 @@ _SEC_HEADERS = {
 # ── Pure probe primitives (no DB) ────────────────────────────────────────────
 
 def _extract_title(html: str) -> Optional[str]:
-    """First <title> in the page head, whitespace-collapsed and length-capped."""
+    """First <title> in the page head, entity-decoded, whitespace-collapsed and
+    length-capped (decoded twice: CMSs double-encode entities)."""
     if not html:
         return None
     m = _TITLE_RE.search(html)
     if not m:
         return None
-    title = re.sub(r"\s+", " ", m.group(1)).strip()
+    title = re.sub(r"\s+", " ", unescape(unescape(m.group(1)))).strip()
     return title[:300] or None
 
 

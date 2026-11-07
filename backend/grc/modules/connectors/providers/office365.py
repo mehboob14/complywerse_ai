@@ -72,7 +72,7 @@ class Office365Adapter(CollabAdapter):
             if resp.status_code == 200:
                 return ConnectionTestResult(
                     success=True,
-                    message="Office 365 / Graph reachable (beta).",
+                    message="Office 365 / Graph reachable.",
                 )
             return ConnectionTestResult(
                 success=False,
@@ -160,7 +160,7 @@ META = ProviderMeta(
     provider="office365",
     label="Office 365 / Outlook",
     category="collab",
-    description="Send email notifications and create calendar invites (with Teams meeting link). Beta — wire app permissions Calendars.ReadWrite + Mail.Send.",
+    description="Send email notifications and create calendar invites (with Teams meeting link). Requires app permissions Calendars.ReadWrite + Mail.Send.",
     auth_method="oauth2",
     fields=[
         ProviderField(key="ms_tenant_id", label="Azure AD tenant id",
@@ -179,6 +179,5 @@ META = ProviderMeta(
                       is_credential=False),
     ],
     adapter_cls=Office365Adapter,
-    beta=True,
     docs_url="https://learn.microsoft.com/en-us/graph/api/overview",
 )

@@ -572,6 +572,43 @@ PERMISSION_MATRIX = [
                 "actions": ["view", "edit"]
             }
         ]
+    },
+    {
+        # AI Pentest. Write endpoints are gated in modules/pentest/router.py via
+        # _require_scan (pentest:scan:execute) and _require_exploit
+        # (pentest:exploit:execute), fail-closed: non-admins need the grant here;
+        # Administrator and the primary contact always pass.
+        "module": "pentest",
+        "display_name": "AI Pentest",
+        "submodules": [
+            {"name": "scan", "display_name": "Run Scans", "actions": ["execute"]},
+            {"name": "exploit", "display_name": "Run Exploits", "actions": ["execute"]},
+            {"name": "run", "display_name": "Batch Runs", "actions": ["execute"]},
+            {"name": "gate", "display_name": "Approve Exploit Gate", "actions": ["approve"]},
+            {"name": "workspace", "display_name": "Pentest Workspace", "actions": ["view"]},
+        ]
+    },
+    {
+        # Help Desk (native ITSM). Agent gates (helpdesk:tickets:view/edit) are
+        # enforced across the HD routers via common.require_view / require_edit;
+        # this block makes the module grantable in Admin > Roles and adds the
+        # end-user `requests` scope (raise + track-own + KB) for requester-only
+        # roles. Preset roles are seeded per tenant by
+        # helpdesk_native.itsm_seed.seed_hd_roles.
+        "module": "helpdesk",
+        "display_name": "Help Desk",
+        "submodules": [
+            {"name": "requests", "display_name": "My Requests (end user)",
+             "actions": ["create", "view_own"]},
+            {"name": "tickets", "display_name": "Tickets (agent queue)",
+             "actions": ["view", "create", "edit", "delete", "assign"]},
+            {"name": "processes", "display_name": "Incidents / Problems / Changes / Service Requests",
+             "actions": ["view", "manage"]},
+            {"name": "kb", "display_name": "Knowledge Base",
+             "actions": ["view", "author"]},
+            {"name": "settings", "display_name": "Help Desk Settings & SLA",
+             "actions": ["view", "manage"]},
+        ]
     }
 ]
 

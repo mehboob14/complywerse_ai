@@ -8,15 +8,13 @@ import {
 import { cloudConnectorsApi, type CloudConnector } from '@/cyber-assurance/lib/api';
 import { PageLoader } from '@/cyber-assurance/components/ui';
 import {
-  AwsIcon, AzureIcon, GcpIcon, NessusIcon, NexposeIcon, getProviderIcon,
+  AwsIcon, AzureIcon, GcpIcon, getProviderIcon,
 } from '@/cyber-assurance/components/integrations/ProviderIcons';
 
-// Card catalogue — drives the top-of-page card grid. Each entry maps to
-// either a `CloudConnector` provider (new framework) or the legacy
-// scanner integrations table. The card shows status pulled from the
-// live connector list; clicking either opens the create modal pre-filled
-// with the right provider, or deep-links to the legacy admin page.
-type CardKind = 'cloud_connector' | 'legacy_scanner';
+// Card catalogue — drives the top-of-page card grid. Each entry maps to a
+// `CloudConnector` provider; the card shows status pulled from the live
+// connector list and clicking opens the create modal pre-filled.
+type CardKind = 'cloud_connector';
 interface ProviderCard {
   provider: string;
   label: string;
@@ -53,22 +51,8 @@ const PROVIDER_CATALOGUE: ProviderCard[] = [
     iconBg: 'bg-emerald-50',
     icon: GcpIcon,
   },
-  {
-    provider: 'nessus',
-    label: 'Tenable Nessus',
-    description: 'Scanner ingest via Nessus / Tenable.io API key pair.',
-    kind: 'legacy_scanner',
-    iconBg: 'bg-sky-50',
-    icon: NessusIcon,
-  },
-  {
-    provider: 'nexpose',
-    label: 'Rapid7 Nexpose',
-    description: 'Scanner ingest via Nexpose / InsightVM console credentials.',
-    kind: 'legacy_scanner',
-    iconBg: 'bg-rose-50',
-    icon: NexposeIcon,
-  },
+  // Nessus / Nexpose scanners are NOT cloud — they live in the Vulnerability
+  // Scanners category. Kept out of here to avoid duplication.
 ];
 
 const STATUS_STYLES: Record<string, string> = {
@@ -93,16 +77,6 @@ export default function CloudConnectorsAdminPage() {
     queryKey: ['cloud-connectors'],
     queryFn: () => cloudConnectorsApi.list().then((r) => r.data),
   });
-
-  // Unified read — cloud connectors + legacy scanner integrations in one
-  // list, so the admin sees the full integration surface here.
-  const { data: unified } = useQuery({
-    queryKey: ['cloud-connectors-unified'],
-    queryFn: () => cloudConnectorsApi.unified().then((r) => r.data),
-  });
-  const legacyScannerRows = (unified?.connectors || []).filter(
-    (c) => c.framework === 'legacy_scanner',
-  );
 
   const syncMutation = useMutation({
     mutationFn: (id: number) => cloudConnectorsApi.sync(id),
@@ -322,74 +296,6 @@ export default function CloudConnectorsAdminPage() {
           )}
         </div>
       </div>
-
-      {/* Legacy scanner connections (Nessus / Nexpose) live in a different
-          table but are surfaced here so admins see the full integration
-          surface in one place. Read-only — manage in Integrations tab. */}
-      {legacyScannerRows.length > 0 && (
-        <div className="bg-white border border-slate-200 rounded-xl shadow-card">
-          <div className="p-6 border-b border-slate-200 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-              <Activity size={16} className="text-slate-600" />
-              Scanner connections (legacy)
-            </h2>
-            <span className="text-xs text-slate-500">
-              {legacyScannerRows.length} legacy scanner row{legacyScannerRows.length === 1 ? '' : 's'}
-            </span>
-          </div>
-          <div className="p-6 space-y-2">
-            <p className="text-xs text-slate-500 -mt-2 mb-2">
-              These connectors live in the legacy scanner-integrations table.
-              They keep syncing on their own schedule; manage them in the
-              Integrations tab.
-            </p>
-            {legacyScannerRows.map((c) => {
-              const lastSync = c.last_sync_at ? new Date(c.last_sync_at).toLocaleString() : 'Never';
-              const syncStyle = STATUS_STYLES[c.last_sync_status || ''] || 'border-slate-200 bg-slate-50 text-slate-600';
-              return (
-                <div key={`legacy-${c.id}`} className="border border-slate-200 rounded-lg p-3 bg-slate-50">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold text-slate-900">{c.display_name}</h3>
-                        <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
-                          {c.provider}
-                        </span>
-                        <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
-                          Legacy
-                        </span>
-                        {!c.is_active && (
-                          <span className="inline-flex items-center rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-700">
-                            Disabled
-                          </span>
-                        )}
-                      </div>
-                      {c.description && (
-                        <p className="text-xs text-slate-600 mb-1">{c.description}</p>
-                      )}
-                      <div className="text-xs text-slate-700">
-                        Last sync: <span className="text-slate-900">{lastSync}</span>
-                        {c.last_sync_status && (
-                          <span className={`ml-2 inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold uppercase ${syncStyle}`}>
-                            {c.last_sync_status}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <a
-                      href="/cyber-assurance/admin?tab=integrations"
-                      className="px-2 py-1 border border-slate-300 bg-white text-slate-700 rounded text-xs hover:bg-slate-50"
-                      title="Manage in Integrations tab"
-                    >
-                      Manage →
-                    </a>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {showAdd && providers && (
         <AddConnectorModal
@@ -760,7 +666,7 @@ function SetupGuide({ setup }: { setup?: {
           href={setup.redirect}
           className="inline-flex items-center gap-1.5 text-xs rounded-md border border-primary-300 bg-primary-50 px-3 py-1.5 text-primary-700 hover:bg-primary-100"
         >
-          Manage in Integrations →
+          Manage in Vulnerability Scanners →
         </a>
       </div>
     );

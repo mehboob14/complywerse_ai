@@ -61,7 +61,7 @@ class WazuhAdapter(SiemAdapter):
                 api_version = (resp.json().get("data") or {}).get("api_version")
                 return ConnectionTestResult(
                     success=True,
-                    message="Wazuh manager reachable (beta).",
+                    message="Wazuh manager reachable.",
                     server_version=str(api_version) if api_version else None,
                 )
             return ConnectionTestResult(
@@ -138,7 +138,7 @@ META = ProviderMeta(
     provider="wazuh",
     label="Wazuh",
     category="siem",
-    description="Open-source XDR/SIEM. Pull alerts and correlate active exploitation against vulnerabilities. Beta.",
+    description="Open-source XDR/SIEM. Pull alerts and correlate active exploitation against vulnerabilities.",
     auth_method="basic",
     fields=[
         ProviderField(key="console_url", label="Wazuh API URL",
@@ -150,6 +150,5 @@ META = ProviderMeta(
                       kind="password", required=True),
     ],
     adapter_cls=WazuhAdapter,
-    beta=True,
     docs_url="https://documentation.wazuh.com/current/user-manual/api/reference.html",
 )

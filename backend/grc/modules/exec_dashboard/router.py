@@ -7,10 +7,12 @@ from __future__ import annotations
 from datetime import datetime
 
 from fastapi import APIRouter, Depends
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from grc.models import GRCUser, ITAsset, Vulnerability, VulnerabilityAssetLink, get_db
 from grc.models._pentest_exploit_results import PentestExploitResult
+from grc.modules.vuln_management._adhoc_filter import exclude_adhoc, inventory_assets_only
 from grc.modules.vuln_management.routers.dashboard import RESOLVED_STATUSES
 from grc.routers.auth_router import get_user_tenants, require_auth, require_tenant_permission
 
@@ -34,15 +36,24 @@ def summary(db: Session = Depends(get_db), current_user: GRCUser = Depends(requi
 
     V, L, A, E = Vulnerability, VulnerabilityAssetLink, ITAsset, PentestExploitResult
     vulns = [dict(zip(_V_KEYS, r)) for r in db.query(*(getattr(V, k) for k in _V_KEYS))
-             .filter(V.tenant_id.in_(tids)).all()]
+             .filter(V.tenant_id.in_(tids), exclude_adhoc(db)).all()]
+    # INVENTORY ONLY: transient AI-pentest ad-hoc targets (status='adhoc' / source 'pentest-adhoc')
+    # are not inventory. exclude_adhoc (above) keeps only vulns linked to >=1 managed asset - the rule
+    # the Vulnerability dashboard uses; links are restricted to managed assets so a vuln also linked
+    # to an ad-hoc target never attributes risk to that target.
     links = db.query(L.vulnerability_id, L.asset_id).join(V, V.id == L.vulnerability_id) \
-        .filter(V.tenant_id.in_(tids)).all()
+        .join(A, A.id == L.asset_id).filter(V.tenant_id.in_(tids), *inventory_assets_only(A)).all()
     ids = {a for _, a in links}
     assets = {i: (n, bool(f1) or bool(f2)) for i, n, f1, f2 in
-              db.query(A.id, A.name, A.internet_facing, A.is_internet_facing).filter(A.id.in_(ids)).all()} if ids else {}
+              db.query(A.id, A.name, A.internet_facing, A.is_internet_facing).filter(A.id.in_(ids), *inventory_assets_only(A)).all()} if ids else {}
     try:
         exploits = [dict(zip(_E_KEYS, r)) for r in db.query(*(getattr(E, k) for k in _E_KEYS))
-                    .filter(E.tenant_id.in_(tids)).order_by(E.created_at, E.id).all()]
+                    .filter(E.tenant_id.in_(tids),
+                            # exploit runs against ad-hoc pentest targets are not inventory evidence
+                            or_(E.asset_id.is_(None),
+                                ~E.asset_id.in_(db.query(A.id).filter(A.tenant_id.in_(tids),
+                                                                      ~and_(*inventory_assets_only(A))))))
+                    .order_by(E.created_at, E.id).all()]
     except Exception:  # noqa: BLE001 — table not provisioned on this tenant yet: report "unknown", not 0
         db.rollback()
         exploits = None
