@@ -1412,8 +1412,12 @@ export const ermApi = {
       apiClient.put<RiskMitigationAction>(`/erm/mitigation-actions/${actionId}`, data),
     delete: (actionId: number) => 
       apiClient.delete(`/erm/mitigation-actions/${actionId}`),
-    complete: (actionId: number, actualReduction?: number) => 
-      apiClient.post<RiskMitigationAction>(`/erm/mitigation-actions/${actionId}/complete`, { actual_residual_reduction: actualReduction }),
+    // the route reads the achieved reduction as the QUERY parameter `actual_reduction` (it has no body model): sent in the body it was ignored
+    complete: (actionId: number, actualReduction?: number) =>
+      apiClient.post<RiskMitigationAction>(`/erm/mitigation-actions/${actionId}/complete`, null, { params: actualReduction === undefined || actualReduction === null ? undefined : { actual_reduction: actualReduction } }),
+    // every action of the tenant, one request (the per-risk list needed one request per risk and stopped at the newest 100 risks)
+    listAll: (params?: { status_filter?: string; risk_id?: number; owner_id?: number; limit?: number }) =>
+      apiClient.get<{ items: Array<RiskMitigationAction & { owner_name?: string | null; risk_title?: string | null; risk_category?: string | null; evidence_count?: number }>; total: number }>('/erm/mitigation-actions', { params }),
     getOverdue: () => 
       apiClient.get<RiskMitigationAction[]>('/erm/mitigation-actions/overdue'),
     aiSuggest: (data: { risk_id?: number; title?: string }) =>
