@@ -1,18 +1,25 @@
-import { Poppins, JetBrains_Mono } from 'next/font/google';
+import localFont from 'next/font/local';
 import Providers from '@/components/Providers';
 import AuthHandoff from '@/components/AuthHandoff';
 import './globals.css';
 
-const poppins = Poppins({
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '600', '700'],
+// Self-hosted (Latin subset, the same files next/font/google fetched): a build on a server with a poor route to Google
+// no longer fails on a font download. Keep this the Latin subset; add a file here for another script.
+const poppins = localFont({
+  src: [
+    { path: './fonts/poppins-300.woff2', weight: '300', style: 'normal' },
+    { path: './fonts/poppins-400.woff2', weight: '400', style: 'normal' },
+    { path: './fonts/poppins-500.woff2', weight: '500', style: 'normal' },
+    { path: './fonts/poppins-600.woff2', weight: '600', style: 'normal' },
+    { path: './fonts/poppins-700.woff2', weight: '700', style: 'normal' },
+  ],
   variable: '--font-poppins',
   display: 'swap',
 });
 
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500', '600'],
+// One variable file covers every weight (400-600 are used).
+const jetbrainsMono = localFont({
+  src: [{ path: './fonts/jetbrains-mono-latin.woff2', weight: '100 800', style: 'normal' }],
   variable: '--font-mono',
   display: 'swap',
 });
