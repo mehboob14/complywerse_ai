@@ -392,21 +392,20 @@ test('DocumentsTabs has no route of its own: its tabs, its area rule and its lit
   assert.ok(source.includes("from '@/lib/navRegistry'"));
   assert.deepEqual(stringLiterals(source).filter((s) => /\/governance|\/erm|\/is-projects/.test(s)), [], 'a route literal in DocumentsTabs.tsx');
   for (const call of ['tabsFor(', 'activeTab(', 'isInArea(']) assert.ok(source.includes(call), call);
-  assert.ok(source.includes('title={tabName(t)}') && source.includes('aria-label={tabName(t)}'), 'the label (or both, when the short one is another word) is the tooltip and the accessible name');
-  assert.ok(source.includes('{tabText(t)}'), 'the short label is what the tab shows');
+  assert.ok(source.includes('title={t.label}') && source.includes('aria-label={t.label}'), 'the full label is the tooltip and the accessible name');
+  assert.ok(source.includes('t.shortLabel ?? t.label'), 'the short label is what the tab shows');
   // an icon for every tab of the strip (it keeps the presentation; the registry keeps the names)
   for (const { tab } of tabsFor('documents')) assert.ok(new RegExp(`\\b${tab.id}:\\s*\\{\\s*icon:\\s*[A-Z]`).test(source), `no icon for the ${tab.id} tab`);
 });
 
-test('the top bar names no page itself: the trail comes from the registry (Breadcrumbs, crumbsFor), and the Header keeps no title map and no route of its own', () => {
-  const header = read('components/layout/Header.tsx');
-  assert.ok(header.includes("import Breadcrumbs from '@/components/shell/Breadcrumbs'") && header.includes('<Breadcrumbs />'));
-  assert.ok(!header.includes('PAGE_TITLES') && !header.includes('titleFor(') && !header.includes('subtitleFor('), 'the title map of the other modules went with the trail');
-  assert.deepEqual(stringLiterals(header).filter((s) => /^['"`]\/(governance|erm|is-projects|vendor-risk|cyber|assets|frameworks|compliance)/.test(s)), [], 'a route literal in Header.tsx');
-  const crumbs = read('components/shell/Breadcrumbs.tsx');
-  assert.ok(crumbs.includes('crumbsFor(') && crumbs.includes("from './crumbsModel'"));
-  const model = read('components/shell/crumbsModel.ts');
-  assert.ok(model.includes('breadcrumbFor(') && model.includes('ownHeadingSection('), "the trail is the registry's, and a page with its own heading does not repeat its name");
+test('the Header names Governance pages from the registry and keeps no Governance title of its own', () => {
+  const source = read('components/layout/Header.tsx');
+  assert.ok(source.includes("from '@/lib/navRegistry'"));
+  assert.ok(source.includes('titleFor(pathname)') && source.includes('subtitleFor(pathname)'));
+  const table = source.slice(source.indexOf('const PAGE_TITLES'), source.indexOf('export default function Header'));
+  const keys = Array.from(table.matchAll(/^\s*'(\/[^']*)':/gm)).map((m) => m[1]);
+  assert.ok(keys.length > 20, 'the title map of the other modules is still there');
+  assert.deepEqual(keys.filter((k) => routeFor(k)?.area === 'governance' || k.startsWith('/governance') || k.startsWith('/is-projects')), [], 'a Governance title kept in the Header');
 });
 
 test('a page that draws its own heading is flagged in the registry, and only its section is shown in the top bar', () => {

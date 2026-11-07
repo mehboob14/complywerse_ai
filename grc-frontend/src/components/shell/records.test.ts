@@ -81,8 +81,4 @@ test('the crumbs read the committee and meeting pages\' own cache entries: the s
   assert.match(meeting, /queryKey: \['meeting', meetingId\],\s*queryFn: async \(\) => \{\s*const res = await committeeApi\.getMeeting\(meetingId\);\s*return res\.data as Meeting;/);
   assert.match(committee, /const committeeId = parseInt\(params\.id as string\)/);
   assert.match(committee, /queryKey: \['committee', committeeId\],\s*queryFn: async \(\) => \{\s*const response = await committeeApi\.getCommittee\(committeeId\);\s*return response\.data as Committee;/);
-  const hook = readFileSync('src/components/shell/useShellRecords.ts', 'utf8');
-  assert.match(hook, /queryKey: \['meeting', ids\.meetingId\]/);
-  assert.match(hook, /queryKey: \['committee', committeeId\]/);
-  assert.match(hook, /\(await committeeApi\.getMeeting\(ids\.meetingId as number\)\)\.data/);
 });

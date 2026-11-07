@@ -1,13 +1,14 @@
 'use client';
 
-// The full menu tree of the off-canvas drawer (below 1024), drawn from the person's entries (navAccess.ts) and the one lit entry (navActive.ts): labels, groups that
-// open and close in place (disclosure buttons: aria-expanded, aria-controls). Also the menu-button pattern the rail's Administration button uses (useFlyout).
-// The rail itself is components/shell/ModuleIconRail.tsx; its group flyouts are gone (the Work and context panel lists a module's pages).
-// Nothing here is revealed by hover, so the keyboard, the mouse and a finger all get the whole menu. The look is the drawer's own (legacy-styled on purpose).
+// The menu in its two shapes, drawn from the same entries (navAccess.ts) and the one lit entry (navActive.ts):
+//  - the full tree: labels, groups that open and close (disclosure buttons: aria-expanded, aria-controls), in the 240px sidebar and in the drawer
+//  - the rail: icons only; a group is a button that opens a flyout menu of its entries (arrow keys, Escape, outside press), the same for
+//    Administration. Nothing here is revealed by hover, so the keyboard, the mouse and a finger all get the whole menu.
+// The look is the sidebar's own (legacy-styled on purpose); what is new is behaviour and accessibility.
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  Activity, BarChart3, Bot, CalendarClock, ChevronDown, GitPullRequest, Globe, Layers, Radar, ScrollText, Settings, Shield,
+  Activity, BarChart3, Bot, CalendarClock, ChevronDown, ChevronRight, GitPullRequest, Globe, Layers, Radar, ScrollText, Settings, Shield,
   ShieldCheck, Sparkles, Users, type LucideIcon,
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -97,12 +98,9 @@ function NavSubGroup({ group, activeHref, animated, touch, onNavigate }: GroupPr
   );
 }
 
-/** A count beside an entry (the queue's): the text drawn, what it means for a screen reader, and whether something is overdue. */
-export interface EntryBadge { text: string; label: string; urgent: boolean }
-
 /** An entry that is a page by itself (Performance Overview, Task Management, Third-Party Vendor Risk); `collapsed`: its icon alone. */
-export function NavItemLink({ item, active, collapsed = false, touch = false, onNavigate = noop, badge }: {
-  item: NavItem; active: boolean; collapsed?: boolean; touch?: boolean; onNavigate?: () => void; badge?: EntryBadge;
+export function NavItemLink({ item, active, collapsed = false, touch = false, onNavigate = noop }: {
+  item: NavItem; active: boolean; collapsed?: boolean; touch?: boolean; onNavigate?: () => void;
 }) {
   return (
     <Link
@@ -117,7 +115,7 @@ export function NavItemLink({ item, active, collapsed = false, touch = false, on
         collapsed && 'justify-center px-2'
       )}
       title={collapsed ? item.name : undefined}
-      aria-label={badge ? badge.label : collapsed ? item.name : undefined}
+      aria-label={collapsed ? item.name : undefined}
     >
       <item.icon
         {...navIconProps}
@@ -127,9 +125,6 @@ export function NavItemLink({ item, active, collapsed = false, touch = false, on
         )}
       />
       {!collapsed && <span className="leading-tight break-words">{item.name}</span>}
-      {badge && badge.text && (
-        <span aria-hidden className={clsx('ml-auto flex h-[20px] min-w-[20px] items-center justify-center rounded-full px-[6px] text-[12px] font-[600] leading-none text-[#ffffff]', badge.urgent ? 'bg-[#b42318]' : 'bg-[#9a5007]')}>{badge.text}</span>
-      )}
     </Link>
   );
 }
@@ -209,21 +204,21 @@ export function NavGroupSection({ group, activeHref, animated, touch, onNavigate
 }
 
 /** The labelled menu: every entry, groups open and close. */
-export function FullTree({ entries, activeHref, animated, touch = false, onNavigate = noop, badges }: {
-  entries: NavEntry[]; activeHref: string | undefined; animated: boolean; touch?: boolean; onNavigate?: () => void; badges?: Record<string, EntryBadge | undefined>;
+export function FullTree({ entries, activeHref, animated, touch = false, onNavigate = noop }: {
+  entries: NavEntry[]; activeHref: string | undefined; animated: boolean; touch?: boolean; onNavigate?: () => void;
 }) {
   return (
     <>
       {entries.map((item) => (isGroup(item)
         ? <NavGroupSection key={item.name} group={item} activeHref={activeHref} animated={animated} touch={touch} onNavigate={onNavigate} />
-        : <NavItemLink key={item.name} item={item} active={activeHref === item.href} touch={touch} onNavigate={onNavigate} badge={badges?.[item.href]} />))}
+        : <NavItemLink key={item.name} item={item} active={activeHref === item.href} touch={touch} onNavigate={onNavigate} />))}
     </>
   );
 }
 
 // ---- flyout menus (the rail's groups, Administration) ----
 
-export interface Flyout {
+interface Flyout {
   open: boolean;
   panelId: string;
   rootRef: RefObject<HTMLDivElement>;
@@ -246,7 +241,7 @@ const menuItems = (panel: HTMLElement | null) => Array.from(panel?.querySelector
  * Tab out, a scroll or resize of the page, and following a link close it. `fixed`: the flyout is placed beside the button from its
  * position (the rail's groups sit in a scrolling list that would clip a flyout placed inside it); otherwise the caller's classes place it.
  */
-export function useFlyout(fixed: boolean): Flyout {
+function useFlyout(fixed: boolean): Flyout {
   const pathname = usePathname();
   const panelId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -318,7 +313,7 @@ export function useFlyout(fixed: boolean): Flyout {
 }
 
 /** One entry of a flyout. Entries take focus by arrow keys (tabIndex -1: Tab leaves the menu, as a menu does). */
-export function MenuLink({ item, active, className, iconClass, size, onPick }: {
+function MenuLink({ item, active, className, iconClass, size, onPick }: {
   item: { name: string; href: string; icon: LucideIcon }; active: boolean; className: string; iconClass: string; size: number; onPick: () => void;
 }) {
   return (
@@ -329,10 +324,103 @@ export function MenuLink({ item, active, className, iconClass, size, onPick }: {
   );
 }
 
+function RailFlyoutItems({ entries, activeHref, onPick }: { entries: NavEntry[]; activeHref: string | undefined; onPick: () => void }) {
+  return (
+    <>
+      {entries.map((entry) => {
+        if (isGroup(entry)) {
+          // a sub-group keeps its name, or three entries called Overview would be indistinguishable
+          return (
+            <div key={entry.name} role="group" aria-label={entry.name}>
+              <div aria-hidden className="px-2.5 pb-0.5 pt-2 text-[12px] font-semibold text-[var(--sidebar-text-section)]">{entry.name}</div>
+              <RailFlyoutItems entries={entry.items} activeHref={activeHref} onPick={onPick} />
+            </div>
+          );
+        }
+        const active = activeHref === entry.href;
+        return (
+          <MenuLink
+            key={entry.href}
+            item={entry}
+            active={active}
+            onPick={onPick}
+            size={16}
+            iconClass={clsx('flex-shrink-0', active ? 'text-[var(--color-text)]' : 'text-[var(--sidebar-icon)]')}
+            className={clsx(
+              'flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors',
+              active
+                ? 'bg-[var(--sidebar-active-bg)] font-semibold text-[var(--color-text)]'
+                : 'font-normal text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]'
+            )}
+          />
+        );
+      })}
+    </>
+  );
+}
+
+function RailGroup({ group, activeHref }: { group: NavGroup; activeHref: string | undefined }) {
+  const hasActiveChild = groupHasActive(group, activeHref);
+  const fly = useFlyout(true);
+  const GroupIcon = group.icon;
+  return (
+    <div ref={fly.rootRef} onBlur={fly.onBlur} className="relative">
+      <button
+        ref={fly.triggerRef}
+        type="button"
+        onClick={fly.toggle}
+        onKeyDown={fly.onTriggerKeyDown}
+        aria-label={group.name}
+        aria-haspopup="menu"
+        aria-expanded={fly.open}
+        aria-controls={fly.open ? fly.panelId : undefined}
+        className={clsx(
+          'flex items-center justify-center w-full rounded-lg p-2 transition-colors duration-150', FOCUS,
+          hasActiveChild
+            ? 'bg-[var(--sidebar-active-bg)] text-[var(--color-text)]'
+            : 'text-[var(--sidebar-icon)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]'
+        )}
+        title={group.name}
+      >
+        {GroupIcon
+          ? <GroupIcon {...navIconProps} />
+          : <span className="text-[12px] font-semibold">{group.name.charAt(0)}</span>}
+      </button>
+      {fly.open && (
+        <div
+          ref={fly.panelRef}
+          id={fly.panelId}
+          role="menu"
+          aria-label={group.name}
+          tabIndex={-1}
+          onKeyDown={fly.onPanelKeyDown}
+          style={fly.style}
+          className="fixed z-50 max-h-[calc(100vh-16px)] min-w-[210px] overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-elevated focus:outline-none"
+        >
+          <div aria-hidden className="px-2.5 py-1.5 text-[12px] font-semibold text-[var(--color-text)]">{group.name}</div>
+          <RailFlyoutItems entries={group.items} activeHref={activeHref} onPick={fly.close} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The icon-only menu: pages that stand alone are links, a group is a button that opens its flyout. */
+export function RailTree({ entries, activeHref }: { entries: NavEntry[]; activeHref: string | undefined }) {
+  return (
+    <>
+      {entries.map((item) => (isGroup(item)
+        ? <RailGroup key={item.name} group={item} activeHref={activeHref} />
+        : <NavItemLink key={item.name} item={item} active={activeHref === item.href} collapsed />))}
+    </>
+  );
+}
+
 // ---- Administration ----
-// The sections of the Administration menu: a button at the foot of the rail opens them (components/shell/ModuleIconRail.tsx), and in the drawer they are a group like the
-// others (a flyout to the right of a drawer would run off a phone). Each deep-links to /admin with a ?tab=<id> (admin/page.tsx reads it on mount), so the admin tab bar lands on
-// the right tab. Shown to administrators only (the old nav entry was adminOnly, and administrators bypass module and permission checks).
+// A button pinned at the bottom of the sidebar that opens a menu of every admin section. Each deep-links to /admin with a ?tab=<id>
+// (admin/page.tsx reads it on mount), so the admin tab bar lands on the right tab. Shown to administrators only (the old nav entry was
+// adminOnly, and administrators bypass module and permission checks). In the drawer it is a group like the others (a flyout to the right
+// of a drawer would run off a phone).
 
 // Most items deep-link into the admin tab bar via `/admin?tab=<id>`. Items that live at their own standalone route set `href` to override that.
 const ADMIN_ITEMS: Array<{ id: string; label: string; icon: LucideIcon; href?: string }> = [
@@ -354,7 +442,74 @@ const ADMIN_ITEMS: Array<{ id: string; label: string; icon: LucideIcon; href?: s
   { id: 'scheduler',        label: 'Scheduler',          icon: CalendarClock, href: '/admin/scheduler' },
 ];
 
-export const adminEntries: NavItem[] = ADMIN_ITEMS.map(({ id, label, icon, href }) => ({ name: label, href: href ?? `/admin?tab=${id}`, icon }));
+const adminEntries: NavItem[] = ADMIN_ITEMS.map(({ id, label, icon, href }) => ({ name: label, href: href ?? `/admin?tab=${id}`, icon }));
 
 /** The same sections as a menu group, for the drawer. */
 export const ADMIN_GROUP: NavGroup = { name: 'Administration', icon: Settings, items: adminEntries };
+
+export function AdminMenu({ collapsed }: { collapsed: boolean }) {
+  const fly = useFlyout(false);
+  return (
+    <div ref={fly.rootRef} onBlur={fly.onBlur} className="border-t border-[var(--sidebar-hover-bg)] px-2.5 py-2 relative">
+      <button
+        ref={fly.triggerRef}
+        type="button"
+        onClick={fly.toggle}
+        onKeyDown={fly.onTriggerKeyDown}
+        className={clsx(
+          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[13px] transition-colors duration-150', FOCUS,
+          fly.open
+            ? 'bg-[var(--sidebar-hover-bg)] font-medium text-[var(--color-text)]'
+            : 'font-normal text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]',
+          collapsed && 'justify-center px-2'
+        )}
+        title={collapsed ? 'Administration' : undefined}
+        aria-label={collapsed ? 'Administration' : undefined}
+        aria-expanded={fly.open}
+        aria-haspopup="menu"
+        aria-controls={fly.open ? fly.panelId : undefined}
+      >
+        <Settings {...navIconProps} className={clsx('flex-shrink-0', fly.open ? 'text-[var(--color-base)]' : 'text-[var(--sidebar-icon)]')} />
+        {!collapsed && <span className="truncate flex-1 text-left">Administration</span>}
+        {!collapsed && (
+          <ChevronRight
+            size={14}
+            className={clsx('transition-transform duration-200', fly.open && 'rotate-90')}
+          />
+        )}
+      </button>
+
+      {fly.open && (
+        <div
+          ref={fly.panelRef}
+          id={fly.panelId}
+          role="menu"
+          aria-label="Administration"
+          tabIndex={-1}
+          onKeyDown={fly.onPanelKeyDown}
+          className={clsx(
+            'absolute z-50 rounded-lg border border-slate-200 bg-white shadow-xl py-1.5 focus:outline-none',
+            'min-w-[220px] max-h-[70vh] overflow-y-auto',
+            // Anchor: appear to the right of the sidebar, bottom-aligned with the trigger so the menu grows upward.
+            'left-full bottom-2 ml-2',
+          )}
+        >
+          <div aria-hidden className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-100 mb-1">
+            Administration
+          </div>
+          {adminEntries.map((item) => (
+            <MenuLink
+              key={item.href}
+              item={item}
+              active={false}
+              onPick={fly.close}
+              size={14}
+              iconClass="text-slate-500"
+              className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
