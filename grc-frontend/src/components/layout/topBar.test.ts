@@ -32,12 +32,12 @@ test('the left of the bar is the trail, or in the Documents area its tab strip; 
   assert.ok(header.indexOf('aria-label="User menu"') > header.indexOf('aria-label="Notifications"'));
 });
 
-test('a phone\'s Documents strip is a menu: the bar has room for two of its seven tabs, so it shows the open one with a list of them all', () => {
+test('below 1024 the Documents strip is a menu: the bar has room for two of its seven tabs on a phone and four at 768, so it shows the open one with a list of them all', () => {
   const tabs = readFileSync('src/components/governance/DocumentsTabs.tsx', 'utf8');
-  assert.match(tabs, /if \(phone\) return <PhoneTabs tabs=\{tabs\} open=\{open\} \/>/);
+  assert.match(tabs, /const narrow = useShellMode\(\) === 'drawer'/, 'the shell\'s own mode: the same width the menu button appears at');
+  assert.match(tabs, /if \(narrow\) return <TabsMenu tabs=\{tabs\} open=\{open\} \/>/);
   assert.match(tabs, /aria-haspopup="menu"[\s\S]*role="menu" aria-label="Documents tabs"/);
   assert.match(tabs, /min-h-\[44px\]/, 'a 44px target');
-  assert.match(readFileSync('src/components/layout/useShellMode.ts', 'utf8'), /export function usePhone\(\): boolean/);
 });
 
 test('Comply Agent is a question box from 1440 and an icon to the same chat below it; routes keep the name ComplyChat', () => {

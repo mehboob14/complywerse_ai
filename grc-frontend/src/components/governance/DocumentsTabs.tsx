@@ -11,6 +11,8 @@
  * Which tabs there are, their names and order, who sees them and which page lights which come from the navigation registry
  * (lib/navRegistry.ts); this file is how a tab looks. Colours are explicit hex on purpose: the platform CSS repaints the accent
  * utilities (PITFALLS: grc-frontend UI).
+ * Below 1024, where the shell's menu is a drawer and the bar has less room (the strip shows 4 of its 7 tabs at 768 and 6 at 820, the rest cut off with no cue), it is the open tab
+ * with a menu of all seven instead (TabsMenu).
  */
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -23,7 +25,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { activeTab, isInArea, tabName, tabText, tabsFor } from '@/lib/navRegistry';
 import { scrollDelta } from '@/lib/tabsModel';
 import { useFlyout } from '@/components/layout/NavTree';
-import { usePhone } from '@/components/layout/useShellMode';
+import { useShellMode } from '@/components/layout/useShellMode';
 
 // the look of each tab of the registry's 'documents' strip, by its id
 const LOOK: Record<string, { icon: LucideIcon; iconOnly?: boolean }> = {
@@ -44,8 +46,8 @@ export const inDocumentsArea = (pathname: string | null) => isInArea('documents'
 
 type Tabs = ReturnType<typeof tabsFor>;
 
-/** A phone: the bar has room for about two of the seven tabs, so it shows the open one and a menu of them all (the strip is for a window that fits it). */
-function PhoneTabs({ tabs, open }: { tabs: Tabs; open: Tabs[number] | undefined }) {
+/** Below 1024 the bar has room for two of the seven tabs on a phone and four at 768, so it shows the open one and a menu of them all (the strip is for a window that fits it). */
+function TabsMenu({ tabs, open }: { tabs: Tabs; open: Tabs[number] | undefined }) {
   const fly = useFlyout(false);
   const shown = open ?? tabs[0];
   if (!shown) return null;
@@ -90,7 +92,7 @@ function PhoneTabs({ tabs, open }: { tabs: Tabs; open: Tabs[number] | undefined 
 
 export default function DocumentsTabs({ ownerOnly = false }: { ownerOnly?: boolean }) {
   const pathname = usePathname() ?? '';
-  const phone = usePhone();
+  const narrow = useShellMode() === 'drawer';                        // below 1024, where the shell's menu is a drawer
   const studio = useQuery({ queryKey: ['studio', 'status'], queryFn: studioApi.status, staleTime: 5 * 60_000, retry: false });
   const { hasPermission } = usePermissions();
   const studioOn = !!studio.data?.enabled;
@@ -102,7 +104,7 @@ export default function DocumentsTabs({ ownerOnly = false }: { ownerOnly?: boole
   // the strip does not fit with every label: only the open tab keeps its (see the comment at the top)
   const [tight, setTight] = useState(false);
   const full = useRef(0);                                             // the strip's width with every label showing
-  useBeforePaint(() => { setTight(false); }, [tabs.length, phone]);   // other tabs, or the strip is back from a phone's menu: measure the whole strip again
+  useBeforePaint(() => { setTight(false); }, [tabs.length, narrow]);  // other tabs, or the strip is back from the menu: measure the whole strip again
   useBeforePaint(() => {
     const box = strip.current;
     if (!box) return undefined;
@@ -118,7 +120,7 @@ export default function DocumentsTabs({ ownerOnly = false }: { ownerOnly?: boole
     const watch = new ResizeObserver(decide);                         // the window, and the menu opening or closing
     watch.observe(room);
     return () => watch.disconnect();
-  }, [tight, tabs.length, phone]);
+  }, [tight, tabs.length, narrow]);
   useEffect(() => {
     const fit = () => {
       const box = strip.current;
@@ -132,8 +134,8 @@ export default function DocumentsTabs({ ownerOnly = false }: { ownerOnly?: boole
     fit();
     window.addEventListener('resize', fit);                       // turning the phone moves the strip's edges
     return () => window.removeEventListener('resize', fit);
-  }, [pathname, tabs.length, phone]);
-  if (phone) return <PhoneTabs tabs={tabs} open={open} />;
+  }, [pathname, tabs.length, narrow]);
+  if (narrow) return <TabsMenu tabs={tabs} open={open} />;
   return (
     <nav ref={strip} aria-label="Documents" className="-mb-px flex min-w-0 self-stretch overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {tabs.map((t) => {
