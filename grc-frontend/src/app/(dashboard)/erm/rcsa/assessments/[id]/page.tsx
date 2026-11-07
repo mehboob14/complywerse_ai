@@ -1,1224 +1,314 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+export const dynamic = 'force-dynamic';
+
+// RCSA > a unit (one business unit's self-assessment in one campaign): the form the assessor completes and the screen the reviewer decides on, ONE page for both.
+//   assessor   opening an own unit that has not started starts it (no Start button, no key to look for); the questions are a table with the controls in the row; every change is saved
+//              as it is made ("Saved 14:02" is the server's word, not a guess); Submit lists what is still empty and goes through a plain question; after it the form is read only.
+//   reviewer   the same table read only with the answers that need a look first; a sticky bar to Approve, Send back (a comment is required) or Reject (says it closes the unit); the trail.
+//   anyone     the unit's status in words, what happens next, the findings raised on it, the history.
+// Contract: answers are saved under the field names the API stores (lib/rcsa/answers.savePayload) — the old form sent other names and nothing was kept. Rules of what each state offers:
+// lib/rcsa/rules.ts (the server's state machine, never widened). Requests: the unit's detail, its findings, and the writes (start, save, submit, approve / return / reject, evidence).
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { rcsaApi, getTenantSlug } from '@/lib/api';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Check, Flag, RotateCw, Send, XCircle } from 'lucide-react';
+import { rcsaApi } from '@/lib/api';
+import { PageHeader } from '@/components/ui';
 import {
-  ArrowLeft,
-  Save,
-  Send,
-  Loader2,
-  AlertCircle,
-  CheckCircle,
-  XCircle,
-  Sparkles,
-  HelpCircle,
-  Building2,
-  Calendar,
-  ChevronDown,
-  ChevronUp,
-  ChevronLeft,
-  ChevronRight,
-  Upload,
-  FileText,
-  Trash2,
-  Lightbulb,
-} from 'lucide-react';
-import Link from 'next/link';
-import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
-import { PageLoader } from '@/components/ui';
-import EvidencePreviewButton from '@/components/evidence/EvidencePreviewButton';
+  Button, ErrorState, Notice, ProgressBar, ReadOnlyNote, SectionCard, SegmentedControl, Select, Skeleton, SkeletonRows, StatusPill, useConfirm, useNotify, useReportedMutation,
+} from '@/components/ui/ds';
+import { canRetry, errorMessage, statusOf } from '@/components/ui/ds/reportOutcome';
+import { formatCount, formatDate, formatDateTime } from '@/lib/format';
+import { statusPill } from '@/lib/status';
+import { assessmentStatus, findingSeverity, findingStatus } from '@/lib/statuses/rcsa';
+import { answerFromServer, completion, needsLook, sections, sortedQuestions, type Answer, type Question, type ServerAnswer } from '@/lib/rcsa/answers';
+import { canEdit, canStart, decisionDone, decisions, inReview, readOnlyReason, standing, submitAsk, type Decision } from '@/lib/rcsa/rules';
+import { riskText, controlText } from '@/lib/rcsa/scores';
+import { DecisionSheet } from '../../_parts/DecisionSheet';
+import { FindingSheet } from '../../_parts/FindingSheet';
+import { KEYS, useRcsaRights } from '../../_parts/rcsaData';
+import { QuestionRow } from './_parts/QuestionRow';
+import { ReviewTrail, type Step } from './_parts/ReviewTrail';
+import { useAnswers } from './_parts/useAnswers';
+import type { EvidenceFile } from './_parts/EvidenceCell';
 
-interface Question {
-  id: number;
-  section: string;
-  question_text: string;
-  guidance?: string;
-  question_type: 'risk_rating' | 'control_rating' | 'yes_no' | 'text';
-  is_required: boolean;
-  sequence: number;
-  question_order?: number;
-  ai_suggestion_enabled?: boolean;
-  risk_category?: string;
-  control_objective?: string;
+interface Detail {
+  id: number; campaign_id: number; campaign_name: string | null; business_unit: string | null; business_unit_id: number | null; assessor_name: string | null; assessor_id: number | null;
+  status: string; due_date: string | null; template_name: string | null; campaign_status: string | null; current_approval_tier: number; total_tiers: number;
+  submitted_at: string | null; completed_at: string | null; overall_risk_score: number | null; overall_control_score: number | null;
+  questions: Question[]; responses: ServerAnswer[]; approval_history: Step[]; viewer_may_review: boolean; viewer_is_assessor: boolean;
 }
+interface Finding { id: number; title: string; severity: string; status: string; assessment_id: number }
 
-interface Response {
-  question_id: number;
-  likelihood?: number;
-  impact?: number;
-  effectiveness?: string;
-  yes_no_value?: boolean;
-  text_value?: string;
-  evidence_files?: EvidenceFile[];
-  evidence?: EvidenceFile[];
-}
-
-interface EvidenceFile {
-  id: number;
-  filename: string;
-  file_size: number;
-  uploaded_at: string;
-}
-
-interface EvidenceRecommendation {
-  evidence_type: string;
-  description: string;
-  example_files: string[];
-}
-
-interface AISuggestion {
-  question_id: number;
-  suggested_value: unknown;
-  suggestion: string;
-  reasoning: string;
-  confidence: number;
-  evidence_recommendations?: EvidenceRecommendation[];
-}
-
-interface Assessment {
-  id: number;
-  campaign_id: number;
-  campaign_name: string | null;
-  // Backend RCSAAssessmentDetailResponse returns `business_unit_name`
-  // (per the schema), not a flat `business_unit` string. Keeping a
-  // legacy `business_unit` alias would mask the field-mismatch bug —
-  // we read the canonical field directly here.
-  business_unit_id?: number | null;
-  business_unit_name: string | null;
-  assessor_id?: number | null;
-  assessor_name: string | null;
-  status: string;
-  due_date: string | null;
-  progress: number;
-  questions: Question[];
-  responses: Response[];
-}
-
-const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  not_started: { bg: 'bg-slate-100', text: 'text-slate-700', label: 'Not Started' },
-  in_progress: { bg: 'bg-primary-50', text: 'text-primary-700', label: 'In Progress' },
-  submitted: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Submitted' },
-  under_review: { bg: 'bg-orange-50', text: 'text-orange-700', label: 'Under Review' },
-  approved: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Approved' },
-  rejected: { bg: 'bg-rose-50', text: 'text-rose-700', label: 'Rejected' },
-};
-
-const LIKELIHOOD_OPTIONS = [
-  { value: 1, label: '1 - Rare' },
-  { value: 2, label: '2 - Unlikely' },
-  { value: 3, label: '3 - Possible' },
-  { value: 4, label: '4 - Likely' },
-  { value: 5, label: '5 - Almost Certain' },
-];
-
-const IMPACT_OPTIONS = [
-  { value: 1, label: '1 - Insignificant' },
-  { value: 2, label: '2 - Minor' },
-  { value: 3, label: '3 - Moderate' },
-  { value: 4, label: '4 - Major' },
-  { value: 5, label: '5 - Catastrophic' },
-];
-
-const EFFECTIVENESS_OPTIONS = [
-  { value: 'effective', label: 'Effective' },
-  { value: 'partially_effective', label: 'Partially Effective' },
-  { value: 'ineffective', label: 'Ineffective' },
-  { value: 'not_applicable', label: 'Not Applicable' },
-];
-
-export default function AssessmentDetailPage() {
+export default function UnitPage() {
   const params = useParams();
-  const router = useRouter();
+  const raw = Array.isArray(params?.id) ? params.id[0] : params?.id;
+  const id = Number(raw);
+  const valid = Number.isFinite(id) && id > 0;
   const queryClient = useQueryClient();
-  const rawAssessmentId = Array.isArray(params.id) ? params.id[0] : params.id;
-  const assessmentId = Number(rawAssessmentId);
-  const isValidAssessmentId = Number.isFinite(assessmentId) && assessmentId > 0;
+  const detail = useQuery({ queryKey: KEYS.unit(id), queryFn: async () => (await rcsaApi.getAssessment(id)).data as Detail, enabled: valid, retry: (n, e) => n < 1 && statusOf(e) !== 404 && statusOf(e) !== 403 });
+  const data = detail.data;
 
-  const [responses, setResponses] = useState<Record<number, Response>>({});
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
-  const [showAISuggestions, setShowAISuggestions] = useState<Record<number, boolean>>({});
-  const [aiSuggestionsByQuestion, setAiSuggestionsByQuestion] = useState<Record<number, AISuggestion | null>>({});
-  const [loadingAIByQuestion, setLoadingAIByQuestion] = useState<Record<number, boolean>>({});
-  const [fetchedAIByQuestion, setFetchedAIByQuestion] = useState<Record<number, boolean>>({});
-  const [validationErrors, setValidationErrors] = useState<Set<number>>(new Set());
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [viewMode, setViewMode] = useState<'list' | 'step'>('list');
-  const [uploadingQuestion, setUploadingQuestion] = useState<number | null>(null);
-  const [evidenceFiles, setEvidenceFiles] = useState<Record<number, EvidenceFile[]>>({});
-  const [reviewComments, setReviewComments] = useState('');
-  const [showRejectModal, setShowRejectModal] = useState(false);
-
-  const { data: assessment, isLoading, error } = useQuery({
-    queryKey: ['rcsa-assessment', assessmentId],
-    queryFn: async () => {
-      try {
-        const response = await rcsaApi.getAssessment(assessmentId);
-        return response.data as Assessment;
-      } catch {
-        throw new Error('Failed to load assessment');
-      }
-    },
-    enabled: isValidAssessmentId,
-    retry: 1,
+  // the assessor's first visit starts the unit; the server's start is the same call the old Assessments list made
+  const started = useRef(false);
+  const start = useReportedMutation({
+    mutationFn: () => rcsaApi.startAssessment(id),
+    failure: "The unit couldn't be started",
+    toast: 'errors',
+    invalidate: [KEYS.unit(id), KEYS.work],
   });
-
-  const handleAIToggle = async (questionId: number) => {
-    const currentlyOpen = !!showAISuggestions[questionId];
-
-    if (currentlyOpen) {
-      setShowAISuggestions((prev) => ({ ...prev, [questionId]: false }));
-      return;
-    }
-
-    setShowAISuggestions((prev) => ({ ...prev, [questionId]: true }));
-
-    if (fetchedAIByQuestion[questionId] || loadingAIByQuestion[questionId]) {
-      return;
-    }
-
-    setLoadingAIByQuestion((prev) => ({ ...prev, [questionId]: true }));
-    try {
-      const response = await rcsaApi.getAISuggestions(assessmentId, questionId);
-      const suggestions = (response.data || []) as AISuggestion[];
-      const matched = suggestions.find((s) => Number(s.question_id) === Number(questionId)) || null;
-      setAiSuggestionsByQuestion((prev) => ({ ...prev, [questionId]: matched }));
-    } finally {
-      setFetchedAIByQuestion((prev) => ({ ...prev, [questionId]: true }));
-      setLoadingAIByQuestion((prev) => ({ ...prev, [questionId]: false }));
-    }
-  };
-
   useEffect(() => {
-    if (assessment?.responses) {
-      const responseMap: Record<number, Response> = {};
-      const evidenceMap: Record<number, EvidenceFile[]> = {};
-      assessment.responses.forEach(r => {
-        responseMap[r.question_id] = r;
-        if (r.evidence && r.evidence.length > 0) {
-          evidenceMap[r.question_id] = r.evidence;
-        }
-      });
-      setResponses(responseMap);
-      setEvidenceFiles(evidenceMap);
+    if (data && data.viewer_is_assessor && canStart({ status: data.status, campaignStatus: data.campaign_status }) && !started.current) {
+      started.current = true;
+      start.mutate();
     }
-    if (assessment?.questions) {
-      const sections = new Set(assessment.questions.map(q => q.section));
-      setExpandedSections(sections);
-    }
-  }, [assessment]);
+  }, [data, start]);
 
-  const saveMutation = useMutation({
-    mutationFn: (data: { responses: Response[] }) => rcsaApi.saveResponses(assessmentId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rcsa-assessment', assessmentId] });
-    },
-  });
-
-  const submitMutation = useMutation({
-    mutationFn: () => rcsaApi.submitAssessment(assessmentId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rcsa-assessment', assessmentId] });
-      queryClient.invalidateQueries({ queryKey: ['rcsa-assessments'] });
-      router.push('/erm/rcsa/assessments');
-    },
-  });
-
-  const approveMutation = useMutation({
-    mutationFn: (comments: string) => rcsaApi.approveAssessment(assessmentId, { comments }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rcsa-assessment', assessmentId] });
-      queryClient.invalidateQueries({ queryKey: ['rcsa-assessments'] });
-      queryClient.invalidateQueries({ queryKey: ['rcsa-pending-reviews'] });
-      router.push('/erm/rcsa');
-    },
-  });
-
-  const rejectMutation = useMutation({
-    mutationFn: (comments: string) => rcsaApi.rejectAssessment(assessmentId, { comments, reason: comments }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rcsa-assessment', assessmentId] });
-      queryClient.invalidateQueries({ queryKey: ['rcsa-assessments'] });
-      queryClient.invalidateQueries({ queryKey: ['rcsa-pending-reviews'] });
-      router.push('/erm/rcsa');
-    },
-  });
-
-  const handleSave = () => {
-    const responseArray = Object.values(responses);
-    saveMutation.mutate({ responses: responseArray });
-  };
-
-  const handleSubmit = () => {
-    if (!assessment) return;
-
-    // Detect any still-empty required fields. Previously this was a
-    // hard block — the department couldn't submit their own portion
-    // until *every* template-defined required field was filled, even
-    // when the unfilled questions belong to a different team's scope.
-    // We now treat the gate as a warning and let the user knowingly
-    // submit their assigned part. Reviewers can flag any incomplete
-    // areas during approval.
-    const errors = new Set<number>();
-    assessment.questions.filter(q => q.is_required).forEach(q => {
-      const response = responses[q.id];
-      if (!response) {
-        errors.add(q.id);
-        return;
-      }
-      if (q.question_type === 'risk_rating' && (!response.likelihood || !response.impact)) {
-        errors.add(q.id);
-      } else if (q.question_type === 'control_rating' && !response.effectiveness) {
-        errors.add(q.id);
-      } else if (q.question_type === 'yes_no' && response.yes_no_value === undefined) {
-        errors.add(q.id);
-      }
-    });
-
-    // Light up the red borders so the user can still see what's
-    // missing, but only short-circuit the submit when they actively
-    // cancel the confirmation prompt.
-    if (errors.size > 0) {
-      setValidationErrors(errors);
-      const proceed = confirm(
-        `${errors.size} required field${errors.size === 1 ? ' is' : 's are'} still empty.\n\n` +
-        `Submit your assigned portion anyway? Reviewers will be able to ` +
-        `flag missing areas during approval.`,
-      );
-      if (!proceed) return;
-      submitMutation.mutate();
-      return;
-    }
-
-    if (confirm('Are you sure you want to submit this assessment for review? You will not be able to make changes after submission.')) {
-      submitMutation.mutate();
-    }
-  };
-
-  const updateResponse = (questionId: number, field: string, value: unknown) => {
-    setResponses(prev => ({
-      ...prev,
-      [questionId]: {
-        ...prev[questionId],
-        question_id: questionId,
-        [field]: value,
-      },
-    }));
-    setValidationErrors(prev => {
-      const next = new Set(prev);
-      next.delete(questionId);
-      return next;
-    });
-  };
-
-  const acceptAISuggestion = (questionId: number) => {
-    const suggestion = aiSuggestionsByQuestion[questionId];
-    if (suggestion && typeof suggestion.suggested_value === 'object') {
-      const value = suggestion.suggested_value as Record<string, unknown>;
-      setResponses(prev => ({
-        ...prev,
-        [questionId]: {
-          ...prev[questionId],
-          question_id: questionId,
-          ...value,
-        },
-      }));
-    }
-    setShowAISuggestions(prev => ({ ...prev, [questionId]: false }));
-  };
-
-  const toggleSection = (section: string) => {
-    setExpandedSections(prev => {
-      const next = new Set(prev);
-      if (next.has(section)) {
-        next.delete(section);
-      } else {
-        next.add(section);
-      }
-      return next;
-    });
-  };
-
-  const sortedQuestions = assessment?.questions
-    ? [...assessment.questions].sort((a, b) => (a.question_order || a.sequence || 0) - (b.question_order || b.sequence || 0))
-    : [];
-
-  const groupedQuestions = sortedQuestions.reduce((acc, q) => {
-    if (!acc[q.section]) acc[q.section] = [];
-    acc[q.section].push(q);
-    return acc;
-  }, {} as Record<string, Question[]>);
-
-  const currentQuestion = sortedQuestions[currentQuestionIndex];
-  const currentAISuggestion = currentQuestion
-    ? (aiSuggestionsByQuestion[currentQuestion.id] || null)
-    : null;
-  const totalQuestions = sortedQuestions.length;
-  const answeredCount = Object.keys(responses).filter(qId => {
-    const q = sortedQuestions.find(sq => sq.id === Number(qId));
-    if (!q) return false;
-    const r = responses[Number(qId)];
-    if (q.question_type === 'risk_rating') return r.likelihood && r.impact;
-    if (q.question_type === 'control_rating') return !!r.effectiveness;
-    if (q.question_type === 'yes_no') return r.yes_no_value !== undefined;
-    if (q.question_type === 'text') return !!r.text_value;
-    return false;
-  }).length;
-
-  const goToNextQuestion = () => {
-    if (currentQuestionIndex < totalQuestions - 1) {
-      setCurrentQuestionIndex(currentQuestionIndex + 1);
-      handleSave();
-    }
-  };
-
-  const goToPrevQuestion = () => {
-    if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex(currentQuestionIndex - 1);
-    }
-  };
-
-  const handleFileUpload = async (questionId: number, files: FileList) => {
-    if (!files.length) return;
-    setUploadingQuestion(questionId);
-    
-    try {
-      const formData = new FormData();
-      formData.append('file', files[0]);
-      formData.append('assessment_id', assessmentId.toString());
-      formData.append('question_id', questionId.toString());
-      
-      const response = await fetch('/api/erm/rcsa/evidence/upload', {
-        method: 'POST',
-        body: formData,
-        credentials: 'include',
-        headers: (() => {
-          const slug = getTenantSlug();
-          const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-          return {
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            ...(slug ? { 'X-Tenant-Slug': slug } : {}),
-          };
-        })(),
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setEvidenceFiles(prev => ({
-          ...prev,
-          [questionId]: [...(prev[questionId] || []), data],
-        }));
-      }
-    } catch (err) {
-      console.error('Error uploading file:', err);
-    } finally {
-      setUploadingQuestion(null);
-    }
-  };
-
-  const handleRemoveEvidence = async (questionId: number, fileId: number) => {
-    try {
-      await fetch(`/api/erm/rcsa/evidence/${fileId}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-      setEvidenceFiles(prev => ({
-        ...prev,
-        [questionId]: (prev[questionId] || []).filter(f => f.id !== fileId),
-      }));
-    } catch (err) {
-      console.error('Error removing evidence:', err);
-    }
-  };
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
-
-  const isEditable = assessment?.status === 'in_progress' || assessment?.status === 'rejected' || assessment?.status === 'not_started';
-  const isReviewMode = assessment?.status === 'submitted' || assessment?.status === 'under_review';
-  const statusStyle = STATUS_STYLES[assessment?.status || 'not_started'];
-
-  if (isLoading) {
+  if (!valid) return <ErrorState title="This unit doesn't exist" message="Check the address, or open the unit from your worklist." />;
+  if (detail.isLoading) return (
+    <div className="flex flex-col gap-[16px]" aria-busy="true">
+      <Skeleton className="h-[32px] w-[40%]" />
+      <Skeleton className="h-[24px] w-[70%]" />
+      <SkeletonRows rows={6} columns={3} label="Loading the unit" />
+    </div>
+  );
+  if (detail.isError || !data) {
+    const gone = statusOf(detail.error) === 404;
     return (
-      <PageLoader className="h-64" />
+      <ErrorState
+        title={gone ? "This unit doesn't exist" : "Couldn't load the unit"}
+        message={gone ? 'It may have been deleted with its campaign, or you may not have access to it.' : errorMessage(detail.error)}
+        onRetry={!gone && canRetry(detail.error) ? () => { void detail.refetch(); } : undefined}
+      />
     );
   }
+  return <UnitBody key={`${data.id}:${data.status}:${data.campaign_status}`} data={data} starting={start.isPending} startFailed={start.isError} onRetryStart={() => start.mutate()} reload={() => queryClient.invalidateQueries({ queryKey: KEYS.unit(id) })} />;
+}
 
-  if (error || !assessment) {
-    return (
-      <div className="rounded-xl border border-rose-200 bg-rose-50 p-6 text-center">
-        <AlertCircle className="mx-auto h-8 w-8 text-rose-600" strokeWidth={1.75} />
-        <p className="mt-2 text-rose-700">Failed to load assessment</p>
-      </div>
-    );
-  }
+function UnitBody({ data, starting, startFailed, onRetryStart, reload }: { data: Detail; starting: boolean; startFailed: boolean; onRetryStart: () => void; reload: () => unknown }) {
+  const router = useRouter();
+  const notify = useNotify();
+  const rights = useRcsaRights();
+  const { confirm, confirmDialog } = useConfirm();
+  const unitName = [data.business_unit || 'Unit', data.campaign_name].filter(Boolean).join(' · ');
+  const facts = { status: data.status, campaignStatus: data.campaign_status };
+  const editable = canEdit(facts) && data.viewer_is_assessor && !starting;
+  const reviewer = data.viewer_may_review;
+  const role = reviewer ? 'reviewer' : data.viewer_is_assessor ? 'assessor' : 'reader';
+
+  const questions = useMemo(() => sortedQuestions(data.questions), [data.questions]);
+  const initial = useMemo(() => Object.fromEntries(data.responses.map((r) => [r.question_id, answerFromServer(r)])) as Record<number, Answer>, [data.responses]);
+  const api = useAnswers(data.id, questions, initial, editable);
+  const [evidence, setEvidence] = useState<Record<number, EvidenceFile[]>>(() => Object.fromEntries(data.responses.filter((r) => (r.evidence ?? []).length > 0).map((r) => [r.question_id, r.evidence as EvidenceFile[]])));
+  const done = completion(questions, api.answers);
+  const [attempted, setAttempted] = useState(false);
+  const [decision, setDecision] = useState<Decision | null>(null);
+  const [finding, setFinding] = useState<{ suggestion?: string } | null>(null);
+  const [filter, setFilter] = useState<'all' | 'look' | null>(null);
+
+  const findings = useQuery({ queryKey: [...KEYS.findings, 'unit', data.id], queryFn: async () => (await rcsaApi.getFindings({ assessment_id: data.id, limit: 200 })).data as Finding[] });
+  const looks = useMemo(() => new Map(questions.map((q) => [q.id, needsLook(q, api.answers[q.id])])), [questions, api.answers]);
+  const lookCount = Array.from(looks.values()).filter(Boolean).length;
+  const reading = !editable && reviewer && inReview(data.status);
+  const shownFilter = filter ?? (reading && lookCount > 0 ? 'look' : 'all');
+  const parts = sections(questions, api.answers)
+    .map((s) => ({ ...s, shown: shownFilter === 'look' ? s.questions.filter((q) => looks.get(q.id)) : s.questions }))
+    .filter((s) => s.shown.length > 0);
+  const numbers = new Map(questions.map((q, i) => [q.id, i + 1]));
+  const canRaise = (editable) || reviewer || rights.manage;
+
+  const submit = useReportedMutation({
+    mutationFn: () => rcsaApi.submitAssessment(data.id),
+    success: () => ({ title: 'Submitted for review', message: 'The reviewer has been asked. You will see their decision here and on your worklist.' }),
+    failure: "The unit couldn't be submitted",
+    invalidate: [KEYS.work, KEYS.summary, KEYS.campaigns, KEYS.campaign(data.campaign_id)],
+    onSuccess: () => { void reload(); },
+  });
+  const decide = useReportedMutation({
+    mutationFn: ({ d, comments }: { d: Decision; comments: string }) => (d === 'approve' ? rcsaApi.approveAssessment(data.id, { comments }) : d === 'return' ? rcsaApi.returnAssessment(data.id, { comments }) : rcsaApi.rejectAssessment(data.id, { comments })),
+    success: (_, v) => decisionDone(v.d, unitName),
+    failure: "The decision wasn't recorded",
+    toast: 'success',
+    invalidate: [KEYS.work, KEYS.summary, KEYS.campaigns, KEYS.campaign(data.campaign_id)],
+    onSuccess: () => { setDecision(null); void reload(); router.push('/erm/rcsa'); },
+  });
+
+  const onSubmit = async () => {
+    setAttempted(true);
+    if (!(await api.flush())) { notify.error(api.error ?? "Your answers couldn't be saved.", { title: "Fix this before submitting", fallback: 'Your answers are not saved yet.' }); return; }
+    const ask = submitAsk(done.missing.length);
+    if (!(await confirm({ title: ask.title, message: ask.message, confirmLabel: ask.confirmLabel }))) return;
+    submit.mutate();
+  };
+
+  const pill = statusPill(assessmentStatus, data.status);
+  const reason = readOnlyReason(facts);
+  const saveWords = api.state === 'saving' ? 'Saving…' : api.state === 'unsaved' ? 'Saving soon…' : api.state === 'saved' && api.savedAt ? `Saved ${formatDateTime(api.savedAt)}` : '';
 
   return (
-    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
-      <div className="flex items-center gap-4">
-        <Link
-          href="/erm/rcsa/assessments"
-          className="p-2 rounded-lg hover:bg-slate-100 text-slate-600 hover:text-slate-900"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </Link>
-        <div className="flex-1">
-          <h1 className="text-lg sm:text-xl font-semibold text-slate-900">{assessment.campaign_name}</h1>
-          <div className="flex items-center gap-4 mt-1">
-            <span className="flex items-center gap-1.5 text-slate-600">
-              <Building2 className="h-4 w-4" />
-              {assessment.business_unit_name || <span className="italic text-slate-400">Unassigned</span>}
-            </span>
-            <span className="flex items-center gap-1.5 text-slate-600">
-              <Calendar className="h-4 w-4" />
-              Due: {assessment.due_date ? new Date(assessment.due_date).toLocaleDateString() : '—'}
-            </span>
-            <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusStyle.bg} ${statusStyle.text}`}>
-              {statusStyle.label}
-            </span>
-          </div>
-        </div>
-        {isEditable && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleSave}
-              disabled={saveMutation.isPending}
-              className="btn-secondary flex items-center gap-2"
-            >
-              {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              Save Draft
-            </button>
-            <button
-              onClick={handleSubmit}
-              disabled={submitMutation.isPending}
-              className="btn-primary flex items-center gap-2"
-            >
-              {submitMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              Submit
-            </button>
-          </div>
+    <div className="flex flex-col gap-[16px] pb-[64px]">
+      <PageHeader
+        variant="page"
+        title={unitName}
+        back={reviewer || rights.manage ? { href: `/erm/rcsa/campaigns/${data.campaign_id}`, label: 'Back to the campaign' } : { href: '/erm/rcsa', label: 'Back to your worklist' }}
+        meta={[data.template_name, data.due_date ? `due ${formatDate(data.due_date, { calendar: true })}` : null, data.assessor_name ? `assessor ${data.assessor_name}` : 'no assessor yet'].filter(Boolean).join(' · ')}
+        chips={(
+          <>
+            <StatusPill {...pill} />
+            {inReview(data.status) && data.total_tiers > 1 && <StatusPill tone="neutral" label={`Step ${Math.max(data.current_approval_tier, 1)} of ${data.total_tiers}`} />}
+            {data.overall_risk_score != null && <StatusPill tone="neutral" label={`Residual ${riskText(data.overall_risk_score)}`} />}
+            {data.overall_control_score != null && <StatusPill tone="neutral" label={`Controls ${controlText(data.overall_control_score)}`} />}
+          </>
         )}
-        {isReviewMode && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => approveMutation.mutate(reviewComments || 'Approved')}
-              disabled={approveMutation.isPending}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white transition-colors"
-            >
-              {approveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
-              Approve
-            </button>
-            <button
-              onClick={() => setShowRejectModal(true)}
-              disabled={rejectMutation.isPending}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-rose-500 hover:bg-rose-600 text-white transition-colors"
-            >
-              {rejectMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
-              Reject
-            </button>
-          </div>
+        actions={editable ? (
+          <Button variant="primary" leftIcon={<Send aria-hidden />} loading={submit.isPending} onClick={() => { void onSubmit(); }}>Submit for review</Button>
+        ) : (
+          <Button leftIcon={<Flag aria-hidden />} onClick={() => setFinding({})} disabled={!canRaise}>Raise a finding</Button>
         )}
-      </div>
+      />
 
-      {/* Reject Modal */}
-      <RightSlidePanel
-        isOpen={showRejectModal}
-        onClose={() => setShowRejectModal(false)}
-        title="Reject Assessment"
-        subtitle="Please provide a reason for rejecting this assessment. This will be shared with the assessor."
-        footer={
-          <div className="flex justify-end gap-3">
-            <button
-              onClick={() => setShowRejectModal(false)}
-              className="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={() => {
-                if (reviewComments.trim()) {
-                  rejectMutation.mutate(reviewComments);
-                  setShowRejectModal(false);
-                }
-              }}
-              disabled={!reviewComments.trim() || rejectMutation.isPending}
-              className="px-4 py-2 rounded-lg bg-rose-500 hover:bg-rose-600 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {rejectMutation.isPending ? 'Rejecting...' : 'Confirm Rejection'}
-            </button>
-          </div>
-        }
-      >
-        <textarea
-          value={reviewComments}
-          onChange={(e) => setReviewComments(e.target.value)}
-          placeholder="Enter rejection reason..."
-          className="w-full h-32 bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-        />
-      </RightSlidePanel>
+      <Notice tone={data.status === 'requires_changes' || data.status === 'rejected' ? 'warning' : 'info'} title={standing({ ...facts, tier: data.current_approval_tier, total: data.total_tiers }, role)}>
+        {data.status === 'requires_changes' ? lastReturn(data.approval_history) : undefined}
+      </Notice>
+      {startFailed && (
+        <Notice tone="danger" title="This unit couldn't be started" action={<Button leftIcon={<RotateCw aria-hidden />} onClick={onRetryStart}>Retry</Button>}>
+          You can read it, but you cannot answer until it starts.
+        </Notice>
+      )}
 
-      <div className="card p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-slate-600">Progress</span>
-            <span className="text-sm font-medium text-slate-900">{answeredCount} of {totalQuestions} questions answered ({Math.round((answeredCount / Math.max(totalQuestions, 1)) * 100)}%)</span>
-          </div>
-          <div className="flex items-center gap-4 border-b border-slate-200">
-            <button
-              onClick={() => setViewMode('list')}
-              className={`px-1 py-2 text-sm font-medium border-b-2 transition-colors ${viewMode === 'list' ? 'border-primary-600 text-primary-700' : 'border-transparent text-slate-600 hover:text-slate-900'}`}
-            >
-              List View
-            </button>
-            <button
-              onClick={() => setViewMode('step')}
-              className={`px-1 py-2 text-sm font-medium border-b-2 transition-colors ${viewMode === 'step' ? 'border-primary-600 text-primary-700' : 'border-transparent text-slate-600 hover:text-slate-900'}`}
-            >
-              Step View
-            </button>
-          </div>
+      {editable ? (
+        <div className="flex flex-wrap items-center gap-x-[16px] gap-y-[8px] rounded-ds-card border border-ds-border bg-ds-surface px-[12px] py-[8px]">
+          <ProgressBar className="min-w-[200px] flex-1" value={done.percent} label="Required questions answered" valueText={`${formatCount(done.answeredRequired)} of ${formatCount(done.required)} required answered`} tone={done.percent >= 100 ? 'success' : 'primary'} />
+          <span role="status" aria-live="polite" className="text-ds-label text-ds-fg-muted">
+            {api.state === 'error' ? (
+              <span className="inline-flex flex-wrap items-center gap-[8px] text-ds-danger">
+                <span className="font-[600]">Not saved. {api.error}</span>
+                <Button size="sm" leftIcon={<RotateCw aria-hidden />} onClick={() => { void api.flush(); }}>Retry</Button>
+              </span>
+            ) : saveWords}
+          </span>
         </div>
-        <div className="mt-2 h-2 bg-slate-100 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-primary-500 rounded-full transition-all duration-300"
-            style={{ width: `${(answeredCount / Math.max(totalQuestions, 1)) * 100}%` }}
+      ) : reason ? (
+        <ReadOnlyNote>{reason}</ReadOnlyNote>
+      ) : null}
+
+      {reading && (
+        <div className="flex flex-wrap items-center gap-[12px]">
+          <SegmentedControl<'all' | 'look'>
+            label="Which answers to show" name="rcsa-look" value={shownFilter} onChange={setFilter}
+            options={[{ value: 'look', label: `Needs a look ${formatCount(lookCount)}` }, { value: 'all', label: `All answers ${formatCount(questions.length)}` }]}
           />
-        </div>
-        {viewMode === 'step' && totalQuestions > 0 && (
-          <div className="mt-3 flex items-center justify-between">
-            <span className="text-sm text-slate-600">Question {currentQuestionIndex + 1} of {totalQuestions}</span>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={goToPrevQuestion}
-                disabled={currentQuestionIndex === 0}
-                className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:text-slate-900 disabled:opacity-50"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <button
-                onClick={goToNextQuestion}
-                disabled={currentQuestionIndex === totalQuestions - 1}
-                className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:text-slate-900 disabled:opacity-50"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {validationErrors.size > 0 && (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 flex items-center gap-3">
-          <AlertCircle className="h-5 w-5 text-rose-600 flex-shrink-0" strokeWidth={1.75} />
-          <p className="text-rose-700">Please complete all required fields before submitting.</p>
+          {shownFilter === 'look' && lookCount === 0 && <span className="text-ds-body text-ds-fg-muted">Nothing stands out: every answer looks fine.</span>}
         </div>
       )}
 
-      {/* Step View Mode */}
-      {viewMode === 'step' && currentQuestion && (
-        <div className="card p-6">
-          <div className="flex items-start justify-between gap-4 mb-6">
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs font-medium px-2 py-1 bg-slate-100 rounded text-slate-700">
-                  {currentQuestion.section}
-                </span>
-                <span className="text-xs text-slate-500">Question {currentQuestionIndex + 1}</span>
-              </div>
-              <p className="text-xl text-slate-900 font-medium">
-                {currentQuestion.question_text}
-                {currentQuestion.is_required && <span className="text-rose-600 ml-1">*</span>}
-              </p>
-              {currentQuestion.guidance && (
-                <p className="text-sm text-slate-600 mt-3 flex items-start gap-1.5 bg-slate-100/30 p-3 rounded-lg">
-                  <HelpCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                  {currentQuestion.guidance}
-                </p>
-              )}
-            </div>
-            {currentQuestion.ai_suggestion_enabled && (
-              <div className="relative">
-                <button
-                  onClick={() => void handleAIToggle(currentQuestion.id)}
-                  className="p-2 rounded-lg bg-primary-50 text-primary-700 hover:bg-primary-100"
-                  title="AI Assistant"
-                >
-                  <Sparkles className="h-4 w-4" />
-                </button>
-                {showAISuggestions[currentQuestion.id] && (
-                  <div className="absolute right-0 top-10 z-10 w-96 p-4 rounded-lg bg-slate-100 border border-slate-300 shadow-xl max-h-80 overflow-y-auto">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Sparkles className="h-4 w-4 text-primary-600" />
-                      <span className="text-sm font-medium text-slate-900">AI Assistant</span>
-                      {currentAISuggestion && (
-                        <span className="text-xs text-slate-600">({Math.round(currentAISuggestion.confidence * 100)}% confidence)</span>
-                      )}
-                    </div>
+      <div className="grid items-start gap-[16px] lg:grid-cols-[200px_minmax(0,1fr)]">
+        <SectionJump parts={parts.map((s) => ({ name: s.name, answered: s.answered, required: s.required }))} />
+        <div className="flex min-w-0 flex-col gap-[16px]">
+          {parts.length === 0 && <p className="rounded-ds-card border border-dashed border-ds-border-strong bg-ds-surface px-[16px] py-[24px] text-center text-ds-body text-ds-fg-muted">{questions.length === 0 ? 'This questionnaire has no questions.' : 'No answer matches.'}</p>}
+          {parts.map((s, i) => (
+            <SectionCard key={s.name} id={`section-${i}`} title={s.name} meta={s.required > 0 ? `${formatCount(s.answered)} of ${formatCount(s.required)} required answered` : `${formatCount(s.questions.length)} questions`}>
+              <ul aria-label={s.name} className="m-0 -mx-[16px] -mb-[16px] list-none border-t border-ds-border p-0">
+                {s.shown.map((q) => (
+                  <QuestionRow
+                    key={q.id}
+                    assessmentId={data.id}
+                    question={q}
+                    number={numbers.get(q.id) ?? 0}
+                    answer={api.answers[q.id]}
+                    editable={editable}
+                    onChange={(next, wait) => api.change(q.id, next, wait)}
+                    onBlur={() => { void api.flush(); }}
+                    evidence={evidence[q.id] ?? []}
+                    onEvidence={(next) => setEvidence((prev) => ({ ...prev, [q.id]: next }))}
+                    look={reading ? looks.get(q.id) ?? null : null}
+                    missing={attempted && editable && done.missing.includes(q.id)}
+                    canRaise={canRaise}
+                    onRaise={() => setFinding({ suggestion: q.question_text.slice(0, 120) })}
+                  />
+                ))}
+              </ul>
+            </SectionCard>
+          ))}
+          {shownFilter === 'look' && lookCount > 0 && lookCount < questions.length && (
+            <p className="text-ds-body text-ds-fg-muted">{`${formatCount(questions.length - lookCount)} answers look fine and are hidden. `}<Button variant="link" size="sm" onClick={() => setFilter('all')}>Show all answers</Button></p>
+          )}
 
-                    {currentQuestion && loadingAIByQuestion[currentQuestion.id] ? (
-                      <p className="text-sm text-slate-700">Loading AI suggestion...</p>
-                    ) : currentAISuggestion ? (
-                      <>
-                        {currentAISuggestion.suggestion && (
-                          <p className="text-sm text-slate-700 mb-2">{currentAISuggestion.suggestion}</p>
-                        )}
-                        {currentAISuggestion.evidence_recommendations && currentAISuggestion.evidence_recommendations.length > 0 && (
-                          <div className="mb-3">
-                            <p className="text-xs font-medium text-primary-700 mb-2">Recommended Evidence to Upload:</p>
-                            <div className="space-y-2">
-                              {currentAISuggestion.evidence_recommendations.map((rec: EvidenceRecommendation, idx: number) => (
-                                <div key={idx} className="bg-white rounded p-2">
-                                  <p className="text-sm font-medium text-slate-900">{rec.evidence_type}</p>
-                                  <p className="text-xs text-slate-600">{rec.description}</p>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        {!currentAISuggestion.suggestion && !currentAISuggestion.evidence_recommendations?.length && (
-                          <p className="text-sm text-slate-700 mb-3">{currentAISuggestion.reasoning}</p>
-                        )}
-                        {isEditable && (
-                          <button
-                            onClick={() => acceptAISuggestion(currentQuestion.id)}
-                            className="w-full btn-primary text-sm py-1.5"
-                          >
-                            Accept Suggestion
-                          </button>
-                        )}
-                      </>
-                    ) : currentQuestion && fetchedAIByQuestion[currentQuestion.id] ? (
-                      <p className="text-sm text-slate-700">No AI suggestion available yet for this question.</p>
-                    ) : (
-                      <p className="text-sm text-slate-700">Click AI Assistant to load suggestions for this assessment.</p>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-6">
-            {currentQuestion.question_type === 'control_rating' && (
-              <div className="space-y-4">
-                <p className="text-sm text-slate-600">Select Control Effectiveness:</p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {EFFECTIVENESS_OPTIONS.map(opt => {
-                    const isSelected = (responses[currentQuestion.id] || {}).effectiveness === opt.value;
-                    const colorClass = opt.value === 'effective'
-                      ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
-                      : opt.value === 'partially_effective'
-                      ? 'border-amber-500 bg-amber-50 text-amber-700'
-                      : opt.value === 'ineffective'
-                      ? 'border-rose-500 bg-rose-50 text-rose-700'
-                      : 'border-slate-400 bg-slate-100 text-slate-700';
-                    return (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => isEditable && updateResponse(currentQuestion.id, 'effectiveness', opt.value)}
-                        disabled={!isEditable}
-                        className={`p-4 rounded-xl border-2 font-medium transition-all text-center ${
-                          isSelected 
-                            ? colorClass
-                            : 'border-slate-300 bg-slate-100/50 text-slate-700 hover:border-slate-500 hover:bg-slate-100'
-                        }`}
-                      >
-                        <span className="flex flex-col items-center gap-2">
-                          {isSelected && <CheckCircle className="h-5 w-5" />}
-                          {opt.label}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {currentQuestion.question_type === 'risk_rating' && (
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm text-slate-600 mb-2">Likelihood</label>
-                  <div className="space-y-2">
-                    {LIKELIHOOD_OPTIONS.map(opt => (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => isEditable && updateResponse(currentQuestion.id, 'likelihood', opt.value)}
-                        className={`w-full p-3 rounded-lg text-left border-2 transition-all ${
-                          (responses[currentQuestion.id] || {}).likelihood === opt.value
-                            ? 'border-primary-500 bg-primary-50 text-primary-700'
-                            : 'border-slate-300 bg-slate-50 text-slate-700 hover:border-slate-500'
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm text-slate-600 mb-2">Impact</label>
-                  <div className="space-y-2">
-                    {IMPACT_OPTIONS.map(opt => (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => isEditable && updateResponse(currentQuestion.id, 'impact', opt.value)}
-                        className={`w-full p-3 rounded-lg text-left border-2 transition-all ${
-                          (responses[currentQuestion.id] || {}).impact === opt.value
-                            ? 'border-primary-500 bg-primary-50 text-primary-700'
-                            : 'border-slate-300 bg-slate-50 text-slate-700 hover:border-slate-500'
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {currentQuestion.question_type === 'yes_no' && (
-              <div className="flex gap-4">
-                <button
-                  type="button"
-                  onClick={() => isEditable && updateResponse(currentQuestion.id, 'yes_no_value', true)}
-                  className={`flex-1 p-4 rounded-xl border-2 font-medium transition-all ${
-                    (responses[currentQuestion.id] || {}).yes_no_value === true
-                      ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
-                      : 'border-slate-300 bg-slate-50 text-slate-700 hover:border-slate-500'
-                  }`}
-                >
-                  {(responses[currentQuestion.id] || {}).yes_no_value === true && <CheckCircle className="h-5 w-5 mx-auto mb-2" />}
-                  Yes
-                </button>
-                <button
-                  type="button"
-                  onClick={() => isEditable && updateResponse(currentQuestion.id, 'yes_no_value', false)}
-                  className={`flex-1 p-4 rounded-xl border-2 font-medium transition-all ${
-                    (responses[currentQuestion.id] || {}).yes_no_value === false
-                      ? 'border-rose-500 bg-rose-50 text-rose-700'
-                      : 'border-slate-300 bg-slate-50 text-slate-700 hover:border-slate-500'
-                  }`}
-                >
-                  {(responses[currentQuestion.id] || {}).yes_no_value === false && <CheckCircle className="h-5 w-5 mx-auto mb-2" />}
-                  No
-                </button>
-              </div>
-            )}
-
-            {currentQuestion.question_type === 'text' && (
-              <textarea
-                value={(responses[currentQuestion.id] || {}).text_value || ''}
-                onChange={(e) => updateResponse(currentQuestion.id, 'text_value', e.target.value)}
-                disabled={!isEditable}
-                placeholder="Enter your response..."
-                className="input w-full h-32"
-              />
-            )}
-
-            {/* Evidence Upload in Step View */}
-            <div className="mt-6 pt-6 border-t border-slate-200">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-sm text-slate-600 flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
-                  Supporting Evidence
-                </p>
-                {isEditable && (
-                  <label className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 cursor-pointer">
-                    <Upload className="h-3.5 w-3.5" />
-                    Upload
-                    <input
-                      type="file"
-                      className="hidden"
-                      onChange={(e) => e.target.files && handleFileUpload(currentQuestion.id, e.target.files)}
-                      accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
-                    />
-                  </label>
-                )}
-              </div>
-              
-              {uploadingQuestion === currentQuestion.id && (
-                <div className="flex items-center gap-2 text-sm text-primary-600">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Uploading...
-                </div>
-              )}
-              
-              {(evidenceFiles[currentQuestion.id] || []).length > 0 ? (
-                <div className="space-y-2">
-                  {evidenceFiles[currentQuestion.id].map(file => (
-                    <div key={file.id} className="flex items-center justify-between p-2 bg-slate-100/50 rounded-lg">
-                      <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-primary-600" />
-                        <span className="text-sm text-slate-900">{file.filename}</span>
-                        <span className="text-xs text-slate-500">{formatFileSize(file.file_size)}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        {/* In-place preview so the assessor doesn't have
-                            to leave the RCSA flow to verify what was
-                            uploaded against this question. */}
-                        <EvidencePreviewButton
-                          evidenceId={file.id}
-                          title="Preview file"
-                          className="p-1 text-slate-600 hover:text-primary-700"
-                        />
-                        {isEditable && (
-                          <button
-                            onClick={() => handleRemoveEvidence(currentQuestion.id, file.id)}
-                            className="p-1 text-slate-600 hover:text-rose-600"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-slate-500 italic">No evidence attached</p>
-              )}
-            </div>
-          </div>
-
-          {/* Step Navigation */}
-          <div className="mt-8 pt-6 border-t border-slate-200 flex items-center justify-between">
-            <button
-              onClick={goToPrevQuestion}
-              disabled={currentQuestionIndex === 0}
-              className="btn-secondary flex items-center gap-2 disabled:opacity-50"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Previous
-            </button>
-            <div className="flex items-center gap-2">
-              {currentQuestionIndex === totalQuestions - 1 ? (
-                <button
-                  onClick={handleSubmit}
-                  disabled={submitMutation.isPending}
-                  className="btn-primary flex items-center gap-2"
-                >
-                  {submitMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  Submit Assessment
-                </button>
-              ) : (
-                <button
-                  onClick={goToNextQuestion}
-                  className="btn-primary flex items-center gap-2"
-                >
-                  Next
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* List View Mode */}
-      {viewMode === 'list' && (
-      <div className="space-y-4">
-        {Object.entries(groupedQuestions).map(([section, questions]) => (
-          <div key={section} className="card overflow-hidden">
-            <button
-              onClick={() => toggleSection(section)}
-              className="w-full flex items-center justify-between p-4 bg-white/50 hover:bg-white"
-            >
-              <h3 className="text-lg font-medium text-slate-900">{section}</h3>
-              {expandedSections.has(section) ? (
-                <ChevronUp className="h-5 w-5 text-slate-600" />
-              ) : (
-                <ChevronDown className="h-5 w-5 text-slate-600" />
-              )}
-            </button>
-
-            {expandedSections.has(section) && (
-              <div className="divide-y divide-slate-200">
-                {questions.sort((a, b) => (a.question_order || a.sequence) - (b.question_order || b.sequence)).map((question) => {
-                  const response = responses[question.id] || {};
-                  const aiSuggestion = aiSuggestionsByQuestion[question.id] || null;
-                  const hasError = validationErrors.has(question.id);
-
+          <SectionCard id="findings" title="Findings" meta={findings.data ? `${formatCount(findings.data.length)} raised on this unit` : undefined} actions={canRaise ? <Button size="sm" leftIcon={<Flag aria-hidden />} onClick={() => setFinding({})}>Raise a finding</Button> : undefined}>
+            {findings.isLoading && <SkeletonRows rows={2} columns={2} label="Loading the findings" />}
+            {findings.isError && <ErrorState compact title="Couldn't load the findings" message={errorMessage(findings.error)} onRetry={() => { void findings.refetch(); }} />}
+            {findings.data && findings.data.length === 0 && <p className="text-ds-body text-ds-fg-muted">No finding has been raised on this unit.</p>}
+            {findings.data && findings.data.length > 0 && (
+              <ul className="m-0 flex list-none flex-col p-0">
+                {findings.data.map((f) => {
+                  const sev = statusPill(findingSeverity, f.severity);
+                  const st = statusPill(findingStatus, f.status);
                   return (
-                    <div key={question.id} className={`p-4 ${hasError ? 'bg-rose-50' : ''}`}>
-                      <div className="flex items-start justify-between gap-4 mb-3">
-                        <div className="flex-1">
-                          <p className="text-slate-900 font-medium">
-                            {question.question_text}
-                            {question.is_required && <span className="text-rose-600 ml-1">*</span>}
-                          </p>
-                          {question.guidance && (
-                            <p className="text-sm text-slate-600 mt-1 flex items-start gap-1.5">
-                              <HelpCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                              {question.guidance}
-                            </p>
-                          )}
-                        </div>
-                        {question.ai_suggestion_enabled && (
-                          <div className="relative">
-                            <button
-                              onClick={() => void handleAIToggle(question.id)}
-                              className="p-2 rounded-lg bg-primary-50 text-primary-700 hover:bg-primary-100"
-                              title="AI Assistant"
-                            >
-                              <Sparkles className="h-4 w-4" />
-                            </button>
-                            {showAISuggestions[question.id] && (
-                              <div className="absolute right-0 top-10 z-10 w-96 p-4 rounded-lg bg-slate-100 border border-slate-300 shadow-xl max-h-80 overflow-y-auto">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <Sparkles className="h-4 w-4 text-primary-600" />
-                                  <span className="text-sm font-medium text-slate-900">AI Assistant</span>
-                                  {aiSuggestion && (
-                                    <span className="text-xs text-slate-600">({Math.round(aiSuggestion.confidence * 100)}% confidence)</span>
-                                  )}
-                                </div>
-                                {loadingAIByQuestion[question.id] ? (
-                                  <p className="text-sm text-slate-700">Loading AI suggestion...</p>
-                                ) : aiSuggestion ? (
-                                  <>
-                                    {aiSuggestion.suggestion && (
-                                      <p className="text-sm text-slate-700 mb-2">{aiSuggestion.suggestion}</p>
-                                    )}
-                                    {aiSuggestion.evidence_recommendations && aiSuggestion.evidence_recommendations.length > 0 && (
-                                      <div className="mb-3">
-                                        <p className="text-xs font-medium text-primary-700 mb-2">Recommended Evidence to Upload:</p>
-                                        <div className="space-y-2">
-                                          {aiSuggestion.evidence_recommendations.map((rec: EvidenceRecommendation, idx: number) => (
-                                            <div key={idx} className="bg-white rounded p-2">
-                                              <p className="text-sm font-medium text-slate-900">{rec.evidence_type}</p>
-                                              <p className="text-xs text-slate-600">{rec.description}</p>
-                                              {rec.example_files.length > 0 && (
-                                                <div className="flex flex-wrap gap-1 mt-1">
-                                                  {rec.example_files.map((f: string, i: number) => (
-                                                    <span key={i} className="text-xs bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded">{f}</span>
-                                                  ))}
-                                                </div>
-                                              )}
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    )}
-                                    {!aiSuggestion.suggestion && !aiSuggestion.evidence_recommendations?.length && (
-                                      <p className="text-sm text-slate-700 mb-3">{aiSuggestion.reasoning}</p>
-                                    )}
-                                    {isEditable && (
-                                      <button
-                                        onClick={() => acceptAISuggestion(question.id)}
-                                        className="w-full btn-primary text-sm py-1.5"
-                                      >
-                                        Accept Suggestion
-                                      </button>
-                                    )}
-                                  </>
-                                ) : fetchedAIByQuestion[question.id] ? (
-                                  <p className="text-sm text-slate-700">No AI suggestion available yet for this question.</p>
-                                ) : (
-                                  <p className="text-sm text-slate-700">Click AI Assistant to load suggestions for this assessment.</p>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="mt-3">
-                        {question.question_type === 'risk_rating' && (
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <label className="block text-sm text-slate-600 mb-1">Likelihood</label>
-                              <select
-                                value={response.likelihood || ''}
-                                onChange={(e) => updateResponse(question.id, 'likelihood', Number(e.target.value))}
-                                disabled={!isEditable}
-                                className="input w-full"
-                              >
-                                <option value="">Select...</option>
-                                {LIKELIHOOD_OPTIONS.map(opt => (
-                                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                ))}
-                              </select>
-                            </div>
-                            <div>
-                              <label className="block text-sm text-slate-600 mb-1">Impact</label>
-                              <select
-                                value={response.impact || ''}
-                                onChange={(e) => updateResponse(question.id, 'impact', Number(e.target.value))}
-                                disabled={!isEditable}
-                                className="input w-full"
-                              >
-                                <option value="">Select...</option>
-                                {IMPACT_OPTIONS.map(opt => (
-                                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                ))}
-                              </select>
-                            </div>
-                          </div>
-                        )}
-
-                        {question.question_type === 'control_rating' && (
-                          <div className="space-y-3">
-                            <p className="text-sm text-slate-600">Select Control Effectiveness:</p>
-                            <div className="flex flex-wrap gap-2">
-                              {EFFECTIVENESS_OPTIONS.map(opt => {
-                                const isSelected = response.effectiveness === opt.value;
-                                const colorClass = opt.value === 'effective'
-                                  ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
-                                  : opt.value === 'partially_effective'
-                                  ? 'border-amber-500 bg-amber-50 text-amber-700'
-                                  : opt.value === 'ineffective'
-                                  ? 'border-rose-500 bg-rose-50 text-rose-700'
-                                  : 'border-slate-400 bg-slate-100 text-slate-700';
-                                return (
-                                  <button
-                                    key={opt.value}
-                                    type="button"
-                                    onClick={() => isEditable && updateResponse(question.id, 'effectiveness', opt.value)}
-                                    disabled={!isEditable}
-                                    className={`px-4 py-2.5 rounded-lg border-2 font-medium transition-all ${
-                                      isSelected 
-                                        ? colorClass
-                                        : 'border-slate-300 bg-slate-100/50 text-slate-700 hover:border-slate-500 hover:bg-slate-100'
-                                    } ${!isEditable ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
-                                  >
-                                    <span className="flex items-center gap-2">
-                                      {isSelected && <CheckCircle className="h-4 w-4" />}
-                                      {opt.label}
-                                    </span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                            {response.effectiveness && (
-                              <p className="text-sm text-emerald-600 flex items-center gap-1.5">
-                                <CheckCircle className="h-4 w-4" />
-                                Selection saved
-                              </p>
-                            )}
-                          </div>
-                        )}
-
-                        {question.question_type === 'yes_no' && (
-                          <div className="flex items-center gap-6">
-                            <label className="flex items-center gap-2 cursor-pointer">
-                              <input
-                                type="radio"
-                                name={`q-${question.id}`}
-                                checked={response.yes_no_value === true}
-                                onChange={() => updateResponse(question.id, 'yes_no_value', true)}
-                                disabled={!isEditable}
-                                className="w-4 h-4 text-primary-500"
-                              />
-                              <span className="text-slate-900">Yes</span>
-                            </label>
-                            <label className="flex items-center gap-2 cursor-pointer">
-                              <input
-                                type="radio"
-                                name={`q-${question.id}`}
-                                checked={response.yes_no_value === false}
-                                onChange={() => updateResponse(question.id, 'yes_no_value', false)}
-                                disabled={!isEditable}
-                                className="w-4 h-4 text-primary-500"
-                              />
-                              <span className="text-slate-900">No</span>
-                            </label>
-                          </div>
-                        )}
-
-                        {question.question_type === 'text' && (
-                          <textarea
-                            value={response.text_value || ''}
-                            onChange={(e) => updateResponse(question.id, 'text_value', e.target.value)}
-                            disabled={!isEditable}
-                            placeholder="Enter your response..."
-                            className="input w-full h-24"
-                          />
-                        )}
-                      </div>
-
-                      {/* Evidence Upload Section */}
-                      <div className="mt-4 pt-4 border-t border-slate-200">
-                        <div className="flex items-center justify-between mb-3">
-                          <p className="text-sm text-slate-600 flex items-center gap-2">
-                            <FileText className="h-4 w-4" />
-                            Supporting Evidence
-                          </p>
-                          {isEditable && (
-                            <label className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 cursor-pointer">
-                              <Upload className="h-3.5 w-3.5" />
-                              Upload
-                              <input
-                                type="file"
-                                className="hidden"
-                                onChange={(e) => e.target.files && handleFileUpload(question.id, e.target.files)}
-                                accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
-                              />
-                            </label>
-                          )}
-                        </div>
-                        
-                        {uploadingQuestion === question.id && (
-                          <div className="flex items-center gap-2 text-sm text-primary-600">
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            Uploading...
-                          </div>
-                        )}
-                        
-                        {(evidenceFiles[question.id] || []).length > 0 ? (
-                          <div className="space-y-2">
-                            {evidenceFiles[question.id].map(file => (
-                              <div key={file.id} className="flex items-center justify-between p-2 bg-slate-100/50 rounded-lg">
-                                <div className="flex items-center gap-2">
-                                  <FileText className="h-4 w-4 text-primary-600" />
-                                  <span className="text-sm text-slate-900">{file.filename}</span>
-                                  <span className="text-xs text-slate-500">{formatFileSize(file.file_size)}</span>
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <EvidencePreviewButton
-                                    evidenceId={file.id}
-                                    title="Preview file"
-                                    className="p-1 text-slate-600 hover:text-primary-700"
-                                  />
-                                  {isEditable && (
-                                    <button
-                                      onClick={() => handleRemoveEvidence(question.id, file.id)}
-                                      className="p-1 text-slate-600 hover:text-rose-600"
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-slate-500">No evidence uploaded yet. Upload files to support your response.</p>
-                        )}
-                      </div>
-
-                      {/* AI Suggestion Toggle */}
-                      {question.ai_suggestion_enabled && isEditable && (
-                        <div className="mt-4 p-3 bg-primary-50 border border-primary-200 rounded-lg">
-                          <div className="flex items-center gap-2 text-primary-700">
-                            <Lightbulb className="h-4 w-4" />
-                            <span className="text-sm font-medium">AI Assistance Available</span>
-                          </div>
-                          <p className="text-xs text-slate-600 mt-1">Click the AI button to get suggestions based on your organization&apos;s data.</p>
-                        </div>
-                      )}
-                    </div>
+                    <li key={f.id} className="flex flex-wrap items-center gap-x-[12px] gap-y-[4px] border-t border-ds-border py-[8px] first:border-t-0">
+                      <a href={`/erm/rcsa/findings?open=${f.id}`} className="min-h-ds-control min-w-0 flex-1 content-center text-ds-body font-[500] text-ds-fg underline-offset-2 hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring [overflow-wrap:anywhere]">{f.title}</a>
+                      <StatusPill size="sm" {...sev} />
+                      <StatusPill size="sm" {...st} />
+                    </li>
                   );
                 })}
-              </div>
+              </ul>
             )}
-          </div>
-        ))}
+          </SectionCard>
+
+          <SectionCard id="history" title="History" info="Who submitted, approved, sent back or rejected this unit, and what they wrote.">
+            <ReviewTrail steps={data.approval_history} totalTiers={data.total_tiers} />
+          </SectionCard>
+        </div>
       </div>
+
+      {decisions(facts, reviewer).length > 0 && (
+        <div role="region" aria-label="Your decision" className="sticky bottom-0 z-10 -mx-[4px] flex flex-wrap items-center justify-between gap-[12px] rounded-ds-card border border-ds-border-strong bg-ds-surface px-[16px] py-[12px] shadow-ds-pop">
+          <span className="min-w-0 text-ds-body text-ds-fg">{`Waiting for your decision${data.total_tiers > 1 ? ` · step ${Math.max(data.current_approval_tier, 1)} of ${data.total_tiers}` : ''}`}</span>
+          <div className="flex flex-wrap items-center gap-[8px]">
+            <Button variant="dangerOutline" leftIcon={<XCircle aria-hidden />} onClick={() => setDecision('reject')}>Reject</Button>
+            <Button leftIcon={<RotateCw aria-hidden />} onClick={() => setDecision('return')}>Send back</Button>
+            <Button variant="primary" leftIcon={<Check aria-hidden />} onClick={() => setDecision('approve')}>Approve</Button>
+          </div>
+        </div>
       )}
+
+      <DecisionSheet decision={decision} unit={unitName} pending={decide.isPending} error={decide.error} onClose={() => { setDecision(null); decide.reset(); }} onDecide={(comments) => decision && decide.mutate({ d: decision, comments })} />
+      <FindingSheet open={finding !== null} assessmentId={data.id} unit={unitName} suggestion={finding?.suggestion} onClose={() => setFinding(null)} />
+      {confirmDialog}
     </div>
+  );
+}
+
+/** What the reviewer wrote when they sent the unit back: the last "returned" step. */
+function lastReturn(steps: Step[]): string | undefined {
+  const last = steps.slice().reverse().find((s) => s.action === 'returned');
+  return last?.comments ? `${last.performer_name ?? 'The reviewer'} wrote: ${last.comments}` : undefined;
+}
+
+/** The sections of the form to jump between: a column on a wide window, a select on a narrow one. */
+function SectionJump({ parts }: { parts: Array<{ name: string; answered: number; required: number }> }) {
+  if (parts.length < 2) return <div className="hidden lg:block" />;
+  const go = (i: number) => document.getElementById(`section-${i}`)?.scrollIntoView({ block: 'start' });
+  return (
+    <>
+      <nav aria-label="Sections of the form" className="sticky top-[64px] hidden rounded-ds-card border border-ds-border bg-ds-surface p-[8px] lg:block">
+        <ul className="m-0 flex list-none flex-col p-0">
+          {parts.map((s, i) => (
+            <li key={s.name}>
+              <a href={`#section-${i}`} className="flex min-h-ds-control items-center justify-between gap-[8px] rounded-ds-control px-[8px] text-ds-body text-ds-fg-body hover:bg-ds-surface-hover focus-visible:outline-none focus-visible:shadow-ds-ring">
+                <span className="min-w-0 [overflow-wrap:anywhere]">{s.name}</span>
+                {s.required > 0 && <span className={`shrink-0 text-ds-label tabular-nums ${s.answered >= s.required ? 'text-ds-success' : 'text-ds-fg-muted'}`}>{`${s.answered}/${s.required}`}</span>}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+      <div className="lg:hidden">
+        <Select aria-label="Jump to a section" placeholder="Jump to a section" value="" onChange={(e) => { if (e.target.value !== '') go(Number(e.target.value)); }}>
+          {parts.map((s, i) => <option key={s.name} value={i}>{s.required > 0 ? `${s.name} (${s.answered}/${s.required})` : s.name}</option>)}
+        </Select>
+      </div>
+    </>
   );
 }

@@ -3616,13 +3616,13 @@ export const rcsaApi = {
   activateCampaign: (id: number) => apiClient.post(`/erm/rcsa/campaigns/${id}/activate`),
   closeCampaign: (id: number) => apiClient.post(`/erm/rcsa/campaigns/${id}/close`),
   assignBusinessUnits: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/rcsa/campaigns/${id}/assign`, data),
-  sendReminders: (id: number) => apiClient.post(`/erm/rcsa/campaigns/${id}/reminders`),
-  exportResults: (id: number) => apiClient.get(`/erm/rcsa/campaigns/${id}/export`, { responseType: 'blob' }),
-  
+
   getDashboardSummary: () => apiClient.get('/erm/rcsa/dashboard/summary'),
   getFindingsBySeverity: () => apiClient.get('/erm/rcsa/dashboard/findings-by-severity'),
   getBUProgress: () => apiClient.get('/erm/rcsa/dashboard/business-unit-progress'),
   getRecentCampaigns: () => apiClient.get('/erm/rcsa/dashboard/recent-campaigns'),
+  /** The Worklist: what waits for this person, with the server's true totals (GET /erm/rcsa/my-work). */
+  getMyWork: (limit = 30) => apiClient.get('/erm/rcsa/my-work', { params: { limit } }),
 
   getAssessments: (params?: Record<string, unknown>) => apiClient.get('/erm/rcsa/assessments', { params }),
   getAssessment: (id: number) => apiClient.get(`/erm/rcsa/assessments/${id}/detail`),
@@ -3638,15 +3638,24 @@ export const rcsaApi = {
   rejectAssessment: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/rcsa/assessments/${id}/reject`, data),
   returnAssessment: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/rcsa/assessments/${id}/return`, data),
   delegateAssessment: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/rcsa/assessments/${id}/delegate`, data),
-  getPendingApprovals: (params?: Record<string, unknown>) => apiClient.get('/erm/rcsa/assessments/pending-approvals', { params }),
+  /** Evidence for one answer of a unit (multipart; the server keeps the file and links it to the answer). */
+  uploadEvidence: (assessmentId: number, questionId: number, file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('assessment_id', String(assessmentId));
+    fd.append('question_id', String(questionId));
+    return apiClient.post('/erm/rcsa/evidence/upload', fd, { headers: { 'Content-Type': undefined }, timeout: 2 * 60 * 1000 });
+  },
+  deleteEvidence: (evidenceId: number) => apiClient.delete(`/erm/rcsa/evidence/${evidenceId}`),
 
   getFindings: (params?: Record<string, unknown>) => apiClient.get('/erm/rcsa/findings', { params }),
-  getFinding: (id: number) => apiClient.get(`/erm/rcsa/findings/${id}`),
-  createFinding: (data: Record<string, unknown>) => apiClient.post('/erm/rcsa/findings', data),
+  /** A finding belongs to a unit: the unit is a query parameter (the body holds the finding). */
+  createFinding: (assessmentId: number, data: Record<string, unknown>) => apiClient.post('/erm/rcsa/findings', data, { params: { assessment_id: assessmentId } }),
   updateFinding: (id: number, data: Record<string, unknown>) => apiClient.put(`/erm/rcsa/findings/${id}`, data),
-  linkFindingToRisk: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/rcsa/findings/${id}/link-risk`, data),
-  linkFindingToControl: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/rcsa/findings/${id}/link-control`, data),
-  createFindingAction: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/rcsa/findings/${id}/create-action`, data),
+  // the three link calls take QUERY parameters (the old pages posted a JSON body, which the server ignores, and every call failed)
+  linkFindingToRisk: (id: number, riskId: number) => apiClient.post(`/erm/rcsa/findings/${id}/link-risk`, undefined, { params: { risk_id: riskId } }),
+  linkFindingToControl: (id: number, controlId: number) => apiClient.post(`/erm/rcsa/findings/${id}/link-control`, undefined, { params: { control_id: controlId } }),
+  createFindingAction: (id: number, riskId?: number) => apiClient.post(`/erm/rcsa/findings/${id}/create-action`, undefined, { params: riskId ? { risk_id: riskId } : undefined }),
 
   getApprovalWorkflows: () => apiClient.get('/erm/rcsa/approval-workflows'),
   createApprovalWorkflow: (data: Record<string, unknown>) => apiClient.post('/erm/rcsa/approval-workflows', data),
