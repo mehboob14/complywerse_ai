@@ -88,8 +88,8 @@ export function RegisterItems({ templateId, schema, rows, loading, error, canEdi
     { key: 'owner', label: 'Owner', values: (r) => [ownerValue(r)], options: (rs) => ownerOptions(rs), searchable: true, defaultOpen: true },
     { key: 'residual', label: 'Residual', values: (r) => [levelValue(r.residual_overall_label)], options: (rs) => levelOptions(rs, (r) => r.residual_overall_label, label), defaultOpen: true },
     { key: 'inherent', label: 'Inherent', values: (r) => [levelValue(r.inherent_overall_label)], options: (rs) => levelOptions(rs, (r) => r.inherent_overall_label, label) },
-    { key: 'evidence', label: 'Evidence', values: (r) => [evidenceValue(r)], options: () => EVIDENCE_OPTIONS },
-    { key: 'register', label: 'In the Risk Register', values: (r) => [linkedValue(r)], options: () => LINKED_OPTIONS },
+    { key: 'evidence', label: 'Evidence', values: (r) => [evidenceValue(r)], options: (rs) => (rs.length ? EVIDENCE_OPTIONS : []) },
+    { key: 'register', label: 'In the Risk Register', values: (r) => [linkedValue(r)], options: (rs) => (rs.length ? LINKED_OPTIONS : []) },
   ], []);
   const quick = useMemo<ExplorerQuick<RegisterRow>[]>(() => [
     { key: 'unassigned', label: 'Unassigned', test: (r) => !r.assigned_user_id },

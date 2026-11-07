@@ -41,7 +41,7 @@ const categoryOf = (t: Tpl): string => (t.category || '').trim() || CATEGORY_NON
 const FACETS: ExplorerFacet<Tpl>[] = [
   { key: 'category', label: 'Category', values: (t) => [categoryOf(t)], options: (rows) => uniqueOptions(rows, (t) => [categoryOf(t)]), searchable: true, defaultOpen: true },
   { key: 'who', label: 'Who', values: (t) => [t.is_system_template ? 'provided' : 'yours'], options: (rows) => uniqueOptions(rows, (t) => [t.is_system_template ? 'provided' : 'yours'], (v) => (v === 'provided' ? 'Provided' : 'Yours')), defaultOpen: true },
-  { key: 'use', label: 'In use', values: (t) => [(t.campaign_count ?? 0) > 0 ? 'used' : 'unused'], options: () => [{ value: 'used', label: 'Used by a campaign' }, { value: 'unused', label: 'Not used' }], defaultOpen: true },
+  { key: 'use', label: 'In use', values: (t) => [(t.campaign_count ?? 0) > 0 ? 'used' : 'unused'], options: (rows) => (rows.length ? [{ value: 'used', label: 'Used by a campaign' }, { value: 'unused', label: 'Not used' }] : []), defaultOpen: true },
 ];
 const QUICK: ExplorerQuick<Tpl>[] = [
   { key: 'used', label: 'In use', test: (t) => (t.campaign_count ?? 0) > 0 },

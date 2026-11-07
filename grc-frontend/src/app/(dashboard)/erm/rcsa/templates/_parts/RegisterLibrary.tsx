@@ -4,7 +4,6 @@
 // workspace. Above the list, the items assigned to the person, each a link straight to that item. The server answers these routes only to people with the RCSA right: a refusal is said in
 // words ("You don't have access to the registers") and is never drawn as an empty list. Uploading and deactivating are the risk team's.
 import { useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowUpRight, Eye, FileUp, PowerOff } from 'lucide-react';

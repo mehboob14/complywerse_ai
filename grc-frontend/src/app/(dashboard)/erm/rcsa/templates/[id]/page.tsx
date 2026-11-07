@@ -148,7 +148,8 @@ export default function QuestionnaireWorkspacePage() {
   };
 
   if (!(id > 0)) return <ErrorState title="This questionnaire doesn't exist" message="Check the address, or go back to the library." />;
-  if (query.isLoading) {
+  // loading, or the questionnaire has arrived and the draft is about to be made from it (one frame: no "No questions yet" flash)
+  if (query.isLoading || (query.isSuccess && !seeded.current)) {
     return (
       <div className="flex min-w-0 flex-col gap-[16px]">
         <Skeleton className="h-[28px] w-[40%]" />
