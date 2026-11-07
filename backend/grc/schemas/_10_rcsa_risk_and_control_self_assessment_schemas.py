@@ -272,6 +272,9 @@ class RCSAAssessmentDetailResponse(BaseModel):
     overall_risk_score: Optional[float] = None
     overall_control_score: Optional[float] = None
     approval_history: List[RCSAApprovalStep] = []
+    # whether the Worklist counts this unit as waiting for the viewer (risk team, or named for the tier that is up, never the unit's own assessor)
+    viewer_may_review: bool = False
+    viewer_is_assessor: bool = False
 
     class Config:
         from_attributes = True

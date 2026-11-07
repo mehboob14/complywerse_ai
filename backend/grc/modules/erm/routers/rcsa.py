@@ -224,6 +224,7 @@ from ....schemas import (
 from ....routers.auth_router import (require_auth, get_user_tenants, get_user_primary_tenant, is_tenant_admin, is_platform_account,
                                      refuse_imported_accounts)
 from ....services import evidence_review
+from ..rcsa_work import viewer_may_review
 
 router = APIRouter(prefix="/rcsa", tags=["RCSA - Risk and Control Self-Assessment"])
 
@@ -1810,7 +1811,9 @@ def get_assessment_detail(
         completed_at=assessment.completed_at,
         overall_risk_score=assessment.overall_risk_score,
         overall_control_score=assessment.overall_control_score,
-        approval_history=history
+        approval_history=history,
+        viewer_may_review=viewer_may_review(db, current_user, assessment, workflow),
+        viewer_is_assessor=assessment.assessor_id == current_user.id
     )
 
 

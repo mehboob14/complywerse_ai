@@ -178,6 +178,11 @@ def test_a_named_tier_approver_reviews_and_a_stranger_does_not(db):
     assert client(db, OTHER).get("/my-work").json()["counts"]["to_review"] == 0
     detail = client(db, ADMIN).get("/assessments/1/detail").json()
     assert detail["total_tiers"] == 2 and detail["current_approval_tier"] == 1
+    assert detail["viewer_may_review"] is True
+    assert client(db, APPROVER).get("/assessments/1/detail").json()["viewer_may_review"] is True
+    assert client(db, OTHER).get("/assessments/1/detail").json()["viewer_may_review"] is False
+    assert me.get("/assessments/1/detail").json()["viewer_may_review"] is False          # never the unit's own assessor
+    assert me.get("/assessments/1/detail").json()["viewer_is_assessor"] is True and client(db, OTHER).get("/assessments/1/detail").json()["viewer_is_assessor"] is False
     assert client(db, ADMIN).post("/assessments/1/approve", json={}).json()["status"] == "under_review"
     # step two is the role (the administrator role): the line approver no longer has it
     assert client(db, APPROVER).get("/my-work").json()["counts"]["to_review"] == 0

@@ -75,6 +75,16 @@ def _in_any_workflow(workflows: List[RCSAApprovalWorkflow], user_id: int, role_i
                for w in workflows for t in (w.tiers or []))
 
 
+def viewer_may_review(db: Session, user: GRCUser, assessment: RCSAAssessment, workflow: Optional[RCSAApprovalWorkflow]) -> bool:
+    """Whether the Worklist counts this unit as waiting for ``user``: it waits for review, the person is not its assessor, and they are the risk team or
+    named for the tier that is up. The assessment page shows its decision bar to exactly these people (the server does not enforce it)."""
+    if assessment.status not in REVIEW_STATES or assessment.assessor_id == user.id:
+        return False
+    if is_tenant_admin(db, user) or has_tenant_permission(db, user, "erm:rcsa:edit", "erm:rcsa:create"):
+        return True
+    return _named_for_tier(workflow, assessment.current_approval_tier or 1, user.id, set(platform_role_ids(db, user)))
+
+
 def _iso(value: Optional[datetime]) -> Optional[str]:
     return value.isoformat() if value else None
 
