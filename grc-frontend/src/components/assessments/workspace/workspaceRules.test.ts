@@ -24,7 +24,7 @@ const src = (f: string) => readFileSync(f, 'utf8');
 const code = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/\s.*$/gm, '$1');
 
 test('every file of the workspace and its page follows the kit rules', () => {
-  assert.ok(FILES.length >= 28, 'the files are there');
+  assert.ok(FILES.length >= 22, 'the files are there');         // 28 before the type lenses left the workspace's adapter folder for components/assessments/lenses
   const bad = FILES.filter((f) => f.endsWith('.tsx')).flatMap((f) => findViolations(src(f)).map((v) => `${f}:${v.line} ${v.rule}: ${v.text}`));
   assert.deepEqual(bad, []);
 });

@@ -17,7 +17,7 @@ import { infoOf } from './scopingModel';
 import { refreshAssessmentLists, scopingApi, type AssetRow } from './scopingApi';
 
 export function assessmentHref(id: number): string {
-  return `/cyber-security/assessments/${id}`;
+  return `/assessments/a/${id}`;
 }
 
 export default function StartDialog({ format, onClose }: { format: string; onClose: () => void }) {
