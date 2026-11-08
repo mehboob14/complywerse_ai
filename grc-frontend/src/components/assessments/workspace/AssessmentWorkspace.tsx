@@ -177,7 +177,7 @@ export function AssessmentWorkspace({ detail }: { detail: AssessmentDetail }) {
       <PageHeading
         title={detail.name} back={BACK}
         meta={[subject, owner ? `Owner ${owner}` : null, detail.assessor ? `Assessor ${detail.assessor}` : null].filter(Boolean).join(' · ') || undefined}
-        chips={<><StatusPill {...life} /><StatusPill tone="neutral" label={facts.kind} />{facts.category !== facts.kind && <StatusPill tone="neutral" label={facts.category} />}</>}
+        chips={<><StatusPill {...life} /><StatusPill tone="neutral" label={facts.kind} />{facts.category !== facts.kind && facts.category !== 'Other' && <StatusPill tone="neutral" label={facts.category} />}</>}
         actions={(
           <>
             {actions.discard && <Button leftIcon={<Trash2 aria-hidden />} loading={scoping.discarding} onClick={() => void askDiscard()}>Discard draft</Button>}
