@@ -1,5 +1,5 @@
-// Navigation-registry entries of the Controls Automation pages (/automation/*) and of the Control Catalog and Control Library pages (/controls/*, /control-library/*), which the
-// sidebar does not list: the Compliance overview's cards and the Control Catalog's tabs open them (see navPages/index.ts for the contract). Written by R-REG, 2026-11-01.
+// Navigation-registry entries of the Controls Automation pages (/automation/*) and of the Control Catalog, Control Library and Control Assurance pages (/controls/*, /control-library/*), which the
+// sidebar does not list: the Compliance overview's cards and the strip of those pages (Catalog | Library | Assurance) open them (see navPages/index.ts for the contract). Written by R-REG, 2026-11-01.
 // The sidebar lights the Compliance Overview for the Catalog / Library pages and the Controls Automation Overview for its standalone pages (navAccess activeMatch).
 import type { PageSpec, RouteExtra } from '../navRegistry.ts';
 
@@ -29,19 +29,21 @@ export const PAGES: PageSpec[] = [
   { path: '/automation/checks', label: 'Automated Checks', area: AUTOMATION, parent: '/automation/overview', hidden: `${NO_LINK}: it forwards to Common Controls` },
   { path: '/automation/scope', label: 'Common Controls', area: AUTOMATION, aliasOf: COMMON },
 
-  // ---- Control Catalog and Normalized Controls: the two (and Assurance) tabs of ControlSurfaceTabs, cards of the Compliance overview ----
-  { path: '/controls', label: 'Control Catalog', area: COMPLIANCE, parent: '/compliance', hidden: 'opens from the Compliance overview (Controls card), the Control Library tabs and the Frameworks pages', keywords: ['Controls', 'Internal controls'] },
-  { path: '/controls/configure-frameworks', label: 'Configure Frameworks', area: COMPLIANCE, parent: '/controls', hidden: 'opens from the Control Catalog' },
-  { path: '/controls/overview', label: 'Controls Overview', area: COMPLIANCE, parent: '/controls', hidden: NO_LINK },
-  { path: '/controls/workbench', label: 'Controls Workbench', area: COMPLIANCE, parent: '/controls', hidden: NO_LINK },
-  { path: LIBRARY, label: 'Unified Control Library', area: COMPLIANCE, parent: '/compliance', hidden: 'opens from the Compliance overview (Control Library card), the Performance Overview cards and the Control Catalog tabs (Normalized Controls)', keywords: ['Normalized Controls', 'Control library'] },
-  { path: `${LIBRARY}/assurance`, label: 'Control Testing & Assurance', area: COMPLIANCE, parent: '/compliance', hidden: 'opens from the Performance Overview (Control Testing & Assurance card) and the Control Catalog tabs (Assurance)', keywords: ['Control assurance'] },
-  { path: `${LIBRARY}/:id`, label: 'Normalized control', area: COMPLIANCE, parent: LIBRARY, hidden: 'opens from a Unified Control Library row and from the risks, assets and reports that link a control' },
-  { path: `${LIBRARY}/review`, label: 'Master List Review', area: COMPLIANCE, parent: LIBRARY, hidden: 'opens from the Unified Control Library' },
-  { path: `${LIBRARY}/compare`, label: 'Framework Comparison', area: COMPLIANCE, parent: LIBRARY, hidden: NO_LINK },
-  { path: `${LIBRARY}/coverage`, label: 'Compliance Coverage Matrix', area: COMPLIANCE, parent: LIBRARY, hidden: NO_LINK },
-  { path: `${LIBRARY}/evidence`, label: 'Evidence Suggestions & Reuse', area: COMPLIANCE, parent: LIBRARY, hidden: NO_LINK },
-  { path: `${LIBRARY}/gaps`, label: 'Gap Analysis', area: COMPLIANCE, parent: LIBRARY, hidden: NO_LINK },
-  { path: `${LIBRARY}/pipeline-lab`, label: 'New-Framework Auto-Pipeline', area: COMPLIANCE, parent: LIBRARY, hidden: NO_LINK },
-  { path: `${LIBRARY}/templates`, label: 'Framework Templates', area: COMPLIANCE, parent: LIBRARY, hidden: NO_LINK },
+  // ---- Control Catalog, Control Library and Control Assurance: the three surfaces of components/dashboard/ControlSurfaceTabs (Catalog | Library | Assurance), cards of the Compliance overview. Each draws the kit's page head. ----
+  { path: '/controls', label: 'Control Catalog', area: COMPLIANCE, parent: '/compliance', ownHeading: true, hidden: 'opens from the Compliance overview (Controls card), the strip of the Control Library pages and the Frameworks pages (View requirements)', keywords: ['Controls', 'Internal controls'] },
+  { path: '/controls/configure-frameworks', label: 'Configure Frameworks', area: COMPLIANCE, parent: '/controls', ownHeading: true, hidden: 'opens from the Control Catalog' },
+  // the Workbench and the Overview were a second way into the Catalog that only linked to each other; the addresses forward to the Catalog with their query string
+  { path: '/controls/overview', label: 'Controls Overview', area: COMPLIANCE, parent: '/controls', hidden: `${NO_LINK}: it forwards to the Control Catalog` },
+  { path: '/controls/workbench', label: 'Controls Workbench', area: COMPLIANCE, parent: '/controls', hidden: `${NO_LINK}: it forwards to the Control Catalog` },
+  { path: LIBRARY, label: 'Control Library', area: COMPLIANCE, parent: '/compliance', ownHeading: true, hidden: 'opens from the Compliance overview (Control Library card), the Performance Overview cards and the strip of the Control Catalog pages', keywords: ['Unified Control Library', 'Normalized Controls', 'Control library'] },
+  { path: `${LIBRARY}/assurance`, label: 'Control Assurance', area: COMPLIANCE, parent: '/compliance', ownHeading: true, hidden: 'opens from the Performance Overview (Control Testing & Assurance card) and the strip of the Control Catalog pages', keywords: ['Control Testing & Assurance', 'Control assurance'] },
+  { path: `${LIBRARY}/:id`, label: 'Control domain', area: COMPLIANCE, parent: LIBRARY, ownHeading: true, hidden: 'opens from a Control Library row and from the risks, assets and reports that link a control', keywords: ['Normalized control'] },
+  { path: `${LIBRARY}/review`, label: 'Master List Review', area: COMPLIANCE, parent: LIBRARY, ownHeading: true, hidden: 'opens from the Control Library' },
+  // six Library pages that no link opened (a framework comparison, a coverage matrix, evidence suggestions, gap analysis, a new-framework pipeline, templates): the addresses forward to the Library
+  { path: `${LIBRARY}/compare`, label: 'Framework Comparison', area: COMPLIANCE, parent: LIBRARY, hidden: `${NO_LINK}: it forwards to the Control Library` },
+  { path: `${LIBRARY}/coverage`, label: 'Compliance Coverage Matrix', area: COMPLIANCE, parent: LIBRARY, hidden: `${NO_LINK}: it forwards to the Control Library` },
+  { path: `${LIBRARY}/evidence`, label: 'Evidence Suggestions & Reuse', area: COMPLIANCE, parent: LIBRARY, hidden: `${NO_LINK}: it forwards to the Control Library` },
+  { path: `${LIBRARY}/gaps`, label: 'Gap Analysis', area: COMPLIANCE, parent: LIBRARY, hidden: `${NO_LINK}: it forwards to the Control Library` },
+  { path: `${LIBRARY}/pipeline-lab`, label: 'New-Framework Auto-Pipeline', area: COMPLIANCE, parent: LIBRARY, hidden: `${NO_LINK}: it forwards to the Control Library` },
+  { path: `${LIBRARY}/templates`, label: 'Framework Templates', area: COMPLIANCE, parent: LIBRARY, hidden: `${NO_LINK}: it forwards to the Control Library` },
 ];

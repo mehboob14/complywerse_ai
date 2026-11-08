@@ -1,37 +1,39 @@
 'use client';
 
 /**
- * Top-of-page toggle between the two control surfaces — the working Catalog and
- * the normalization Library. Renders on both /controls and /control-library so
- * they read as one page with two tabs (switch in place, no "jump to other page"
- * buttons).
+ * The strip of the three control surfaces of the Compliance side: Catalog (the controls an organisation works), Library (the unified, de-duplicated controls across frameworks) and Assurance (how well
+ * the controls are tested). Each is a page of its own with its own address, so the strip is a row of links, not a tab list: the page you are on is marked with aria-current and a line under it. It
+ * sits under the page's head on /controls, /control-library and /control-library/assurance. (The Cyber Assurance area keeps its own copy of this component.)
  */
 import Link from 'next/link';
-import { Boxes, GitMerge, ShieldCheck } from 'lucide-react';
+import { clsx } from 'clsx';
 
-export default function ControlSurfaceTabs({ active }: { active: 'catalog' | 'library' | 'assurance' }) {
-  const tabs = [
-    { k: 'catalog', label: 'Control Catalog', href: '/controls', icon: Boxes, hint: 'Work your controls — assign, test, evidence & certify' },
-    { k: 'library', label: 'Normalized Controls', href: '/control-library', icon: GitMerge, hint: 'Normalize frameworks & explore the unified library' },
-    { k: 'assurance', label: 'Assurance', href: '/control-library/assurance', icon: ShieldCheck, hint: 'Control testing & assurance posture — tested, effective, on time' },
-  ] as const;
+export type ControlSurface = 'catalog' | 'library' | 'assurance';
+
+const SURFACES: ReadonlyArray<{ id: ControlSurface; label: string; href: string; hint: string }> = [
+  { id: 'catalog', label: 'Catalog', href: '/controls', hint: 'Work your controls: assign, test, attach evidence and certify' },
+  { id: 'library', label: 'Library', href: '/control-library', hint: 'The unified controls across all frameworks' },
+  { id: 'assurance', label: 'Assurance', href: '/control-library/assurance', hint: 'How well the controls are tested: tested, effective and on time' },
+];
+
+const STRIP = 'flex overflow-x-auto shadow-[inset_0_-1px_0_var(--ds-border)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
+const TAB = 'inline-flex h-ds-control shrink-0 items-center whitespace-nowrap border-b-2 px-[12px] text-ds-body font-medium focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--ds-focus)]';
+
+export default function ControlSurfaceTabs({ active, className }: { active: ControlSurface; className?: string }) {
   return (
-    <div className="mb-4 inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1">
-      {tabs.map((t) => {
-        const on = active === t.k;
-        const Icon = t.icon;
-        return (
-          <Link
-            key={t.k}
-            href={t.href}
-            title={t.hint}
-            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-[13px] font-semibold transition-colors ${on ? 'bg-white text-primary-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-          >
-            <Icon className="h-4 w-4" />
-            {t.label}
-          </Link>
-        );
-      })}
-    </div>
+    <nav aria-label="Control sections" className={clsx(STRIP, className)}>
+      {SURFACES.map((s) => (
+        <Link
+          key={s.id}
+          href={s.href}
+          prefetch={false}
+          title={s.hint}
+          aria-current={s.id === active ? 'page' : undefined}
+          className={clsx(TAB, s.id === active ? 'border-ds-primary text-ds-primary-text' : 'border-transparent text-ds-fg-muted hover:border-ds-border-strong hover:text-ds-fg')}
+        >
+          {s.label}
+        </Link>
+      ))}
+    </nav>
   );
 }
