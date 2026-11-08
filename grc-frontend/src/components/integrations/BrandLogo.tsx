@@ -19,7 +19,7 @@ export function BrandLogo({ id, name = '', size = 48 }: { id?: string; name?: st
     return (
       <span
         className="flex shrink-0 items-center justify-center rounded-lg bg-slate-100 font-bold text-slate-500"
-        style={{ width: size, height: size, fontSize: Math.max(11, size * 0.34) }}
+        style={{ width: size, height: size, fontSize: Math.max(12, size * 0.34) }}
         aria-hidden
       >
         {initials(name)}

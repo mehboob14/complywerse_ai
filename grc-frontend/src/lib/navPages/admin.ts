@@ -34,8 +34,8 @@ export const PAGES: PageSpec[] = [
     keywords: everyName() },
   ...sectionPages(),
   // pages that were once a section of their own and belong to one now (adminSections `paths`)
-  { path: `${ADMIN}/cloud-connectors`, label: 'Cloud Connectors', area: AREA, parent: `${ADMIN}/connections`, hidden: 'opens from Connected systems (Cloud security) and from the scanner cards that name a cloud provider' },
-  { path: `${ADMIN}/connectors`, label: 'Connectors', area: AREA, parent: `${ADMIN}/connections`, hidden: 'opens from Connected systems (Business tools), from the vendor pages that ask for a connector key (Breach alerts, Security ratings, Settings, a vendor record) and from a vulnerability' },
+  { path: `${ADMIN}/cloud-connectors`, label: 'Cloud Connectors', area: AREA, parent: `${ADMIN}/connections`, hidden: 'only forwards to Connected systems (Cloud security); the connect form for a provider opens from there, and from the scanner dashboard cards that name a cloud provider' },
+  { path: `${ADMIN}/connectors`, label: 'Connectors', area: AREA, parent: `${ADMIN}/connections`, hidden: 'only forwards to Connected systems (Business tools); the vendor pages that ask for a connector key (Breach alerts, Security ratings, Settings, a vendor record) and a vulnerability still link here' },
   { path: `${ADMIN}/usage`, label: 'Usage Monitoring', area: AREA, parent: `${ADMIN}/ai-usage`, hidden: 'no menu entry opens it any more (AI usage is the entry); a typed address still works until the two AI usage pages are one' },
   // a person's AI usage opens from a row of Users
   { path: `${ADMIN}/users/:id/usage`, label: 'User usage', area: AREA, parent: `${ADMIN}/users`, hidden: 'opens from a user row of Users (Usage)' },

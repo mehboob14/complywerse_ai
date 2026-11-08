@@ -353,7 +353,7 @@ export function SqlDbForm({
       <form onSubmit={submit} className="space-y-6">
         <fieldset>
           <legend className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-2">
-            <span className="w-5 h-5 rounded bg-primary-100 text-primary-700 flex items-center justify-center text-[10px] font-bold">1</span>
+            <span className="w-5 h-5 rounded bg-primary-100 text-primary-700 flex items-center justify-center text-[12px] font-bold">1</span>
             Connection details
           </legend>
           <div className="grid grid-cols-1 gap-4">
@@ -444,7 +444,7 @@ export function SqlDbForm({
 
         <fieldset>
           <legend className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-2">
-            <span className="w-5 h-5 rounded bg-primary-100 text-primary-700 flex items-center justify-center text-[10px] font-bold">2</span>
+            <span className="w-5 h-5 rounded bg-primary-100 text-primary-700 flex items-center justify-center text-[12px] font-bold">2</span>
             Authentication (read-only)
           </legend>
           <div className="grid grid-cols-2 gap-4">
