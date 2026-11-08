@@ -32,6 +32,9 @@ export interface InlineEditorProps<T> {
   className?: string;
 }
 
+/** "Due date" in the middle of a sentence is "due date"; "SLA days" stays as it is. */
+const inSentence = (label: string): string => label.replace(/^([A-Z])([a-z])/, (_m, a: string, b: string) => `${a.toLowerCase()}${b}`);
+
 /** The first thing the person can type into or press in an editor. */
 const FIRST = 'input:not([type="hidden"]), select, textarea, [role="combobox"], button[aria-haspopup]';
 
@@ -73,7 +76,7 @@ export function InlineEditor<T>({ taskId, label, view, empty = 'Not set', canEdi
         <div ref={box} className={`flex flex-col gap-[8px] ${className ?? ''}`} onKeyDown={onKeyDown}>
           {children(draft, setDraft, { submit, problem: shown })}
           {shown && <p role="alert" className="text-ds-label text-ds-danger">{shown}</p>}
-          <FormError title={`Couldn't save the ${label.toLowerCase()}`} error={error} onRetry={last.current ? () => { setError(null); save.mutate({ patch: last.current as Record<string, unknown>, said }); } : undefined} />
+          <FormError title={`Couldn't save the ${inSentence(label)}`} error={error} onRetry={last.current ? () => { setError(null); save.mutate({ patch: last.current as Record<string, unknown>, said }); } : undefined} />
           <div className="flex flex-wrap items-center gap-[8px]">
             <Button variant="primary" size="sm" loading={save.isPending} onClick={submit}>Save</Button>
             <Button size="sm" disabled={save.isPending} onClick={close}>Cancel</Button>
@@ -83,7 +86,7 @@ export function InlineEditor<T>({ taskId, label, view, empty = 'Not set', canEdi
         <div className="flex flex-wrap items-center justify-between gap-x-[8px]">
           <span className="min-w-0 flex-1">{view}</span>
           {canEdit && !lockedWhy && (
-            <Button ref={trigger} variant="link" size="sm" aria-label={`Change the ${label.toLowerCase()}`} onClick={() => { setDraft(start); setTried(false); setError(null); setEditing(true); }}>Change</Button>
+            <Button ref={trigger} variant="link" size="sm" aria-label={`Change the ${inSentence(label)}`} onClick={() => { setDraft(start); setTried(false); setError(null); setEditing(true); }}>Change</Button>
           )}
         </div>
       )}

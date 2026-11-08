@@ -6,7 +6,8 @@
 // The tenant's own lists and labels (Settings) are used, and a field the organization removed from its forms is not offered (its value is still shown). Who may edit is `rights`, which
 // is what the old Edit button checked; a document request's task keeps its owners, due date and status (they follow the request).
 import { useMemo, type ReactNode } from 'react';
-import { Button, Disclosure, Fact, Menu, Select, TextInput, type MenuItem } from '@/components/ui/ds';
+import { InfoTip } from '@/components/ui/InfoTip';
+import { Button, Disclosure, Fact, Menu, ReadOnlyNote, Select, TextInput, type MenuItem } from '@/components/ui/ds';
 import { builtinLabel, listOptions, showBuiltin, useModuleSettings } from '@/components/settings/CustomFields';
 import { formatDate, formatDateTime } from '@/lib/format';
 import { statusPill } from '@/lib/status';
@@ -156,7 +157,8 @@ export function Rail({ task, rights, approval, showApprovalNote, now }: RailProp
 
   return (
     <div className="flex flex-col gap-[16px]">
-    <dl className="m-0 flex flex-col gap-[16px]">
+      {!rights.edit && <ReadOnlyNote>View only <InfoTip text="Changing a task's details needs the edit right. You can still move the task, comment, tick sub-tasks and ask for or give an approval." label="Why the details are view only" /></ReadOnlyNote>}
+      <dl className="m-0 flex flex-col gap-[16px]">
       <StatusRow task={task} rights={rights} />
       {priority.show && <InstantSelect task={task} label={builtinLabel(settings, 'priority', 'Priority')} field="priority" value={task.priority} options={opts.priority} canEdit={priority.edit} view={<PriorityPill word={task.priority} size="md" />} />}
       {owners.show && <OwnersRow task={task} label={builtinLabel(settings, 'owners', 'Owners')} canEdit={owners.edit && !rights.ownersLocked} locked={rights.ownersLocked} />}

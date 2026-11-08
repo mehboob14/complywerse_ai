@@ -49,7 +49,7 @@ test('the head offers ONE next step (taskRecord.nextStep), Ask AI and Delete; Ap
 test('every editor saves through the one update (PUT with the fields that changed) and says what happened; a failure stays where it happened with a Retry', () => {
   const editor = read('[id]/_workspace/InlineEditor.tsx');
   assert.match(editor, /useUpdateTask\(taskId, \{ inline: true, onDone: close, onFail: \(e\) => setError\(e\) \}\)/);
-  assert.match(editor, /<FormError title=\{`Couldn't save the \$\{label\.toLowerCase\(\)\}`\}/);
+  assert.match(editor, /<FormError title=\{`Couldn't save the \$\{inSentence\(label\)\}`\}/);
   assert.match(editor, /e\.key === 'Escape' && !e\.defaultPrevented/, 'Escape closes the editor, not an open list inside it');
   assert.match(editor, /trigger\.current\?\.focus\(\)/, 'focus goes back to the Change button');
   assert.match(read('[id]/_workspace/useTaskActions.ts'), /criticalTasksApi\.update\(taskId, patch\)/);

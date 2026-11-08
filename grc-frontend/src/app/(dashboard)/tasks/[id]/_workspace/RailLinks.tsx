@@ -69,7 +69,7 @@ export function LinkedRow({ task, canEdit }: { task: TaskPageData; canEdit: bool
   return (
     <InlineEditor<LinkIds>
       taskId={task.id}
-      label="Linked to"
+      label="Linked records"
       view={<LinkedList links={task.links ?? []} />}
       canEdit={canEdit}
       start={start}
