@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 import json
 import re
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Request, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request, Response, UploadFile, File, Form
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, and_, or_
 
@@ -20,7 +20,7 @@ except Exception:
 from ....models import (
     RegulatoryChange, RegulatoryImpactAssessment, RegulatoryImplementationTask, RegulatoryObligation,
     GovernanceDocument, NormalizedControl, InternalControl, InternalControlFrameworkLink, Framework, GRCUser, Tenant, AuditLog, UserRole, Role,
-    AuditObservation, GRCDepartment, get_db
+    AuditObservation, GRCDepartment, RegulatoryLink, RegulatoryFeedItem, RegulatoryFeedAssignment, get_db
 )
 from ....schemas import (
     RegulatoryChangeCreate, RegulatoryChangeUpdate, RegulatoryChangeResponse,
@@ -188,9 +188,21 @@ def create_audit_log_entry(
     return audit_log
 
 
-def serialize_regulatory_change(change: RegulatoryChange) -> RegulatoryChangeResponse:
+def _today_start() -> datetime:
+    """Midnight today (naive UTC, like every server time): a task is late from the day after its due day."""
+    return datetime.combine(datetime.utcnow().date(), datetime.min.time())
+
+
+def is_late_task(task: RegulatoryImplementationTask, today: Optional[datetime] = None) -> bool:
+    """Not completed and the due day has passed. The one reading of "late" for the register, the Overview and My work."""
+    return bool(task.due_date and task.status != "completed" and task.due_date < (today or _today_start()))
+
+
+def serialize_regulatory_change(change: RegulatoryChange, counts: Optional[dict] = None) -> RegulatoryChangeResponse:
     completed_tasks = sum(1 for t in change.implementation_tasks if t.status == "completed")
     gap_count = sum(1 for a in change.impact_assessments if a.gap_identified)
+    today = _today_start()
+    counts = counts or {}
     return RegulatoryChangeResponse(
         id=change.id,
         tenant_id=change.tenant_id,
@@ -219,6 +231,9 @@ def serialize_regulatory_change(change: RegulatoryChange) -> RegulatoryChangeRes
         assessment_count=len(change.impact_assessments),
         task_count=len(change.implementation_tasks),
         completed_task_count=completed_tasks,
+        obligation_count=counts.get("obligations", 0),
+        met_count=counts.get("met", 0),
+        late_task_count=sum(1 for t in change.implementation_tasks if is_late_task(t, today)),
         analysis=regulatory_engine.analysis_state(change),
     )
 
@@ -360,20 +375,16 @@ def list_regulatory_changes(
     search: Optional[str] = None,
     skip: int = 0,
     limit: int = 100,
+    response: Response = None,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
         return []
-    
-    query = db.query(RegulatoryChange).options(
-        joinedload(RegulatoryChange.assignee),
-        joinedload(RegulatoryChange.creator),
-        joinedload(RegulatoryChange.impact_assessments),
-        joinedload(RegulatoryChange.implementation_tasks)
-    ).filter(RegulatoryChange.tenant_id.in_(user_tenants))
-    
+
+    query = db.query(RegulatoryChange).filter(RegulatoryChange.tenant_id.in_(user_tenants))
+
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(RegulatoryChange.tenant_id == tenant_id)
@@ -393,8 +404,35 @@ def list_regulatory_changes(
         )
         query = query.filter(search_filter)
     
-    changes = query.order_by(RegulatoryChange.created_at.desc()).offset(skip).limit(limit).all()
-    return [serialize_regulatory_change(c) for c in changes]
+    # The true number that match, whatever the page holds (the register says when it was cut).
+    if response is not None:
+        response.headers["X-Total-Count"] = str(query.with_entities(func.count(RegulatoryChange.id)).scalar() or 0)
+    changes = query.options(
+        joinedload(RegulatoryChange.assignee),
+        joinedload(RegulatoryChange.creator),
+        joinedload(RegulatoryChange.impact_assessments),
+        joinedload(RegulatoryChange.implementation_tasks)
+    ).order_by(RegulatoryChange.created_at.desc()).offset(skip).limit(limit).all()
+    counts = _row_counts(db, [c.id for c in changes])
+    return [serialize_regulatory_change(c, counts.get(c.id)) for c in changes]
+
+
+def _row_counts(db: Session, change_ids: List[int]) -> dict:
+    """Per change: its obligations (not removed) and how many a confirmed control meets. Two grouped queries for the whole page."""
+    if not change_ids:
+        return {}
+    out = {i: {"obligations": 0, "met": 0} for i in change_ids}
+    live = RegulatoryObligation.deleted_at.is_(None)
+    for cid, n in (db.query(RegulatoryObligation.regulatory_change_id, func.count(RegulatoryObligation.id))
+                   .filter(RegulatoryObligation.regulatory_change_id.in_(change_ids), live)
+                   .group_by(RegulatoryObligation.regulatory_change_id)):
+        out[cid]["obligations"] = n
+    for cid, n in (db.query(RegulatoryLink.regulatory_change_id, func.count(func.distinct(RegulatoryLink.obligation_id)))
+                   .join(RegulatoryObligation, RegulatoryObligation.id == RegulatoryLink.obligation_id)
+                   .filter(RegulatoryLink.regulatory_change_id.in_(change_ids), RegulatoryLink.status == "confirmed", live)
+                   .group_by(RegulatoryLink.regulatory_change_id)):
+        out[cid]["met"] = n
+    return out
 
 
 @router.get("/changes/{change_id}", response_model=RegulatoryChangeResponse)
@@ -1890,6 +1928,133 @@ def get_regulatory_dashboard(
         upcoming_effective_dates=upcoming_effective_dates,
         task_completion_rate=round(task_completion_rate, 2)
     )
+
+
+# =============================================================================
+# Overview, My work and the people lists of the Regulatory Changes screens (read-only; the same access as the dashboard above)
+# =============================================================================
+
+_OPEN_CHANGE_STATUSES = ("identified", "under_assessment", "implementation")
+
+
+@router.get("/overview")
+def get_regulatory_overview(db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    """The Overview's counters and posture, counted by the server over every change still being worked on (identified, under
+    assessment, implementation): never over a page of the register."""
+    out = {
+        "changes": {"open": 0, "by_status": {}, "effective_soon": 0, "in_force": 0},
+        "obligations": {"total": 0, "by_compliance": {}, "to_check": 0, "met": 0, "without_control": 0, "suggestions": 0},
+        "tasks": {"open": 0, "late": 0, "unassigned": 0},
+        "feed": {"new": 0},
+    }
+    tenants = get_user_tenants(current_user, db)
+    if not tenants:
+        return out
+    today = _today_start()
+    rows = db.query(RegulatoryChange.id, RegulatoryChange.status, RegulatoryChange.effective_date).filter(
+        RegulatoryChange.tenant_id.in_(tenants), RegulatoryChange.status.in_(_OPEN_CHANGE_STATUSES)).all()
+    ids = [r.id for r in rows]
+    by_status: dict = {}
+    for r in rows:
+        by_status[r.status] = by_status.get(r.status, 0) + 1
+    out["changes"] = {
+        "open": len(rows), "by_status": by_status,
+        "effective_soon": sum(1 for r in rows if r.effective_date and today <= r.effective_date < today + timedelta(days=31)),
+        "in_force": sum(1 for r in rows if r.effective_date and r.effective_date < today),
+    }
+    if ids:
+        obligations = db.query(RegulatoryObligation.id, RegulatoryObligation.compliance_status, RegulatoryObligation.source,
+                               RegulatoryObligation.verified).filter(
+            RegulatoryObligation.regulatory_change_id.in_(ids), RegulatoryObligation.deleted_at.is_(None)).all()
+        live = {o.id for o in obligations}
+        links = [l for l in db.query(RegulatoryLink.obligation_id, RegulatoryLink.status).filter(
+            RegulatoryLink.regulatory_change_id.in_(ids), RegulatoryLink.status.in_(("confirmed", "proposed"))).all()
+            if l.obligation_id in live]
+        met = {l.obligation_id for l in links if l.status == "confirmed"}
+        suggested = {l.obligation_id for l in links if l.status == "proposed"}
+        split: dict = {}
+        for o in obligations:
+            split[o.compliance_status] = split.get(o.compliance_status, 0) + 1
+        out["obligations"] = {
+            "total": len(obligations), "by_compliance": split,
+            "to_check": sum(1 for o in obligations if o.source == "ai" and not o.verified),
+            "met": len(met), "without_control": len(live - met - suggested),
+            "suggestions": sum(1 for l in links if l.status == "proposed"),
+        }
+        tasks = db.query(RegulatoryImplementationTask).filter(
+            RegulatoryImplementationTask.regulatory_change_id.in_(ids), RegulatoryImplementationTask.status != "completed").all()
+        out["tasks"] = {
+            "open": len(tasks), "late": sum(1 for t in tasks if is_late_task(t, today)),
+            "unassigned": sum(1 for t in tasks if not regulatory_tasks.assignees_of(t)),
+        }
+    out["feed"]["new"] = db.query(func.count(RegulatoryFeedItem.id)).filter(
+        RegulatoryFeedItem.tenant_id.in_(tenants), RegulatoryFeedItem.status == "new").scalar() or 0
+    return out
+
+
+@router.get("/my-work")
+def get_my_regulatory_work(db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    """What waits for the signed-in person in Regulatory Changes: tasks they are on, obligations they own that nobody has assessed,
+    changes assigned to them, and new feed items of the sources assigned to them or to a role of theirs. Each list is cut at 100 with its true total."""
+    from .regulatory_feeds import ensure_feed_assignments_table
+
+    me = current_user.id
+    out = {"tasks": [], "tasks_total": 0, "obligations": [], "obligations_total": 0, "changes": [], "changes_total": 0, "feed_new": 0}
+    tenants = get_user_tenants(current_user, db)
+    if not tenants:
+        return out
+    today = _today_start()
+    open_changes = {c.id: c for c in db.query(RegulatoryChange).filter(
+        RegulatoryChange.tenant_id.in_(tenants), RegulatoryChange.status.in_(_OPEN_CHANGE_STATUSES)).all()}
+    ids = list(open_changes)
+    cap = 100
+
+    mine_changes = sorted((c for c in open_changes.values() if c.assigned_to == me), key=lambda c: (c.effective_date is None, c.effective_date or today))
+    out["changes_total"] = len(mine_changes)
+    out["changes"] = [{"id": c.id, "title": c.title, "source": c.source, "status": c.status, "priority": c.priority,
+                       "effective_date": c.effective_date.isoformat() if c.effective_date else None} for c in mine_changes[:cap]]
+    if ids:
+        tasks = [t for t in db.query(RegulatoryImplementationTask).filter(
+            RegulatoryImplementationTask.regulatory_change_id.in_(ids), RegulatoryImplementationTask.status != "completed").all()
+            if me in regulatory_tasks.assignees_of(t)]
+        tasks.sort(key=lambda t: (t.due_date is None, t.due_date or today, t.id))
+        out["tasks_total"] = len(tasks)
+        out["tasks"] = [{"id": t.id, "change_id": t.regulatory_change_id, "change_title": open_changes[t.regulatory_change_id].title,
+                         "title": t.title, "status": t.status, "priority": t.priority,
+                         "due_date": t.due_date.isoformat() if t.due_date else None, "late": is_late_task(t, today)} for t in tasks[:cap]]
+        owned = [o for o in db.query(RegulatoryObligation).filter(
+            RegulatoryObligation.regulatory_change_id.in_(ids), RegulatoryObligation.deleted_at.is_(None),
+            RegulatoryObligation.compliance_status == "not_assessed").all() if me in _owner_ids(o)]
+        owned.sort(key=lambda o: (o.deadline is None, o.deadline or today.date(), o.id))
+        out["obligations_total"] = len(owned)
+        out["obligations"] = [{"id": o.id, "change_id": o.regulatory_change_id, "change_title": open_changes[o.regulatory_change_id].title,
+                               "ref": o.ref, "summary": o.summary, "priority": o.priority,
+                               "deadline": o.deadline.isoformat() if o.deadline else None} for o in owned[:cap]]
+    ensure_feed_assignments_table(db)
+    roles = [r for (r,) in db.query(UserRole.role_id).filter(UserRole.user_id == me)]
+    sources = [s for (s,) in db.query(RegulatoryFeedAssignment.feed_source_id).filter(or_(
+        and_(RegulatoryFeedAssignment.assignee_type == "user", RegulatoryFeedAssignment.user_id == me),
+        and_(RegulatoryFeedAssignment.assignee_type == "role", RegulatoryFeedAssignment.role_id.in_(roles or [0]))))]
+    if sources:
+        out["feed_new"] = db.query(func.count(RegulatoryFeedItem.id)).filter(
+            RegulatoryFeedItem.tenant_id.in_(tenants), RegulatoryFeedItem.status == "new",
+            RegulatoryFeedItem.feed_source_id.in_(sources)).scalar() or 0
+    return out
+
+
+@router.get("/people")
+def list_regulatory_people(db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    """The people and roles the pickers of Regulatory Changes and Feeds offer (an owner, an assignee, a feed's watchers). Any signed-in
+    person: the pickers used the administrator's user list, which a compliance officer without that right could not read."""
+    from ....routers.auth_router import platform_account
+
+    users = (db.query(GRCUser).filter(GRCUser.is_active == True, platform_account())            # noqa: E712
+             .order_by(GRCUser.display_name.asc().nullslast(), GRCUser.username.asc()).all())
+    counts = dict(db.query(UserRole.role_id, func.count(UserRole.id)).group_by(UserRole.role_id).all())
+    return {
+        "users": [{"id": u.id, "display_name": u.display_name or u.username, "email": u.email, "department": u.department} for u in users],
+        "roles": [{"id": r.id, "name": r.name, "user_count": counts.get(r.id, 0)} for r in db.query(Role).order_by(Role.name.asc()).all()],
+    }
 
 
 # =============================================================================
