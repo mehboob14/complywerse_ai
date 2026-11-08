@@ -6,7 +6,6 @@
  * selection, and "every framework ticked" saves as the canonical "all" (an empty list). The kit's save bar holds the unsaved choice; a failed save says why and can be tried again.
  */
 import { useEffect, useId, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { History, Layers } from 'lucide-react';
 import { Button, Checkbox, EmptyState, ErrorState, Notice, ReadOnlyNote, SaveBar, SectionCard, SkeletonRows, StatTile, TextInput, useReportedMutation } from '@/components/ui/ds';
 import { PageHeader } from '@/components/ui';
@@ -53,8 +52,8 @@ export default function ConfigureFrameworks() {
   return (
     <div className="mx-auto flex max-w-[960px] flex-col gap-[16px]">
       <PageHeader variant="page" title={label} back={{ href: '/controls', label: 'Back to the Control Catalog' }} info="Choose which frameworks appear in your Control Catalog. Their controls flow into it automatically. The choice is for the whole organisation and every change is logged." />
-      <Notice tone="info" title="Controls Automation has its own scope">
-        The frameworks that drive Controls Automation are chosen under <Link href="/automation/soc2-controls?configure=scope" className="font-[600] text-ds-primary-text underline">Controls, Configure scope</Link>. This page is for the Control Catalog only.
+      <Notice tone="info" title="Controls Automation has its own scope" action={<Button href="/automation/soc2-controls?configure=scope">Configure the scope</Button>}>
+        The frameworks that drive Controls Automation are chosen in its own scope. This page is for the Control Catalog only.
       </Notice>
 
       {q.isError && !scope ? (
