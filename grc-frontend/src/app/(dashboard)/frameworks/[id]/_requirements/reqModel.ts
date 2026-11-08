@@ -114,7 +114,6 @@ export interface ReqRow {
   evidence: EvidenceCounts;
   evidenceKey: EvidenceKey;
   checklist: Checklist | null;
-  openIssues: number;
   /** the folded text the search looks at */
   text: string;
   control: CertificationControl;
@@ -192,7 +191,6 @@ export function toRows(
       evidence,
       evidenceKey: evidenceStateOf(evidence),
       checklist: checklistOf(c, ticks),
-      openIssues: Number((c as { open_issues_count?: number }).open_issues_count ?? 0) || 0,
       text: [
         c.control_code, c.original_control_code, c.system_control_code, c.control_name, c.control_statement, section, owners.join(' '),
         ...(c.sub_control_tree ?? []).map((n) => `${n.code} ${n.lead_in ?? ''} ${n.text}`),
@@ -200,6 +198,14 @@ export function toRows(
       control: c,
     };
   });
+}
+
+/** The scope decisions about one requirement, newest first. Decisions are keyed by the library clause (`parsed_control_id`), the journey's rows by their own id. */
+export function decisionsOf<T extends { id: number; control_id: number; requested_at?: string | null }>(row: Pick<ReqRow, 'parsedId'>, records: readonly T[]): T[] {
+  if (row.parsedId == null) return [];
+  return records
+    .filter((r) => r.control_id === row.parsedId)
+    .sort((a, b) => String(b.requested_at || '').localeCompare(String(a.requested_at || '')) || b.id - a.id);
 }
 
 // ── the quick views ──────────────────────────────────────────────────────────────────────────────────────────────────────

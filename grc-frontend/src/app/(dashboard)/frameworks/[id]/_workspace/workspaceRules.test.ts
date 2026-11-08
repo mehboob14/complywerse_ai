@@ -1,8 +1,8 @@
 // node --test "src/app/(dashboard)/frameworks/\[id\]/_workspace/workspaceRules.test.ts"   (or the whole suite: npm test)
 // Source-text pins for the journey page (/frameworks/[id]): the shell stays thin, the files written for the revamp follow the kit's rules, nothing
 // uses a native dialog, hides an action until hover, logs payloads or writes from a GET, every tab the page draws is a tab of the model and every
-// tab of the model is drawn, and the old wrong sum (verified counted twice) is gone. The requirement popup and accordion that still live in
-// JourneyWorkspace.tsx are group J2's: they are held to the dialog, log and sum rules here, not yet to the kit's class rules.
+// tab of the model is drawn, and the old wrong sum (verified counted twice) is gone. The Requirements tab (the facet explorer, the drawer and the actions on a
+// requirement) lives in ../_requirements and has its own rules there (requirementsRules.test.ts); the dialog, log and sum rules here cover that folder too.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
@@ -18,12 +18,12 @@ const files = (dir: string): string[] => readdirSync(join(ROOT, dir)).flatMap((n
   const rel = join(dir, n);
   return statSync(join(ROOT, rel)).isDirectory() ? files(rel) : /\.tsx?$/.test(n) && !/\.test\.tsx?$/.test(n) ? [rel] : [];
 });
-const all = [...files('_workspace'), ...files('_tabs'), 'page.tsx'];
+const all = [...files('_workspace'), ...files('_requirements'), ...files('_tabs'), 'page.tsx'];
 
 // the files written for the revamp (the kit's class rules apply to them)
 const NEW = [
   '_workspace/JourneyHeader.tsx', '_workspace/JourneyHome.tsx', '_workspace/NextForMe.tsx', '_workspace/RecentActivity.tsx', '_workspace/StageList.tsx',
-  '_workspace/OverviewTab.tsx', '_workspace/JourneyCharts.tsx', '_workspace/ScopeTab.tsx', '_workspace/ScopeDecisionDialog.tsx', '_workspace/ActivityTab.tsx',
+  '_workspace/OverviewTab.tsx', '_workspace/JourneyCharts.tsx', '_workspace/ScopeTab.tsx', '_workspace/ActivityTab.tsx',
   '_workspace/RegistersHost.tsx', '_workspace/useJourneyActions.ts', '_tabs/_StageOwnerPicker.tsx',
 ];
 
@@ -85,17 +85,16 @@ test('every tab of the model is drawn and every tab drawn is a tab of the model'
   assert.doesNotMatch(ws, /case 'applicability'|renderApplicabilityTab|renderHistoryTab|renderSoaTab|renderAssignedToMeTab|renderCDEScopeTab|renderPhasesTab|renderScopingTab/, 'the dead renderers are gone');
 });
 
-test('the requirement link keeps working: ?req= opens the popup and the tab goes to the address', () => {
+test('the requirement link keeps working: ?req= opens the requirement in the drawer of the Requirements tab, and the address carries the tab', () => {
   const ws = read('_workspace/JourneyWorkspace.tsx');
-  assert.match(ws, /searchParams\.set\('req', String\(control\.id\)\)/);
+  assert.match(ws, /searchParams\.set\('req', String\(id\)\)/);
   assert.match(ws, /searchParams\.set\('tab', 'controls'\)/);
   assert.match(ws, /useTabParam<string>\('tab'/);
   assert.match(ws, /setTab\('controls'\)/);
 });
 
 test('every mutation of the page reports: none is a bare useMutation', () => {
-  // RequirementArtifactsSection is the requirement popup's artifacts block, moved as it was (it prints its own failure under the list); J2 rebuilds it,
-  // and the other _tabs files belong to J2 and J3
-  const mine = all.filter((x) => !/RequirementArtifactsSection/.test(x) && (!/^_tabs/.test(x) || /_StageOwnerPicker/.test(x)));
+  // the register and document tabs in _tabs belong to group J3
+  const mine = all.filter((x) => !/^_tabs/.test(x) || /_StageOwnerPicker/.test(x));
   for (const f of mine) assert.doesNotMatch(read(f), /\buseMutation\(/, `${f} uses a bare useMutation`);
 });

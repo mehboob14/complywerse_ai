@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 
 import type { CertificationControl, ControlStructure } from '../../../../../types/index.ts';
 import {
-  DEFAULT_SORT, QUICK_IDS, bulkPlan, bulkSummary, boardDefs, checklistOf, evidenceCountsOf, evidenceLine, evidenceStateOf, groupInfos, inQuick, mergeOwners, naturalCompare,
+  DEFAULT_SORT, QUICK_IDS, bulkPlan, bulkSummary, boardDefs, checklistOf, decisionsOf, evidenceCountsOf, evidenceLine, evidenceStateOf, groupInfos, inQuick, mergeOwners, naturalCompare,
   nextSort, searchTerms, sectionLabelOf, sortRows, statusFollowsTicks, tierOf, toRows, withGroups,
   type EvidenceCounts, type ReqRow,
 } from './reqModel.ts';
@@ -148,7 +148,7 @@ test('section lines: a plain framework counts done per section of the requiremen
     control({ domain_name: 'S2', status: 'in_progress' }),
   ]);
   const infos = groupInfos(all, null);
-  assert.deepEqual([...infos.values()].map((g) => [g.title, g.done, g.total]), [['S1', 2, 3], ['S2', 0, 1]], 'implemented and verified are both done, each once');
+  assert.deepEqual(Array.from(infos.values()).map((g) => [g.title, g.done, g.total]), [['S1', 2, 3], ['S2', 0, 1]], 'implemented and verified are both done, each once');
   const page = all.slice(2);                         // starts with the third row of S1
   const items = withGroups(page, infos, false);
   assert.deepEqual(items.map((i) => (i.kind === 'group' ? `[${i.group.title} ${i.group.done}/${i.group.total}]` : 'row')), ['[S1 2/3]', 'row', '[S2 0/1]', 'row']);
@@ -206,4 +206,14 @@ test('the summary of a bulk action counts what was done and says what was not', 
   assert.deepEqual(bulkSummary('Asked about', noun, { done: 1, failed: 0, skipped: 2 }, '2 are already out of scope'), { title: 'Asked about 1 requirement', message: '2 are already out of scope.' });
   const failed = bulkSummary('Assigned', noun, { done: 2, failed: 1, skipped: 0 });
   assert.match(failed.message ?? '', /1 could not be changed and stays selected/);
+});
+
+test('the scope decisions of one requirement are found by the library clause, newest first', () => {
+  const r = row({ parsed_control_id: 77 });
+  const records = [
+    { id: 1, control_id: 77, requested_at: '2026-11-01T10:00:00' }, { id: 2, control_id: 99, requested_at: '2026-11-05T10:00:00' },
+    { id: 3, control_id: 77, requested_at: '2026-11-03T10:00:00' }, { id: 4, control_id: 77, requested_at: null },
+  ];
+  assert.deepEqual(decisionsOf(r, records).map((d) => d.id), [3, 1, 4]);
+  assert.deepEqual(decisionsOf({ parsedId: null }, records), [], 'a requirement with no library clause has no decisions');
 });
