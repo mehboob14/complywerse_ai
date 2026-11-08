@@ -8,7 +8,7 @@ import os
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, func, or_
 
 import feedparser
 from openai import OpenAI
@@ -94,6 +94,8 @@ def serialize_feed_source(source: RegulatoryFeedSource) -> RegulatoryFeedSourceR
 
 
 def serialize_feed_item(item: RegulatoryFeedItem) -> RegulatoryFeedItemResponse:
+    # The analysis is stored with the model that wrote it; the page never carries a model name (AGENTS rule 5).
+    analysis = {k: v for k, v in item.ai_analysis.items() if k != "model_used"} if isinstance(item.ai_analysis, dict) else item.ai_analysis
     return RegulatoryFeedItemResponse(
         id=item.id,
         tenant_id=item.tenant_id,
@@ -107,7 +109,7 @@ def serialize_feed_item(item: RegulatoryFeedItem) -> RegulatoryFeedItemResponse:
         status=item.status,
         regulatory_change_id=item.regulatory_change_id,
         processed_at=item.processed_at,
-        ai_analysis=item.ai_analysis,
+        ai_analysis=analysis,
         created_at=item.created_at,
         feed_source_name=item.feed_source.name if item.feed_source else None
     )
@@ -729,6 +731,55 @@ def list_feed_items(
     
     items = query.order_by(RegulatoryFeedItem.published_date.desc().nullslast()).offset(skip).limit(limit).all()
     return [serialize_feed_item(item) for item in items]
+
+
+@router.get("/items/counts")
+def feed_item_counts(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """How many items there are in each state: the true numbers behind the Feed's tabs, whatever page of items is on screen."""
+    user_tenants = get_user_tenants(current_user, db)
+    counts = {"new": 0, "analyzed": 0, "processed": 0, "ignored": 0}
+    if user_tenants:
+        for state, n in (db.query(RegulatoryFeedItem.status, func.count(RegulatoryFeedItem.id))
+                         .filter(RegulatoryFeedItem.tenant_id.in_(user_tenants)).group_by(RegulatoryFeedItem.status)):
+            counts[state] = counts.get(state, 0) + n
+    counts["total"] = sum(counts.values())
+    return counts
+
+
+def _feed_item_for(db: Session, user: GRCUser, item_id: int) -> RegulatoryFeedItem:
+    item = db.query(RegulatoryFeedItem).options(joinedload(RegulatoryFeedItem.feed_source)).filter(
+        RegulatoryFeedItem.id == item_id, RegulatoryFeedItem.tenant_id.in_(get_user_tenants(user, db))).first()
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Feed item not found")
+    return item
+
+
+@router.post("/items/{item_id}/dismiss", response_model=RegulatoryFeedItemResponse)
+def dismiss_feed_item(item_id: int, db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    """Mark an item "not relevant": it leaves the New and Analyzed lists, nothing is deleted, and Restore brings it back.
+    An item already turned into a regulatory change cannot be dismissed (the change exists)."""
+    item = _feed_item_for(db, current_user, item_id)
+    if item.regulatory_change_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This item already became a regulatory change.")
+    item.status = "ignored"
+    db.commit()
+    db.refresh(item)
+    return serialize_feed_item(item)
+
+
+@router.post("/items/{item_id}/restore", response_model=RegulatoryFeedItemResponse)
+def restore_feed_item(item_id: int, db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    """Bring a dismissed item back to where it was: Analyzed if the AI had read it, else New."""
+    item = _feed_item_for(db, current_user, item_id)
+    if item.status != "ignored":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This item was not dismissed.")
+    item.status = "analyzed" if item.ai_analysis else "new"
+    db.commit()
+    db.refresh(item)
+    return serialize_feed_item(item)
 
 
 @router.get("/items/{item_id}", response_model=RegulatoryFeedItemResponse)

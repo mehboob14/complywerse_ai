@@ -64,6 +64,13 @@ class RegulatoryChangeResponse(BaseModel):
     assessment_count: int = 0
     task_count: int = 0
     completed_task_count: int = 0
+    # Added for the register (GET /changes fills the first two; every serializer fills the third): obligations (not removed), the ones a confirmed
+    # control meets, and the tasks not completed whose due day has passed.
+    obligation_count: int = 0
+    met_count: int = 0
+    to_check_count: int = 0       # obligations the AI read whose quote was not found word for word
+    suggestion_count: int = 0     # control links the platform suggested that nobody has decided
+    late_task_count: int = 0
     # The circular analysis in progress or last run (regulatory_engine.analysis_state).
     analysis: Optional[dict] = None
 
