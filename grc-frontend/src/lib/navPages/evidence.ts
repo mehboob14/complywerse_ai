@@ -10,8 +10,8 @@ export const LEAVES: Record<string, RouteExtra> = {
 };
 
 export const PAGES: PageSpec[] = [
-  // The record page: group 2 of the Evidence revamp moves it to the kit and adds `ownHeading`.
-  { path: '/evidence/:id', label: 'Evidence item', area: AREA, parent: '/evidence', hidden: 'opens from an evidence row and from the records that link evidence (common controls, assessments, statements, risks, frameworks, the Auditor Portal, reports)' },
+  // The record page: the kit's head names the file, so the top bar names only the section.
+  { path: '/evidence/:id', label: 'Evidence item', area: AREA, parent: '/evidence', hidden: 'opens from an evidence row and from the records that link evidence (common controls, assessments, statements, risks, frameworks, the Auditor Portal, reports)', ownHeading: true },
   { path: '/evidence/audit-packages', label: 'Audit packages', area: AREA, parent: '/evidence', hidden: 'a tab of the Evidence Management page; the audit packages report in Reports opens it too', keywords: ['Audit package builder'], ownHeading: true },
   // The old Evidence Coverage Dashboard: it forwards to the Insights tab, where coverage by framework is a card.
   { path: '/evidence/coverage', label: 'Evidence Coverage Dashboard', area: AREA, parent: '/evidence', hidden: 'forwards to the Insights tab of Evidence Management; an old link or bookmark lands there', keywords: ['Evidence coverage'] },

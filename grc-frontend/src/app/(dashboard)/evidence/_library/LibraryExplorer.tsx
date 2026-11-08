@@ -34,6 +34,8 @@ import type { AddressState } from '@/lib/addressState';
 import { BoardCard, LibraryCard, RowMenu, libraryColumns, type RowEnv } from './LibraryRows';
 import { LibraryDrawer } from './LibraryDrawer';
 import { useLibraryActions } from './libraryActions';
+import { NO_SCOPE, idsOf, scopeWords, withControlScope } from './controlScope';
+import { useControlScope } from './useControlScope';
 import { LIBRARY_SCHEMA, filtersPatch, openPatch, pageOf, type LibraryAddress } from './libraryAddress';
 import { useLibrary, useMeId } from './libraryData';
 import {
@@ -47,6 +49,7 @@ const QUICK_SHOWN: QuickId[] = ['all', 'waiting', 'expiring', 'lapsed', 'unrated
 const QUICK_IDS_COUNTED: QuickId[] = ['all', 'waiting', 'expiring', 'lapsed', 'unrated', 'unlinked', 'mine'];
 const RAIL_LIMIT: Partial<Record<FacetKey, number>> = { type: 7, owner: 7, framework: 7 };
 const NO_ROWS: LibraryRow[] = [];
+const NO_FILES: ReadonlySet<number> = new Set<number>();
 
 function download(data: BlobPart, fileName: string, type?: string) {
   const url = URL.createObjectURL(new Blob([data], type ? { type } : undefined));
@@ -85,6 +88,7 @@ export function LibraryExplorer({ address, setAddress, onUploadClick, head }: Li
   // ── the page's state: in the address ──
   const page = useMemo(() => pageOf(address as unknown as LibraryAddress), [address]);
   const { filters, sort, openId } = page;
+  const scope = page.control;                                          // "evidence for this control": the address names one (controlScope.ts)
   const view = page.view === 'board' ? 'board' : 'list';
   const setFilters = useCallback((next: Filters) => setAddress(filtersPatch(next)), [setAddress]);
   const setSort = useCallback((next: typeof sort) => setAddress({ sort: next }), [setAddress]);
@@ -97,7 +101,12 @@ export function LibraryExplorer({ address, setAddress, onUploadClick, head }: Li
   const cut = !!libQ.data?.truncated;
   const archivedCount = useMemo(() => rows.reduce((n, r) => n + (r.status === 'archived' ? 1 : 0), 0), [rows]);
   const noList = libQ.isError && !libQ.data;                         // the list could not be read at all: never drawn as an empty library
-  const loading = libQ.isPending;
+  const scopeQ = useControlScope(scope);
+  const scopeIds = useMemo(() => idsOf(scopeQ.data), [scopeQ.data]);
+  const scopeBusy = !!scope && scopeQ.isPending;                       // until the control's files are known the list is not drawn, so it is never briefly the whole library
+  const scopeFailed = !!scope && scopeQ.isError && !scopeQ.data;
+  const scopeSaid = scope && scopeQ.data ? scopeWords(scopeQ.data) : null;
+  const loading = libQ.isPending || scopeBusy;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const now = useMemo(() => Date.now(), [libQ.data]);
   const viewer: Viewer = useMemo(() => ({ me, canReview: canCreate, now }), [me, canCreate, now]);
@@ -106,7 +115,7 @@ export function LibraryExplorer({ address, setAddress, onUploadClick, head }: Li
   const index = useMemo(() => indexLibrary(rows, now), [rows, now]);
   const searched = useDeferredValue(filters.search);
   const applied = useMemo(() => (searched === filters.search ? filters : { ...filters, search: searched }), [filters, searched]);
-  const result = useMemo(() => evaluate(index, chosenOf(applied), ruleOf(applied, viewer)), [index, applied, viewer]);
+  const result = useMemo(() => evaluate(index, chosenOf(applied), withControlScope(ruleOf(applied, viewer), scopeBusy ? NO_FILES : scopeIds)), [index, applied, viewer, scopeIds, scopeBusy]);
   const filtered = result.matches;
   const filtering = isFiltering(filters);
   const matchKey = useMemo(() => `${filtered.length}:${filtered.reduce((h, r) => (h * 31 + r.id) >>> 0, 7)}`, [filtered]);
@@ -131,10 +140,11 @@ export function LibraryExplorer({ address, setAddress, onUploadClick, head }: Li
   // ── the quick views, with the number each would show ──
   const quickCounts = useMemo(() => {
     const out: Record<string, number> = {};
-    QUICK_IDS_COUNTED.forEach((id) => { out[id] = rows.reduce((n, r) => n + (inQuick(id, r, viewer) ? 1 : 0), 0); });
-    out.all = rows.reduce((n, r) => n + (r.status !== 'archived' ? 1 : 0), 0);
+    const of = scopeIds ? rows.filter((r) => scopeIds.has(r.id)) : rows;           // the quick views count the control's files when the Library is opened on a control
+    QUICK_IDS_COUNTED.forEach((id) => { out[id] = of.reduce((n, r) => n + (inQuick(id, r, viewer) ? 1 : 0), 0); });
+    out.all = of.reduce((n, r) => n + (r.status !== 'archived' ? 1 : 0), 0);
     return out;
-  }, [rows, viewer]);
+  }, [rows, viewer, scopeIds]);
   const activeQuick = filters.quick ?? 'all';
   const quickNote = (id: QuickId): string | undefined => {
     if ((id === 'waiting' || id === 'mine') && me == null) return 'Your account could not be read, so only what needs a review is counted here.';
@@ -238,6 +248,7 @@ export function LibraryExplorer({ address, setAddress, onUploadClick, head }: Li
 
   const body = (() => {
     if (noList) return <ErrorState {...failureWords(libQ.error)} onRetry={canRetry(libQ.error) ? () => { void libQ.refetch(); } : undefined} />;
+    if (scopeFailed) return <ErrorState title="Couldn't load the evidence for this control" message={errorMessage(scopeQ.error)} onRetry={canRetry(scopeQ.error) ? () => { void scopeQ.refetch(); } : undefined} />;
     if (loading) return <div aria-busy="true" className="rounded-ds-card border border-ds-border bg-ds-surface p-[12px]"><SkeletonRows rows={10} columns={5} label="Loading the evidence" /></div>;
     if (nothing) {
       return (
@@ -252,7 +263,11 @@ export function LibraryExplorer({ address, setAddress, onUploadClick, head }: Li
     if (filtered.length === 0) {
       return (
         <div className="rounded-ds-card border border-ds-border bg-ds-surface">
-          <EmptyState kind="noMatches" bare title="No evidence matches" description="Loosen a filter, or search for other words." onClearFilters={filtering ? () => setFilters(NO_FILTERS) : undefined} />
+          <EmptyState
+            kind="noMatches" bare title={scopeIds && !filtering ? 'No evidence is linked to this control' : 'No evidence matches'}
+            description={scopeIds && !filtering ? 'Upload evidence, then link it to the control from the file.' : 'Loosen a filter, or search for other words.'}
+            onClearFilters={filtering ? () => setFilters(NO_FILTERS) : undefined}
+          />
         </div>
       );
     }
@@ -306,6 +321,9 @@ export function LibraryExplorer({ address, setAddress, onUploadClick, head }: Li
           <>
             {libQ.isError && !noList && (
               <ErrorState compact title="Couldn't refresh the evidence" message={`${errorMessage(libQ.error)} What is shown may be out of date.`} onRetry={canRetry(libQ.error) ? () => { void libQ.refetch(); } : undefined} className="rounded-ds-card border border-ds-danger-border bg-ds-danger-soft" />
+            )}
+            {scopeSaid && (
+              <Notice tone={scopeSaid.found ? 'info' : 'warning'} title={scopeSaid.title} action={<Button variant="ghost" onClick={() => setAddress(NO_SCOPE)}>Show all evidence</Button>}>{scopeSaid.message}</Notice>
             )}
             {cut && <Notice tone="info" title="Only part of the library is loaded">The newest {formatCount(rows.length)} of {formatCount(total ?? rows.length)} files are shown. Filter to narrow it down.</Notice>}
             {missingOpen && (
