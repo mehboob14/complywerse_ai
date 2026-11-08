@@ -1,344 +1,139 @@
 'use client';
 
-import { detailText } from '@/lib/apiError';
-import { useEffect, useState } from 'react';
-import { Lock, Shield } from 'lucide-react';
+// Administration > Password & sessions: the rules for passwords an administrator sets, for sign-in attempts and for how long an idle session lasts. The form saves as
+// a whole (a security change deserves an explicit Save, Discard and the words of its effect), reads for everyone and changes for who holds admin:settings:edit (the
+// server checks it). It offers only what the platform enforces: the rules, the words and the ranges are passwordPolicyModel.ts. Previously "reuse of the last N
+// passwords" and "maximum password age" were offered too, and nothing read them.
+import { useEffect, useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
-import { PageLoader } from '@/components/ui';
+import { formatDateTime } from '@/lib/format';
+import { usePermissions } from '@/hooks/usePermissions';
+import { PageHeader } from '@/components/ui';
+import { InfoTip } from '@/components/ui/InfoTip';
+import { Checkbox, ErrorState, FormField, ReadOnlyNote, SaveBar, SectionCard, SkeletonLines, TextInput, useReportedMutation } from '@/components/ui/ds';
+import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
+import {
+  bodyOf, CLASSES, errorsOf, formOf, hasErrors, INFO, isDirty, LABELS, numberOf, SAVE_FAILED, SAVED, type NumberField, type PolicyForm, type PolicyRecord,
+} from './passwordPolicyModel';
 
-// Mirrors the GET /admin/password-policy response shape. Kept local because
-// no other page consumes it.
-interface Policy {
-  id: number;
-  min_length: number;
-  require_uppercase: boolean;
-  require_lowercase: boolean;
-  require_digit: boolean;
-  require_special: boolean;
-  lockout_threshold: number;
-  lockout_minutes: number;
-  session_idle_timeout_minutes: number;
-  password_history_count: number;
-  max_password_age_days: number;
-  updated_at: string | null;
-}
+const EDIT_RIGHT = 'admin:settings:edit';
+const KEY = ['admin-password-policy'];
+const PAGE = 'mx-auto flex max-w-4xl flex-col gap-[16px]';
+const GRID = 'grid gap-x-[16px] gap-y-[16px] sm:grid-cols-2';
 
 export default function PasswordPolicyPage() {
-  const [policy, setPolicy] = useState<Policy | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [okMessage, setOkMessage] = useState<string | null>(null);
-  // Edit-mode draft. We only mutate this; on Cancel we discard back to the
-  // last-loaded policy. Mirrors the pattern used by the Company Profile page.
-  const [draft, setDraft] = useState<Policy | null>(null);
+  const qc = useQueryClient();
+  const { hasPermission, isLoading: rightsLoading } = usePermissions();
+  const canEdit = !rightsLoading && hasPermission(EDIT_RIGHT);
+  const policy = useQuery({ queryKey: KEY, queryFn: async () => (await adminApi.getPasswordPolicy()).data as PolicyRecord });
+  const saved = useMemo(() => (policy.data ? formOf(policy.data) : null), [policy.data]);
+  const [draft, setDraft] = useState<PolicyForm | null>(null);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+  const form = draft ?? saved;
+  const dirty = !!saved && !!draft && isDirty(saved, draft);
+  const errors = form ? errorsOf(form) : {};
+  const invalid = form ? hasErrors(form) : false;
 
-  const load = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const r = await adminApi.getPasswordPolicy();
-      setPolicy(r.data as Policy);
-      setDraft(r.data as Policy);
-    } catch (err: unknown) {
-      const msg =
-        detailText((err as { response?: { data?: { detail?: string } } })?.response?.data?.detail) ||
-        (err as { message?: string })?.message ||
-        'Failed to load password policy';
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {                                    // leaving with unsaved changes asks first
+    if (!dirty) return undefined;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty]);
 
   useEffect(() => {
-    load();
-  }, []);
+    if (!savedAt) return undefined;
+    const t = window.setTimeout(() => setSavedAt(null), 4000);
+    return () => window.clearTimeout(t);
+  }, [savedAt]);
 
-  const handleSave = async () => {
-    if (!draft) return;
-    setSaving(true);
-    setError(null);
-    setOkMessage(null);
-    try {
-      const payload = {
-        min_length: draft.min_length,
-        require_uppercase: draft.require_uppercase,
-        require_lowercase: draft.require_lowercase,
-        require_digit: draft.require_digit,
-        require_special: draft.require_special,
-        lockout_threshold: draft.lockout_threshold,
-        lockout_minutes: draft.lockout_minutes,
-        session_idle_timeout_minutes: draft.session_idle_timeout_minutes,
-        password_history_count: draft.password_history_count,
-        max_password_age_days: draft.max_password_age_days,
-      };
-      const r = await adminApi.updatePasswordPolicy(payload);
-      setPolicy(r.data as Policy);
-      setDraft(r.data as Policy);
-      setEditing(false);
-      setOkMessage('Password & session policy updated successfully.');
-    } catch (err: unknown) {
-      const msg =
-        detailText((err as { response?: { data?: { detail?: string } } })?.response?.data?.detail) ||
-        (err as { message?: string })?.message ||
-        'Failed to save policy';
-      setError(msg);
-    } finally {
-      setSaving(false);
+  const save = useReportedMutation({
+    mutationFn: (body: Record<string, number | boolean>) => adminApi.updatePasswordPolicy(body),
+    success: SAVED,
+    failure: SAVE_FAILED,
+    toast: 'success',                                   // a refusal is said on the save bar, in the server's words
+    onSuccess: () => {
+      setDraft(null);
+      setServerError(null);
+      setSavedAt(Date.now());
+      void qc.invalidateQueries({ queryKey: KEY });
+    },
+    onError: (e) => setServerError(errorMessage(e, 'The settings could not be saved. Try again.')),
+  });
+
+  if (policy.isLoading || !form || !saved) {
+    if (!policy.isLoading && policy.isError) {
+      return (
+        <div className={PAGE}>
+          <PageHeader variant="page" title="Password & sessions" />
+          <ErrorState title="Couldn't open the password and session settings" message={errorMessage(policy.error)} onRetry={canRetry(policy.error) ? () => { void policy.refetch(); } : undefined} />
+        </div>
+      );
     }
-  };
-
-  const set = <K extends keyof Policy>(k: K, v: Policy[K]) => {
-    setDraft((p) => (p ? { ...p, [k]: v } : p));
-  };
-
-  if (loading) return <PageLoader className="h-64" />;
-  if (!policy || !draft) {
     return (
-      <div className="bg-rose-50 border border-rose-200 rounded-lg p-4 text-rose-700">
-        {error || 'Could not load password policy.'}
+      <div className={PAGE}>
+        <PageHeader variant="page" title="Password & sessions" />
+        <div className="rounded-ds-card border border-ds-border bg-ds-surface p-[16px]"><SkeletonLines lines={5} label="Loading the password and session settings" /></div>
       </div>
     );
   }
 
-  // Reusable read/edit field — string version (number input). Mirrors the
-  // Company Profile page so the two screens feel like the same product.
-  const NumberField = ({
-    label,
-    value,
-    onChange,
-    min,
-    max,
-    hint,
-  }: {
-    label: string;
-    value: number;
-    onChange: (v: number) => void;
-    min: number;
-    max: number;
-    hint?: string;
-  }) => (
-    <div>
-      <label className="block text-sm font-medium text-slate-500 mb-2">{label}</label>
-      {editing ? (
-        <>
-          <input
-            type="number"
-            min={min}
-            max={max}
-            value={value}
-            onChange={(e) => onChange(Number(e.target.value))}
-            className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
-          />
-          {hint && <p className="mt-1.5 text-xs text-slate-500">{hint}</p>}
-        </>
-      ) : (
-        <p className="text-slate-900">{value}</p>
-      )}
-    </div>
+  const readOnly = !canEdit;
+  const set = (patch: Partial<PolicyForm>) => { setDraft({ ...form, ...patch }); setServerError(null); };
+  const numberField = (key: NumberField, unit: string, info: string) => (
+    <FormField label={LABELS[key]} info={info} error={errors[key]}>
+      <TextInput
+        type="number" inputMode="numeric" step={1} readOnly={readOnly} unit={unit} className="w-[200px]"
+        value={Number.isNaN(form[key]) ? '' : form[key]} onChange={(e) => set({ [key]: numberOf(e.target.value) })}
+      />
+    </FormField>
   );
 
   return (
-    <div className="space-y-4">
-      {error && (
-        <div className="bg-rose-50 border border-rose-200 rounded-lg p-4 text-rose-700">
-          {error}
-        </div>
-      )}
-      {okMessage && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-emerald-700">
-          {okMessage}
-        </div>
-      )}
+    <div className={`${PAGE} pb-[24px]`}>
+      <PageHeader
+        variant="page"
+        title="Password & sessions"
+        info="The rules for passwords an administrator sets, for wrong passwords, and for how long an inactive session lasts. They apply to the whole organisation."
+        meta={readOnly && !rightsLoading ? (
+          <ReadOnlyNote>
+            View only
+            <InfoTip text="Only an administrator, or someone given the settings right, can change these." label="Why these settings are view only" />
+          </ReadOnlyNote>
+        ) : (policy.data?.updated_at ? `Last changed ${formatDateTime(policy.data.updated_at)}` : undefined)}
+      />
 
-      {/* ── Card 1: Password Complexity ───────────────────────────────────── */}
-      <div className="bg-white border border-slate-200 rounded-xl shadow-card">
-        <div className="p-6 border-b border-slate-200 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-            <Lock size={16} className="text-slate-600" />
-            Password Complexity
-          </h2>
-          {!editing ? (
-            <button
-              onClick={() => setEditing(true)}
-              className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-[color:var(--color-on-base,#0a0a0a)] rounded-lg text-sm transition-colors"
-            >
-              Edit Policy
-            </button>
-          ) : (
-            <div className="flex space-x-3">
-              <button
-                onClick={() => {
-                  setEditing(false);
-                  setDraft(policy);
-                  setError(null);
-                  setOkMessage(null);
-                }}
-                className="px-4 py-2 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-sm transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-[color:var(--color-on-base,#0a0a0a)] rounded-lg text-sm transition-colors disabled:opacity-50"
-              >
-                {saving ? 'Saving...' : 'Save Changes'}
-              </button>
+      <SectionCard id="passwords" title="Passwords" info="Checked when an administrator creates an account.">
+        <div className={GRID}>
+          {numberField('minLength', 'characters', INFO.minLength)}
+          <fieldset className="min-w-0 border-0 p-0">
+            <legend className="mb-[4px] flex items-center gap-[4px] text-ds-body font-[500] text-ds-fg">
+              Every password needs
+              <InfoTip text={INFO.classes} label="About the kinds of character required" />
+            </legend>
+            <div className="flex flex-col">
+              {CLASSES.map(({ key, label }) => (
+                <Checkbox key={key} label={label} checked={form[key]} disabled={readOnly} onChange={(e) => set({ [key]: e.target.checked })} />
+              ))}
             </div>
-          )}
+          </fieldset>
         </div>
+      </SectionCard>
 
-        <div className="p-6">
-          {/* Strict 2x2: minimum-length + character-class group in row 1;
-              password history + max age in row 2. */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <NumberField
-              label="Minimum Length"
-              value={draft.min_length}
-              onChange={(v) => set('min_length', v)}
-              min={8}
-              max={128}
-              hint="NIST minimum is 8; 12+ is recommended for organisation accounts."
-            />
-
-            <div>
-              <label className="block text-sm font-medium text-slate-500 mb-2">
-                Character Requirements
-              </label>
-              {editing ? (
-                <div className="space-y-2.5">
-                  {([
-                    ['require_uppercase', 'Uppercase letter (A–Z)'],
-                    ['require_lowercase', 'Lowercase letter (a–z)'],
-                    ['require_digit', 'Digit (0–9)'],
-                    ['require_special', 'Special character (!@#$ etc.)'],
-                  ] as const).map(([key, label]) => (
-                    <label key={key} className="flex items-center gap-2 text-sm text-slate-700">
-                      <input
-                        type="checkbox"
-                        checked={draft[key] as boolean}
-                        onChange={(e) => set(key as keyof Policy, e.target.checked as never)}
-                        className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-                      />
-                      {label}
-                    </label>
-                  ))}
-                </div>
-              ) : (
-                <ul className="space-y-1.5 text-sm text-slate-900">
-                  {([
-                    ['require_uppercase', 'Uppercase letter (A–Z)'],
-                    ['require_lowercase', 'Lowercase letter (a–z)'],
-                    ['require_digit', 'Digit (0–9)'],
-                    ['require_special', 'Special character (!@#$ etc.)'],
-                  ] as const).map(([key, label]) => (
-                    <li key={key} className="flex items-center gap-2">
-                      <span
-                        className={`inline-block h-2 w-2 rounded-full ${
-                          (policy[key] as boolean) ? 'bg-emerald-500' : 'bg-slate-300'
-                        }`}
-                        aria-hidden="true"
-                      />
-                      <span className={(policy[key] as boolean) ? '' : 'text-slate-400 line-through'}>
-                        {label}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <NumberField
-              label="Disallow Reuse of Last N Passwords"
-              value={draft.password_history_count}
-              onChange={(v) => set('password_history_count', v)}
-              min={0}
-              max={24}
-              hint="0 disables history checks."
-            />
-
-            <NumberField
-              label="Max Password Age (days)"
-              value={draft.max_password_age_days}
-              onChange={(v) => set('max_password_age_days', v)}
-              min={0}
-              max={730}
-              hint="0 disables expiry. Current NIST guidance discourages forced rotation."
-            />
-          </div>
+      <SectionCard id="sign-in" title="Sign-in and sessions">
+        <div className={GRID}>
+          {numberField('lockoutThreshold', 'sign-ins', INFO.lockoutThreshold)}
+          {numberField('lockoutMinutes', 'minutes', INFO.lockoutMinutes)}
+          {numberField('idleMinutes', 'minutes', INFO.idleMinutes)}
         </div>
-      </div>
+      </SectionCard>
 
-      {/* ── Card 2: Account Lockout & Session ─────────────────────────────── */}
-      <div className="bg-white border border-slate-200 rounded-xl shadow-card">
-        <div className="p-6 border-b border-slate-200">
-          <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-            <Shield size={16} className="text-slate-600" />
-            Account Lockout & Session
-          </h2>
-          <p className="text-sm text-slate-500 mt-1">
-            Brute-force protection and idle-session enforcement. Changes apply to all subsequent
-            logins.
-          </p>
-        </div>
-
-        <div className="p-6">
-          {/* Strict 2x2: threshold + duration in row 1; idle timeout + spacer
-              in row 2. The session-timeout field sits in the row-2 left cell,
-              and the right cell is a short reference text for context. */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <NumberField
-              label="Failed Attempts Before Lock"
-              value={draft.lockout_threshold}
-              onChange={(v) => set('lockout_threshold', v)}
-              min={3}
-              max={50}
-              hint="Lock the account after this many consecutive failed logins."
-            />
-
-            <NumberField
-              label="Lock Duration (minutes)"
-              value={draft.lockout_minutes}
-              onChange={(v) => set('lockout_minutes', v)}
-              min={1}
-              max={1440}
-              hint="How long an account stays locked after the threshold is hit."
-            />
-
-            <NumberField
-              label="Idle Session Timeout (minutes)"
-              value={draft.session_idle_timeout_minutes}
-              onChange={(v) => set('session_idle_timeout_minutes', v)}
-              min={5}
-              max={1440}
-              hint="Sign the user out after this many minutes of no keyboard/mouse activity."
-            />
-
-            {/* Right-hand info cell — keeps the 2×2 grid balanced and gives
-                administrators a quick reference for the active setup. */}
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-              <p className="text-sm font-medium text-slate-700 mb-1">Current configuration</p>
-              <ul className="space-y-0.5 text-sm text-slate-600">
-                <li>
-                  Lockout: <span className="text-slate-900 font-medium">{policy.lockout_threshold}</span> attempts → lock for{' '}
-                  <span className="text-slate-900 font-medium">{policy.lockout_minutes}</span> min
-                </li>
-                <li>
-                  Idle timeout: <span className="text-slate-900 font-medium">{policy.session_idle_timeout_minutes}</span> min
-                </li>
-                {policy.updated_at && (
-                  <li className="text-xs text-slate-500 pt-1">
-                    Last updated {new Date(policy.updated_at).toLocaleString()}
-                  </li>
-                )}
-              </ul>
-            </div>
-          </div>
-        </div>
-      </div>
+      <SaveBar
+        label="Save the password and session settings" canEdit={canEdit} dirty={dirty} invalid={invalid} saving={save.isPending} justSaved={savedAt !== null} error={serverError}
+        onSave={() => { if (saved && draft) save.mutate(bodyOf(saved, draft)); }} onDiscard={() => { setDraft(null); setServerError(null); }}
+      />
     </div>
   );
 }

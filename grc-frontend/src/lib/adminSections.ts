@@ -85,7 +85,7 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
     keywords: ['Role Management', 'Roles', 'Permissions'],
   }),
   S({
-    id: 'password-policy', label: 'Password & sessions', group: 'people', url: '/admin/password-policy', ownHeading: false,
+    id: 'password-policy', label: 'Password & sessions', group: 'people', url: '/admin/password-policy', ownHeading: true,
     rights: ['admin:settings:edit'],                // reads: any signed-in person
     tabs: [{ tab: 'password-policy' }],
     keywords: ['Password Policy', 'Lockout', 'Session timeout', 'Idle timeout'],
