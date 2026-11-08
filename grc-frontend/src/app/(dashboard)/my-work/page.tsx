@@ -8,7 +8,7 @@
 import Link from 'next/link';
 import { useMemo, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronRight, Plus } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { certificationsApi, scfApi, type ScfMyWorkItem } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { formatCount, formatDate } from '@/lib/format';
@@ -16,8 +16,9 @@ import { PageHeader } from '@/components/ui';
 import { Button, EmptyState, ErrorState, NoAccessState, Notice, ProgressBar, SectionCard, SkeletonRows, StatusPill, type ProgressTone } from '@/components/ui/ds';
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { routeFor } from '@/lib/navRegistry';
-import { useMyUserId } from '@/components/governance/DocumentTaskActions';
 import { retryRead } from '../tasks/_queries';
+import { useMe } from '../tasks/_work/workData';
+import { canOpenMyWork } from './myWorkAccess';
 import {
   STATUS_LABELS, failedNames, frameworksOf, mineOf, scfCode, scfOverdue, scfTitle, weekOf, workItems,
   type Ctrl, type Journey, type Per,
@@ -86,8 +87,9 @@ const controlHref = (item: ScfMyWorkItem) => { const code = scfCode(item); retur
 
 export default function MyWorkPage() {
   const { hasAnyPermission, isAdmin, isLoading: permLoading } = usePermissions();
-  const canView = isAdmin || hasAnyPermission(['compliance:frameworks:*', 'controls:control_library:*', 'evidence:evidence_library:*']);
-  const userId = useMyUserId();
+  const canView = canOpenMyWork(isAdmin, hasAnyPermission);
+  const me = useMe();
+  const userId = me.id;
   const enabled = userId != null && canView;
 
   const journeys = useQuery({
@@ -129,19 +131,27 @@ export default function MyWorkPage() {
   const openItems = items.filter((i) => !i.done);
   const overdueCount = items.filter((i) => i.overdue).length;
 
+  if (canView && !permLoading && me.failed) {
+    return (
+      <div className="flex flex-col gap-[16px]">
+        <PageHeader variant="page" title={TITLE} back={{ href: '/tasks', label: 'Back to Task Management' }} />
+        <ErrorState title="Couldn't tell who you are" message="Your work can't be listed until your account is read. Try again, or sign in again." onRetry={me.refetch} />
+      </div>
+    );
+  }
   if (permLoading || (canView && (journeys.isPending || userId == null))) {
-    return <div role="status" aria-label="Loading your work" className="flex flex-col gap-[16px]"><PageHeader variant="page" title={TITLE} /><SkeletonRows rows={6} columns={3} /></div>;
+    return <div role="status" aria-label="Loading your work" className="flex flex-col gap-[16px]"><PageHeader variant="page" title={TITLE} back={{ href: '/tasks', label: 'Back to Task Management' }} /><SkeletonRows rows={6} columns={3} /></div>;
   }
   if (!canView) {
     return (
       <div className="flex flex-col gap-[16px]">
-        <PageHeader variant="page" title={TITLE} />
+        <PageHeader variant="page" title={TITLE} back={{ href: '/tasks', label: 'Back to Task Management' }} />
         <NoAccessState title="My Work isn’t available for your role" reason="You need framework or evidence access to see assigned work." action={<Button href="/dashboard">Back to Performance Overview</Button>} />
       </div>
     );
   }
 
-  const facts = journeys.isError ? null : `${plural(openItems.length, 'journey item', 'journey items')}${scfQ.data ? ` · ${plural(scfOpenCount, 'control-plane item', 'control-plane items')}` : ''} across ${plural(frameworks.length, 'framework', 'frameworks')}`;
+  const facts = journeys.isError ? null : `${plural(openItems.length, 'journey item', 'journey items')}${scfQ.data ? ` · ${plural(scfOpenCount, 'control item', 'control items')}` : ''} across ${plural(frameworks.length, 'framework', 'frameworks')}`;
   const overdue = overdueCount + scfOver.length;
 
   return (
@@ -150,17 +160,17 @@ export default function MyWorkPage() {
         variant="page"
         title={TITLE}
         meta={facts ? <>{facts}{overdue > 0 && <span className="font-[600] text-ds-danger"> · {formatCount(overdue)} overdue</span>}</> : undefined}
-        actions={<Button variant="primary" href="/compliance" leftIcon={<Plus aria-hidden />}>Start a journey</Button>}
+        back={{ href: '/tasks', label: 'Back to Task Management' }}
       />
       <div className="grid grid-cols-1 gap-[16px] lg:grid-cols-3">
         <div className="flex min-w-0 flex-col gap-[16px] lg:col-span-2">
           {scfQ.isError ? (
-            <ErrorState title="Couldn't load your control-plane work" message={errorMessage(scfQ.error)} onRetry={canRetry(scfQ.error) ? () => { void scfQ.refetch(); } : undefined} />
+            <ErrorState title="Couldn't load your controls" message={errorMessage(scfQ.error)} onRetry={canRetry(scfQ.error) ? () => { void scfQ.refetch(); } : undefined} />
           ) : scfQ.isPending ? (
-            <SkeletonRows rows={4} columns={3} label="Loading your control-plane work" />
+            <SkeletonRows rows={4} columns={3} label="Loading your controls" />
           ) : (
             <>
-              <ScfSection id="scf-controls" title="Controls you own or are assigned" items={scfControls} empty="No SCF controls assigned to you." hrefFor={controlHref} />
+              <ScfSection id="scf-controls" title="Controls you own or are assigned" items={scfControls} empty="No controls assigned to you." hrefFor={controlHref} />
               <ScfSection id="scf-na" title="N/A reviews waiting" items={scfNa} empty="No applicability reviews waiting on you." hrefFor={controlHref} badge={() => ({ tone: 'warning', label: 'N/A review' })} />
               <ScfSection id="scf-overdue" title="Overdue re-attestations" items={scfOver} empty="Nothing overdue." hrefFor={controlHref} badge={() => ({ tone: 'danger', label: 'Overdue' })} />
               <ScfSection
@@ -223,7 +233,7 @@ export default function MyWorkPage() {
           </SectionCard>
           <SectionCard id="this-week" title="This week">
             <dl className="m-0 flex flex-col gap-[8px]">
-              {([['Items completed', week.completed, 'text-ds-success'], ['Evidence approved', week.evidenceApproved, 'text-ds-fg'], ['Awaiting reviewer', week.awaitingReviewer, 'text-ds-warning'], ['Due next 7 days', week.dueNext7, 'text-ds-fg'], ['SCF overdue', scfOver.length, 'text-ds-danger']] as Array<[string, number, string]>).map(([label, value, tone]) => (
+              {([['Items completed', week.completed, 'text-ds-success'], ['Evidence approved', week.evidenceApproved, 'text-ds-fg'], ['Awaiting reviewer', week.awaitingReviewer, 'text-ds-warning'], ['Due next 7 days', week.dueNext7, 'text-ds-fg'], ['Controls overdue', scfOver.length, 'text-ds-danger']] as Array<[string, number, string]>).map(([label, value, tone]) => (
                 <div key={label} className="flex items-center justify-between gap-[12px]"><dt className="text-ds-body text-ds-fg-muted">{label}</dt><dd className={`m-0 text-ds-body font-[600] tabular-nums ${tone}`}>{formatCount(value)}</dd></div>
               ))}
             </dl>

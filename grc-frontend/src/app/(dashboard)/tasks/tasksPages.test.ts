@@ -70,12 +70,13 @@ test('every write goes through useReportedMutation: no bare useMutation in these
   for (const { file, text } of writers.filter((w) => !w.file.endsWith('Model.ts') && !w.file.includes('_queries'))) assert.match(code(text), /useReportedMutation/, `${file} writes without useReportedMutation`);
 });
 
-test('every page of the group draws the kit\'s page head: PageHeader variant="page"', () => {
-  for (const f of ['tasks/page.tsx', 'tasks/[id]/page.tsx', 'tasks/[id]/_TaskView.tsx', 'tasks/reports/page.tsx', 'tasks/my-tasks/page.tsx', 'tasks/sla/page.tsx', 'my-work/page.tsx']) {
+test('every page of the group that draws something draws the kit\'s page head (PageHeader variant="page"); the three old pages are forwards and draw nothing', () => {
+  for (const f of ['tasks/page.tsx', 'tasks/[id]/page.tsx', 'tasks/[id]/_TaskView.tsx', 'my-work/page.tsx']) {
     assert.match(code(read(f)), /<PageHeader[\s\S]{0,40}variant="page"/, f);
   }
   // the tabs' views draw none: they sit under their page's head
-  for (const f of ['tasks/_MyTasksView.tsx', 'tasks/_ReportsView.tsx', 'tasks/_Board.tsx']) assert.doesNotMatch(code(read(f)), /<PageHeader/, f);
+  for (const f of ['tasks/_work/MyWork.tsx', 'tasks/_SettingsTab.tsx', 'tasks/_ReportsView.tsx', 'tasks/_Board.tsx']) assert.doesNotMatch(code(read(f)), /<PageHeader/, f);
+  for (const f of ['tasks/my-tasks/page.tsx', 'tasks/reports/page.tsx', 'tasks/sla/page.tsx']) assert.doesNotMatch(code(read(f)), /<PageHeader/, `${f} is a forward`);
 });
 
 // ── the behaviour the rebuild preserves ───────────────────────────────────────────────────────────────────────────────────────────────
@@ -88,10 +89,16 @@ test('the rights are the ones the pages always checked: New task needs critical_
   assert.match(view, /canDeleteTask\(task, \{ isAdmin, hasDeleteRight: canDelete \}\)/);
   assert.match(code(read('tasks/[id]/_Panels.tsx')), /canDelete/, 'the sub-task delete follows the same right');
   const work = code(read('my-work/page.tsx'));
-  assert.match(work, /isAdmin \|\| hasAnyPermission\(\['compliance:frameworks:\*', 'controls:control_library:\*', 'evidence:evidence_library:\*'\]\)/, 'My Work is for administrators and people with framework, control or evidence access');
+  assert.match(work, /canOpenMyWork\(isAdmin, hasAnyPermission\)/, 'My Work is for administrators and people with framework, control or evidence access (the rule is myWorkAccess.ts, which Task Management\'s link shares)');
+  assert.match(code(read('my-work/myWorkAccess.ts')), /\['compliance:frameworks:\*', 'controls:control_library:\*', 'evidence:evidence_library:\*'\]/);
+  assert.match(code(read('my-work/myWorkAccess.ts')), /isAdmin \|\| hasAny\(/);
   assert.match(work, /NoAccessState/, 'the one place that already decided "no access" says it with the kit');
   const register = ['tasks/_Board.tsx', 'tasks/_register/TaskRegister.tsx', 'tasks/_register/TaskRows.tsx', 'tasks/_register/TaskBoard.tsx', 'tasks/_register/TaskDrawer.tsx', 'tasks/_register/BulkTasks.tsx'].map((f) => code(read(f))).join(' ');
-  assert.doesNotMatch(register + code(read('tasks/_MyTasksView.tsx')) + code(read('tasks/_ReportsView.tsx')), /NoAccessState/, 'no other page decides "no access": the server answers and the page says its words');
+  const front = ['tasks/_work/MyWork.tsx', 'tasks/_work/WorkCard.tsx', 'tasks/_work/LoadCard.tsx', 'tasks/_work/workData.ts', 'tasks/_work/useTaskStep.ts'].map((f) => code(read(f))).join(' ');
+  assert.doesNotMatch(register + front + code(read('tasks/_ReportsView.tsx')), /NoAccessState/, 'no other page decides "no access": the server answers and the page says its words');
+  assert.doesNotMatch(front, /hasPermission\(/, 'My work checks no right to show a step: the person\'s own tasks are the server\'s answer, a step is offered by taskRecord.nextStep (Approve only to the reviewer who is not the owner: what the server lets act)');
+  assert.equal((front.match(/isAdmin/g) ?? []).length, 2, 'the one right it reads is whether to OFFER the My Work link (the destructuring and the call of canOpenMyWork)');
+  assert.match(code(read('tasks/page.tsx')), /<SettingsTab canEdit=\{canCreate\} \/>/, 'Settings are changed by people who may create tasks: the server\'s module-settings rule (critical_tasks:tasks:create)');
   assert.doesNotMatch(register, /hasPermission|hasAnyPermission|isAdmin/, 'the register checks no right of its own: New task arrives as a prop from the page head, everything else is for the server to allow (recorded as a gap for the owner)');
 });
 
@@ -103,8 +110,17 @@ test('the requests are the old ones: the same API calls, the same bulk and list 
   assert.match(data, /TASKS_KEY = \['critical-tasks', 'lean'\]/, 'the list key still starts with critical-tasks, so every invalidation of that name reaches it');
   assert.match(data, /LOAD_LIMIT = 10_000/, 'the ceiling of the server');
   assert.match(code(read('tasks/[id]/page.tsx')), /queryKey: \['critical-task', taskId\]/);
-  assert.match(code(read('tasks/_MyTasksView.tsx')), /queryKey: \['my-tasks'\]/);
-  assert.match(code(read('tasks/_MyTasksView.tsx')), /criticalTasksApi\.myTasks\(\)/);
+  const mine = code(read('tasks/_work/workData.ts'));
+  assert.match(mine, /WORK_KEY = \['critical-tasks', 'work'\]/, 'the cockpit\'s key starts with critical-tasks, so every invalidation of that name reaches it');
+  assert.match(mine, /queryKey: \[\.\.\.WORK_KEY, me\]/);
+  assert.match(mine, /criticalTasksApi\.list\(\{ lean: 1, limit: LOAD_LIMIT, \.\.\.filter \}\)/, 'My work asks the lean list with the server\'s own filters');
+  for (const filter of ['assignee_id', 'reviewer_id', 'created_by_id']) assert.match(mine, new RegExp(`ask\\(\\{ ${filter}: me as number \\}\\)`), `the tasks the person ${filter}`);
+  assert.match(mine, /\.truncated/, 'a cut answer is said');
+  const step = code(read('tasks/_work/useTaskStep.ts'));
+  assert.match(step, /criticalTasksApi\.transition\(v\.task\.id, \{ new_status: v\.to \}\)/, 'a step of My work is the register\'s: the same bodies');
+  assert.match(step, /criticalTasksApi\.requestApproval\(v\.task\.id, \{ comment: ''/);
+  assert.match(step, /criticalTasksApi\.approveTask\(v\.task\.id, \{ comment: '' \}\)/);
+  assert.match(step, /invalidate: TASK_REFRESH\.filter/);
   assert.match(code(read('tasks/_ReportsView.tsx')), /queryKey: \['task-reports'\]/);
   assert.match(code(read('tasks/_ReportsView.tsx')), /criticalTasksApi\.reportsSummary\(\)/);
   const bulk = code(read('tasks/_register/BulkTasks.tsx'));
@@ -130,20 +146,21 @@ test('every mutation that changes a task refreshes what shows it: the board list
   for (const f of ['tasks/[id]/_Actions.tsx', 'tasks/[id]/_Panels.tsx', 'tasks/[id]/_EditTask.tsx', 'tasks/[id]/_AiPanels.tsx']) assert.match(code(read(f)), /\['critical-task', task\.id\]/, f);
 });
 
-test('the URL contract: /tasks keeps its four tabs in ?tab= (the board has the plain address), the board lives in the address, the task page keeps its tabs in ?tab=, and the pages that were embedded still open on their own', () => {
+test('the URL contract: /tasks keeps its four tabs in ?tab= (My work, the default, has the plain address; an old board link with no tab opens All tasks), the register lives in the address, the task page keeps its tabs in ?tab=, and the pages that were embedded are forwards that keep the query', () => {
   const page = code(read('tasks/page.tsx'));
-  assert.match(page, /useTabParam\('tab', TASK_TABS, \{ fallback: 'board', aliases: TAB_ALIASES \}\)/);
+  assert.match(page, /useTabParam\('tab', TASK_TABS, \{ fallback: defaultTab\(search\), aliases: TAB_ALIASES \}\)/, 'the fallback is My work, or All tasks for an address that carries the register\'s parameters (taskTabs.test.ts)');
+  assert.match(page, /<TabPanel tabKey="work" className="pt-\[12px\]">\{tab === 'work' && <MyWork \/>\}/, 'My work is the first tab');
   assert.match(code(read('tasks/_register/TaskRegister.tsx')), /useAddressState\(REGISTER_SCHEMA\)/, 'the register lives in the address (the old board links keep working: taskAddress.test.ts)');
   assert.match(code(read('tasks/_Board.tsx')), /<TaskRegister canCreate=\{canCreate\} onNew=\{onNew\} \/>/, 'the Board tab is the register');
   assert.match(code(read('tasks/[id]/_TaskView.tsx')), /useTabParam\('tab', DETAIL_TABS, \{ fallback: 'details' \}\)/);
-  for (const f of ['tasks/my-tasks/page.tsx', 'tasks/reports/page.tsx', 'tasks/sla/page.tsx']) assert.match(code(read(f)), /export default function/, `${f} is still a page of its own`);
+  for (const f of ['tasks/my-tasks/page.tsx', 'tasks/reports/page.tsx', 'tasks/sla/page.tsx']) assert.match(code(read(f)), /export default function \w+Forward\(\{ searchParams \}/, `${f} is still an address that works: a forward that keeps the query`);
 });
 
 test('the pieces other groups own are used as they are: the document request link and card, the module settings panel, the document-task rules', () => {
   assert.match(code(read('tasks/_ui.tsx')), /from '@\/components\/governance\/DocumentTaskActions'/);
   assert.match(code(read('tasks/[id]/_TaskView.tsx')), /DocumentTaskCard/);
-  assert.match(code(read('tasks/page.tsx')), /import ModuleSettingsPanel from '@\/components\/settings\/ModuleSettingsPanel'/);
-  assert.match(code(read('tasks/page.tsx')), /<ModuleSettingsPanel moduleKey="tasks" \/>/);
+  assert.match(code(read('tasks/_SettingsTab.tsx')), /import ModuleSettingsPanel from '@\/components\/settings\/ModuleSettingsPanel'/);
+  assert.match(code(read('tasks/_SettingsTab.tsx')), /<ModuleSettingsPanel moduleKey="tasks" \/>/);
   assert.match(code(read('tasks/tasksModel.ts')), /from '\.\.\/\.\.\/\.\.\/lib\/documentTasks\.ts'/);
 });
 
@@ -184,4 +201,38 @@ test('the register has no drag and no storage of its own', () => {
   for (const { file, text } of ALL.filter((s) => s.file.includes('/tasks/_register/') && s.file.endsWith('.tsx'))) {
     assert.doesNotMatch(code(text), /draggable|onDragStart|onDrop/, `${file}: a status changes through the menu, never by dragging`);
   }
+});
+
+// ── the front door (Stage 4, tasks-front) ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+test('My work is the shared cockpit frame with a worklist row per task and ONE action on it, and keeps nothing in the browser', () => {
+  const my = code(read('tasks/_work/MyWork.tsx'));
+  for (const piece of ['Cockpit', 'CounterBand', 'SkipToWork', 'useNarrow', 'layoutOf', 'workRowLimit']) assert.match(my, new RegExp(`\\b${piece}\\b`), piece);
+  assert.match(code(read('tasks/_work/WorkCard.tsx')), /<WorkRow/, 'a row is the kit\'s worklist row');
+  assert.match(code(read('tasks/_work/WorkCard.tsx')), /action=\{r\.action \?/, 'one action a row');
+  for (const { file, text } of ALL.filter((s) => s.file.includes('/tasks/_work/'))) {
+    assert.doesNotMatch(code(text), /localStorage|sessionStorage/, `${file}: state that matters is in the address or on the server`);
+  }
+  assert.match(my, /useInbox\(\)/, 'Needs my action is the shared inbox: the same count as its page and the top bar');
+});
+
+test('the band\'s links are addresses of All tasks the register reads (taskWork.test.ts holds each number to the register\'s own count); an account that cannot be read is an error, never a skeleton for ever', () => {
+  assert.match(code(read('tasks/_work/taskWork.ts')), /tasksHref\('all', \{ quick: 'mine', due: \['overdue'\] \}\)/);
+  const my = code(read('tasks/_work/MyWork.tsx'));
+  assert.match(my, /me\.failed/);
+  assert.match(code(read('tasks/_work/workData.ts')), /failed: id == null && !q\.isPending/);
+  assert.match(code(read('my-work/page.tsx')), /me\.failed/, 'My Work says it could not read the account too');
+});
+
+test('Settings says the server\'s deadline rules, and they ARE the server\'s (services/task_lean.sla_word): Breached below zero days, At risk up to three, Completed when done, No SLA without a due date', () => {
+  const server = readFileSync('../backend/grc/services/task_lean.py', 'utf8');
+  assert.match(server, /if days < 0:\s+return "Breached"/);
+  assert.match(server, /"At Risk" if days <= 3 else "On Track"/);
+  assert.match(server, /if status in DONE:\s+return "Completed"/);
+  const tab = code(read('tasks/_SettingsTab.tsx'));
+  for (const word of ['On track', 'At risk', 'Breached', 'Completed']) assert.ok(tab.includes(`'${word}'`), word);
+  assert.match(tab, /Three days or less until it is due/);
+  assert.match(tab, /<fieldset disabled=\{!canEdit\}/, 'a person who may not save reads the settings: the panel is switched off, not hidden');
+  const spec = readFileSync('../backend/grc/services/module_settings.py', 'utf8');
+  assert.match(spec, /"sections": \("sla", "fields", "lists"\),\r?\n\s+"permissions": \{"view": "critical_tasks:tasks:view", "edit": "critical_tasks:tasks:create"\}/, 'Settings of tasks: no status levels, saved by people who may create tasks');
 });

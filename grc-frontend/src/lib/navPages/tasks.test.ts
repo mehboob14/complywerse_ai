@@ -1,6 +1,7 @@
 // node --test "src/lib/navPages/tasks.test.ts"
 // The Task Management group's entries in the navigation registry: every page of its folders has exactly one entry, every entry that says its page draws its own heading has a page that does, the
-// page's heading is the entry's label, and the top bar names only the section (nothing on the module's top page, which says its name in its body).
+// page's heading is the entry's label, and the top bar names only the section (nothing on the module's top page, which says its name in its body). The three old pages (/tasks/my-tasks,
+// /tasks/reports, /tasks/sla) are forwards to the tabs of /tasks: they draw nothing, so they say nothing about a heading.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -29,6 +30,9 @@ const FILE: Record<string, string> = {
   '/tasks/sla': '(dashboard)/tasks/sla/page.tsx',
   '/my-work': '(dashboard)/my-work/page.tsx',
 };
+/** the pages that are forwards, and the tab of /tasks each one goes to */
+const FORWARDS: Record<string, string> = { '/tasks/my-tasks': '/tasks', '/tasks/reports': 'reports', '/tasks/sla': 'settings' };
+const DRAWS = ['/tasks', '/tasks/:id', '/my-work'];
 
 test('every page of the Tasks and My Work folders is exactly one entry, and every entry of this group is a page', () => {
   assert.deepEqual(pages.slice().sort(), Object.keys(FILE).sort(), 'the six pages of the group');
@@ -49,26 +53,39 @@ test('the group\'s entries: the sidebar leaf says its heading, the other five ha
   assert.deepEqual(PAGES.map((p) => p.label).sort(), ['My tasks', 'My work', 'Task', 'Task SLA levels', 'Task reports']);
 });
 
+test('/tasks/my-tasks, /tasks/reports and /tasks/sla are forwards for ever: a server redirect to the tab that holds their content, the query kept, nothing drawn, no heading flag', () => {
+  for (const path of Object.keys(FORWARDS)) {
+    const source = readFileSync(`${APP}${FILE[path]}`, 'utf8');
+    assert.match(source, /redirect\(/, `${path} redirects`);
+    assert.doesNotMatch(source, /PageHeader|'use client'/, `${path} is a server redirect: nothing is drawn, nothing flashes`);
+    assert.match(source, /searchParams/, `${path} keeps the query of the link`);
+    if (FORWARDS[path] === '/tasks') assert.match(source, /: '\/tasks'\)/, `${path} goes to My work, the plain address`);
+    else assert.ok(source.includes(`tab: '${FORWARDS[path]}'`), `${path} goes to the ${FORWARDS[path]} tab`);
+    assert.equal(routes.find((e) => e.path === path)?.ownHeading, undefined, `${path}: it draws no head, so it carries no flag`);
+  }
+});
+
 test('every entry that says its page draws its own heading has a page that renders the kit head (PageHeader variant="page"), and the other way round', () => {
   const flagged = routes.filter((e) => e.area === 'task-management' && (e.path === '/tasks' || e.path.startsWith('/tasks/') || e.path === '/my-work') && e.ownHeading).map((e) => e.path);
-  assert.deepEqual(flagged.sort(), Object.keys(FILE).sort(), 'all six pages draw their own head');
-  for (const path of flagged) {
-    const source = readFileSync(`${APP}${FILE[path]}`, 'utf8');
-    assert.match(source, /<PageHeader[\s\S]{0,40}variant="page"/, `${path}: ${FILE[path]}`);
+  assert.deepEqual(flagged.sort(), DRAWS.slice().sort(), 'the module\'s page, a task and My Work draw their own head');
+  for (const path of Object.keys(FILE)) {
+    const draws = /<PageHeader[\s\S]{0,40}variant="page"/.test(readFileSync(`${APP}${FILE[path]}`, 'utf8'));
+    assert.equal(draws, DRAWS.indexOf(path) >= 0, `${path}: ${FILE[path]}`);
   }
 });
 
 test('the heading of a page is its registry label (the task page keeps the task\'s own title)', () => {
-  for (const path of ['/tasks', '/tasks/reports', '/tasks/my-tasks', '/tasks/sla', '/my-work']) {
+  for (const path of ['/tasks', '/my-work']) {
     const source = readFileSync(`${APP}${FILE[path]}`, 'utf8');
     assert.match(source, new RegExp(`routeFor\\('${path}'\\)\\?\\.label`), `${path} reads its heading from the registry`);
   }
 });
 
-test('the top bar names only the section: nothing on the module\'s top page, "Task Management" on its other pages', () => {
+test('the top bar names only the section: nothing on the module\'s top page, "Task Management" on a task and on My Work; a forward names itself for the moment it is there', () => {
   assert.equal(ownHeadingSection('/tasks'), '');
-  for (const url of ['/tasks/7', '/tasks/reports', '/tasks/my-tasks', '/tasks/sla', '/my-work']) assert.equal(ownHeadingSection(url), 'Task Management', url);
+  for (const url of ['/tasks/7', '/my-work']) assert.equal(ownHeadingSection(url), 'Task Management', url);
   for (const url of ['/tasks', '/tasks/7', '/my-work']) assert.equal(registryNamesPage(url), true, url);
+  for (const url of ['/tasks/reports', '/tasks/my-tasks', '/tasks/sla']) assert.equal(ownHeadingSection(url), undefined, url);
   assert.equal(titleFor('/tasks'), 'Task Management');
   assert.equal(titleFor('/my-work'), 'My work');
   const trail = breadcrumbFor('/tasks/7');
