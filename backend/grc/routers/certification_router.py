@@ -1953,6 +1953,9 @@ def create_snapshot(
     db.add(snap)
     db.commit()
     db.refresh(snap)
+    # The same moment also becomes today's point of the journey's trend (the Dashboard's compliance trend and the charts read it); it used to be
+    # written by every GET of /charts. Best-effort: the snapshot above is already saved.
+    _record_history_day(journey, db, calculate_progress_summary(journey, db))
     return _snapshot_out(snap)
 
 
@@ -2496,11 +2499,11 @@ _STATUS_CHART = {
 }
 
 
-def _snapshot_and_trend(journey: CertificationJourney, db: Session, prog: ProgressSummary) -> list:
-    """Upsert today's posture snapshot and return the trailing trend series.
+def _record_history_day(journey: CertificationJourney, db: Session, prog: ProgressSummary) -> None:
+    """Upsert today's posture row of the journey's compliance history (the trend the Dashboard draws).
 
-    One row per (journey, UTC day). Best-effort: a snapshot failure must never
-    break the charts response."""
+    One row per (journey, UTC day). Best-effort: a failure here must never break the call that asked for it.
+    This is a WRITE: it runs from the explicit snapshot (POST /{id}/snapshots), never from a GET."""
     now = datetime.utcnow()
     day = datetime(now.year, now.month, now.day)
     try:
@@ -2526,6 +2529,10 @@ def _snapshot_and_trend(journey: CertificationJourney, db: Session, prog: Progre
         db.commit()
     except Exception:  # noqa: BLE001
         db.rollback()
+
+
+def _history_trend(journey: CertificationJourney, db: Session) -> list:
+    """The trailing trend series of the journey (read only): one point per day a snapshot was captured."""
     try:
         hist = db.query(ComplianceHistory).filter(
             ComplianceHistory.journey_id == journey.id,
@@ -2636,12 +2643,13 @@ def get_framework_charts(
 ):
     """All data for the framework compliance dashboard charts: gauge, requirement
     status donut, automated-controls assurance, maturity radar (by domain),
-    compliance trend (history), and the top stat cards. Also records today's
-    posture snapshot so the trend fills in over time."""
+    compliance trend (history), and the top stat cards. Read only: the trend gains
+    a point when someone captures a snapshot (POST /{id}/snapshots), not when
+    someone opens the page."""
     journey = get_journey_or_404(journey_id, current_user, db)
     prog = calculate_progress_summary(journey, db)
     auto = _automation_for_journey(journey, db)
-    trend = _snapshot_and_trend(journey, db, prog)
+    trend = _history_trend(journey, db)
 
     applicable = prog.total_controls - prog.not_applicable_count
 
