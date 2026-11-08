@@ -55,6 +55,8 @@ export default function JourneyWorkspace({ journeyId }: { journeyId: number }) {
     queryKey: ['certification', journeyId],
     queryFn: async () => (await certificationsApi.getById(journeyId)).data as CertificationJourney,
     enabled: Number.isFinite(journeyId),
+    // a journey that does not exist (404) or that the person may not open (403) is answered once; a failed connection is tried again twice
+    retry: (failureCount, err: any) => !(err?.response?.status >= 400 && err?.response?.status < 500) && failureCount < 2,
   });
   if (!Number.isFinite(journeyId)) {
     return <ErrorState title="This framework journey does not exist" message="The address is not a journey. Open the frameworks list and pick one." />;
