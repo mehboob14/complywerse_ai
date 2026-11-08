@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 
 import {
   DEFAULT_SCHEDULE, SCANNER_PORT, cloudCredentials, cloudFields, cloudProblems, emptyScanner, isSecretField, isServiceAccountKey, scannerKeysPatch, scannerPayload, scannerProblems,
-  scheduleLabel, splitRegions, syncSeconds, toolFieldsToSend, toolInitialValues, toolProblems, type ToolFieldMeta,
+  lowerFirst, scheduleLabel, splitRegions, syncSeconds, toolFieldsToSend, toolInitialValues, toolProblems, type ToolFieldMeta,
 } from './credentialModel.ts';
 
 const FAKE_SECRET = 'fake-secret-value-0000';
@@ -74,6 +74,13 @@ test('cloud problems: said in words per field, the AWS shapes follow the server,
   assert.deepEqual(Object.keys(gcp).sort(), ['organization_id', 'service_account_json']);
   for (const message of Object.values({ ...aws, ...azure, ...gcp })) assert.equal(message.includes(FAKE_SECRET) || message.includes('not-an-arn') || message.includes('mars'), false, `"${message}" repeats a typed value`);
   assert.deepEqual(cloudProblems('gcp_scc', { organization_id: '1', service_account_json: FAKE_KEY }, 'G'), {});
+});
+
+test('a label inside a sentence keeps its acronyms', () => {
+  assert.equal(lowerFirst('Instance URL'), 'instance URL');
+  assert.equal(lowerFirst('Directory (tenant) ID'), 'directory (tenant) ID');
+  assert.equal(lowerFirst('URL of the console'), 'URL of the console');
+  assert.equal(cloudProblems('azure_defender', {}, 'x').tenant_id, 'Enter the directory (tenant) ID.');
 });
 
 test('a key file counts only when it is a service account key', () => {

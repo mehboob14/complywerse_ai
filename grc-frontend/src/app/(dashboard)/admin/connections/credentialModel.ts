@@ -118,6 +118,9 @@ const ROLE_ARN = /^arn:aws:iam::\d{12}:role\/[A-Za-z0-9+=,.@/_-]+$/;
 const REGION = /^[a-z]{2}-[a-z]+-\d+$/;
 const UUID = /^[0-9a-fA-F-]{8,40}$/;
 
+/** A label inside a sentence: "Instance URL" -> "instance URL", "Directory (tenant) ID" -> "directory (tenant) ID"; a label that starts with an acronym ("URL of the console") keeps it. */
+export const lowerFirst = (label: string): string => (/^[A-Z][a-z]/.test(label) ? label.charAt(0).toLowerCase() + label.slice(1) : label);
+
 /** "us-east-1, eu-west-1" or one per line -> ['us-east-1', 'eu-west-1'], once each. */
 export function splitRegions(text: string): string[] {
   const seen: string[] = [];
@@ -138,7 +141,7 @@ export function cloudProblems(provider: string, values: Record<string, string>, 
   const out: Record<string, string> = {};
   const v = (k: string): string => (values[k] ?? '').trim();
   if (!name.trim()) out.name = 'Give the connection a name.';
-  cloudFields(provider).forEach((f) => { if (!v(f.key)) out[f.key] = `Enter the ${f.label.toLowerCase()}.`; });
+  cloudFields(provider).forEach((f) => { if (!v(f.key)) out[f.key] = `Enter the ${lowerFirst(f.label)}.`; });
   if (provider === 'aws_inspector') {
     if (v('role_arn') && !ROLE_ARN.test(v('role_arn'))) out.role_arn = 'The role looks like arn:aws:iam::123456789012:role/Name (12-digit account).';
     if (v('regions')) {
@@ -194,7 +197,7 @@ export function toolProblems(fields: readonly ToolFieldMeta[], values: Record<st
   fields.forEach((f) => {
     if (!f.required || f.kind === 'toggle') return;
     if (editing && isSecretField(f)) return;
-    if (!(values[f.key] ?? '').trim()) out[f.key] = `Enter the ${f.label.toLowerCase()}.`;
+    if (!(values[f.key] ?? '').trim()) out[f.key] = `Enter the ${lowerFirst(f.label)}.`;
   });
   return out;
 }

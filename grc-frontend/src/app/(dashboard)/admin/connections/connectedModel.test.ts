@@ -8,7 +8,7 @@ import { readAddress, writeAddress } from '../../../../lib/addressState.ts';
 import { connectionHealth } from '../../../../lib/statuses/connections.ts';
 import type { Connector } from '../evidence-collectors/connectionsModel.ts';
 import {
-  CONNECTIONS_SCHEMA, KINDS, catalogueOf, cloudRows, countsOf, entryForProvider, evidenceRows, healthOf, hostOf, isScanner, logoOf, plainProblem, scannerRows, summaryLine, toolRows,
+  CONNECTIONS_SCHEMA, KINDS, catalogueOf, cloudRows, countsOf, entryForProvider, evidenceRows, healthOf, hostOf, isScanner, logoOf, plainProblem, scannerRows, scannerSyncSentence, summaryLine, syncCounters, toolRows,
   visibleCatalogue, visibleRows, type CloudRaw, type ScannerRaw, type ToolRaw,
 } from './connectedModel.ts';
 
@@ -54,6 +54,16 @@ test('scanners: only Nexpose and Nessus are scanners (the endpoint returns every
   assert.equal(scannerRows([scanner({ last_sync_at: null, last_sync_status: null })])[0].health, 'never_run');
   assert.equal(scannerRows([scanner({ is_active: false })])[0].health, 'paused');
   assert.equal(scannerRows([scanner({ status: 'error', last_sync_status: 'failed' })])[0].health, 'failing');
+  assert.equal(scannerRows([scanner({ is_active: true, status: 'deactivated', last_sync_at: null, last_sync_status: null })])[0].health, 'never_run', 'resumed: no longer paused, nothing has run since');
+  assert.equal(scannerRows([scanner({ is_active: false, status: 'deactivated' })])[0].health, 'paused');
+});
+
+test('a scanner sync is a sentence of what it changed, and the counters keep every name readable', () => {
+  assert.equal(scannerSyncSentence({ assets_new: 3, assets_updated: 12, vulns_new: 40, vulns_closed: 5, errors_count: 1 }), 'Hosts: 3 added, 12 updated; Findings: 40 added, 5 closed; 1 error.');
+  assert.equal(scannerSyncSentence({ assets_new: 0 }), 'Nothing changed.');
+  assert.equal(scannerSyncSentence(null), 'Nothing changed.');
+  assert.deepEqual(syncCounters({ assets_new: 2, ai_mapping: { findings_sent: 7 }, note: null }), [['assets new', '2'], ['ai_mapping findings_sent'.replace(/_/g, ' '), '7'], ['note', '—']]);
+  assert.deepEqual(syncCounters(undefined), []);
 });
 
 test('cloud: the later of the sync and the health check is the last run, an error text loses its program-error prefix', () => {
@@ -130,6 +140,8 @@ test('helpers: a console address loses its scheme, a failure its program-error n
   assert.equal(plainProblem('  '), null);
   assert.equal(plainProblem('requests.exceptions.ConnectionError: the host did not answer'), 'the host did not answer');
   assert.equal(plainProblem('Timed out waiting for the scanner'), 'Timed out waiting for the scanner');
+  assert.equal(plainProblem('AWS API error: NoCredentialsError'), 'AWS API error: no credentials error');
+  assert.equal(plainProblem('Credentials could not be decrypted. Re-enter them or check CONNECTOR_MASTER_KEY.'), 'Credentials could not be decrypted. Re-enter them or check a server setting.');
   assert.ok((plainProblem('x'.repeat(600)) ?? '').length <= 240);
   assert.equal(logoOf('aws_inspector'), 'aws');
   assert.equal(logoOf('nessus'), 'tenable');

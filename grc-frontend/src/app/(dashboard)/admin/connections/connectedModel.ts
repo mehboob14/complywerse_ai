@@ -56,9 +56,14 @@ export function hostOf(url: string | null | undefined): string {
   return String(url ?? '').trim().replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').replace(/\/+$/, '');
 }
 
-/** The words of a failure for a person: the server may start with the name of a program error ("ConnectionError: …"); that part is dropped, the rest is cut at 240 characters. */
+/** The words of a failure for a person: the server may start with the name of a program error ("ConnectionError: …"), may name one inside the sentence ("NoCredentialsError") and may name a
+ *  setting (CONNECTOR_MASTER_KEY); the first is dropped, the second is spaced out ("no credentials error"), the third reads "a server setting", and the rest is cut at 240 characters. */
 export function plainProblem(raw: string | null | undefined): string | null {
-  const clean = String(raw ?? '').trim().replace(/^[A-Za-z_][\w.]*(?:Error|Exception|Failure)\s*:\s*/, '').replace(/\s+/g, ' ');
+  const clean = String(raw ?? '').trim()
+    .replace(/^[A-Za-z_][\w.]*(?:Error|Exception|Failure)\s*:\s*/, '')
+    .replace(/\b(?:[A-Z][a-z0-9]+){1,}(?:Error|Exception)\b/g, (m) => m.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase())
+    .replace(/\b[A-Z][A-Z0-9]+(?:_[A-Z0-9]+)+\b/g, 'a server setting')
+    .replace(/\s+/g, ' ');
   if (!clean) return null;
   return clean.length > 240 ? `${clean.slice(0, 237).trimEnd()}…` : clean;
 }
@@ -97,9 +102,35 @@ export function scannerRows(list: readonly ScannerRaw[]): ConnectedRow[] {
     key: `scanners:${c.id}`, kind: 'scanners', id: c.id, name: c.connection_name,
     type: SCANNER_LABEL[w(c.integration_type)] ?? c.integration_type, provider: w(c.integration_type),
     detail: hostOf(c.console_url) || null,
-    health: healthOf({ active: c.is_active, status: c.status, sync: c.last_sync_status, proven: Boolean(c.last_sync_at) }),
+    // a connection that was paused and then resumed keeps the status "deactivated" until its next test or sync: it is not paused any more
+    health: healthOf({ active: c.is_active, status: c.is_active && w(c.status) === 'deactivated' ? null : c.status, sync: c.last_sync_status, proven: Boolean(c.last_sync_at) }),
     lastRun: c.last_sync_at, problem: null,
   }));
+}
+
+/** What a finished scanner sync added, said as a sentence from the counters the server recorded ("3 hosts added, 12 updated; 40 findings added, 5 closed."). */
+export function scannerSyncSentence(stats: Record<string, unknown> | null | undefined): string {
+  const n = (k: string): number => { const v = Number(stats?.[k]); return Number.isFinite(v) && v > 0 ? v : 0; };
+  const part = (items: Array<[number, string]>): string[] => items.filter(([count]) => count > 0).map(([count, word]) => `${count} ${word}`);
+  const hosts = part([[n('assets_new'), 'added'], [n('assets_updated'), 'updated']]);
+  const findings = part([[n('vulns_new'), 'added'], [n('vulns_updated'), 'updated'], [n('vulns_closed'), 'closed'], [n('vulns_reopened'), 'reopened']]);
+  const out: string[] = [];
+  if (hosts.length) out.push(`Hosts: ${hosts.join(', ')}`);
+  if (findings.length) out.push(`Findings: ${findings.join(', ')}`);
+  if (n('errors_count')) out.push(`${n('errors_count')} ${n('errors_count') === 1 ? 'error' : 'errors'}`);
+  return out.length ? `${out.join('; ')}.` : 'Nothing changed.';
+}
+
+/** Every counter of a sync as [readable name, value], nested groups flattened ("ai_mapping" + "findings_sent" -> "ai mapping findings sent"). For the details, not the first line. */
+export function syncCounters(stats: Record<string, unknown> | null | undefined): Array<[string, string]> {
+  const out: Array<[string, string]> = [];
+  Object.keys(stats ?? {}).forEach((key) => {
+    const val = (stats as Record<string, unknown>)[key];
+    const add = (name: string, v: unknown) => out.push([name.replace(/_/g, ' '), v === null || v === undefined ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v)]);
+    if (val !== null && typeof val === 'object' && !Array.isArray(val)) Object.keys(val as Record<string, unknown>).forEach((k) => add(`${key} ${k}`, (val as Record<string, unknown>)[k]));
+    else add(key, val);
+  });
+  return out;
 }
 
 // ── cloud security ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
