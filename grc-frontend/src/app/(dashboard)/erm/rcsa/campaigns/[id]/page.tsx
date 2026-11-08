@@ -1,603 +1,213 @@
 'use client';
 
-import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useParams } from 'next/navigation';
+export const dynamic = 'force-dynamic';
+
+// RCSA > a campaign: the risk team's workspace for one round of self-assessment. The head says where it stands (status, questionnaire, the two days) and holds the actions the server
+// really supports (start, close, delete, change the details, add units); a band of figures says how far it is (approved, waiting for review, not finished, open findings, the average
+// residual); then three tabs — Units (the table every chaser needs: who has not started, who is waiting for review, each row opening its unit), Findings, and Setup. The old page's
+// "Send reminders" and "Export results" called routes that do not exist and are gone: nothing is emailed by the platform, and the units export is a CSV made here from the rows shown.
+// Request: the campaign's detail (units with progress and scores); the findings tab and the pickers load only when used, each with its own states.
+import { Suspense, useMemo, useState, type ReactNode } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
+import { Download, Pencil, Play, Plus } from 'lucide-react';
 import { rcsaApi } from '@/lib/api';
-import apiClient from '@/lib/api';
+import { PageHeader } from '@/components/ui';
 import {
-  ClipboardList,
-  ArrowLeft,
-  Play,
-  XCircle,
-  Download,
-  Send,
-  Plus,
-  Building2,
-  CheckCircle,
-  Clock,
-  AlertCircle,
-  BarChart3,
-  Users,
-  FileText,
-  Mail,
-} from 'lucide-react';
-import Link from 'next/link';
-import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
-import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
+  Button, EmptyState, ErrorState, FilterChips, Menu, Notice, PersonChip, ProgressBar, RegisterTable, SectionCard, SkeletonRows, StatTile, StatusPill, TabPanel, Tabs, TitleLink, sortRows, useTabParam,
+  type FilterChip, type MenuItem, type SortState,
+} from '@/components/ui/ds';
+import { canRetry, errorMessage, statusOf } from '@/components/ui/ds/reportOutcome';
+import { formatCount, formatDate, formatDateTime } from '@/lib/format';
+import { statusPill } from '@/lib/status';
+import { assessmentStatus, campaignStatus, findingSeverity, findingStatus } from '@/lib/statuses/rcsa';
+import { csvName, toCsv } from '@/lib/rcsa/csv';
+import { saveBlob } from '@/lib/rcsa/saveBlob';
+import { dueWords, isLate, sortUnits, unassigned, unfinished, type CampaignRow, type UnitRow } from '@/lib/rcsa/campaignsModel';
+import { controlText, percent, progressTone, riskText } from '@/lib/rcsa/scores';
+import { KEYS, fetchAll, useRcsaRights } from '../../_parts/rcsaData';
+import { useCampaignActions } from '../_parts/useCampaignActions';
+import { AddUnitsSheet, EditCampaignSheet } from './_parts/CampaignSheets';
 
-interface Assessment {
-  id: number;
-  business_unit_id: number;
-  business_unit_name: string;
-  assessor_id?: number;
-  assessor_name?: string;
-  assessor_email?: string;
-  status: 'not_started' | 'in_progress' | 'submitted' | 'approved' | 'rejected';
-  progress: number;
-  risk_score?: number;
-  control_score?: number;
-  findings_count: number;
-  submitted_at?: string;
-  reviewed_at?: string;
+interface Detail {
+  id: number; tenant_id: number; name: string; description: string | null; template_id: number; template_name: string | null; created_by_name: string | null; status_counts: Record<string, number>;
+  status: string; period: string | null; start_date: string | null; end_date: string | null; progress: number; assigned_units: number; completed_units: number; pending_assessments: number;
+  assessments: UnitRow[]; total_findings: number; avg_risk_score: number | null; avg_control_score: number | null;
 }
+interface Finding { id: number; title: string; severity: string; status: string; campaign_id: number | null; business_unit_name: string | null; remediation_owner_name: string | null; remediation_due_date: string | null }
 
-interface Campaign {
-  id: number;
-  tenant_id: number;
-  name: string;
-  description?: string;
-  template_id: number;
-  template_name: string;
-  status: 'draft' | 'active' | 'closed';
-  period: string;
-  start_date: string;
-  end_date: string;
-  progress: number;
-  assigned_units: number;
-  completed_units: number;
-  pending_assessments: number;
-  assessments: Assessment[];
-  total_findings: number;
-  avg_risk_score?: number;
-  avg_control_score?: number;
-  created_at: string;
-  updated_at: string;
-}
+const TABS = ['units', 'findings', 'setup'] as const;
+const FILTERS = [
+  { key: 'all', label: 'All', test: () => true },
+  { key: 'notstarted', label: 'Not started', test: (u: UnitRow) => u.status === 'not_started' },
+  { key: 'working', label: 'In progress', test: (u: UnitRow) => u.status === 'in_progress' || u.status === 'requires_changes' },
+  { key: 'review', label: 'Waiting for review', test: (u: UnitRow) => u.status === 'submitted' || u.status === 'under_review' },
+  { key: 'done', label: 'Approved', test: (u: UnitRow) => u.status === 'approved' },
+] as const;
 
-interface TenantUser {
-  id: number;
-  user_id: number;
-  tenant_id: number;
-  is_primary: boolean;
-  user?: {
-    id: number;
-    username: string;
-    email: string;
-    display_name?: string;
-  };
-}
+const asCampaign = (d: Detail): CampaignRow => ({
+  id: d.id, name: d.name, template_id: d.template_id, template_name: d.template_name, start_date: d.start_date ?? '', due_date: d.end_date ?? '', status: d.status,
+  assessment_count: d.assigned_units, completed_count: d.completed_units, period_label: d.period,
+});
 
-interface BusinessUnit {
-  id: number;
-  name: string;
-}
-
-const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  draft: { bg: 'bg-slate-100', text: 'text-slate-700' },
-  active: { bg: 'bg-emerald-50', text: 'text-emerald-700' },
-  closed: { bg: 'bg-primary-50', text: 'text-primary-700' },
-};
-
-const ASSESSMENT_STATUS_COLORS: Record<string, { bg: string; text: string; icon: React.ElementType }> = {
-  not_started: { bg: 'bg-slate-100', text: 'text-slate-700', icon: Clock },
-  in_progress: { bg: 'bg-amber-50', text: 'text-amber-700', icon: Clock },
-  submitted: { bg: 'bg-primary-50', text: 'text-primary-700', icon: FileText },
-  approved: { bg: 'bg-emerald-50', text: 'text-emerald-700', icon: CheckCircle },
-  rejected: { bg: 'bg-rose-50', text: 'text-rose-700', icon: XCircle },
-};
-
-export default function CampaignDetailPage() {
+function Workspace() {
   const params = useParams();
-  const campaignId = Number(params.id);
-  const queryClient = useQueryClient();
-
-  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
-  const [selectedAssessments, setSelectedAssessments] = useState<number[]>([]);
-  const [selectedBusinessUnitId, setSelectedBusinessUnitId] = useState<number>(0);
-  const [selectedAssessorId, setSelectedAssessorId] = useState<number>(0);
-
-  const { data: campaign, isLoading, error } = useQuery({
-    queryKey: ['rcsa-campaign', campaignId],
-    queryFn: async () => {
-      try {
-        const response = await rcsaApi.getCampaignDetail(campaignId);
-        return response.data as Campaign;
-      } catch {
-        throw new Error('Failed to load campaign');
-      }
-    },
-  });
-
-  const { data: businessUnits } = useQuery({
-    queryKey: ['tenant-business-units', campaign?.tenant_id],
-    queryFn: async () => {
-      const response = await apiClient.get(`/tenants/${campaign!.tenant_id}/business-units`);
-      return response.data as BusinessUnit[];
-    },
-    enabled: !!campaign?.tenant_id,
-  });
-
-  const { data: tenantUsers } = useQuery({
-    queryKey: ['tenant-users', campaign?.tenant_id],
-    queryFn: async () => {
-      const response = await apiClient.get(`/tenants/${campaign!.tenant_id}/users`);
-      return response.data as TenantUser[];
-    },
-    enabled: !!campaign?.tenant_id,
-  });
-
-  const assignedBUIds = (campaign?.assessments || []).map(a => a.business_unit_id);
-  const availableBusinessUnits = (businessUnits || []).filter(bu => !assignedBUIds.includes(bu.id));
-
-  const activateMutation = useMutation({
-    mutationFn: () => rcsaApi.activateCampaign(campaignId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rcsa-campaign', campaignId] });
-    },
-  });
-
-  const closeMutation = useMutation({
-    mutationFn: () => rcsaApi.closeCampaign(campaignId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rcsa-campaign', campaignId] });
-    },
-  });
-
-  const sendRemindersMutation = useMutation({
-    mutationFn: () => rcsaApi.sendReminders(campaignId),
-    onSuccess: () => {
-      alert('Reminders sent successfully');
-    },
-  });
-
-  const exportMutation = useMutation({
-    mutationFn: async () => {
-      const response = await rcsaApi.exportResults(campaignId);
-      const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${campaign?.name.replace(/\s+/g, '_')}_results.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    },
-  });
-
-  const assignMutation = useMutation({
-    mutationFn: (data: Record<string, unknown>) => rcsaApi.assignBusinessUnits(campaignId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rcsa-campaign', campaignId] });
-      setIsAssignModalOpen(false);
-      setSelectedBusinessUnitId(0);
-      setSelectedAssessorId(0);
-    },
-    onError: (error: any) => {
-      const message = error?.response?.data?.detail || error?.message || 'Failed to assign business unit';
-      alert(message);
-    },
-  });
-
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      setSelectedAssessments((campaign?.assessments || []).map(a => a.id));
-    } else {
-      setSelectedAssessments([]);
-    }
-  };
-
-  const handleSelectAssessment = (id: number, checked: boolean) => {
-    if (checked) {
-      setSelectedAssessments([...selectedAssessments, id]);
-    } else {
-      setSelectedAssessments(selectedAssessments.filter(aid => aid !== id));
-    }
-  };
-
-  if (isLoading) {
-    return (
-      <div className="space-y-8">
-        <div className="skeleton h-8 w-64 mb-2" />
-        <div className="skeleton h-5 w-96" />
-        <div className="grid grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map(i => (
-            <div key={i} className="card p-4">
-              <div className="skeleton h-6 w-full" />
-            </div>
-          ))}
-        </div>
-      </div>
-    );
+  const id = Number(Array.isArray(params?.id) ? params.id[0] : params?.id);
+  const valid = Number.isFinite(id) && id > 0;
+  const detail = useQuery({ queryKey: KEYS.campaign(id), queryFn: async () => (await rcsaApi.getCampaignDetail(id)).data as Detail, enabled: valid, retry: (n, e) => n < 1 && statusOf(e) !== 404 });
+  const d = detail.data;
+  if (!valid) return <ErrorState title="This campaign doesn't exist" message="Check the address, or open it from the campaigns list." />;
+  if (detail.isLoading) return <div className="flex flex-col gap-[16px]" aria-busy="true"><SkeletonRows rows={3} columns={3} label="Loading the campaign" /><SkeletonRows rows={6} columns={4} label="Loading the units" /></div>;
+  if (detail.isError || !d) {
+    const gone = statusOf(detail.error) === 404;
+    return <ErrorState title={gone ? "This campaign doesn't exist" : "Couldn't load the campaign"} message={gone ? 'It may have been deleted, or you may not have access to it.' : errorMessage(detail.error)} onRetry={!gone && canRetry(detail.error) ? () => { void detail.refetch(); } : undefined} />;
   }
+  return <CampaignBody d={d} />;
+}
 
-  if (error || !campaign) {
-    return (
-      <div className="card p-8 text-center">
-        <AlertCircle className="h-12 w-12 text-rose-500 mx-auto mb-4" strokeWidth={1.75} />
-        <h3 className="text-lg font-medium text-slate-900 mb-2">Campaign Not Found</h3>
-        <p className="text-slate-600 mb-4">The requested campaign could not be loaded.</p>
-        <Link href="/erm/rcsa/campaigns" className="btn-primary">
-          Back to Campaigns
-        </Link>
-      </div>
-    );
-  }
+function CampaignBody({ d }: { d: Detail }) {
+  const router = useRouter();
+  const { manage } = useRcsaRights();
+  const [tab, setTab] = useTabParam('tab', TABS, { fallback: 'units' });
+  const [filter, setFilter] = useState<(typeof FILTERS)[number]['key']>('all');
+  const [sort, setSort] = useState<SortState>(null);
+  const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const campaign = asCampaign(d);
+  const actions = useCampaignActions(manage, () => router.push('/erm/rcsa/campaigns'));
+  const late = isLate(campaign);
+  const units = useMemo(() => sortUnits(d.assessments), [d.assessments]);
+  const test = FILTERS.find((f) => f.key === filter)?.test ?? (() => true);
+  const shown = units.filter(test);
+  const ordered = sort
+    ? sortRows(shown, sort, (u, key) => (key === 'unit' ? u.business_unit_name : key === 'assessor' ? u.assessor_name : key === 'progress' ? u.progress : key === 'risk' ? u.risk_score : key === 'findings' ? u.findings_count : key === 'status' ? u.status : u.submitted_at))
+    : shown;
+  const chips: FilterChip[] = FILTERS.map((f) => ({ key: f.key, label: f.label, count: units.filter(f.test).length, active: f.key === filter }));
+  const pill = statusPill(campaignStatus, d.status);
+  const left = unfinished(units).length;
+  const review = (d.status_counts.submitted ?? 0) + (d.status_counts.under_review ?? 0);
 
-  const statusStyle = STATUS_COLORS[campaign.status] || STATUS_COLORS.draft;
-  const pendingAssessments = (campaign.assessments || []).filter(a => a.status === 'not_started' || a.status === 'in_progress');
+  const findings = useQuery({ queryKey: [...KEYS.findings, 'campaign', d.id], queryFn: async () => (await fetchAll<Finding>('/erm/rcsa/findings')).filter((f) => f.campaign_id === d.id), enabled: tab === 'findings' });
+
+  const exportUnits = () => {
+    const lines = ordered.map((u) => [u.business_unit_name, u.assessor_name ?? '', statusPill(assessmentStatus, u.status).label, u.progress, u.risk_score ?? '', u.control_score ?? '', u.findings_count, u.submitted_at ? formatDate(u.submitted_at) : '']);
+    saveBlob(new Blob([toCsv(['Unit', 'Assessor', 'Status', 'Answered %', 'Residual', 'Controls', 'Findings', 'Submitted'], lines)], { type: 'text/csv;charset=utf-8' }), csvName('campaign-units'));
+  };
+  const more: MenuItem[] = [
+    { key: 'edit', label: 'Edit details', icon: Pencil, hidden: !manage || d.status === 'closed', onSelect: () => setEditing(true) },
+    { key: 'units', label: 'Add units', icon: Plus, hidden: !manage || d.status === 'closed', onSelect: () => setAdding(true) },
+    { key: 'export', label: 'Export units (CSV)', icon: Download, onSelect: exportUnits },
+    ...actions.items(campaign).filter((i) => i.key !== 'start'),
+  ];
+  const facts: Array<[string, ReactNode]> = [
+    ['Questionnaire', d.template_name ? <TitleLink key="t" href={`/erm/rcsa/templates/${d.template_id}`} title={d.template_name} prefetch={false} /> : '—'],
+    ['Period', d.period || '—'],
+    ['Owner', d.created_by_name || '—'],
+    ['Starts', formatDate(d.start_date, { calendar: true })],
+    ['Due', formatDate(d.end_date, { calendar: true })],
+    ['Units', formatCount(d.assigned_units)],
+  ];
 
   return (
-    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
-      <div>
-        <div className="flex items-center gap-4 mb-4">
-          <Link href="/erm/rcsa/campaigns" className="text-slate-600 hover:text-slate-900">
-            <ArrowLeft className="h-5 w-5" />
-          </Link>
-          <div className="flex-1">
-            <div className="flex items-center gap-3">
-              <h1 className="text-lg sm:text-xl font-semibold text-slate-900">{campaign.name}</h1>
-              <span className={`text-xs px-2 py-0.5 rounded-full ${statusStyle.bg} ${statusStyle.text}`}>
-                {campaign.status}
-              </span>
-            </div>
-            <p className="text-slate-600 mt-1">{campaign.description || `Using ${campaign.template_name} template`}</p>
-          </div>
-          <div className="flex items-center gap-3">
-            {campaign.status === 'draft' && (
-              <button
-                onClick={() => {
-                  if (confirm('Activate this campaign? This will notify all assigned assessors.')) {
-                    activateMutation.mutate();
-                  }
-                }}
-                className="btn-primary flex items-center gap-2"
-                disabled={activateMutation.isPending}
-              >
-                <Play className="h-4 w-4" />
-                Activate Campaign
-              </button>
-            )}
-            {campaign.status === 'active' && (
-              <>
-                <button
-                  onClick={() => sendRemindersMutation.mutate()}
-                  className="btn-secondary flex items-center gap-2"
-                  disabled={sendRemindersMutation.isPending}
-                >
-                  <Send className="h-4 w-4" />
-                  Send Reminders
-                </button>
-                <button
-                  onClick={() => {
-                    if (confirm('Close this campaign?')) {
-                      closeMutation.mutate();
-                    }
-                  }}
-                  className="btn-secondary flex items-center gap-2"
-                  disabled={closeMutation.isPending}
-                >
-                  <XCircle className="h-4 w-4" />
-                  Close Campaign
-                </button>
-              </>
-            )}
-            <button
-              onClick={() => exportMutation.mutate()}
-              className="btn-secondary flex items-center gap-2"
-              disabled={exportMutation.isPending}
-            >
-              <Download className="h-4 w-4" />
-              Export Results
-            </button>
-          </div>
-        </div>
+    <div className="flex flex-col gap-[16px]">
+      <PageHeader
+        variant="page"
+        title={d.name}
+        back={{ href: '/erm/rcsa/campaigns', label: 'Back to campaigns' }}
+        meta={[d.template_name, d.period, d.start_date && d.end_date ? `${formatDate(d.start_date, { calendar: true })} to ${formatDate(d.end_date, { calendar: true })}` : null].filter(Boolean).join(' · ')}
+        chips={(
+          <>
+            <StatusPill {...pill} />
+            {d.status === 'active' && d.end_date && <StatusPill tone={late ? 'danger' : 'neutral'} label={dueWords(campaign)} />}
+          </>
+        )}
+        actions={(
+          <>
+            {manage && d.status === 'draft' && <Button variant="primary" leftIcon={<Play aria-hidden />} loading={actions.busy} onClick={() => actions.ask.activate(campaign)}>Start campaign</Button>}
+            <Menu label="More" items={more} />
+          </>
+        )}
+      />
 
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mt-6">
-          <div className="card p-4">
-            <p className="text-slate-600 text-sm">Template</p>
-            <p className="text-slate-900 font-medium">{campaign.template_name}</p>
-          </div>
-          <div className="card p-4">
-            <p className="text-slate-600 text-sm">Period</p>
-            <p className="text-slate-900 font-medium">{campaign.period}</p>
-          </div>
-          <div className="card p-4">
-            <p className="text-slate-600 text-sm">Duration</p>
-            <p className="text-slate-900 font-medium text-sm">
-              {new Date(campaign.start_date).toLocaleDateString()} - {new Date(campaign.end_date).toLocaleDateString()}
-            </p>
-          </div>
-          <div className="card p-4">
-            <p className="text-slate-600 text-sm">Progress</p>
-            <div className="flex items-center gap-2">
-              <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-primary-500 rounded-full"
-                  style={{ width: `${campaign.progress}%` }}
-                />
-              </div>
-              <span className="text-slate-900 font-medium text-sm">{campaign.progress}%</span>
-            </div>
-          </div>
-          <div className="card p-4">
-            <p className="text-slate-600 text-sm">Avg Risk Score</p>
-            <p className="text-slate-900 font-medium">{campaign.avg_risk_score?.toFixed(1) || 'N/A'}</p>
-          </div>
-          <div className="card p-4">
-            <p className="text-slate-600 text-sm">Total Findings</p>
-            <p className="text-slate-900 font-medium">{campaign.total_findings}</p>
-          </div>
-        </div>
+      {d.status === 'draft' && <Notice tone="info" title="This campaign has not started">{manage ? 'Nobody has been asked yet. Start it when the units and the days are right.' : 'It has not been started by the risk team yet.'}</Notice>}
+      {d.status === 'closed' && <Notice tone="info" title="This campaign is closed">Units can no longer be answered. Approved answers and findings are kept.</Notice>}
+
+      <div className="grid gap-[12px] sm:grid-cols-2 xl:grid-cols-5">
+        <StatTile label="Approved" value={`${formatCount(d.completed_units)} of ${formatCount(d.assigned_units)}`} unit="units" progress={percent(d.completed_units, d.assigned_units)} tone={progressTone(percent(d.completed_units, d.assigned_units), late) === 'danger' ? 'danger' : 'default'} />
+        <StatTile label="Waiting for review" value={formatCount(review)} unit={review === 1 ? 'unit' : 'units'} />
+        <StatTile label="Not finished" value={formatCount(left)} unit={left === 1 ? 'unit' : 'units'} note={unassigned(units).length > 0 ? `${formatCount(unassigned(units).length)} with no assessor` : undefined} tone={late && left > 0 ? 'danger' : 'default'} />
+        <StatTile label="Open findings" value={formatCount(units.reduce((n, u) => n + (u.open_findings_count ?? 0), 0))} note={`${formatCount(d.total_findings)} raised in all`} />
+        <StatTile label="Average residual" value={d.avg_risk_score == null ? null : riskText(d.avg_risk_score)} note={d.avg_control_score == null ? undefined : `Controls ${controlText(d.avg_control_score)}`} info="The mean of the units' scores, likelihood times impact." />
       </div>
 
-      <div className="card p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-medium text-slate-900 flex items-center gap-2">
-            <Users className="h-5 w-5 text-primary-600" strokeWidth={1.75} />
-            Assessment Progress ({(campaign.assessments || []).length} Business Units)
-          </h3>
-          <div className="flex items-center gap-3">
-            {selectedAssessments.length > 0 && (
-              <button
-                onClick={() => sendRemindersMutation.mutate()}
-                className="btn-secondary flex items-center gap-2 text-sm"
-              >
-                <Mail className="h-4 w-4" />
-                Send Reminder ({selectedAssessments.length})
-              </button>
+      <Tabs tabs={[{ key: 'units', label: 'Units', count: units.length }, { key: 'findings', label: 'Findings', count: d.total_findings }, { key: 'setup', label: 'Setup' }]} value={tab} onChange={setTab} ariaLabel="Campaign sections" countFormat="exact">
+        <TabPanel tabKey="units" className="pt-[12px]">
+          <div className="flex flex-col gap-[12px]">
+            <FilterChips label="Show units" chips={chips} onToggle={(k) => setFilter(k as typeof filter)} />
+            <RegisterTable<UnitRow>
+              caption={`Units of ${d.name}`}
+              rows={ordered}
+              getRowId={(u) => u.id}
+              sort={sort}
+              onSortChange={setSort}
+              onRowActivate={(u) => router.push(`/erm/rcsa/assessments/${u.id}`)}
+              empty={units.length === 0 ? (
+                <EmptyState kind="firstUse" title="This campaign has no units yet" description={d.status === 'draft' ? 'Starting it makes every active department a unit.' : 'Add the business units that should answer.'} action={manage && d.status !== 'closed' ? <Button leftIcon={<Plus aria-hidden />} onClick={() => setAdding(true)}>Add units</Button> : undefined} />
+              ) : <EmptyState kind="noMatches" title="No unit matches" description="Choose another status above." onClearFilters={() => setFilter('all')} />}
+              footer={<p className="mt-[8px] text-ds-label text-ds-fg-muted">{`${formatCount(ordered.length)} of ${formatCount(units.length)} ${units.length === 1 ? 'unit' : 'units'}`}</p>}
+              cardTitle={(u) => <TitleLink href={`/erm/rcsa/assessments/${u.id}`} title={u.business_unit_name} prefetch={false} />}
+              columns={[
+                { key: 'unit', header: 'Unit', sortable: true, isRowHeader: true, cell: (u) => <TitleLink href={`/erm/rcsa/assessments/${u.id}`} title={u.business_unit_name} prefetch={false} /> },
+                { key: 'assessor', header: 'Assessor', sortable: true, priority: 2, card: 'meta', cell: (u) => <PersonChip name={u.assessor_name} /> },
+                { key: 'status', header: 'Status', sortable: true, card: 'meta', cell: (u) => <span className="inline-flex flex-wrap items-center gap-[6px]"><StatusPill size="sm" {...statusPill(assessmentStatus, u.status)} />{(u.status === 'submitted' || u.status === 'under_review') && (u.current_approval_tier ?? 0) > 1 ? <span className="text-ds-label text-ds-fg-muted">{`step ${u.current_approval_tier}`}</span> : null}</span> },
+                { key: 'progress', header: 'Answered', sortable: true, priority: 2, width: 'w-[150px]', card: 'meta', cell: (u) => <ProgressBar value={u.progress} label={`${u.business_unit_name} answered`} tone={u.progress >= 100 ? 'success' : 'primary'} /> },
+                { key: 'risk', header: 'Residual', sortable: true, priority: 3, card: 'meta', cell: (u) => <span className="text-ds-body text-ds-fg">{riskText(u.risk_score)}</span> },
+                { key: 'controls', header: 'Controls', priority: 3, card: 'meta', cell: (u) => <span className="text-ds-body text-ds-fg">{controlText(u.control_score)}</span> },
+                { key: 'findings', header: 'Findings', sortable: true, priority: 3, align: 'right', card: 'meta', cell: (u) => <span className="text-ds-body tabular-nums text-ds-fg">{formatCount(u.findings_count)}</span> },
+                { key: 'submitted', header: 'Submitted', sortable: true, priority: 3, cell: (u) => <span className="whitespace-nowrap text-ds-body text-ds-fg-muted">{u.submitted_at ? formatDateTime(u.submitted_at) : '—'}</span> },
+              ]}
+            />
+          </div>
+        </TabPanel>
+        <TabPanel tabKey="findings" lazy className="pt-[12px]">
+          <SectionCard id="campaign-findings" title="Findings" meta={findings.data ? `${formatCount(findings.data.length)} in this campaign` : undefined} actions={<Button size="sm" href="/erm/rcsa/findings">Findings register</Button>}>
+            {findings.isLoading && <SkeletonRows rows={3} columns={3} label="Loading the findings" />}
+            {findings.isError && <ErrorState compact title="Couldn't load the findings" message={errorMessage(findings.error)} onRetry={() => { void findings.refetch(); }} />}
+            {findings.data && findings.data.length === 0 && <p className="text-ds-body text-ds-fg-muted">No finding has been raised in this campaign.</p>}
+            {findings.data && findings.data.length > 0 && (
+              <ul className="m-0 flex list-none flex-col p-0">
+                {findings.data.map((f) => (
+                  <li key={f.id} className="flex flex-wrap items-center gap-x-[12px] gap-y-[4px] border-t border-ds-border py-[8px] first:border-t-0">
+                    <TitleLink href={`/erm/rcsa/findings?open=${f.id}`} title={f.title} prefetch={false} className="min-w-0 flex-1" />
+                    <span className="text-ds-label text-ds-fg-muted">{f.business_unit_name}</span>
+                    <StatusPill size="sm" {...statusPill(findingSeverity, f.severity)} />
+                    <StatusPill size="sm" {...statusPill(findingStatus, f.status)} />
+                  </li>
+                ))}
+              </ul>
             )}
-            <button
-              onClick={() => setIsAssignModalOpen(true)}
-              className="btn-primary flex items-center gap-2"
-            >
-              <Plus className="h-4 w-4" />
-              Assign Business Unit
-            </button>
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-slate-200">
-                <th className="text-left py-3 px-4">
-                  <input
-                    type="checkbox"
-                    checked={selectedAssessments.length === (campaign.assessments || []).length}
-                    onChange={(e) => handleSelectAll(e.target.checked)}
-                    className="rounded border-slate-300 bg-slate-100 text-primary-500 focus:ring-primary-500"
-                  />
-                </th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Business Unit</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Assessor</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Status</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Progress</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Risk Score</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Control Score</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Findings</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Submitted</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(campaign.assessments || []).map((assessment) => {
-                const astyle = ASSESSMENT_STATUS_COLORS[assessment.status] || ASSESSMENT_STATUS_COLORS.not_started;
-                const StatusIcon = astyle.icon;
-
-                return (
-                  <tr key={assessment.id} className="border-b border-slate-200 hover:bg-slate-50">
-                    <td className="py-3 px-4">
-                      <input
-                        type="checkbox"
-                        checked={selectedAssessments.includes(assessment.id)}
-                        onChange={(e) => handleSelectAssessment(assessment.id, e.target.checked)}
-                        className="rounded border-slate-300 bg-slate-100 text-primary-500 focus:ring-primary-500"
-                      />
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-2">
-                        <Building2 className="h-4 w-4 text-slate-600" />
-                        <span className="text-slate-900 font-medium">{assessment.business_unit_name}</span>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4">
-                      {assessment.assessor_name ? (
-                        <div>
-                          <p className="text-slate-700">{assessment.assessor_name}</p>
-                          {assessment.assessor_email && (
-                            <p className="text-xs text-slate-500">{assessment.assessor_email}</p>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-slate-500 italic">Not assigned</span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium inline-flex items-center gap-1 ${astyle.bg} ${astyle.text}`}>
-                        <StatusIcon className="h-3 w-3" />
-                        {assessment.status.replace('_', ' ')}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-16 h-2 bg-slate-100 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-primary-500 rounded-full"
-                            style={{ width: `${assessment.progress}%` }}
-                          />
-                        </div>
-                        <span className="text-sm text-slate-600">{assessment.progress}%</span>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4">
-                      {assessment.risk_score != null ? (
-                        <span className={`font-medium ${
-                          assessment.risk_score >= 4 ? 'text-rose-600' :
-                          assessment.risk_score >= 3 ? 'text-amber-600' :
-                          'text-emerald-600'
-                        }`}>
-                          {assessment.risk_score.toFixed(1)}
-                        </span>
-                      ) : (
-                        <span className="text-slate-500">-</span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4">
-                      {assessment.control_score != null ? (
-                        <span className={`font-medium ${
-                          assessment.control_score >= 4 ? 'text-emerald-600' :
-                          assessment.control_score >= 3 ? 'text-amber-600' :
-                          'text-rose-600'
-                        }`}>
-                          {assessment.control_score.toFixed(1)}
-                        </span>
-                      ) : (
-                        <span className="text-slate-500">-</span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4">
-                      {assessment.findings_count > 0 ? (
-                        <span className="text-amber-600 font-medium">{assessment.findings_count}</span>
-                      ) : (
-                        <span className="text-slate-500">0</span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 text-sm text-slate-600">
-                      {assessment.submitted_at ? new Date(assessment.submitted_at).toLocaleDateString() : '-'}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="card p-6">
-          <h3 className="text-lg font-medium text-slate-900 mb-4 flex items-center gap-2">
-            <BarChart3 className="h-5 w-5 text-primary-600" strokeWidth={1.75} />
-            Status Summary
-          </h3>
-          <div className="space-y-3">
-            {Object.entries(ASSESSMENT_STATUS_COLORS).map(([status, style]) => {
-              const count = (campaign.assessments || []).filter(a => a.status === status).length;
-              const StatusIcon = style.icon;
-              return (
-                <div key={status} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <StatusIcon className={`h-4 w-4 ${style.text}`} />
-                    <span className="text-slate-700 capitalize">{status.replace('_', ' ')}</span>
-                  </div>
-                  <span className={`font-medium ${style.text}`}>{count}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="card p-6">
-          <h3 className="text-lg font-medium text-slate-900 mb-4 flex items-center gap-2">
-            <AlertCircle className="h-5 w-5 text-amber-600" strokeWidth={1.75} />
-            Pending Actions
-          </h3>
-          {pendingAssessments.length > 0 ? (
-            <div className="space-y-3">
-              {pendingAssessments.slice(0, 5).map((assessment) => (
-                <div key={assessment.id} className="flex items-center justify-between p-3 bg-white/50 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <Building2 className="h-4 w-4 text-slate-600" />
-                    <div>
-                      <p className="text-slate-900 text-sm">{assessment.business_unit_name}</p>
-                      <p className="text-xs text-slate-500">{assessment.assessor_name || 'No assessor assigned'}</p>
-                    </div>
-                  </div>
-                  <span className={`text-xs px-2 py-1 rounded-full ${ASSESSMENT_STATUS_COLORS[assessment.status]?.bg} ${ASSESSMENT_STATUS_COLORS[assessment.status]?.text}`}>
-                    {assessment.status.replace('_', ' ')}
-                  </span>
-                </div>
+          </SectionCard>
+        </TabPanel>
+        <TabPanel tabKey="setup" lazy className="pt-[12px]">
+          <SectionCard id="setup" title="Setup" actions={manage && d.status !== 'closed' ? <Button size="sm" leftIcon={<Pencil aria-hidden />} onClick={() => setEditing(true)}>Edit details</Button> : undefined}>
+            <dl className="m-0 grid gap-x-[16px] gap-y-[12px] sm:grid-cols-2 lg:grid-cols-3">
+              {facts.map(([label, value]) => (
+                <div key={label} className="min-w-0"><dt className="text-ds-label text-ds-fg-muted">{label}</dt><dd className="mt-[2px] text-ds-body text-ds-fg [overflow-wrap:anywhere]">{value}</dd></div>
               ))}
-            </div>
-          ) : (
-            <p className="text-slate-600 text-center py-4">All assessments are complete or submitted</p>
-          )}
-        </div>
-      </div>
+            </dl>
+            {d.description && <p className="mt-[12px] whitespace-pre-line text-ds-body text-ds-fg-body [overflow-wrap:anywhere]">{d.description}</p>}
+            <p className="mt-[12px] text-ds-label text-ds-fg-muted">Nobody is emailed by the platform: units appear on their assessors&apos; worklists.</p>
+          </SectionCard>
+        </TabPanel>
+      </Tabs>
 
-      <RightSlidePanel
-        isOpen={isAssignModalOpen}
-        onClose={() => { setIsAssignModalOpen(false); setSelectedBusinessUnitId(0); setSelectedAssessorId(0); }}
-        title="Assign Business Unit"
-      >
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!selectedBusinessUnitId) return;
-            assignMutation.mutate({
-              business_unit_ids: [selectedBusinessUnitId],
-              assessor_ids: selectedAssessorId ? { [selectedBusinessUnitId]: selectedAssessorId } : undefined,
-            });
-          }}
-        >
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Business Unit</label>
-              <MultiSelectDropdown
-                title="Business Unit"
-                items={availableBusinessUnits.map((bu) => ({ value: String(bu.id), label: bu.name }))}
-                selectedValues={selectedBusinessUnitId ? [String(selectedBusinessUnitId)] : []}
-                onApply={(vals) => setSelectedBusinessUnitId(Number(vals[0] || 0))}
-                multiSelect={false}
-                triggerVariant="input"
-                placeholder="Select business unit"
-                className="w-full"
-                triggerClassName="w-full"
-              />
-              {availableBusinessUnits.length === 0 && businessUnits && businessUnits.length > 0 && (
-                <p className="text-xs text-amber-600 mt-1">All business units have already been assigned.</p>
-              )}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Assessor (Optional)</label>
-              <MultiSelectDropdown
-                title="Assessor"
-                items={(tenantUsers || []).map((tu) => ({
-                  value: String(tu.user_id),
-                  label: tu.user?.display_name || tu.user?.username || tu.user?.email || `User #${tu.user_id}`,
-                  subLabel: tu.user?.email,
-                }))}
-                selectedValues={selectedAssessorId ? [String(selectedAssessorId)] : []}
-                onApply={(vals) => setSelectedAssessorId(Number(vals[0] || 0))}
-                multiSelect={false}
-                triggerVariant="input"
-                placeholder="Select assessor"
-                forceSearch
-                className="w-full"
-                triggerClassName="w-full"
-              />
-            </div>
-          </div>
-          <div className="flex justify-end gap-3 mt-6">
-            <button type="button" onClick={() => { setIsAssignModalOpen(false); setSelectedBusinessUnitId(0); setSelectedAssessorId(0); }} className="btn-secondary">
-              Cancel
-            </button>
-            <button type="submit" className="btn-primary" disabled={assignMutation.isPending || !selectedBusinessUnitId}>
-              {assignMutation.isPending ? 'Assigning...' : 'Assign'}
-            </button>
-          </div>
-        </form>
-      </RightSlidePanel>
+      {manage && <EditCampaignSheet key={`e${editing}`} open={editing} details={d} onClose={() => setEditing(false)} />}
+      {manage && <AddUnitsSheet key={`a${adding}`} open={adding} campaignId={d.id} tenantId={d.tenant_id} taken={units.map((u) => u.business_unit_id)} onClose={() => setAdding(false)} />}
+      {actions.dialog}
     </div>
   );
+}
+
+export default function RcsaCampaignPage() {
+  return <Suspense fallback={null}><Workspace /></Suspense>;
 }
