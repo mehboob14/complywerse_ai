@@ -824,7 +824,7 @@ def get_inventory_overview(
     from ..modules.it_assets.scoring import score_inventory
     tids = get_user_tenants(current_user, db)
     if not tids:
-        return {"as_of": None, "counts": {}, "sections": {},
+        return {"as_of": None, "target": 85, "customized": False, "counts": {}, "sections": {},
                 "performance": {"score": None, "grade": None, "components": []},
                 "attention_queue": {}}
     return score_inventory(db, tids)

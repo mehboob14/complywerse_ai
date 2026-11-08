@@ -706,6 +706,33 @@ def get_documents_overview(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    """The Governance scorecard (rules and shape: _documents_overview). A read never writes: the health trend is the snapshots
+    kept so far (POST /documents-overview/snapshot keeps them) plus today's score in memory."""
+    return _documents_overview(db, current_user, tenant_id)
+
+
+@router.post("/documents-overview/snapshot")
+def snapshot_documents_overview(
+    tenant_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Keep today's Governance health score (one row per tenant and day, asking again the same day replaces it), so the 12-month
+    health trend has a history. This is what GET /documents-overview used to do on every read. Same access as the GET."""
+    from grc.services import metric_snapshots as _ms
+    data = _documents_overview(db, current_user, tenant_id)
+    score = data["performance"]["score"]
+    tids = [tenant_id] if tenant_id else get_user_tenants(current_user, db)
+    written = 0
+    if score is not None and tids:
+        _ms.ensure_table(db)
+        _ms.upsert(db, tids[0], "governance_health", datetime.utcnow().date(), score)
+        db.commit()
+        written = 1
+    return {"as_of": data["as_of"], "score": score, "written": written}
+
+
+def _documents_overview(db: Session, current_user: GRCUser, tenant_id: Optional[int] = None):
     """Deep per-section dashboard for the Governance / Documents module.
 
     Every functional area of the module (Documents register, Mappings,
@@ -763,7 +790,7 @@ def get_documents_overview(
         return round(sum(m["score"] * m["weight"] for m in avail) / total_w, 1)
 
     if not scoped:
-        return {"as_of": now.isoformat(), "sections": {}, "attention_queue": {},
+        return {"as_of": now.isoformat(), "target": 85, "customized": False, "sections": {}, "attention_queue": {},
                 "performance": {"score": None, "grade": None, "components": []}}
 
     # ================= raw reads (each group guarded so one missing =========
@@ -1403,20 +1430,21 @@ def get_documents_overview(
     else:
         grade = "poor"
 
-    # Health-score history: snapshot today's weighted governance score and read
-    # back a monthly series so the overview draws a real 12-month trend. Starts
-    # from today and fills in over time — no fabricated history.
+    # Health-score history: the monthly series the overview draws as a real 12-month
+    # trend = the snapshots kept so far (POST /documents-overview/snapshot keeps them)
+    # with today's score in memory, so the line ends at the number on the screen. A
+    # read never writes. Starts from the first snapshot — no fabricated history.
     health_trend = []
     try:
         from grc.services import metric_snapshots as _ms
         from calendar import month_abbr
         _ms.ensure_table(db)
-        _tid = scoped[0]
+        _hist = _ms.read_trend(db, [scoped[0]], "governance_health", days=400)
         if performance_score is not None:
-            _ms.upsert(db, _tid, "governance_health", now.date(), performance_score)
-            db.commit()
+            _today = now.date().isoformat()
+            _hist = [_h for _h in _hist if _h["date"] != _today] + [{"date": _today, "value": performance_score}]
         _by_month = {}
-        for _h in _ms.read_trend(db, [_tid], "governance_health", days=400):
+        for _h in _hist:
             _by_month[_h["date"][:7]] = _h["value"]  # ascending — last value per month wins
         for _ym, _val in list(_by_month.items())[-12:]:
             _y, _m = _ym.split("-")
@@ -1427,6 +1455,8 @@ def get_documents_overview(
     expiring_docs_30 = sections["documents"]["counts"]["expiring_30d"]
     return {
         "as_of": now.isoformat(),
+        "target": _target,                                     # the tenant's target (85 unless tuned) and whether it was tuned
+        "customized": sc_cfg.is_customized(_cfg, "governance"),
         "sections": sections,
         "attention_queue": {
             "documents_awaiting_approval": docs_awaiting_approval,

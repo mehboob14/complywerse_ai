@@ -344,6 +344,8 @@ def score_inventory(db, tids, now=None):
 
     return {
         "as_of": now.isoformat(),
+        "target": _target,                                     # the tenant's target (85 unless tuned) and whether it was tuned
+        "customized": sc_cfg.is_customized(_cfg, "assets"),
         # True when there is no inventory to score at all — the UI should show
         # "No assets yet", never a number.
         "no_data": N == 0,

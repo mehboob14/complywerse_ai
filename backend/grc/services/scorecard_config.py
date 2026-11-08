@@ -214,6 +214,14 @@ def apply_overrides(sections: list, cfg: dict):
     return round(sum(s["score"] * s["weight"] for s in scored) / tw, 1) if (scored and tw) else None
 
 
+def is_customized(cfg: dict, module: str) -> bool:
+    """True when the tenant changed this module's section weights, metric weights or target (the one rule the editor's
+    ``merged()`` and the scorecard payloads' top-level ``customized`` share)."""
+    default_target = DEFAULTS.get(module, {}).get("target", 85)
+    return (bool(cfg.get("weights")) or bool(cfg.get("metric_weights"))
+            or cfg.get("target", default_target) != default_target)
+
+
 def merged(db: Session, tenant_id: int, module: str) -> dict:
     """Section weights + target (defaults merged with overrides) — for the card editor."""
     d = DEFAULTS.get(module, {})
@@ -230,5 +238,5 @@ def merged(db: Session, tenant_id: int, module: str) -> dict:
         "sections": sections,
         "target": target,
         "default_target": default_target,
-        "customized": bool(w) or bool(cfg.get("metric_weights")) or target != default_target,
+        "customized": is_customized(cfg, module),
     }

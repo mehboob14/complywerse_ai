@@ -70,7 +70,7 @@ def get_sections_overview(
     today = date.today()
 
     if not scoped:
-        return {"as_of": now.isoformat(), "sections": {}, "attention_queue": {},
+        return {"as_of": now.isoformat(), "target": 85, "customized": False, "sections": {}, "attention_queue": {},
                 "performance": {"score": None, "grade": None, "components": []}}
 
     # ================= Risk Register =========================================
@@ -736,6 +736,8 @@ def get_sections_overview(
 
     return {
         "as_of": now.isoformat(),
+        "target": _target,                                     # the tenant's target (85 unless tuned) and whether it was tuned
+        "customized": sc_cfg.is_customized(_cfg, "erm"),
         "sections": sections,
         "attention_queue": {
             "critical_open_risks": critical_open,

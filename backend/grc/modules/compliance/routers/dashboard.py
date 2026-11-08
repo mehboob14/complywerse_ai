@@ -782,14 +782,13 @@ def get_compliance_sections_overview(
         RegulatoryChange, RegulatoryImpactAssessment, RegulatoryImplementationTask,
         RegulatoryFeedSource, RegulatoryFeedItem,
         CertificationJourney, ControlImplementation, ImplementationEvidence,
-        ControlWorkItem, ControlWorkTest,
         PolicyStatementCompliance, PolicyGapFinding,
     )
     user_tenants = get_user_tenants(current_user, db)
     scoped = [tenant_id] if (tenant_id and tenant_id in user_tenants) else user_tenants
     now = datetime.utcnow()
     if not scoped:
-        return {"as_of": now.isoformat(), "sections": {}, "attention_queue": {},
+        return {"as_of": now.isoformat(), "target": 85, "customized": False, "sections": {}, "attention_queue": {},
                 "performance": {"score": None, "grade": None, "components": []}}
 
     # ---------- Frameworks (REAL compliance posture, not the upload pipeline) ----------
@@ -1047,41 +1046,20 @@ def get_compliance_sections_overview(
     ]
 
     # ---------- Control Effectiveness (CT&A workbench) ----------
-    # Mirror internal controls into work items before scoring (same as assurance board).
-    try:
-        from grc.modules.control_library.routers.workbench import ensure_tables, sync_internal_control_work_items
-        ensure_tables(db)
-        uid = getattr(current_user, "id", None)
-        for tid in scoped:
-            sync_internal_control_work_items(db, tid, created_by=uid)
-        db.flush()
-    except Exception:
-        db.rollback()
-
     # The assurance layer: a control being "implemented"/"verified" is not the
     # same as it being TESTED and operating effectively. Reads the CT&A workbench
     # (ControlWorkItem / ControlWorkTest) — design vs operating effectiveness,
-    # test currency and exception-clean test results.
-    try:
-        wis = db.query(
-            ControlWorkItem.id, ControlWorkItem.status,
-            ControlWorkItem.design_effectiveness, ControlWorkItem.operating_effectiveness,
-            ControlWorkItem.last_tested_at, ControlWorkItem.next_test_date,
-            ControlWorkItem.is_key_control,
-        ).filter(ControlWorkItem.tenant_id.in_(scoped)).all()
-    except _SQLErr:
-        db.rollback(); wis = []
+    # test currency and exception-clean test results. An internal control with no
+    # work item yet is scored as the work item it would get (in memory, like the
+    # assurance board): a read writes nothing. See control_library/scorecard_rows.
+    from grc.modules.control_library.scorecard_rows import work_rows
+    wis, tests = work_rows(db, scoped)
     _EFF_RATED = ("effective", "partially_effective", "ineffective")
     wi_active = [w for w in wis if (w.status or "") == "active"]
     n_wi = len(wi_active)
     # Real test records grouped by work item — a dropdown value alone no longer
     # counts a control as "tested"; it needs an actual last_tested_at timestamp
     # or at least one ControlWorkTest row.
-    try:
-        tests = db.query(ControlWorkTest.work_item_id, ControlWorkTest.exceptions_found).filter(
-            ControlWorkTest.tenant_id.in_(scoped)).all()
-    except _SQLErr:
-        db.rollback(); tests = []
     tested_wi_ids = {t.work_item_id for t in tests if t.work_item_id is not None}
     wi_tested = [w for w in wi_active
                  if w.last_tested_at is not None or w.id in tested_wi_ids]
@@ -1168,6 +1146,8 @@ def get_compliance_sections_overview(
 
     return {
         "as_of": now.isoformat(),
+        "target": _target,                                     # the tenant's target (85 unless tuned) and whether it was tuned
+        "customized": sc_cfg.is_customized(_cfg, "compliance"),
         "sections": sections,
         "attention_queue": {
             # Non-overlapping actionable buckets (a control gap is counted once).
