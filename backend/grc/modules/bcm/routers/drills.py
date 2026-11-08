@@ -4,18 +4,19 @@ from typing import List, Optional
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from ....models import (
-    BcmPlan, BcmDrill, BcmDrillResult, BcmFinding, RiskIncident, Risk,
+    BcmPlan, BcmDrill, BcmDrillResult, BcmFinding, RiskIncident, Risk, Evidence,
     GRCUser, get_db,
 )
 from ....routers.auth_router import require_auth, get_user_tenants, require_tenant_permission
 from ._common import (
-    DRILL_STATUSES, DRILL_TYPES, SOURCE_TYPES, SEVERITIES,
+    DRILL_STATUSES, DRILL_TYPES, SOURCE_TYPES, SEVERITIES, NAME_MAX, LEAN_MAX,
+    NotNullWhenSet, hours_field,
     get_or_404, audit, get_or_create_settings, severity_at_or_above,
-    create_issue_for_finding, create_risk,
+    create_issue_for_finding, create_risk, lean_drills, lean_findings,
     serialize_drill, serialize_result, serialize_finding, is_drill_overdue,
 )
 
@@ -25,7 +26,7 @@ router = APIRouter(tags=["BCM - Drills & Findings"])
 # ── Schemas ─────────────────────────────────────────────────────────────────
 class DrillCreate(BaseModel):
     plan_id: int
-    title: str
+    title: str = Field(min_length=1, max_length=NAME_MAX)
     drill_type: Optional[str] = "tabletop"
     scenario: Optional[str] = None
     scheduled_date: Optional[datetime] = None
@@ -35,8 +36,9 @@ class DrillCreate(BaseModel):
     linked_incident_id: Optional[int] = None
 
 
-class DrillUpdate(BaseModel):
-    title: Optional[str] = None
+class DrillUpdate(NotNullWhenSet):
+    not_null = ("title", "drill_type")
+    title: Optional[str] = Field(None, min_length=1, max_length=NAME_MAX)
     drill_type: Optional[str] = None
     scenario: Optional[str] = None
     scheduled_date: Optional[datetime] = None
@@ -52,22 +54,27 @@ class DrillTransition(BaseModel):
 class ResultUpsert(BaseModel):
     rto_met: Optional[bool] = None
     rpo_met: Optional[bool] = None
-    actual_rto_hours: Optional[int] = None
-    actual_rpo_hours: Optional[int] = None
+    actual_rto_hours: Optional[int] = hours_field()
+    actual_rpo_hours: Optional[int] = hours_field()
     summary: Optional[str] = None
     evidence_ref_id: Optional[int] = None
 
 
 class FindingCreate(BaseModel):
-    title: str
+    title: str = Field(min_length=1, max_length=NAME_MAX)
     description: Optional[str] = None
     severity: Optional[str] = "medium"
+    owner_id: Optional[int] = None
+    due_date: Optional[datetime] = None
 
 
-class FindingUpdate(BaseModel):
-    title: Optional[str] = None
+class FindingUpdate(NotNullWhenSet):
+    not_null = ("title", "severity")
+    title: Optional[str] = Field(None, min_length=1, max_length=NAME_MAX)
     description: Optional[str] = None
     severity: Optional[str] = None
+    owner_id: Optional[int] = None
+    due_date: Optional[datetime] = None
 
 
 class FindingLinkRisk(BaseModel):
@@ -101,11 +108,14 @@ def list_drills(
     search: Optional[str] = Query(None),
     skip: int = 0,
     limit: int = 200,
+    lean: bool = Query(False, description="the whole register in a few queries, with the counts the quick views read (up to 5,000 drills)"),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
     _p: bool = Depends(require_tenant_permission("bcm:drills:view")),
 ):
     tenant_ids = _tenant(current_user, db)
+    if lean:
+        limit = max(1, min(limit, LEAN_MAX))
     q = db.query(BcmDrill).filter(BcmDrill.tenant_id.in_(tenant_ids))
     if plan_id:
         q = q.filter(BcmDrill.plan_id == plan_id)
@@ -116,12 +126,14 @@ def list_drills(
     if search:
         q = q.filter(BcmDrill.title.ilike(f"%{search}%"))
     rows = q.order_by(BcmDrill.scheduled_date.desc().nullslast(), BcmDrill.created_at.desc()).all()
-    serialized = [serialize_drill(db, d) for d in rows]
-    # "overdue" is a derived/effective status — filter on it post-serialize.
+    # "overdue" is a derived/effective status: filter on the stored rows (it is worked out from the row alone), then serialise only the page asked for
     if status_filter and status_filter != "all":
-        serialized = [s for s in serialized if s["effective_status"] == status_filter]
-    total = len(serialized)
-    return {"items": serialized[skip:skip + limit], "total": total, "skip": skip, "limit": limit}
+        rows = [d for d in rows if ("overdue" if is_drill_overdue(d) else d.status) == status_filter]
+    total = len(rows)
+    page = rows[skip:skip + limit]
+    if lean:
+        return {"items": lean_drills(db, page, tenant_ids), "total": total, "skip": skip, "limit": limit, "truncated": total > skip + len(page)}
+    return {"items": [serialize_drill(db, d) for d in page], "total": total, "skip": skip, "limit": limit}
 
 
 @router.post("/drills", status_code=status.HTTP_201_CREATED)
@@ -269,6 +281,9 @@ def upsert_result(
 ):
     tenant_ids = _tenant(current_user, db)
     drill = get_or_404(BcmDrill, drill_id, tenant_ids, db, "Drill")
+    evidence_id = payload.evidence_ref_id
+    if evidence_id is not None and not db.query(Evidence.id).filter(Evidence.id == evidence_id, Evidence.tenant_id.in_(tenant_ids)).first():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence not found")
     res = db.query(BcmDrillResult).filter(BcmDrillResult.drill_id == drill.id).first()
     is_new = res is None
     if is_new:
@@ -289,6 +304,53 @@ def upsert_result(
 
 
 # ── Findings ────────────────────────────────────────────────────────────────
+@router.get("/findings")
+def list_all_findings(
+    severity: Optional[str] = Query(None),
+    status_filter: Optional[str] = Query(None, description="open, closed, or an issue state (new, triage, in_progress, resolution, closure_review, cancelled)"),
+    drill_id: Optional[int] = Query(None),
+    plan_id: Optional[int] = Query(None),
+    owner_id: Optional[int] = Query(None),
+    has_issue: Optional[bool] = Query(None),
+    search: Optional[str] = Query(None),
+    skip: int = 0,
+    limit: int = 1000,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _p: bool = Depends(require_tenant_permission("bcm:findings:view")),
+):
+    """Every finding of every drill: the Findings register. Each row names its drill and plan, its owner and due day, and where its issue stands (read live from the
+    issue, as everywhere in BCM). `status_filter` works on that derived state, so it is applied after the rows are read."""
+    tenant_ids = _tenant(current_user, db)
+    limit = max(1, min(limit, LEAN_MAX))
+    q = db.query(BcmFinding).filter(BcmFinding.tenant_id.in_(tenant_ids))
+    if severity and severity != "all":
+        q = q.filter(BcmFinding.severity == severity)
+    if drill_id:
+        q = q.filter(BcmFinding.drill_id == drill_id)
+    if plan_id:
+        q = q.filter(BcmFinding.drill_id.in_(db.query(BcmDrill.id).filter(BcmDrill.plan_id == plan_id, BcmDrill.tenant_id.in_(tenant_ids))))
+    if owner_id:
+        q = q.filter(BcmFinding.owner_id == owner_id)
+    if has_issue is True:
+        q = q.filter(BcmFinding.linked_issue_id.isnot(None))
+    elif has_issue is False:
+        q = q.filter(BcmFinding.linked_issue_id.is_(None))
+    if search:
+        q = q.filter(BcmFinding.title.ilike(f"%{search}%"))
+    rows = lean_findings(db, q.order_by(BcmFinding.created_at.desc(), BcmFinding.id.desc()).all(), tenant_ids)
+    if status_filter and status_filter != "all":
+        if status_filter == "open":
+            rows = [r for r in rows if r["is_open"]]
+        elif status_filter == "closed":
+            rows = [r for r in rows if not r["is_open"]]
+        else:
+            rows = [r for r in rows if r["issue_status"] == status_filter]
+    total = len(rows)
+    page = rows[skip:skip + limit]
+    return {"items": page, "total": total, "skip": skip, "limit": limit, "truncated": total > skip + len(page)}
+
+
 @router.get("/drills/{drill_id}/findings")
 def list_findings(
     drill_id: int,
@@ -317,12 +379,16 @@ def create_finding(
     sev = (payload.severity or "medium").lower()
     if sev not in SEVERITIES:
         raise HTTPException(status_code=400, detail=f"Invalid severity. One of {sorted(SEVERITIES)}")
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [payload.owner_id])
     finding = BcmFinding(
         tenant_id=drill.tenant_id,
         drill_id=drill.id,
         title=payload.title,
         description=payload.description,
         severity=sev,
+        owner_id=payload.owner_id,
+        due_date=payload.due_date,
         created_by=current_user.id,
     )
     db.add(finding)
@@ -356,6 +422,8 @@ def update_finding(
     data = payload.model_dump(exclude_unset=True)
     if "severity" in data and data["severity"] not in SEVERITIES:
         raise HTTPException(status_code=400, detail="Invalid severity")
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [data.get("owner_id")], kept=[finding.owner_id])
     for k, v in data.items():
         setattr(finding, k, v)
     finding.updated_at = datetime.utcnow()

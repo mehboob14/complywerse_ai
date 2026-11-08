@@ -593,6 +593,9 @@ _COLUMN_ADDS = [
     ("grc_policy_gap_findings", "applied_statement_prev_text", "TEXT", None),
     # BCM BIA → IT asset inventory linkage (added after tables were provisioned).
     ("grc_bcm_bia_records", "linked_asset_ids", "JSON", None),
+    # BCM findings: who fixes a finding and by when (the Findings register)
+    ("grc_bcm_findings", "owner_id", "INTEGER", None),
+    ("grc_bcm_findings", "due_date", "TIMESTAMP", None),
     # ERM provenance — where each risk originated (manual entry, register
     # import, assessment, incident, RCSA, framework gap, UBL/NCA bridge).
     # All nullable so existing risks remain untouched; populated by writers

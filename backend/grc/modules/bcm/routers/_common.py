@@ -8,15 +8,17 @@ in exactly one place.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Optional
+from typing import ClassVar, Dict, List, Optional, Tuple
 
 from fastapi import HTTPException, status
+from pydantic import BaseModel, Field, model_validator
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ....models import (
     BcmPlan, BcmBiaRecord, BcmBiaDependency, BcmRecoveryStrategy,
     BcmDrill, BcmDrillResult, BcmFinding, BcmSettings,
-    GRCUser, GovernanceDocument, Risk, RiskIncident, Issue, ITAsset,
+    GRCUser, GovernanceDocument, Risk, RiskIncident, Issue, ITAsset, Evidence,
 )
 from ....rich_audit import write_rich_audit_log
 
@@ -37,6 +39,28 @@ STRATEGY_STATUSES = {"proposed", "approved", "rejected"}
 TESTING_FREQUENCIES = {"annual", "semi_annual", "quarterly"}
 
 SEVERITY_ORDER = {"low": 1, "medium": 2, "high": 3, "critical": 4}
+
+# ── Length and range limits (what the columns hold; more used to be a bare 500) ──
+NAME_MAX = 255                 # String(255) titles, names and business units
+HOURS_MAX = 2147483647         # a Postgres integer
+LEAN_MAX = 5000                # the most rows one lean list returns (the answer says `truncated` when more match)
+
+
+def hours_field():
+    """An optional whole number of hours, 0 up to what the column holds."""
+    return Field(None, ge=0, le=HOURS_MAX)
+
+
+class NotNullWhenSet(BaseModel):
+    """Base of an update body: a field named in `not_null` may be left out but not sent as null (its column is NOT NULL: null was a bare 500)."""
+    not_null: ClassVar[Tuple[str, ...]] = ()
+
+    @model_validator(mode="after")
+    def _no_nulls(self):
+        for name in self.not_null:
+            if name in self.model_fields_set and getattr(self, name) is None:
+                raise ValueError(f"{name} cannot be empty")
+        return self
 
 # Issue workflow_states considered still-open (mirrors issue module).
 ISSUE_OPEN_STATES = {"new", "triage", "in_progress", "resolution", "closure_review"}
@@ -284,6 +308,7 @@ def serialize_drill(db: Session, drill: BcmDrill, *, with_children: bool = False
 
 
 def serialize_result(db: Session, res: BcmDrillResult) -> dict:
+    evidence = db.query(Evidence.name).filter(Evidence.id == res.evidence_ref_id).first() if res.evidence_ref_id else None
     return {
         "id": res.id,
         "drill_id": res.drill_id,
@@ -293,6 +318,7 @@ def serialize_result(db: Session, res: BcmDrillResult) -> dict:
         "actual_rpo_hours": res.actual_rpo_hours,
         "summary": res.summary,
         "evidence_ref_id": res.evidence_ref_id,
+        "evidence_ref_title": evidence[0] if evidence else None,
         "recorded_by": res.recorded_by,
         "recorded_by_name": user_name(db, res.recorded_by),
         "recorded_at": _iso(res.recorded_at),
@@ -317,6 +343,9 @@ def serialize_finding(db: Session, f: BcmFinding) -> dict:
         "is_open": view["is_open"],
         "linked_risk_id": f.linked_risk_id,
         "linked_risk_title": risk_title,
+        "owner_id": f.owner_id,
+        "owner_name": user_name(db, f.owner_id),
+        "due_date": _iso(f.due_date),
         "created_at": _iso(f.created_at),
         "updated_at": _iso(f.updated_at),
     }
@@ -405,3 +434,102 @@ def create_risk(db: Session, *, tenant_id: int, user_id: Optional[int], title: s
     db.add(risk)
     db.flush()
     return risk
+
+
+# ── Lean lists: a whole register in a few queries ────────────────────────────
+# The explorers load their register once and filter it in the browser, so these answer with the same fields as the one-row serializers above
+# (plus a few counts the quick views read) without a query per row. The default list routes are unchanged.
+def _name_map(db: Session, ids) -> Dict[int, Optional[str]]:
+    wanted = {i for i in ids if i}
+    if not wanted:
+        return {}
+    return {uid: name for uid, name in db.query(GRCUser.id, GRCUser.display_name).filter(GRCUser.id.in_(wanted)).all()}
+
+
+def _titles(db: Session, model, title_column, ids) -> Dict[int, Optional[str]]:
+    wanted = {i for i in ids if i}
+    if not wanted:
+        return {}
+    return {i: t for i, t in db.query(model.id, title_column).filter(model.id.in_(wanted)).all()}
+
+
+def _issue_states(db: Session, issue_ids) -> Dict[int, Tuple[Optional[str], Optional[str], Optional[str]]]:
+    wanted = {i for i in issue_ids if i}
+    if not wanted:
+        return {}
+    return {i: (state, code, sev) for i, state, code, sev in db.query(Issue.id, Issue.workflow_state, Issue.code, Issue.severity).filter(Issue.id.in_(wanted)).all()}
+
+
+def lean_plans(db: Session, plans: List[BcmPlan], tenant_ids: List[int]) -> List[dict]:
+    names = _name_map(db, [p.owner_id for p in plans] + [p.approved_by for p in plans])
+    docs = _titles(db, GovernanceDocument, GovernanceDocument.title, [p.document_ref_id for p in plans])
+    scope = BcmBiaRecord.tenant_id.in_(tenant_ids)
+    bia = dict(db.query(BcmBiaRecord.plan_id, func.count(BcmBiaRecord.id)).filter(scope).group_by(BcmBiaRecord.plan_id).all())
+    incomplete = dict(db.query(BcmBiaRecord.plan_id, func.count(BcmBiaRecord.id)).filter(scope, BcmBiaRecord.is_complete.isnot(True)).group_by(BcmBiaRecord.plan_id).all())
+    drill_scope = BcmDrill.tenant_id.in_(tenant_ids)
+    drills = dict(db.query(BcmDrill.plan_id, func.count(BcmDrill.id)).filter(drill_scope).group_by(BcmDrill.plan_id).all())
+    last = dict(db.query(BcmDrill.plan_id, func.max(func.coalesce(BcmDrill.scheduled_date, BcmDrill.created_at))).filter(drill_scope).group_by(BcmDrill.plan_id).all())
+    return [{
+        "id": p.id, "tenant_id": p.tenant_id, "title": p.title, "description": p.description, "business_unit": p.business_unit, "status": p.status,
+        "document_ref_id": p.document_ref_id, "document_title": docs.get(p.document_ref_id),
+        "owner_id": p.owner_id, "owner_name": names.get(p.owner_id),
+        "rto_hours": p.rto_hours, "rpo_hours": p.rpo_hours, "testing_frequency": p.testing_frequency, "version": p.version,
+        "approved_by": p.approved_by, "approved_by_name": names.get(p.approved_by), "approved_date": _iso(p.approved_date), "next_review_due": _iso(p.next_review_due),
+        "created_at": _iso(p.created_at), "updated_at": _iso(p.updated_at),
+        "bia_count": bia.get(p.id, 0), "drill_count": drills.get(p.id, 0),
+        # what the quick views read: the BIA processes still without a recovery strategy, and the day of the plan's latest drill (scheduled day, else when it was made)
+        "bia_incomplete": incomplete.get(p.id, 0), "last_drill_at": _iso(last.get(p.id)),
+    } for p in plans]
+
+
+def lean_drills(db: Session, drills: List[BcmDrill], tenant_ids: List[int]) -> List[dict]:
+    names = _name_map(db, [d.owner_id for d in drills])
+    plan_titles = {i: t for i, t in db.query(BcmPlan.id, BcmPlan.title).filter(BcmPlan.tenant_id.in_(tenant_ids)).all()}
+    incidents = _titles(db, RiskIncident, RiskIncident.title, [d.linked_incident_id for d in drills])
+    has_result = {r for (r,) in db.query(BcmDrillResult.drill_id).filter(BcmDrillResult.tenant_id.in_(tenant_ids)).all()}
+    pairs = db.query(BcmFinding.drill_id, BcmFinding.linked_issue_id).filter(BcmFinding.tenant_id.in_(tenant_ids)).all()
+    states = _issue_states(db, [i for _, i in pairs])
+    total: Dict[int, int] = {}
+    opened: Dict[int, int] = {}
+    for drill_id, issue_id in pairs:
+        total[drill_id] = total.get(drill_id, 0) + 1
+        state = states.get(issue_id, (None,))[0] if issue_id else None
+        if state is None or state in ISSUE_OPEN_STATES:               # same rule as finding_issue_view: no issue (or one that is gone) is open
+            opened[drill_id] = opened.get(drill_id, 0) + 1
+    out = []
+    for d in drills:
+        overdue = is_drill_overdue(d)
+        out.append({
+            "id": d.id, "plan_id": d.plan_id, "plan_title": plan_titles.get(d.plan_id), "title": d.title, "drill_type": d.drill_type,
+            "scheduled_date": _iso(d.scheduled_date), "actual_start": _iso(d.actual_start), "actual_end": _iso(d.actual_end),
+            "owner_id": d.owner_id, "owner_name": names.get(d.owner_id), "status": d.status, "is_overdue": overdue,
+            "effective_status": "overdue" if overdue else d.status, "source_type": d.source_type,
+            "linked_incident_id": d.linked_incident_id, "linked_incident_title": incidents.get(d.linked_incident_id),
+            "created_at": _iso(d.created_at), "updated_at": _iso(d.updated_at),
+            "has_result": d.id in has_result, "finding_count": total.get(d.id, 0), "open_finding_count": opened.get(d.id, 0),
+        })
+    return out
+
+
+def lean_findings(db: Session, findings: List[BcmFinding], tenant_ids: List[int]) -> List[dict]:
+    names = _name_map(db, [f.owner_id for f in findings])
+    drills = {d.id: d for d in db.query(BcmDrill).filter(BcmDrill.tenant_id.in_(tenant_ids), BcmDrill.id.in_({f.drill_id for f in findings})).all()} if findings else {}
+    plan_titles = {i: t for i, t in db.query(BcmPlan.id, BcmPlan.title).filter(BcmPlan.tenant_id.in_(tenant_ids)).all()}
+    states = _issue_states(db, [f.linked_issue_id for f in findings])
+    risks = _titles(db, Risk, Risk.title, [f.linked_risk_id for f in findings])
+    out = []
+    for f in findings:
+        d = drills.get(f.drill_id)
+        issue = states.get(f.linked_issue_id) if f.linked_issue_id else None
+        out.append({
+            "id": f.id, "drill_id": f.drill_id, "drill_title": d.title if d else None, "drill_owner_id": d.owner_id if d else None,
+            "plan_id": d.plan_id if d else None, "plan_title": plan_titles.get(d.plan_id) if d else None,
+            "title": f.title, "description": f.description, "severity": f.severity,
+            "linked_issue_id": f.linked_issue_id if issue else None, "issue_code": issue[1] if issue else None,
+            "issue_status": issue[0] if issue else "open",
+            "is_open": True if not issue else issue[0] in ISSUE_OPEN_STATES,
+            "linked_risk_id": f.linked_risk_id, "linked_risk_title": risks.get(f.linked_risk_id),
+            "owner_id": f.owner_id, "owner_name": names.get(f.owner_id), "due_date": _iso(f.due_date),
+            "created_at": _iso(f.created_at), "updated_at": _iso(f.updated_at),
+        })
+    return out
