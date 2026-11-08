@@ -17,6 +17,8 @@ from ....models import (
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 from ....services import evidence_review
+from ..freshness import is_lapsed, lapsed_clause
+from ..lean import lean_page
 
 EVIDENCE_UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "uploads", "evidence")
 os.makedirs(EVIDENCE_UPLOAD_DIR, exist_ok=True)
@@ -147,7 +149,9 @@ def serialize_evidence(evidence: Evidence, include_counts: bool = True, db: Sess
         "collection_date": evidence.collection_date.isoformat() if evidence.collection_date else None,
         "validity_period_days": evidence.validity_period_days,
         "expiry_date": evidence.expiry_date.isoformat() if evidence.expiry_date else None,
-        "is_stale": evidence.is_stale,
+        # past its validity, worked out now (freshness.py): the stored flag is only ever set by hand
+        "is_stale": is_lapsed(evidence, datetime.utcnow()),
+        "lapsed": is_lapsed(evidence, datetime.utcnow()),
         "source_system": evidence.source_system,
         "content_summary": evidence.content_summary,
         "quality_score": evidence.quality_score,
@@ -269,6 +273,7 @@ def list_evidence(
     search: Optional[str] = None,
     skip: int = 0,
     limit: int = 100,
+    lean: bool = Query(False, description="The Library's complete load: every file in one request, with no text and no query per row"),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -276,24 +281,25 @@ def list_evidence(
     if not user_tenants:
         return {"items": [], "total": 0, "skip": skip, "limit": limit}
     
-    query = db.query(Evidence).options(
-        joinedload(Evidence.uploader)
-    ).filter(Evidence.tenant_id.in_(user_tenants))
+    now = datetime.utcnow()
+    query = db.query(Evidence).filter(Evidence.tenant_id.in_(user_tenants))
+    if not lean:
+        query = query.options(joinedload(Evidence.uploader))
     
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(Evidence.tenant_id == tenant_id)
-    # `stale` is not a workflow status column value — it is Evidence.is_stale
-    # (past expiry / expired lifecycle). Accept status=stale as a first-class
+    # `stale` is not a workflow status column value — it is "past its validity" (freshness.py: the flag, the
+    # expired status, or an expiry date that has gone by). Accept status=stale as a first-class
     # filter alias so list clients can filter the same way as the UI Status menu.
     if status_filter == "stale":
-        query = query.filter(Evidence.is_stale == True)  # noqa: E712
+        query = query.filter(lapsed_clause(now))
     elif status_filter:
         query = query.filter(Evidence.status == status_filter)
     if evidence_type:
         query = query.filter(Evidence.evidence_type == evidence_type)
     if is_stale is not None and status_filter != "stale":
-        query = query.filter(Evidence.is_stale == is_stale)
+        query = query.filter(lapsed_clause(now) if is_stale else ~lapsed_clause(now))
     if search:
         search_term = f"%{search}%"
         query = query.filter(
@@ -305,6 +311,9 @@ def list_evidence(
             )
         )
     
+    if lean:
+        return lean_page(db, query, skip, limit, now)
+
     total = query.count()
     
     evidence_list = query.order_by(Evidence.uploaded_at.desc()).offset(skip).limit(limit).all()
@@ -357,6 +366,8 @@ def get_evidence_dashboard(
     by_status = {}
     by_type = {}
     stale_count = 0
+    lapsed_count = 0
+    in_force_count = 0
     expiring_soon_count = 0
     pending_review_count = 0
     
@@ -369,8 +380,13 @@ def get_evidence_dashboard(
         type_val = e.evidence_type or "other"
         by_type[type_val] = by_type.get(type_val, 0) + 1
         
-        if e.is_stale:
+        # past its validity, worked out now (freshness.py); "in force" is approved AND still in date
+        lapsed = is_lapsed(e, datetime.utcnow())
+        if lapsed:
             stale_count += 1
+            lapsed_count += 1
+        elif e.status == "approved":
+            in_force_count += 1
         
         if e.expiry_date and e.expiry_date <= thirty_days_from_now and e.expiry_date > datetime.utcnow():
             expiring_soon_count += 1
@@ -412,6 +428,8 @@ def get_evidence_dashboard(
         "by_status": by_status,
         "by_type": by_type,
         "stale_count": stale_count,
+        "lapsed_count": lapsed_count,
+        "in_force_count": in_force_count,
         "expiring_soon_count": expiring_soon_count,
         "pending_review_count": pending_review_count,
         "by_month": by_month

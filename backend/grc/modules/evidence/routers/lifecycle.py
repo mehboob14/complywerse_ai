@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from ....models import Evidence, EvidenceVersion, GRCUser, get_db
 from ....routers.auth_router import require_auth, get_user_tenants
 from .evidence import serialize_evidence
+from ..freshness import lapsed_clause
 
 router = APIRouter(prefix="/lifecycle", tags=["Evidence - Lifecycle"])
 
@@ -205,11 +206,12 @@ def get_stale_evidence(
     if not user_tenants:
         return {"items": [], "total": 0}
     
+    # past its validity, worked out now (freshness.py), not the flag nobody sets
     query = db.query(Evidence).options(
         joinedload(Evidence.uploader)
     ).filter(
         Evidence.tenant_id.in_(user_tenants),
-        Evidence.is_stale == True
+        lapsed_clause(datetime.utcnow())
     )
     
     if tenant_id:

@@ -18,6 +18,7 @@ from ....models import (
     AssessmentEvidenceApprovalWorkflow
 )
 from ....routers.auth_router import require_auth, get_user_tenants
+from ..freshness import lapsed_clause
 
 router = APIRouter(prefix="/links", tags=["Evidence - Control Links"])
 
@@ -1044,6 +1045,18 @@ def get_evidence_coverage(
     
     covered_ids_list = [row[0] for row in db.query(covered_fc_ids.c.framework_control_id).all()]
     covered_ids_set = set(covered_ids_list)
+
+    # the stricter reading, beside the one above: a control with APPROVED evidence that is still in date (freshness.py).
+    # "has evidence" above counts any link of any file, draft, rejected or lapsed included, and keeps meaning that.
+    now = datetime.utcnow()
+    in_force_ids = {row[0] for row in db.query(EvidenceControlMapping.framework_control_id).join(
+        Evidence, Evidence.id == EvidenceControlMapping.evidence_id
+    ).filter(
+        evidence_filter,
+        EvidenceControlMapping.framework_control_id.isnot(None),
+        Evidence.status == "approved",
+        ~lapsed_clause(now),
+    ).distinct().all()}
     
     frameworks_data = {}
     
@@ -1063,6 +1076,8 @@ def get_evidence_coverage(
                 "controls_with_evidence": 0,
                 "controls_without_evidence": 0,
                 "coverage_percentage": 0,
+                "controls_with_approved_evidence": 0,
+                "in_force_percentage": 0,
                 "controls": []
             }
         
@@ -1073,6 +1088,8 @@ def get_evidence_coverage(
             frameworks_data[fw_key]["controls_with_evidence"] += 1
         else:
             frameworks_data[fw_key]["controls_without_evidence"] += 1
+        if control.id in in_force_ids:
+            frameworks_data[fw_key]["controls_with_approved_evidence"] += 1
         
         frameworks_data[fw_key]["controls"].append({
             "id": control.id,
@@ -1087,10 +1104,14 @@ def get_evidence_coverage(
             fw_data["coverage_percentage"] = round(
                 (fw_data["controls_with_evidence"] / fw_data["total_controls"]) * 100, 1
             )
+            fw_data["in_force_percentage"] = round(
+                (fw_data["controls_with_approved_evidence"] / fw_data["total_controls"]) * 100, 1
+            )
     
     total_controls = sum(fw["total_controls"] for fw in frameworks_data.values())
     total_with_evidence = sum(fw["controls_with_evidence"] for fw in frameworks_data.values())
     total_without = sum(fw["controls_without_evidence"] for fw in frameworks_data.values())
+    total_in_force = sum(fw["controls_with_approved_evidence"] for fw in frameworks_data.values())
     
     overall_coverage = 0
     if total_controls > 0:
@@ -1101,5 +1122,7 @@ def get_evidence_coverage(
         "controls_with_evidence": total_with_evidence,
         "controls_without_evidence": total_without,
         "coverage_percentage": overall_coverage,
+        "controls_with_approved_evidence": total_in_force,
+        "in_force_percentage": round((total_in_force / total_controls) * 100, 1) if total_controls > 0 else 0,
         "frameworks": list(frameworks_data.values())
     }
