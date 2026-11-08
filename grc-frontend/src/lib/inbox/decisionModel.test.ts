@@ -58,8 +58,10 @@ test('the payloads and endpoints match the pages that already send them (source 
   assert.match(signoff, /signDocumentOff\(documentId, \{ comment: comment \|\| undefined, signature_image: signature \|\| undefined, version: shown \?\? data\?\.version, round_at: data\?\.round_at \}\)/);
   assert.match(signoff, /rejectDocumentSignoff\(documentId, \{ comment: reason, version: shown \?\? data\?\.version, round_at: data\?\.round_at \}\)/);
   assert.match(signoff, /requestSignoffChanges\(documentId, \{ comment: reason\.trim\(\), version: shown \?\? data\?\.version, round_at: data\?\.round_at \}\)/);
-  const approvals = readFileSync('src/app/(dashboard)/compliance/assessments/approvals/page.tsx', 'utf8');
-  assert.match(approvals, /apiClient\.post\(`\/compliance\/assessments\/evidence\/\$\{approval\.id\}\/approval`, \{\s*action,\s*comments: comments \|\| undefined,/);
+  // the Pending Approvals page (which sent { action, comments } to this endpoint) forwards to Assessments > All assessments since the register revamp: this dialog is where evidence is decided, and
+  // evidenceRequest (tested above) is the body it sends: the same two keys to the same endpoint
+  const dialog = readFileSync('src/app/(dashboard)/needs-my-action/_DecisionDialog.tsx', 'utf8');
+  assert.match(dialog, /apiClient\.post\(`\/compliance\/assessments\/evidence\/\$\{item\.recordId\}\/approval`, evidenceRequest\(c\.id, comment\)\)/);
 });
 
 test('a failure is told in the server\'s words under a headline that says what to do', () => {
