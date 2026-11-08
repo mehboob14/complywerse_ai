@@ -1,32 +1,26 @@
 'use client';
 
+/**
+ * Control Assurance: how well the controls are tested, scored by weighted section over the Catalog's testing work: Coverage, Effectiveness and Testing quality. A performance card (the score and its grade,
+ * each area's score against the 85 target, "Adjust weights"), a posture radar, what needs attention, and one card per area whose formulas open in a dialog. The score, its bands and the dialogs are the
+ * shared score-kit / score-tuning pieces, unchanged; this file is the page's own layout on the design-system tokens. A read that fails is an error with Retry (it used to be drawn as a score of nothing).
+ */
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import Link from 'next/link';
-import { AlertTriangle, ClipboardCheck, ShieldCheck, FlaskConical, Radar as RadarIcon, SlidersHorizontal } from 'lucide-react';
+import { AlertTriangle, ClipboardCheck, FlaskConical, Radar as RadarIcon, ShieldCheck, SlidersHorizontal } from 'lucide-react';
 import {
-  ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-  Radar, Tooltip as RTooltip,
-  BarChart, Bar, Cell, XAxis, YAxis, ReferenceArea, ReferenceLine,
+  ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Tooltip as RTooltip, BarChart, Bar, Cell, XAxis, YAxis, ReferenceArea, ReferenceLine,
 } from 'recharts';
 import apiClient from '@/lib/api';
-import {
-  type OverviewSection,
-  scoreBand,
-  ScoreRing,
-  SectionDetailModal,
-} from '@/components/dashboard/score-kit';
+import { Button, CountRow, ErrorState, SectionCard, Skeleton, StatusPill } from '@/components/ui/ds';
+import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
+import { formatCount } from '@/lib/format';
+import { TONE, type Tone } from '@/lib/status';
+import { type OverviewSection, scoreBand, ScoreRing, SectionDetailModal } from '@/components/dashboard/score-kit';
 import { SectionWeightTunerModal } from '@/components/dashboard/score-tuning';
 import { SCORECARD_QUERY_KEYS } from '@/components/dashboard/scorecard-query-keys';
 
 const ASSURANCE_TUNING = { configBase: '/control-library/assurance', invalidateKey: [...SCORECARD_QUERY_KEYS.assurance] as unknown[] };
-
-/**
- * Control Testing & Assurance board — a first-class section-scorecard over the
- * CT&A workbench: Coverage · Effectiveness · Testing Quality. Same shape as the
- * other module overviews (perf hero + weight tuner popup, posture radar, needs-
- * attention, section formula-cards). Feeds the main-dashboard assurance card.
- */
 
 type Payload = {
   as_of: string;
@@ -35,82 +29,70 @@ type Payload = {
   performance: { score: number | null; grade: string | null };
 };
 
-const SECTION_META: Record<string, { icon: React.ElementType; href: string; short: string }> = {
-  coverage: { icon: ClipboardCheck, href: '/control-library', short: 'Coverage' },
-  effectiveness: { icon: ShieldCheck, href: '/control-library', short: 'Effectiveness' },
-  quality: { icon: FlaskConical, href: '/control-library', short: 'Quality' },
+const SECTION_META: Record<string, { icon: React.ElementType; short: string }> = {
+  coverage: { icon: ClipboardCheck, short: 'Coverage' },
+  effectiveness: { icon: ShieldCheck, short: 'Effectiveness' },
+  quality: { icon: FlaskConical, short: 'Quality' },
 };
 
-const ATTENTION_META: Array<{ key: string; label: string; href: string; color: string }> = [
-  { key: 'controls_untested', label: 'Controls not tested', href: '/control-library', color: '#0ea5e9' },
-  { key: 'overdue_control_tests', label: 'Overdue control tests', href: '/control-library', color: '#f97316' },
-  { key: 'ineffective_key_controls', label: 'Key controls not effective', href: '/control-library', color: '#e11d48' },
+const ATTENTION_META: Array<{ key: string; label: string; href: string; tone: Tone }> = [
+  { key: 'controls_untested', label: 'Controls not tested', href: '/control-library', tone: 'progress' },
+  { key: 'overdue_control_tests', label: 'Overdue control tests', href: '/control-library', tone: 'warning' },
+  { key: 'ineffective_key_controls', label: 'Key controls not effective', href: '/control-library', tone: 'danger' },
 ];
 
-/** Zone columns — one column per metric over tinted weak/fair/strong bands with the dashed 85 target. */
+const TARGET = 85;
+const bandTone = (label: string): Tone => (label === 'strong' ? 'success' : label === 'fair' ? 'warning' : label === 'weak' ? 'danger' : 'neutral');
+const bandWords = (label: string): string => (label === 'strong' ? 'Strong' : label === 'fair' ? 'Fair' : label === 'weak' ? 'Weak' : 'No data');
+const TIP = { fontSize: 12, border: '1px solid var(--ds-border)', borderRadius: 8, color: 'var(--ds-fg)' } as const;
+
+/** One column per metric over tinted weak / fair / strong bands, with the dashed target line. */
 function ZoneColumns({ metrics }: { metrics: OverviewSection['metrics'] }) {
-  const data = metrics.map((m) => ({
-    key: m.key, label: m.label,
-    score: m.score == null ? 0 : Math.round(m.score),
-    hasData: m.score != null,
-    fill: scoreBand(m.score).hex,
-  }));
+  const data = metrics.map((m) => ({ key: m.key, label: m.label, score: m.score == null ? 0 : Math.round(m.score), hasData: m.score != null, fill: scoreBand(m.score).hex }));
   return (
     <ResponsiveContainer width="100%" height="100%">
       <BarChart data={data} margin={{ top: 8, right: 6, bottom: 0, left: 6 }} barCategoryGap="26%">
         <YAxis type="number" domain={[0, 100]} hide />
         <XAxis dataKey="key" hide />
-        <ReferenceArea y1={0} y2={60} fill="#e11d48" fillOpacity={0.05} />
-        <ReferenceArea y1={60} y2={80} fill="#d97706" fillOpacity={0.06} />
-        <ReferenceArea y1={80} y2={100} fill="#059669" fillOpacity={0.06} />
-        <ReferenceLine y={85} stroke="#475569" strokeDasharray="4 3" strokeWidth={1} />
-        <RTooltip
-          cursor={{ fill: 'rgba(148,163,184,0.08)' }}
-          contentStyle={{ fontSize: 12, border: '1px solid #e2e8f0', borderRadius: 8, color: '#1e293b' }}
-          formatter={(v, _n, entry) => [`${v}%`, (entry?.payload as { label?: string })?.label ?? '']}
-          labelFormatter={() => ''}
-        />
+        <ReferenceArea y1={0} y2={60} fill={TONE.danger.dot} fillOpacity={0.06} />
+        <ReferenceArea y1={60} y2={80} fill={TONE.warning.dot} fillOpacity={0.07} />
+        <ReferenceArea y1={80} y2={100} fill={TONE.success.dot} fillOpacity={0.07} />
+        <ReferenceLine y={TARGET} stroke={TONE.neutral.dot} strokeDasharray="4 3" strokeWidth={1} />
+        <RTooltip cursor={{ fill: 'rgba(148,163,184,0.08)' }} contentStyle={TIP} formatter={(v, _n, entry) => [`${v}%`, (entry?.payload as { label?: string })?.label ?? '']} labelFormatter={() => ''} />
         <Bar dataKey="score" radius={[3, 3, 0, 0]} isAnimationActive={false} minPointSize={2}>
-          {data.map((d) => (<Cell key={d.key} fill={d.hasData ? d.fill : '#e2e8f0'} />))}
+          {data.map((d) => <Cell key={d.key} fill={d.hasData ? d.fill : TONE.neutral.border} />)}
         </Bar>
       </BarChart>
     </ResponsiveContainer>
   );
 }
 
-function SectionCard({ section, onOpen }: { section: OverviewSection; onOpen: () => void }) {
+function SectionButton({ section, onOpen }: { section: OverviewSection; onOpen: () => void }) {
   const band = scoreBand(section.score);
   const Icon = SECTION_META[section.key]?.icon ?? ClipboardCheck;
+  const score = section.score == null ? 'no score yet' : `score ${Math.round(section.score)}`;
   return (
-    <button type="button" onClick={onOpen}
-      className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30">
-      <div className="h-[3px] w-full" style={{ backgroundColor: band.hex }} />
-      <div className="flex flex-1 flex-col p-4">
-        <div className="mb-2 flex items-start justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: `${band.hex}14` }}>
-              <Icon className="h-4 w-4" style={{ color: band.hex }} />
-            </span>
-            <div className="min-w-0">
-              <h3 className="truncate text-sm font-semibold text-slate-800">{section.label}</h3>
-              <p className="text-[10px] text-slate-400">{Math.round(section.weight * 100)}% of assurance score</p>
-            </div>
-          </div>
-          <div className="flex flex-shrink-0 flex-col items-end gap-1">
-            <span className="text-2xl font-bold leading-none" style={{ color: band.hex }}>
-              {section.score == null ? '—' : Math.round(section.score)}
-            </span>
-            <span className="rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide"
-              style={{ backgroundColor: `${band.hex}14`, color: band.hex }}>{band.label}</span>
-          </div>
-        </div>
-        <div className="mt-auto h-[132px] w-full pb-1">
-          <ZoneColumns metrics={section.metrics} />
-        </div>
-        <p className="mt-1 text-center text-[10px] text-slate-400 opacity-0 transition-opacity group-hover:opacity-100">
-          click for the {section.metrics.length} formulas
-        </p>
-      </div>
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={`${section.label}, ${score}. Show the ${section.metrics.length} formulas`}
+      className="flex w-full flex-col gap-[8px] rounded-ds-card border border-ds-border bg-ds-surface p-[16px] text-left hover:bg-ds-surface-hover focus-visible:outline-none focus-visible:shadow-ds-ring"
+    >
+      <span className="flex items-start justify-between gap-[8px]">
+        <span className="flex min-w-0 items-center gap-[8px]">
+          <Icon aria-hidden className="h-[16px] w-[16px] shrink-0 text-ds-fg-muted" strokeWidth={1.75} />
+          <span className="min-w-0">
+            <span className="block truncate text-ds-body font-[600] text-ds-fg">{section.label}</span>
+            <span className="text-ds-label text-ds-fg-muted">{`${Math.round(section.weight * 100)}% of the assurance score`}</span>
+          </span>
+        </span>
+        <span className="flex shrink-0 flex-col items-end gap-[4px]">
+          <span className="text-ds-title tabular-nums text-ds-fg">{section.score == null ? '—' : Math.round(section.score)}</span>
+          <StatusPill size="sm" tone={bandTone(band.label)} label={bandWords(band.label)} />
+        </span>
+      </span>
+      <span className="block h-[132px] w-full"><ZoneColumns metrics={section.metrics} /></span>
+      <span className="text-center text-ds-label text-ds-fg-muted">{`Show the ${section.metrics.length} formulas`}</span>
     </button>
   );
 }
@@ -118,35 +100,25 @@ function SectionCard({ section, onOpen }: { section: OverviewSection; onOpen: ()
 export default function ControlAssuranceOverviewCards() {
   const [openSection, setOpenSection] = useState<OverviewSection | null>(null);
   const [tuning, setTuning] = useState(false);
-
-  const { data, isLoading } = useQuery({
+  const q = useQuery({
     queryKey: [...SCORECARD_QUERY_KEYS.assurance],
-    queryFn: async () => {
-      try { return (await apiClient.get('/control-library/assurance/sections-overview')).data as Payload; }
-      catch { return null; }
-    },
+    queryFn: async () => (await apiClient.get('/control-library/assurance/sections-overview')).data as Payload,
+    retry: (failures, e) => failures < 2 && canRetry(e),
   });
 
-  if (isLoading) {
+  if (q.isError && !q.data) {
+    return <ErrorState title="Couldn’t load the control assurance" message={errorMessage(q.error)} onRetry={canRetry(q.error) ? () => { void q.refetch(); } : undefined} />;
+  }
+  if (q.isPending || !q.data) {
     return (
-      <div className="space-y-3">
-        <div className="grid grid-cols-1 gap-3.5 xl:grid-cols-[1fr_1.1fr_1fr]">
-          {[1, 2, 3].map((i) => <div key={i} className="skeleton h-64 rounded-2xl" />)}
-        </div>
-        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
-          {[1, 2, 3].map((i) => <div key={i} className="skeleton h-56 rounded-2xl" />)}
-        </div>
+      <div aria-busy="true" className="flex flex-col gap-[12px]">
+        <div className="grid grid-cols-1 gap-[12px] xl:grid-cols-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-[256px] w-full" />)}</div>
+        <div className="grid grid-cols-1 gap-[12px] sm:grid-cols-2 xl:grid-cols-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-[224px] w-full" />)}</div>
       </div>
     );
   }
 
-  const payload = data ?? {
-    as_of: new Date().toISOString(),
-    sections: {},
-    attention_queue: { total: 0 },
-    performance: { score: null, grade: null },
-  } as Payload;
-
+  const payload = q.data;
   const score = payload.performance.score == null ? null : Math.round(payload.performance.score);
   const band = scoreBand(score);
   const order = ['coverage', 'effectiveness', 'quality'] as const;
@@ -154,116 +126,76 @@ export default function ControlAssuranceOverviewCards() {
   const attention = ATTENTION_META.map((m) => ({ ...m, count: payload.attention_queue?.[m.key] ?? 0 }));
   const attentionTotal = payload.attention_queue?.total ?? 0;
   const controlsUnderAssurance = (payload.sections?.coverage as { counts?: { active?: number } })?.counts?.active ?? 0;
-
   const radarData = order.map((key) => {
     const s = payload.sections[key];
-    const label = SECTION_META[key]?.short ?? s?.label ?? key;
-    const hasData = s?.score != null;
-    return {
-      axis: label,
-      score: hasData ? Math.round(s!.score as number) : 0,
-      target: 85,
-      hasData,
-    };
+    return { axis: SECTION_META[key]?.short ?? s?.label ?? key, score: s?.score != null ? Math.round(s.score) : 0, target: TARGET };
   });
 
   return (
-    <div className="space-y-3.5">
-      <div className="grid grid-cols-1 gap-3.5 xl:grid-cols-[0.85fr_1.1fr_0.95fr]">
-        {/* Performance */}
-        <div className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
-            <div className="flex min-w-0 items-center gap-4">
+    <div className="flex flex-col gap-[12px]">
+      <div className="grid grid-cols-1 gap-[12px] xl:grid-cols-[0.85fr_1.1fr_0.95fr]">
+        <section aria-labelledby="perf-title" className="flex flex-col justify-between gap-[16px] rounded-ds-card border border-ds-border bg-ds-surface p-[16px]">
+          <div className="flex flex-wrap items-start justify-between gap-x-[12px] gap-y-[8px]">
+            <div className="flex min-w-0 items-center gap-[16px]">
               <ScoreRing score={score} size={84} />
               <div className="min-w-0">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Control Testing &amp; Assurance</p>
-                {payload.performance.grade && (
-                  <span className="mt-1.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
-                    style={{ backgroundColor: `${band.hex}14`, color: band.hex }}>{payload.performance.grade}</span>
-                )}
-                <p className="mt-1.5 text-[11px] text-slate-400">{controlsUnderAssurance} control{controlsUnderAssurance === 1 ? '' : 's'} under assurance · {sections.length} weighted areas</p>
+                <h2 id="perf-title" className="m-0 !text-ds-body !font-[600] !text-ds-fg">Control testing and assurance</h2>
+                {payload.performance.grade && <div className="mt-[6px]"><StatusPill size="sm" tone={bandTone(band.label)} label={payload.performance.grade} /></div>}
+                <p className="m-0 mt-[6px] text-ds-label text-ds-fg-muted">{`${formatCount(controlsUnderAssurance)} ${controlsUnderAssurance === 1 ? 'control' : 'controls'} under assurance · ${formatCount(sections.length)} weighted areas`}</p>
               </div>
             </div>
-            {!tuning && (
-              <button type="button" onClick={() => setTuning(true)}
-                className="inline-flex flex-shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-slate-200 px-2 py-1 text-[10.5px] font-medium text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-700">
-                <SlidersHorizontal className="h-3 w-3" /> Adjust weights
-              </button>
-            )}
+            {!tuning && <Button size="sm" leftIcon={<SlidersHorizontal aria-hidden />} onClick={() => setTuning(true)}>Adjust weights</Button>}
           </div>
-          <div className="mt-4 space-y-2">
+          <ul className="m-0 flex list-none flex-col gap-[8px] p-0">
             {sections.map((s) => {
               const b = scoreBand(s.score);
               return (
-                <div key={s.key} className="flex items-center gap-2">
-                  <span className="w-20 flex-shrink-0 truncate text-[10.5px] text-slate-500">{SECTION_META[s.key]?.short ?? s.label}</span>
-                  <span className="relative h-1.5 flex-1 rounded-full bg-slate-100">
-                    <span className="block h-1.5 rounded-full" style={{ width: `${s.score ?? 0}%`, backgroundColor: b.hex }} />
-                    <span className="absolute inset-y-0 w-px bg-slate-300" style={{ left: '85%' }} />
+                <li key={s.key} className="flex items-center gap-[8px]">
+                  <span className="w-[96px] shrink-0 truncate text-ds-label text-ds-fg-body">{SECTION_META[s.key]?.short ?? s.label}</span>
+                  <span role="img" aria-label={`${SECTION_META[s.key]?.short ?? s.label}: ${s.score == null ? 'no score' : Math.round(s.score)} against a target of ${TARGET}`} className="relative h-[8px] flex-1 rounded-full bg-ds-surface-hover">
+                    <span className="block h-[8px] rounded-full" style={{ width: `${s.score ?? 0}%`, backgroundColor: b.hex }} />
+                    <span className="absolute inset-y-[-2px] w-px bg-ds-border-strong" style={{ left: `${TARGET}%` }} />
                   </span>
-                  <span className="w-7 flex-shrink-0 text-right text-[10.5px] font-semibold" style={{ color: b.hex }}>
-                    {s.score == null ? '—' : Math.round(s.score)}
-                  </span>
-                </div>
+                  <span className="w-[32px] shrink-0 text-right text-ds-label font-[600] tabular-nums text-ds-fg">{s.score == null ? '—' : Math.round(s.score)}</span>
+                </li>
               );
             })}
-          </div>
-        </div>
+          </ul>
+        </section>
 
-        {/* Posture radar */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-1 flex items-center gap-2">
-            <RadarIcon className="h-4 w-4 text-blue-600" />
-            <span className="text-sm font-semibold text-slate-800">Posture Radar</span>
-            <span className="ml-auto text-[10.5px] text-slate-400">score vs 85 target</span>
+        <section aria-labelledby="radar-title" className="rounded-ds-card border border-ds-border bg-ds-surface p-[16px]">
+          <div className="mb-[4px] flex items-center gap-[8px]">
+            <RadarIcon aria-hidden className="h-[16px] w-[16px] text-ds-primary-text" strokeWidth={1.75} />
+            <h2 id="radar-title" className="m-0 !text-ds-body !font-[600] !text-ds-fg">Posture radar</h2>
+            <span className="ml-auto text-ds-label text-ds-fg-muted">{`score against the ${TARGET} target`}</span>
           </div>
-          <ResponsiveContainer width="100%" height={210}>
-            {radarData.length > 0 ? (
-            <RadarChart data={radarData} outerRadius="72%">
-              <PolarGrid stroke="#e2e8f0" />
-              <PolarAngleAxis dataKey="axis" tick={{ fontSize: 11, fill: '#475569' }} />
-              <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
-              <Radar name="Target" dataKey="target" stroke="#94a3b8" fill="none" strokeDasharray="4 3" strokeWidth={1.2} />
-              <Radar name="Score" dataKey="score" stroke={band.hex} fill={band.hex} fillOpacity={0.22} strokeWidth={2} />
-              <RTooltip contentStyle={{ fontSize: 12, border: '1px solid #e2e8f0', borderRadius: 8, color: '#1e293b' }} />
-            </RadarChart>
-            ) : (
-              <div className="flex h-full items-center justify-center text-xs text-slate-400">No scored areas yet</div>
-            )}
-          </ResponsiveContainer>
-        </div>
+          <div role="img" aria-label={`Posture radar: ${radarData.map((r) => `${r.axis} ${r.score}`).join(', ')}`}>
+            <ResponsiveContainer width="100%" height={210}>
+              <RadarChart data={radarData} outerRadius="72%">
+                <PolarGrid stroke={TONE.neutral.border} />
+                <PolarAngleAxis dataKey="axis" tick={{ fontSize: 12, fill: 'var(--ds-fg-body)' }} />
+                <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
+                <Radar name="Target" dataKey="target" stroke={TONE.neutral.dot} fill="none" strokeDasharray="4 3" strokeWidth={1.2} />
+                <Radar name="Score" dataKey="score" stroke={band.hex} fill={band.hex} fillOpacity={0.22} strokeWidth={2} />
+                <RTooltip contentStyle={TIP} />
+              </RadarChart>
+            </ResponsiveContainer>
+          </div>
+        </section>
 
-        {/* Attention */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-              <AlertTriangle className="h-4 w-4 text-amber-500" /> Needs Attention
-            </span>
-            <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-bold text-white">{attentionTotal}</span>
-          </div>
-          <div className="divide-y divide-slate-50">
-            {attention.map((i) => (
-              <Link key={i.key} href={i.href}
-                className="flex items-center justify-between py-2 text-[11.5px] text-slate-600 hover:text-slate-900">
-                <span className="flex items-center gap-2 truncate">
-                  <span className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: i.count > 0 ? i.color : '#e2e8f0' }} />
-                  {i.label}
-                </span>
-                <span className={`ml-2 text-sm font-bold tabular-nums ${i.count > 0 ? 'text-slate-900' : 'text-slate-300'}`}>{i.count}</span>
-              </Link>
-            ))}
-          </div>
-        </div>
+        <SectionCard id="attention" title="Needs attention" meta={`${formatCount(attentionTotal)} in all`}>
+          <ul className="m-0 list-none divide-y divide-ds-border p-0">
+            {attention.map((a) => <CountRow key={a.key} as="li" label={a.label} count={a.count} href={a.href} tone={a.count > 0 ? a.tone : 'neutral'} />)}
+          </ul>
+          {attentionTotal === 0 && <p className="m-0 mt-[8px] inline-flex items-center gap-[6px] text-ds-label text-ds-success"><AlertTriangle aria-hidden className="h-[12px] w-[12px]" />Nothing needs attention right now.</p>}
+        </SectionCard>
       </div>
 
-      {/* Section formula cards */}
-      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
-        {sections.map((s) => <SectionCard key={s.key} section={s} onOpen={() => setOpenSection(s)} />)}
+      <div className="grid grid-cols-1 gap-[12px] sm:grid-cols-2 xl:grid-cols-3">
+        {sections.map((s) => <SectionButton key={s.key} section={s} onOpen={() => setOpenSection(s)} />)}
       </div>
 
-      {tuning && (
-        <SectionWeightTunerModal sections={sections} configBase={ASSURANCE_TUNING.configBase} invalidateKey={ASSURANCE_TUNING.invalidateKey} onClose={() => setTuning(false)} />
-      )}
+      {tuning && <SectionWeightTunerModal sections={sections} configBase={ASSURANCE_TUNING.configBase} invalidateKey={ASSURANCE_TUNING.invalidateKey} onClose={() => setTuning(false)} />}
       <SectionDetailModal section={openSection} onClose={() => setOpenSection(null)} tuning={ASSURANCE_TUNING} />
     </div>
   );

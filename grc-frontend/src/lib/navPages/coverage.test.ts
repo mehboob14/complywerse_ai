@@ -247,9 +247,10 @@ test('rights: a leaf has the sidebar\'s, a page navAccess lists has those, a pag
 // ---- the heading each entry says its page draws ----
 
 test('ownHeading is on exactly the pages that draw the kit head (PageHeader variant="page"), except the pages whose head is drawn by a component, and the Documents area where the tab strip is the top bar', () => {
-  // MetricReport.tsx and _Standalone.tsx draw it; so do Controls Automation's _explorer/ControlsExplorer, review/_review/MappingReview and assurance/_periods/AuditPeriods, and ComplianceOverview.tsx and StatementsRegister.tsx (thin-shell pages), and the control workspace (soc2-controls/[code]/_workspace/ControlHeader); the Frameworks hub (_hub/FrameworksHub), the journey (_workspace/JourneyHeader), a framework's onboarding (the workspace) and the Organisation Profile draw theirs from a component too
+  // MetricReport.tsx and _Standalone.tsx draw it; so do Controls Automation's _explorer/ControlsExplorer, review/_review/MappingReview and assurance/_periods/AuditPeriods, and ComplianceOverview.tsx and StatementsRegister.tsx (thin-shell pages), and the control workspace (soc2-controls/[code]/_workspace/ControlHeader); the Frameworks hub (_hub/FrameworksHub), the journey (_workspace/JourneyHeader), a framework's onboarding (the workspace) and the Organisation Profile draw theirs from a component too; so do the Control Catalog (controls/_catalog/CatalogPage) and the Control Library's pages (control-library/_library/*)
   const HEAD_FROM_A_COMPONENT = ['/governance/kpi-report', '/governance/mappings', '/automation/soc2-controls', '/automation/soc2-controls/review', '/automation/assurance', '/compliance', '/compliance/statements', '/automation/soc2-controls/:code',
-    '/frameworks', '/frameworks/:id', '/frameworks/onboarding/:id', '/compliance/organisation'];
+    '/frameworks', '/frameworks/:id', '/frameworks/onboarding/:id', '/compliance/organisation',
+    '/controls', '/control-library', '/control-library/:id', '/control-library/review'];       // the Control Catalog and Library (controls/_catalog/CatalogPage, control-library/_library/*)
   const DOCUMENTS_AREA_STRIP = ['/governance/documents/attestation', '/governance/documents/studio', '/governance/documents/overview', '/governance/exceptions', '/governance/reviews', '/governance/settings'];
   const drawing = pages.filter((p) => /<PageHeader[\s\S]{0,60}variant="page"/.test(read(p.file))).map((p) => p.route).sort();
   const flagged = routes.filter((e) => e.ownHeading).map((e) => e.path).sort();
@@ -281,7 +282,7 @@ test('breadcrumbFor gives a sane trail for an example URL of every module', () =
   assert.deepEqual(labels('/assessments/cs_kpi'), ['Compliance Management', 'Assessments', 'Overview', 'Framework assessments']);
   assert.deepEqual(labels('/bcm/plans/2'), ['Compliance Management', 'Business Continuity', 'Continuity Plans', 'Continuity plan']);
   assert.deepEqual(labels('/compliance/access-reviews/9'), ['Compliance Management', 'Access Reviews', 'Access review']);
-  assert.deepEqual(labels('/control-library/5'), ['Compliance Management', 'Overview', 'Unified Control Library', 'Normalized control']);
+  assert.deepEqual(labels('/control-library/5'), ['Compliance Management', 'Overview', 'Control Library', 'Control domain']);
   assert.deepEqual(labels('/automation/soc2-controls/coverage'), ['Controls Automation', 'Common Controls', 'Requirement coverage']);
   assert.deepEqual(labels('/issues/3'), ['Issue & Incident Management', 'Issues', 'Issue']);
   assert.deepEqual(labels('/auditor-portal/statutory-audit/6'), ['Auditor Portal', 'Statutory Audit', 'Audit observation']);
