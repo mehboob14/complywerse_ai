@@ -20,15 +20,15 @@ import { LensFigures } from './LensFigures';
 import { mergeItem } from './lensApi';
 import type { LensItem } from './lensData';
 import type { Tile } from './profiles';
-import { answerOfScreening, BAND_LABEL, bandOfScore, fieldOf, riskKpis, screeningVerdict, sectionOf, toRisk, withField, type Band, type Risk } from './riskModel';
+import { riskBand } from '@/lib/statuses/assessmentLenses';
+import { answerOfScreening, BAND_LABEL, bandOfScore, fieldOf, riskKpis, screeningVerdict, sectionOf, toRisk, withField, type Risk } from './riskModel';
 import { useLensData } from './useLensData';
 
-const BAND_TONE: Record<Band, 'danger' | 'warning' | 'progress' | 'success' | 'neutral'> = { critical: 'danger', high: 'warning', medium: 'progress', low: 'success', none: 'neutral' };
 const SCHEMA = { item: integer(0, { min: 0 }) };
 
 function ScorePill({ score }: { score: number }) {
   const band = bandOfScore(score);
-  return band === 'none' ? <span className="text-ds-body text-ds-fg-muted">{EMPTY}</span> : <StatusPill tone={BAND_TONE[band]} label={`${score} · ${BAND_LABEL[band]}`} size="sm" />;
+  return band === 'none' ? <span className="text-ds-body text-ds-fg-muted">{EMPTY}</span> : <StatusPill tone={riskBand.tone(band)} label={`${score} · ${BAND_LABEL[band]}`} size="sm" />;
 }
 
 export default function DpiaLens({ assessmentId, readOnly, onChanged }: LensProps) {

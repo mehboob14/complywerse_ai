@@ -18,13 +18,13 @@ import { ItemPanelHost } from './ItemPanelHost';
 import { LensFigures } from './LensFigures';
 import { matchesText } from './lensData';
 import type { Tile } from './profiles';
-import { BAND_LABEL, entriesOf, namedBand, namedBandBand, NAMED_BANDS, pick, REGISTERS, registerKpis, type Band, type Entry, type RegisterKind } from './riskModel';
+import { riskBand } from '@/lib/statuses/assessmentLenses';
+import { entriesOf, namedBand, namedBandBand, NAMED_BANDS, pick, REGISTERS, registerKpis, type Entry, type RegisterKind } from './riskModel';
 import { useLensData } from './useLensData';
 
 const SCHEMA = { q: text(), item: integer(0, { min: 0 }) };
-const BAND_TONE: Record<Band, 'danger' | 'warning' | 'progress' | 'success' | 'neutral'> = { critical: 'danger', high: 'warning', medium: 'progress', low: 'success', none: 'neutral' };
 
-const Rating = ({ value }: { value: string }) => (value ? <StatusPill tone={BAND_TONE[namedBandBand(namedBand(value))]} label={value} size="sm" /> : <span className="text-ds-body text-ds-fg-muted">{EMPTY}</span>);
+const Rating = ({ value }: { value: string }) => (value ? <StatusPill tone={riskBand.tone(namedBandBand(namedBand(value)))} label={value} size="sm" /> : <span className="text-ds-body text-ds-fg-muted">{EMPTY}</span>);
 
 export default function RegisterLens({ kind, assessmentId, readOnly, onChanged }: LensProps & { kind: RegisterKind }) {
   const cfg = REGISTERS[kind];
@@ -89,7 +89,6 @@ export default function RegisterLens({ kind, assessmentId, readOnly, onChanged }
                   );
                 })}
               </ul>
-              <p className="mt-[8px] text-ds-label text-ds-fg-muted">{BAND_LABEL.critical}, high, medium, low and very low as the register words them.</p>
             </SectionCard>
           )}
           {k.inherent.length > 0 && (

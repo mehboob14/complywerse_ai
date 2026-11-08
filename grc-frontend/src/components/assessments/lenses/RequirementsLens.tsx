@@ -48,8 +48,10 @@ function scaleOptions(profile: Profile): Array<{ value: string; label: string }>
   return out;
 }
 
-export function RequirementsLens({ profile, assessmentId, readOnly, onChanged, panel, toolbar, groupActions }: LensProps & {
+export function RequirementsLens({ profile, assessmentId, readOnly, onChanged, panel, toolbar, groupActions, enrich }: LensProps & {
   profile: Profile;
+  /** facts the assessment read does not carry, added to the controls before anything is counted (the DCC control type of the NCA container) */
+  enrich?: (items: LensItem[]) => LensItem[];
   /** buttons at the right of the filter bar (Add control) */
   toolbar?: ReactNode;
   /** under a group's heading, above its table (Delete this domain) */
@@ -59,7 +61,8 @@ export function RequirementsLens({ profile, assessmentId, readOnly, onChanged, p
 }) {
   const qc = useQueryClient();
   const notify = useNotify();
-  const { query, detail, items: all } = useLensData(assessmentId);
+  const { query, detail, items: loaded } = useLensData(assessmentId);
+  const all = useMemo(() => (enrich ? enrich(loaded) : loaded), [loaded, enrich]);
   const { days } = useSlaDays();
   const [a, set] = useAddressState(SCHEMA);
   const [openRows, setOpenRows] = useState<Array<string | number>>([]);

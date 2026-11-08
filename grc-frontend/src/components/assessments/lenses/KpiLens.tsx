@@ -16,6 +16,8 @@ import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { rowCountText } from '@/components/ui/ds/tableModel';
 import { EMPTY, formatCount, formatDate } from '@/lib/format';
 import { buildKpis, type Kpi } from '@/components/dashboard/kpiShared';
+import { statusPill } from '@/lib/status';
+import { kpiStanding } from '@/lib/statuses/assessmentLenses';
 import type { LensProps } from '../workspace/lens';
 import { LensFigures } from './LensFigures';
 import { lensApi } from './lensApi';
@@ -26,11 +28,10 @@ import { useLensData } from './useLensData';
 
 const SCHEMA = { q: text(), kpi: text() };
 const pct = (v: number | null): string => (v == null ? EMPTY : `${Math.round(v)}%`);
-const STATE = { below: { tone: 'danger', label: 'Below target' }, on: { tone: 'success', label: 'On target' }, external: { tone: 'neutral', label: 'External' } } as const;
 const EMPTY_FORM = { number: '', domain: '', name: '', definition: '', source: '' };
 
 export default function KpiLens({ assessmentId, readOnly, onChanged }: LensProps) {
-  const { query, detail, items } = useLensData(assessmentId);
+  const { query, detail } = useLensData(assessmentId);
   const live = useQuery({ queryKey: ['assessment-lens-kpi-live'], queryFn: lensApi.kpiLive, staleTime: 30_000 });
   const [a, set] = useAddressState(SCHEMA);
   const [adding, setAdding] = useState(false);
@@ -48,7 +49,6 @@ export default function KpiLens({ assessmentId, readOnly, onChanged }: LensProps
   const shown = useMemo(() => kpis.filter((k) => matchesText(`${k.domain} ${k.topic} ${k.def}`, a.q)), [kpis, a.q]);
   const key = (k: Kpi): string => `${k.domain}|${k.topic}`;
   const opened = a.kpi ? kpis.find((k) => key(k) === a.kpi) ?? null : null;
-  void items;
 
   if (query.isPending) return <SkeletonLines lines={6} label="Loading the KPI report" />;
   if (query.isError || !detail) return <ErrorState title="Couldn't load the KPI report" message={errorMessage(query.error)} onRetry={canRetry(query.error) ? () => { void query.refetch(); } : undefined} />;
@@ -64,7 +64,7 @@ export default function KpiLens({ assessmentId, readOnly, onChanged }: LensProps
       key: 'kpi', header: 'KPI', isRowHeader: true, width: 'w-[44%]',
       cell: (k) => (<span className="block min-w-0"><span className="block text-ds-label text-ds-fg-muted">{k.domain}</span><span className="line-clamp-2 break-words text-ds-body text-ds-fg" title={k.topic}>{k.topic}</span></span>),
     },
-    { key: 'state', header: 'Status', card: 'meta', cell: (k) => <StatusPill tone={STATE[stateOf(k)].tone} label={STATE[stateOf(k)].label} size="sm" /> },
+    { key: 'state', header: 'Status', card: 'meta', cell: (k) => <StatusPill {...statusPill(kpiStanding, stateOf(k))} size="sm" /> },
     { key: 'actual', header: 'Actual', align: 'right', card: 'meta', cell: (k) => <span className="text-ds-body tabular-nums text-ds-fg">{k.live ? pct(k.actual) : EMPTY}</span> },
     { key: 'target', header: 'Target', align: 'right', priority: 2, card: 'meta', cell: (k) => <span className="text-ds-body tabular-nums text-ds-fg-body">{k.live ? pct(k.target) : EMPTY}</span> },
     { key: 'bar', header: 'Progress', priority: 3, card: 'hide', width: 'w-[160px]', cell: (k) => (k.live ? <ProgressBar value={k.actual} label={`${k.topic} actual`} showValue={false} tone={k.onTarget === false ? 'danger' : 'success'} /> : <span className="text-ds-body text-ds-fg-muted">{EMPTY}</span>) },
@@ -90,7 +90,7 @@ export default function KpiLens({ assessmentId, readOnly, onChanged }: LensProps
         />
       )}
       {opened && (
-        <SidePanel open onClose={() => set({ kpi: '' })} title={opened.topic} width="md" dockFrom={Infinity} subtitle={<span className="flex flex-wrap items-center gap-[8px]"><StatusPill tone={STATE[stateOf(opened)].tone} label={STATE[stateOf(opened)].label} size="sm" /><span className="text-ds-label text-ds-fg-muted">{opened.domain}</span></span>}>
+        <SidePanel open onClose={() => set({ kpi: '' })} title={opened.topic} width="md" dockFrom={Infinity} subtitle={<span className="flex flex-wrap items-center gap-[8px]"><StatusPill {...statusPill(kpiStanding, stateOf(opened))} size="sm" /><span className="text-ds-label text-ds-fg-muted">{opened.domain}</span></span>}>
           <div className="flex flex-col gap-[16px]">
             <dl className="grid grid-cols-2 gap-[12px]">
               <div><dt className="text-ds-label text-ds-fg-muted">Actual</dt><dd className="text-ds-section font-[600] tabular-nums text-ds-fg">{opened.live ? pct(opened.actual) : EMPTY}</dd></div>

@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  answerFor, answerFromMaturity, asvsFacts, asvsInScope, asvsLevels, byLeadingNumber, coverageShare, dccType, englishLabel, evidenceAsked, groupOf, isGapScore, masvsFacts, masvsLevels, masvsPlatforms,
+  answerFor, answerFromMaturity, answerWord, asvsFacts, asvsInScope, asvsLevels, byLeadingNumber, coverageShare, dccType, englishLabel, evidenceAsked, groupOf, isGapScore, masvsFacts, masvsLevels, masvsPlatforms,
   maturityBand, maturityFacts, maturityStats, matchesText, metShare, owaspFacts, pdplFacts, splitBilingual, tally, toLensItem, weightedShare, type LensItem, type LensRaw,
 } from './lensData.ts';
 
@@ -108,9 +108,11 @@ test('DCC: the Arabic sentence goes second, the domain reads in English, Essenti
   assert.deepEqual(splitBilingual('نص عربي فقط'), { en: 'نص عربي فقط', ar: '' }, 'Arabic only stays visible');
   assert.equal(englishLabel('1- الحوكمة (Governance)'), '1 · Governance');
   assert.equal(englishLabel('Plain domain'), 'Plain domain');
-  assert.equal(dccType('high'), 'essential');
-  assert.equal(dccType('medium'), 'sub');
-  assert.equal(dccType(''), 'sub');
+  assert.equal(dccType(item(1, 'complied', { priority: 'high' })), 'essential');
+  assert.equal(dccType(item(1, 'complied', { priority: 'medium' })), 'sub');
+  assert.equal(dccType(item(1, 'complied', { priority: '' })), 'sub');
+  assert.equal(dccType(toLensItem({ id: 1, control_type: 'basic' })), 'essential', 'the NCA container says basic');
+  assert.equal(dccType(toLensItem({ id: 1, control_type: 'sub' })), 'sub');
 });
 
 test('grouping keeps the workbook order or sorts by the leading number; search is plain text', () => {
@@ -120,4 +122,9 @@ test('grouping keeps the workbook order or sorts by the leading number; search i
   assert.equal(matchesText('Reset the PASSWORD', ' password '), true);
   assert.equal(matchesText('abc', ''), true);
   assert.equal(matchesText('abc', 'xyz'), false);
+});
+
+test('Not answered is sent as a word the server reads as Not answered (it reads "in_progress" as Partially complied)', () => {
+  assert.equal(answerWord('in_progress'), 'pending');
+  for (const s of ['complied', 'partially_complied', 'not_complied', 'na']) assert.equal(answerWord(s), s);
 });

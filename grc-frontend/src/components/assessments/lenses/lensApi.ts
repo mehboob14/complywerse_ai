@@ -6,7 +6,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import apiClient, { assetsApi } from '@/lib/api';
 import { KEYS } from '../workspace/workspaceApi';
 import type { AssessmentDetail } from '../workspace/types';
-import type { LensRaw } from './lensData';
+import { answerWord, type LensRaw } from './lensData';
 
 const BASE = '/compliance/assessments';
 
@@ -19,7 +19,7 @@ export interface AnswerBody { compliance_status?: string; asset_id?: number; mat
 export interface Application { id: number; name: string; asset_type?: string | null }
 
 export const lensApi = {
-  setAnswer: async (itemId: number, body: AnswerBody): Promise<Record<string, unknown>> => (await apiClient.put(`${BASE}/items/${itemId}`, body)).data,
+  setAnswer: async (itemId: number, body: AnswerBody): Promise<Record<string, unknown>> => (await apiClient.put(`${BASE}/items/${itemId}`, body.compliance_status ? { ...body, compliance_status: answerWord(body.compliance_status) } : body)).data,
   setApplications: async (id: number, assetIds: number[]): Promise<unknown> => (await apiClient.put(`${BASE}/${id}/assets`, { asset_ids: assetIds })).data,
   setTargetLevel: async (id: number, assetId: number, level: number): Promise<unknown> => (await apiClient.put(`${BASE}/${id}/asset-level`, { asset_id: assetId, level })).data,
   /** the live value of every KPI the platform owns the data for (a read: it writes nothing) */

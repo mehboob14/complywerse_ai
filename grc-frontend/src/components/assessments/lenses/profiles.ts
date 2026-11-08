@@ -157,14 +157,14 @@ export const DCC: Profile = {
   facet: {
     label: 'Type',
     options: () => [{ value: 'essential', label: 'Essential' }, { value: 'sub', label: 'Sub-control' }],
-    match: (it, chosen) => chosen.includes(dccType(it.priority)),
+    match: (it, chosen) => chosen.includes(dccType(it)),
   },
   searchText: (it) => `${it.number} ${splitBilingual(it.description).en} ${it.sub}`,
-  chips: (it) => [dccType(it.priority) === 'essential' ? 'Essential' : 'Sub-control'],
+  chips: (it) => [dccType(it) === 'essential' ? 'Essential' : 'Sub-control'],
   facts: (it) => { const b = splitBilingual(it.description); return [{ label: 'Sub-domain', value: englishLabel(it.sub) }, { label: 'Arabic text', value: b.ar, long: true, rtl: true }].filter((x) => x.value); },
   tiles: (items) => {
     const t = tally(items);
-    const essential = items.filter((i) => dccType(i.priority) === 'essential').length;
+    const essential = items.filter((i) => dccType(i) === 'essential').length;
     return [
       { label: 'Compliance', value: `${weightedShare(t)}%`, progress: weightedShare(t), info: 'Implemented controls count whole, partly implemented ones count half. A control that does not apply is left out.' },
       { label: 'Controls', value: count(t.total), note: `${count(t.answered)} assessed` },

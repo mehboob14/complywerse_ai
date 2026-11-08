@@ -9,6 +9,8 @@ import { normaliseItem, type ControlStatus, type RawItem, type WorkItem } from '
 /** A control as the detail read sends it: the workspace's fields plus the two a lens uses. */
 export interface LensRaw extends RawItem {
   subdomain_name?: string | null;
+  /** the DCC control type the NCA container stores: basic or sub */
+  control_type?: string | null;
   /** the answer per application (ASVS on an uploaded workbook): `{ "<asset id>": "complied" }` */
   asset_status?: Record<string, string> | null;
 }
@@ -16,6 +18,8 @@ export interface LensRaw extends RawItem {
 export interface LensItem extends WorkItem {
   /** the sub-heading under the domain (a sub-domain, a section) */
   sub: string;
+  /** 'basic' or 'sub' for a DCC control of the NCA container, '' otherwise */
+  controlType: string;
   assetStatus: Record<string, ControlStatus>;
 }
 
@@ -26,10 +30,16 @@ export function toLensItem(raw: LensRaw): LensItem {
   const base = normaliseItem(raw);
   const per: Record<string, ControlStatus> = {};
   for (const [k, v] of Object.entries(raw.asset_status ?? {})) per[k] = asStatus(v);
-  return { ...base, sub: (raw.subdomain_name ?? '').trim(), assetStatus: per };
+  return { ...base, sub: (raw.subdomain_name ?? '').trim(), controlType: (raw.control_type ?? '').trim().toLowerCase(), assetStatus: per };
 }
 
 /** The answer of a control; for an application of an uploaded workbook, that application's own answer (not answered when it has none). */
+/**
+ * The word the server is sent for an answer. The server reads a word through its list of spellings and "in_progress" is also spelled "in progress", which that list gives to
+ * Partially complied first: sending it would save Partially complied. "pending" is one of Not answered's own spellings and reads the same on every server, fixed or not.
+ */
+export const answerWord = (status: string): string => (status === 'in_progress' ? 'pending' : status);
+
 export function answerFor(item: LensItem, assetId: number | null): ControlStatus {
   return assetId == null ? item.status : item.assetStatus[String(assetId)] ?? 'in_progress';
 }
@@ -110,8 +120,8 @@ export function englishLabel(text: string | null | undefined): string {
   if (paren) return num ? `${num} · ${paren.trim()}` : paren.trim();
   return splitBilingual(t).en || t;
 }
-/** The DCC control type the workbook stores in priority: high is Essential, anything else Sub. */
-export const dccType = (priority: string): 'essential' | 'sub' => (priority === 'high' ? 'essential' : 'sub');
+/** The DCC control type: the tool workbook stores it in priority (high is Essential), the NCA container in its control type (basic is Essential); anything else is a sub-control. */
+export const dccType = (item: Pick<LensItem, 'priority' | 'controlType'>): 'essential' | 'sub' => (item.priority === 'high' || item.controlType === 'basic' ? 'essential' : 'sub');
 
 // ── counting ────────────────────────────────────────────────────────────────────
 export interface Tally { total: number; complied: number; partial: number; notComplied: number; na: number; open: number; answered: number }
@@ -248,10 +258,10 @@ export function groupBy<T>(items: readonly T[], key: (item: T) => string, order?
 }
 /** The controls grouped by their domain. */
 export const groupOf = <T extends { domain: string }>(items: readonly T[], order?: (a: string, b: string) => number): Array<Group<T>> => groupBy(items, (i) => i.domain, order);
-/** "1-2 Governance" before "10 Risk": the number the domain starts with, else last. */
+/** "1-2 Governance" before "10 Risk": the number the domain starts with; domains with no number keep the order they were listed in (the sort is stable). */
 export function byLeadingNumber(a: string, b: string): number {
   const n = (s: string): number => { const m = /^(\d+)/.exec(s); return m ? parseInt(m[1], 10) : 99; };
-  return n(a) - n(b) || a.localeCompare(b);
+  return n(a) - n(b);
 }
 export const matchesText = (text: string, q: string): boolean => {
   const needle = q.trim().toLowerCase();
