@@ -38,6 +38,12 @@ test('open gaps age by how far off their date is, with the server\'s due date; d
   assert.equal(remediationClock(ITEMS, { critical_days: 30, high_days: 60, medium_days: 90, low_days: 180, due_soon_days: 45 }, NOW, null).dueSoon, 2, 'the tenant\'s own horizon');
 });
 
+test('without the counts of the board the same numbers come from the controls: gaps, open, overdue, closed', () => {
+  const c = remediationClock(ITEMS, undefined, NOW, null);
+  assert.deepEqual(c.local, { gaps: 7, open: 6, overdue: 1, closed: 1 });
+  assert.equal(c.local.open, c.agingTotal);
+});
+
 test('closed on time is read from the server\'s metric, and only when something was closed', () => {
   const metric = { key: 'on_time', label: 'Closed on time', weight: 0.4, score: 100, numerator: 3, denominator: 4, formula: '' };
   assert.deepEqual(remediationClock(ITEMS, undefined, NOW, null, [metric]).closedOnTime, { done: 3, of: 4 });

@@ -116,7 +116,7 @@ export function ItemsTab({ assessmentId, assessmentName, items, days, readOnly, 
 
   const table = (rows: readonly WorkItem[], caption: string, footer?: ReactNode, sortable = true) => (
     <RegisterTable
-      caption={caption} columns={columns} rows={rows.slice()} getRowId={(r) => r.id}
+      caption={caption} columns={sortable ? columns : columns.filter((c) => c.key !== 'domain')} rows={rows.slice()} getRowId={(r) => r.id}
       sort={sortable ? sort : undefined} onSortChange={sortable ? (next) => change({ sort: next ? { key: next.key as SortKey, dir: next.dir } : null }) : undefined}
       onRowActivate={(r) => set({ item: r.id })} selectedId={open?.id ?? null}
       cardTitle={(r) => <span className="block min-w-0"><span className="block text-ds-label text-ds-fg-muted">{r.number || EMPTY}</span><span className="line-clamp-3 break-words text-ds-body font-[600] text-ds-fg">{r.description}</span></span>}
@@ -168,7 +168,7 @@ export function ItemsTab({ assessmentId, assessmentName, items, days, readOnly, 
       )}
 
       {open && (
-        <ItemDrawer assessmentId={assessmentId} assessmentName={assessmentName} item={open} domains={allDomains} readOnly={readOnly} structuredRemarks={structuredRemarks}
+        <ItemDrawer assessmentId={assessmentId} assessmentName={assessmentName} item={open} domains={allDomains} days={days} readOnly={readOnly} structuredRemarks={structuredRemarks}
           prev={near.prev} next={near.next} onOpen={(id) => set({ item: id })} onClose={() => set({ item: 0 })} onChanged={onChanged} />
       )}
       {a.item > 0 && !open && (

@@ -11,13 +11,14 @@ import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, Download, FileUp, Pencil, Play, RotateCcw, Trash2 } from 'lucide-react';
 import { PageHeading } from '@/components/ui/ds/PageHeading';
-import { Button, EmptyState, Menu, Notice, StatTile, StatusPill, TabPanel, Tabs, useConfirm, useNotify, useReportedMutation, useTabParam, type MenuItem } from '@/components/ui/ds';
+import { Button, EmptyState, Menu, Notice, ReadOnlyNote, StatTile, StatusPill, TabPanel, Tabs, useConfirm, useNotify, useReportedMutation, useTabParam, type MenuItem } from '@/components/ui/ds';
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { usePermissions } from '@/hooks/usePermissions';
 import { formatCount, formatDate, orEmpty, UNASSIGNED } from '@/lib/format';
 import { statusPill } from '@/lib/status';
 import { grade as gradeWords, lifecycle as lifecycleWords } from '@/lib/statuses/assessments';
 import { stageState } from '@/components/compliance/scoping/scopingModel';
+import { remediationClock } from './clockModel';
 import { DetailsDialog } from './DetailsDialog';
 import { ItemsTab } from './ItemsTab';
 import { normaliseItem } from './itemModel';
@@ -29,7 +30,7 @@ import { ScopeTab, type StageKey } from './ScopeTab';
 import type { AssessmentDetail } from './types';
 import { useScoping } from './useScoping';
 import { KEYS, refreshWorkspaceCaches, workspaceApi, type ReuploadPreview, type ReuploadResult } from './workspaceApi';
-import { actionsFor, BACK, defaultTabFor, entryOf, headFacts, readOnlyFor, scoreView, tabsFor } from './workspaceModel';
+import { actionsFor, answeredShare, BACK, defaultTabFor, entryOf, headFacts, readOnlyFor, scoreView, tabsFor } from './workspaceModel';
 
 const SHELL = 'mx-auto flex max-w-7xl flex-col gap-[16px]';
 const STAGES: StageKey[] = ['scope', 'people', 'plan'];
@@ -58,19 +59,22 @@ export function AssessmentWorkspace({ detail }: { detail: AssessmentDetail }) {
   const [editing, setEditing] = useState(false);
   const [reading, setReading] = useState(false);
 
-  const scopeQ = useQuery({ queryKey: KEYS.scope(id), queryFn: () => workspaceApi.scope(id), staleTime: 15_000 });
-  const scoreQ = useQuery({ queryKey: KEYS.score(id), queryFn: () => workspaceApi.score(id), staleTime: 15_000 });
+  const scopeQ = useQuery({ queryKey: KEYS.scope(id), queryFn: () => workspaceApi.scope(id), staleTime: 15_000, retry: (failures, error) => failures < 2 && canRetry(error) });
+  const scoreQ = useQuery({ queryKey: KEYS.score(id), queryFn: () => workspaceApi.score(id), staleTime: 15_000, retry: (failures, error) => failures < 2 && canRetry(error) });
   const { days } = useSlaDays();
 
   const scoped = !!detail.scope_model;
+  const container = detail.assessment_format === 'nca_container';                  // the NCA workspace holds no controls of its own: no score, no count
   const phase = detail.phase;
   const kind = kindOf(detail.assessment_format);
   const facts = headFacts(detail);
   const items = useMemo(() => detail.items.map(normaliseItem), [detail.items]);
   const entry = entryOf(scoreQ.data, id);
   const score = scoreView(entry);
+  const own = useMemo(() => remediationClock(items, days, Date.now(), null).local, [items, days]);
+  const openGaps = typeof entry?.sla_counts?.open === 'number' ? entry.sla_counts.open : own.open;           // the board's count, else the controls' own
   const lenses = useMemo(() => resolveLenses(LENSES, { format: detail.assessment_format, scoped, phase }), [detail.assessment_format, scoped, phase]);
-  const tabs = tabsFor({ scoped, phase, totalItems: detail.total_items ?? items.length, openGaps: entry?.sla_counts?.open ?? null, controls: lenses.controls, lensTabs: lenses.tabs });
+  const tabs = tabsFor({ scoped, phase, totalItems: container ? null : detail.total_items ?? items.length, openGaps: scoreQ.isPending ? null : openGaps, controls: lenses.controls, lensTabs: lenses.tabs });
   const [tab, setTab] = useTabParam('tab', tabs.filter((t) => !t.disabled).map((t) => t.key), { fallback: defaultTabFor({ scoped, phase }) });
   const actions = actionsFor({ phase, status: detail.status, scoped, readOnly, format: detail.assessment_format });
   const refresh = () => refreshWorkspaceCaches(qc, id);
@@ -157,12 +161,15 @@ export function AssessmentWorkspace({ detail }: { detail: AssessmentDetail }) {
   ];
 
   const sv = scopeQ.data;
-  const subject = sv?.primary_asset?.name ?? sv?.scope.function ?? sv?.scope.system ?? null;
+  const subjectRaw = sv?.primary_asset?.name ?? sv?.scope.function ?? sv?.scope.system ?? null;
+  const subject = subjectRaw && subjectRaw !== detail.name ? subjectRaw : null;
   const owner = sv?.owner?.name ?? null;
   const life = statusPill(lifecycleWords, facts.lifecycle);
   const scoreError = scoreQ.isError ? { title: "Couldn't load the score", message: errorMessage(scoreQ.error), onRetry: canRetry(scoreQ.error) ? () => { void scoreQ.refetch(); } : undefined } : null;
   const draft = scoped && phase === 'scoping';
   const sla = entry?.sla_counts;
+  const answered = answeredShare(detail);
+  const overdueGaps = typeof sla?.overdue === 'number' ? sla.overdue : own.overdue;
 
   return (
     <div className={SHELL}>
@@ -179,27 +186,34 @@ export function AssessmentWorkspace({ detail }: { detail: AssessmentDetail }) {
           </>
         )}
       />
+      {readOnly && !draft && <ReadOnlyNote>You can look at this assessment but not change it.</ReadOnlyNote>}
       {reading && <p role="status" className="text-ds-label text-ds-fg-muted">Reading the file…</p>}
-      {draft && !scopeQ.data?.readiness?.ready && scopeQ.data && <Notice tone="info" title="This assessment has not started">Fill in the scope and the people; the questions open when you press Start.</Notice>}
 
-      {!draft && (
+      {!draft && !container && (
         <div className="grid grid-cols-2 gap-[12px] lg:grid-cols-4">
-          <StatTile
-            label="Score" value={score.score === null ? null : formatCount(Math.round(score.score))} unit={score.score === null ? undefined : 'of 100'} progress={score.score}
-            info={score.counted ? 'The share of applicable controls that comply, weighted by how the type of assessment is scored. Nothing is scored until controls are answered.' : 'The board counts an assessment once it has answers; a plain upload or an unanswered questionnaire is not scored.'}
-            loading={scoreQ.isPending} error={scoreError} tone={score.grade === 'poor' ? 'danger' : score.grade === 'excellent' ? 'success' : 'default'}
-          >
-            {score.grade && <StatusPill {...statusPill(gradeWords, score.grade)} size="sm" className="mt-[8px]" />}
-          </StatTile>
+          {score.counted || scoreQ.isPending || scoreError ? (
+            <StatTile
+              label="Score" value={score.score === null ? null : formatCount(Math.round(score.score))} unit={score.score === null ? undefined : 'of 100'} progress={score.score}
+              info="The share of applicable controls that comply, weighted by how the type of assessment is scored. Nothing is scored until controls are answered."
+              loading={scoreQ.isPending} error={scoreError} tone={score.grade === 'poor' ? 'danger' : score.grade === 'excellent' ? 'success' : 'default'}
+            >
+              {score.grade && <StatusPill {...statusPill(gradeWords, score.grade)} size="sm" className="mt-[8px]" />}
+            </StatTile>
+          ) : (
+            <StatTile
+              label="Answered" value={formatCount(answered.answered)} unit={`of ${formatCount(answered.total)}`} progress={answered.total ? Math.round((answered.answered / answered.total) * 100) : null}
+              info="The board gives a score to the types of assessment it scores; this one is not scored, so this is how much of it has an answer."
+            />
+          )}
           <StatTile
             label="Remediation score" value={score.sla === null ? null : formatCount(Math.round(score.sla))} unit={score.sla === null ? undefined : 'of 100'} progress={score.sla}
-            info="How well the gaps are closed on time. It is separate from the score and is empty while there is no gap to close."
+            info={score.counted ? 'How well the gaps are closed on time. It is separate from the score and is empty while there is no gap to close.' : 'The board scores how well gaps are closed on time for the types it scores; this type has no such score.'}
             loading={scoreQ.isPending} error={scoreError}
           />
           <StatTile
-            label="Open gaps" value={sla && typeof sla.open === 'number' ? formatCount(sla.open) : null} unit={sla?.open === 1 ? 'gap' : 'gaps'}
-            note={sla && typeof sla.overdue === 'number' ? `${formatCount(sla.overdue)} overdue` : undefined} tone={sla?.overdue ? 'danger' : 'default'}
-            loading={scoreQ.isPending} error={scoreError} link={{ href: `?tab=remediation`, label: 'Open gaps. See the Remediation tab' }}
+            label="Open gaps" value={formatCount(openGaps)} unit={openGaps === 1 ? 'gap' : 'gaps'}
+            note={`${formatCount(overdueGaps)} overdue`} tone={overdueGaps ? 'danger' : 'default'}
+            loading={scoreQ.isPending} error={scoreError} link={{ href: '?tab=remediation', label: 'Open gaps. See the Remediation tab' }}
           />
           <StatTile
             label="Due" value={detail.due_date ? formatDate(detail.due_date, { calendar: true }) : 'Not set'}
@@ -208,7 +222,7 @@ export function AssessmentWorkspace({ detail }: { detail: AssessmentDetail }) {
         </div>
       )}
 
-      <Tabs tabs={tabs} value={tab} onChange={setTab} ariaLabel="Assessment sections" className="flex flex-col gap-[16px]">
+      <Tabs tabs={tabs} value={tab} onChange={setTab} countFormat="exact" ariaLabel="Assessment sections" className="flex flex-col gap-[16px]">
         <TabPanel tabKey="controls">
           <div className="pt-[16px]">
             {draft ? (

@@ -20,6 +20,7 @@ test('the address: a positive whole number is an assessment, anything else is no
 test('tabs of an uploaded assessment: Controls and Remediation, then the lens tabs; a lens may rename Controls', () => {
   assert.deepEqual(tabsFor(base), [{ key: 'controls', label: 'Controls', count: 280 }, { key: 'remediation', label: 'Remediation', count: 14 }]);
   assert.deepEqual(tabsFor({ ...base, controls: lens('maturity', 'Capabilities', 'controls'), lensTabs: [lens('artifacts', 'Artifacts')] }).map((t) => t.label), ['Capabilities', 'Remediation', 'Artifacts']);
+  assert.deepEqual(tabsFor({ ...base, totalItems: null })[0], { key: 'controls', label: 'Controls' }, 'the NCA workspace holds no controls of its own: no count');
   assert.deepEqual(tabsFor({ ...base, openGaps: null })[1], { key: 'remediation', label: 'Remediation' }, 'a board that does not count it gives no number, never 0');
 });
 

@@ -25,7 +25,7 @@ function Missing({ title, message, retry }: { title: string; message: string; re
 }
 
 function Loaded({ id }: { id: number }) {
-  const q = useQuery({ queryKey: KEYS.detail(id), queryFn: () => workspaceApi.detail(id), staleTime: 15_000 });
+  const q = useQuery({ queryKey: KEYS.detail(id), queryFn: () => workspaceApi.detail(id), staleTime: 15_000, retry: (failures, error) => failures < 3 && canRetry(error) });
   if (q.isPending) {
     return (
       <div role="status" aria-label="Loading the assessment" className="mx-auto flex max-w-7xl flex-col gap-[16px]">

@@ -1,7 +1,7 @@
 // The Remediation clock of one assessment: how many gaps are open, overdue, due soon and closed, and how the open ones age. The headline numbers are the server's
 // (`/overview?assessment_id=` -> `sla_counts`, the ones the board and the Performance Overview show); the due-soon count and the ageing are worked out from the controls
 // with the server's own due-date rule (itemModel.dueMs), so for the checklist, ASVS, DCC and Mobile formats the two agree. Pure (`node --test clockModel.test.ts`).
-import { DEFAULT_SLA_DAYS, dueMs, isOpenGap, type SlaDays, type WorkItem } from './itemModel.ts';
+import { DEFAULT_SLA_DAYS, dueMs, isGap, isOpenGap, type SlaDays, type WorkItem } from './itemModel.ts';
 import type { Metric, SlaCounts } from './types.ts';
 
 const DAY = 86_400_000;
@@ -20,6 +20,8 @@ export interface Clock {
   dueSoonDays: number;
   /** "closed on time": gaps closed on or before their date, of those closed, as the server scores it */
   closedOnTime: { done: number; of: number } | null;
+  /** the same counts worked out from the controls (the checklist rule): shown when the board does not count this assessment, so a plain upload still has its numbers */
+  local: { gaps: number; open: number; overdue: number; closed: number };
   /** the open gaps by how far off their date is */
   aging: AgeBucket[];
   agingTotal: number;
@@ -31,7 +33,10 @@ const daysTo = (due: number, now: number): number => Math.floor((due - now) / DA
 export function remediationClock(items: readonly WorkItem[], days: SlaDays = DEFAULT_SLA_DAYS, now: number = Date.now(), server: SlaCounts | null = null, metrics: readonly Metric[] = []): Clock {
   const age: Record<AgeKey, number> = { overdue: 0, d30: 0, d60: 0, d90: 0, later: 0, none: 0 };
   let dueSoon = 0;
+  let gaps = 0;
+  let closed = 0;
   for (const it of items) {
+    if (isGap(it)) { gaps += 1; if (it.closedAt) closed += 1; }
     if (!isOpenGap(it)) continue;
     const due = dueMs(it, days);
     if (due === null) { age.none += 1; continue; }
@@ -58,6 +63,7 @@ export function remediationClock(items: readonly WorkItem[], days: SlaDays = DEF
     closed: server && typeof server.closed === 'number' ? server.closed : null,
     dueSoon, dueSoonDays: days.due_soon_days,
     closedOnTime: onTime && onTime.denominator > 0 ? { done: onTime.numerator, of: onTime.denominator } : null,
+    local: { gaps, open: gaps - closed, overdue: age.overdue, closed },
     aging, agingTotal: aging.reduce((n, b) => n + b.count, 0),
   };
 }

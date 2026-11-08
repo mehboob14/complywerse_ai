@@ -25,7 +25,8 @@ export interface TabInput {
   /** made per application, function or system */
   scoped: boolean;
   phase: 'scoping' | 'in_progress' | null;
-  totalItems: number;
+  /** null: no count on the tab (the NCA workspace holds no controls of its own) */
+  totalItems: number | null;
   /** open gaps, the server's count; null when the board does not count the assessment */
   openGaps: number | null;
   controls: LensDef | null;
@@ -36,7 +37,7 @@ export interface TabInput {
 export function tabsFor(a: TabInput): TabSpec[] {
   const stages: TabSpec[] = [{ key: 'scope', label: 'Scope' }, { key: 'people', label: 'People' }, { key: 'plan', label: 'Plan' }];
   if (a.scoped && a.phase === 'scoping') return [...stages, { key: 'controls', label: 'Controls', disabled: true }];
-  const tabs: TabSpec[] = [{ key: 'controls', label: a.controls?.label ?? 'Controls', count: a.totalItems }, { key: 'remediation', label: 'Remediation', ...(a.openGaps === null ? {} : { count: a.openGaps }) }];
+  const tabs: TabSpec[] = [{ key: 'controls', label: a.controls?.label ?? 'Controls', ...(a.totalItems === null ? {} : { count: a.totalItems }) }, { key: 'remediation', label: 'Remediation', ...(a.openGaps === null ? {} : { count: a.openGaps }) }];
   for (const l of a.lensTabs) tabs.push({ key: l.key, label: l.label });
   return a.scoped ? [...tabs, ...stages] : tabs;
 }

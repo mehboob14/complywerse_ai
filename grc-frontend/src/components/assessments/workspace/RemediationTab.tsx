@@ -43,8 +43,9 @@ export function RemediationTab({ items, days, entry, score }: {
   const open = useMemo(() => sortItems(items.filter(isOpenGap), { key: 'due', dir: 'asc' }, days), [items, days]);
   const shares = barShares(clock.aging);
   const counted = !!entry && clock.gaps !== null;
+  const local = !counted;                                             // the board does not score this assessment: the numbers come from its controls
+  const num = (server: number | null, own: number): string => formatCount(server ?? own);
   const errored = score.error ? { title: "Couldn't load the counts", message: errorMessage(score.error), onRetry: canRetry(score.error) ? score.retry : undefined } : null;
-  const shownNote = (n: number | null) => (n === null ? null : formatCount(n));
 
   const columns: Array<RegisterColumn<WorkItem>> = [
     {
@@ -69,19 +70,19 @@ export function RemediationTab({ items, days, entry, score }: {
     <div className="flex flex-col gap-[16px]">
       <SectionCard id="clock" title="Remediation clock" meta={clock.closedOnTime ? `${formatCount(clock.closedOnTime.done)} of ${formatCount(clock.closedOnTime.of)} closed on time` : undefined}
         info="Gaps are the controls that are not complied with or that have a fix under way. A gap is due on its own date, or when its priority allows from the day it was raised; the days are your organization's SLA days.">
-        {!entry && !score.loading && !errored && (
-          <Notice tone="info" title="Not counted yet">The board counts an assessment once it has answers. Until then the open gaps below are listed without a total.</Notice>
+        {local && !score.loading && !errored && (
+          <div className="mb-[12px]"><Notice tone="info" title="Counted from the controls">The board does not score this assessment, so these numbers are counted from its controls: a gap is a control that is not complied with or has a fix recorded.</Notice></div>
         )}
         <div className="grid grid-cols-2 gap-[12px] lg:grid-cols-4">
-          <StatTile label="Open gaps" value={shownNote(clock.open)} loading={score.loading} error={errored} unit={clock.open === 1 ? 'gap' : 'gaps'} note={clock.gaps !== null ? `${formatCount(clock.gaps)} in all` : undefined} />
-          <StatTile label="Overdue" value={shownNote(clock.overdue)} loading={score.loading} error={errored} tone={clock.overdue ? 'danger' : 'default'} unit="gaps" />
+          <StatTile label="Open gaps" value={num(clock.open, clock.local.open)} loading={score.loading} error={errored} unit={(clock.open ?? clock.local.open) === 1 ? 'gap' : 'gaps'} note={`${formatCount(clock.gaps ?? clock.local.gaps)} in all`} />
+          <StatTile label="Overdue" value={num(clock.overdue, clock.local.overdue)} loading={score.loading} error={errored} tone={(clock.overdue ?? clock.local.overdue) ? 'danger' : 'default'} unit="gaps" />
           <StatTile label="Due soon" value={formatCount(clock.dueSoon)} unit="gaps" note={`within ${formatCount(clock.dueSoonDays)} days`} />
-          <StatTile label="Closed" value={shownNote(clock.closed)} loading={score.loading} error={errored} tone={clock.closed ? 'success' : 'default'} unit="gaps" />
+          <StatTile label="Closed" value={num(clock.closed, clock.local.closed)} loading={score.loading} error={errored} tone={(clock.closed ?? clock.local.closed) ? 'success' : 'default'} unit="gaps" />
         </div>
         <div className="mt-[16px]">
           <p className="mb-[6px] text-ds-label text-ds-fg-muted">Open gaps by due date</p>
           {clock.agingTotal === 0 ? (
-            <p className="text-ds-body text-ds-fg-muted">{counted || items.length ? 'No open gaps.' : 'Nothing to track yet.'}</p>
+            <p className="text-ds-body text-ds-fg-muted">{items.length ? 'No open gaps.' : 'Nothing to track yet.'}</p>
           ) : (
             <>
               <div role="img" aria-label={clock.aging.filter((b) => b.count).map((b) => `${b.count} ${b.label.toLowerCase()}`).join(', ')} className="flex h-[12px] w-full overflow-hidden rounded-full bg-ds-border">

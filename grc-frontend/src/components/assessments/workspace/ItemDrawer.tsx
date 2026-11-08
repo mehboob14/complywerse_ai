@@ -9,24 +9,25 @@ import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { Button, Disclosure, FactList, Fact, FormField, IconButton, Notice, ReadOnlyNote, Select, SidePanel, StatusPill, Tabs, TabPanel, Textarea, TextInput, useConfirm, useReportedMutation } from '@/components/ui/ds';
-import { formatDate, formatDateTime, UNASSIGNED } from '@/lib/format';
+import { formatDate, formatDateTime } from '@/lib/format';
 import { statusPill } from '@/lib/status';
 import { priority as priorityWords } from '@/lib/status';
 import { CONTROL_STATUS_ORDER, controlStatus, remediationState } from '@/lib/statuses/assessments';
 import { AssigneesField } from './AssigneesField';
 import { EvidenceSection } from './EvidenceSection';
-import { draftOf, draftProblem, hasChanges, patchBetween, PRIORITIES, PRIORITY_LABEL, REMEDIATIONS, UNCATEGORIZED, type Assignee, type ItemDraft, type WorkItem } from './itemModel';
+import { draftOf, draftProblem, dueMs, hasChanges, isOpenGap, patchBetween, PRIORITIES, PRIORITY_LABEL, REMEDIATIONS, UNCATEGORIZED, type Assignee, type ItemDraft, type SlaDays, type WorkItem } from './itemModel';
 import { KEYS, workspaceApi } from './workspaceApi';
 import type { AssessmentDetail } from './types';
 
 type Section = 'details' | 'evidence';
 
-export function ItemDrawer({ assessmentId, assessmentName, item, domains, readOnly, structuredRemarks, prev, next, onOpen, onClose, onChanged }: {
+export function ItemDrawer({ assessmentId, assessmentName, item, domains, days, readOnly, structuredRemarks, prev, next, onOpen, onClose, onChanged }: {
   assessmentId: number;
   assessmentName: string;
   item: WorkItem;
   /** the domains of this assessment, offered while typing a domain */
   domains: readonly string[];
+  days: SlaDays;
   readOnly: boolean;
   /** the score of this format reads `remarks`: the field is not offered */
   structuredRemarks: boolean;
@@ -84,6 +85,7 @@ export function ItemDrawer({ assessmentId, assessmentName, item, domains, readOn
   };
   const walk = (to: WorkItem | null) => { if (to && !dirty) onOpen(to.id); };
 
+  const followed = isOpenGap(item) ? dueMs(item, days) : null;
   const status = statusPill(controlStatus, item.status);
   const title = item.number ? `${item.number}` : 'Control';
   const dis = readOnly || save.isPending;
@@ -134,14 +136,13 @@ export function ItemDrawer({ assessmentId, assessmentName, item, domains, readOn
                     {REMEDIATIONS.map((r) => <option key={r} value={r}>{remediationState.label(r)}</option>)}
                   </Select>
                 </FormField>
-                <FormField label="Due date" info="When the gap must be closed. Left empty, the date follows the priority (the organization's SLA days from the day the control was raised).">
+                <FormField label="Due date" hint={!draft.targetDate && followed ? `Follows the priority: ${formatDate(followed, { calendar: true })}` : undefined} info="When the gap must be closed. Left empty, the date follows the priority (the organization's SLA days from the day the control was raised).">
                   <TextInput type="date" value={draft.targetDate} disabled={dis} onChange={(e) => set('targetDate', e.target.value)} />
                 </FormField>
               </div>
               <FormField label="Assigned to">
                 <AssigneesField itemId={item.id} value={item.assignees} disabled={readOnly} onSaved={(list: Assignee[]) => { merge({ assignees: list }); onChanged(); }} />
               </FormField>
-              {readOnly && item.assignees.length === 0 && <p className="-mt-[8px] text-ds-label text-ds-fg-muted">{UNASSIGNED}</p>}
               <FormField label="Domain">
                 <>
                   <TextInput list={`domains-${item.id}`} value={draft.domain} placeholder={UNCATEGORIZED} disabled={dis} onChange={(e) => set('domain', e.target.value)} />
