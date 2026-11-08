@@ -40,6 +40,7 @@ export function useMyWork(me: number | null) {
       const answers = await Promise.all([ask({ assignee_id: me as number }), ask({ reviewer_id: me as number }), ask({ created_by_id: me as number })]);
       return { rows: joinWork(answers.map((a) => a.items)), truncated: answers.some((a) => a.truncated) };
     },
+    staleTime: 0,                                     // asked again every time My work is opened (the app's default is a minute): a task changed on its own page shows when the person comes back
     placeholderData: keepPreviousData,                // the rows on screen stay while a newer answer comes
     refetchOnWindowFocus: false,                      // asked again every time the tab is opened (the view is drawn only while it is open)
     retry: retryRead,

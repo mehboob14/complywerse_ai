@@ -5,16 +5,17 @@
  * into All tasks that shows exactly the tasks it counts; "Do next", the person's open tasks most urgent first with ONE action on each row; "Your load" beside it; the latest ten tasks
  * they finished below. What a number or a row means is taskWork.ts (built on taskRecord.ts, the model All tasks shares); the requests are workData.ts (the person's own tasks, complete: the
  * server's own filters, three small requests answered together); a step asks the server and says what it did (useTaskStep).
- * A request that fails is said ONCE, with its Retry, where the cockpit would be (a refusal has no Retry): never as a row of zeros, and a person whose account could not be read is told so
- * (the old My Work stayed on a skeleton for ever). Needs my action is its own request and fails, loads and has nothing on its own.
+ * A request that fails is said ONCE, with its Retry, where the cockpit would be (a refusal has no Retry): never as a row of zeros; a refresh that fails keeps what was shown and says it may be
+ * out of date; a person whose account could not be read is told so (the old My Work stayed on a skeleton for ever). Needs my action is its own request and fails, loads and has nothing on its own.
  */
 import { useMemo } from 'react';
+import { RotateCw } from 'lucide-react';
 import { Cockpit, SkipToWork, type Breakdown } from '@/components/overview/Cockpit';
 import { CounterBand, type BandCounter } from '@/components/overview/CounterBand';
 import { layoutOf, workRowLimit } from '@/components/overview/cockpitModel';
 import { useNarrow } from '@/components/overview/useNarrow';
 import { workOf } from '@/components/overview/workList';
-import { ErrorState, TitleLink } from '@/components/ui/ds';
+import { Button, ErrorState, Notice, TitleLink } from '@/components/ui/ds';
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { usePermissions } from '@/hooks/usePermissions';
 import { formatDate } from '@/lib/format';
@@ -80,6 +81,11 @@ export function MyWork() {
   return (
     <>
       <SkipToWork />
+      {work.isError && (
+        <Notice tone="warning" title="Couldn't refresh your tasks" className="mb-[16px]" action={canRetry(work.error) ? <Button leftIcon={<RotateCw aria-hidden />} loading={work.isFetching} onClick={() => { void work.refetch(); }}>Retry</Button> : undefined}>
+          {errorMessage(work.error)} What is shown may be out of date.
+        </Notice>
+      )}
       <Cockpit
         mode={mode}
         narrow={narrow}
