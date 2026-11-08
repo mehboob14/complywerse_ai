@@ -55,12 +55,8 @@ const OUTSIDE_THE_SHELL: Record<string, string> = {
 };
 /** The one page outside the shell that HAS an entry: the Governance URL contract (G1) pins it and its trail. */
 const PUBLIC_WITH_AN_ENTRY = '/attest/:token';
-/** Sidebar leaves that no page.tsx of their own serves: three addresses of the one dynamic page /assessments/:framework. */
-const INSTANCES_OF_A_DYNAMIC_PAGE: Record<string, string> = {
-  '/assessments/digital_ops_maturity': '/assessments/:framework',
-  '/assessments/dpia': '/assessments/:framework',
-  '/assessments/pdpl': '/assessments/:framework',
-};
+/** Sidebar leaves that no page.tsx of their own serves: none since Stage 4 (the DPIA, PDPL and Digital Operations Maturity leaves went; their addresses are the one dynamic page /assessments/:framework). */
+const INSTANCES_OF_A_DYNAMIC_PAGE: Record<string, string> = {};
 
 test('the walk finds the app: no catch-all segment (the registry does not model them), and the pages outside the shell are exactly the allow-list and the public attestation page', () => {
   assert.ok(pages.length >= 303, `the app had 303 pages when the registry was completed; the walk found ${pages.length}`);
@@ -149,7 +145,7 @@ test('the group files: each leaf is declared once and is a sidebar leaf, each pa
 
 /** The page a forward goes to, read from its source: router.replace / redirect with a path (query and hash dropped, a ${...} part standing for :param), else the page it re-exports or renders. */
 function forwardTarget(source: string): { to?: string; renders?: string } {
-  const call = /(?:router\.(?:replace|push)|redirect)\(\s*[`'"]([^`'"?#$]*)/.exec(source);           // the literal start of the path, up to a query, a hash or a ${...}
+  const call = /(?:router\.(?:replace|push)|redirect)\(\s*(?:[^`'"\n;?]*\?\s*)?[`'"]([^`'"?#$]*)/.exec(source);           // the literal start of the path, up to a query, a hash or a ${...}; a conditional (`query ? `/x?${q}` : '/x'`) is read at its first literal
   if (call) return { to: call[1].replace(/\/$/, '') };
   const reexport = /export\s*\{\s*default[^}]*\}\s*from\s*['"]([^'"]+)['"]/.exec(source) ?? /^import\s+\w+\s+from\s+['"](\.[^'"]*page)['"]/m.exec(source);
   return reexport ? { renders: reexport[1] } : {};
@@ -203,7 +199,9 @@ test('duplicates: the entry a copy names exists, is a page the sidebar (or the t
 test('rights: a leaf has the sidebar\'s, a page navAccess lists has those, a page that gates itself says so (pinned), every other page has those of the page it hangs under or forwards to', () => {
   // the pages that gate themselves or sit under the Administration menu: what their code checks (PermissionGuard with navPermissions, or a "locked" view without the agents right)
   const OWN: Record<string, { permissions: string[] | null; adminOnly?: true }> = {
-    '/bcm/findings': { permissions: ['bcm:findings:*'] },                // a tab of Business Continuity that is offered on its own right
+    '/bcm/plans': { permissions: ['bcm:plans:*'] },                      // the tabs of Business Continuity are offered on their own rights (the one leaf lists the three)
+    '/bcm/drills': { permissions: ['bcm:drills:*'] },
+    '/bcm/findings': { permissions: ['bcm:findings:*'] },
     '/admin': { permissions: null, adminOnly: true },
     '/admin/ui-kit': { permissions: null, adminOnly: true },        // PermissionGuard required={navPermissions(PATH)}, which is [] for a page nobody listed: administrators only
     '/admin/agents': { permissions: ['compliance:agents:manage'] },
@@ -280,12 +278,14 @@ test('breadcrumbFor gives a sane trail for an example URL of every module', () =
   assert.deepEqual(labels('/compliance/assessments/8'), ['Compliance Management', 'Overview', 'Assessment Control Center', 'Assessment']);
   assert.deepEqual(labels('/frameworks/3'), ['Compliance Management', 'Frameworks', 'Framework']);
   assert.deepEqual(labels('/evidence/44'), ['Compliance Management', 'Evidence Management', 'Evidence item']);
-  assert.deepEqual(labels('/assessments/dpia'), ['Compliance Management', 'Assessments', 'DPIA / PIA']);
+  assert.deepEqual(labels('/assessments/dpia'), ['Compliance Management', 'Assessments', 'Overview', 'Framework assessments'], 'an old type address is the forward under the Assessments Overview');
+  assert.deepEqual(labels('/assessments/register'), ['Compliance Management', 'Assessments', 'All assessments']);
+  assert.deepEqual(labels('/cyber-security/questionnaires/cs_kpi'), ['Compliance Management', 'Assessments', 'Types', 'Assessment type']);
   assert.deepEqual(labels('/assessments/cs_kpi'), ['Compliance Management', 'Assessments', 'Overview', 'Framework assessments']);
-  assert.deepEqual(labels('/bcm/plans/2'), ['Compliance Management', 'Business Continuity', 'Continuity Plans', 'Continuity plan']);
+  assert.deepEqual(labels('/bcm/plans/2'), ['Compliance Management', 'Business Continuity', 'Plans', 'Continuity plan']);
   assert.deepEqual(labels('/compliance/access-reviews/9'), ['Compliance Management', 'Access Reviews', 'Access review']);
   assert.deepEqual(labels('/control-library/5'), ['Compliance Management', 'Overview', 'Control Library', 'Control domain']);
-  assert.deepEqual(labels('/automation/soc2-controls/coverage'), ['Controls Automation', 'Common Controls', 'Requirement coverage']);
+  assert.deepEqual(labels('/automation/soc2-controls/coverage'), ['Controls Automation', 'Controls', 'Requirement coverage']);
   assert.deepEqual(labels('/issues/3'), ['Issue & Incident Management', 'Issues', 'Issue']);
   assert.deepEqual(labels('/auditor-portal/statutory-audit/6'), ['Auditor Portal', 'Statutory Audit', 'Audit observation']);
   assert.deepEqual(labels('/reports/trends'), ['Reports', 'Quick export', 'Trends']);

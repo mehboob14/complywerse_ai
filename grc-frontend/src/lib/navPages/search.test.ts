@@ -81,8 +81,8 @@ test('only pages a person can open: no record page (:param), no forward, no olde
 
 test('the palette finds the pages by the names people use: acronyms, old names, tab names, the other language of a module', () => {
   assert.equal(find('KRI')[0], '/erm/kris');
-  assert.ok(find('DPIA').includes('/assessments/dpia'));
-  assert.ok(find('PDPL').includes('/assessments/pdpl'));
+  assert.ok(find('DPIA').includes('/assessments/types'), 'the type pages are Types now');
+  assert.ok(find('PDPL').includes('/assessments/types'));
   assert.ok(find('rcsa').includes('/erm/rcsa'));
   assert.ok(find('TPRM').includes('/vendor-risk'));
   assert.ok(find('sso').includes('/admin'), 'a section of the Administration page is a keyword of it');

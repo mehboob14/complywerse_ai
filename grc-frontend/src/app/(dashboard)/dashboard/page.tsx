@@ -2490,8 +2490,8 @@ export default function MainDashboard() {
       <PageHeader
         variant="page"
         title={titleFor('/dashboard') ?? 'Performance Overview'}
-        info="How each module you can open is doing: its score and its weakest sections, then the Cyber Security KPIs. Your assigned requirements across every framework are in My Work."
-        actions={canSeeMyWork ? <Button href="/my-work" variant="primary" leftIcon={<Inbox aria-hidden />}>My Work</Button> : undefined}
+        info="How each module you can open is doing: its score and its weakest sections, then the Cyber Security KPIs. Your assigned requirements across every framework are in My requirements."
+        actions={canSeeMyWork ? <Button href="/my-work" variant="primary" leftIcon={<Inbox aria-hidden />}>My requirements</Button> : undefined}
       />
       <ModuleOverview />
       <CyberKpis />

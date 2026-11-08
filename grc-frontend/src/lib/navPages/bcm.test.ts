@@ -46,17 +46,22 @@ test('every BCM entry is flagged ownHeading and its page file renders the kit\'s
 test('the top bar names only the section on all six pages; the four list pages share the head "Business Continuity" (the Overview\'s registry name) with a strip of tabs, and the two records have their own', () => {
   for (const url of ['/bcm', '/bcm/plans', '/bcm/plans/12', '/bcm/drills', '/bcm/drills/12', '/bcm/findings']) assert.equal(ownHeadingSection(url), 'Compliance Management', url);
   assert.equal(titleFor('/bcm'), 'Business Continuity');
-  assert.equal(titleFor('/bcm/plans'), 'Continuity Plans');
-  assert.equal(titleFor('/bcm/drills'), 'Drills & Invocations');
+  assert.equal(titleFor('/bcm/plans'), 'Plans');
+  assert.equal(titleFor('/bcm/drills'), 'Drills');
   for (const path of ['/bcm', '/bcm/plans', '/bcm/drills', '/bcm/findings']) assert.match(headFile(path), /title=\{AREA\}/, `${path}: the head is the area's name`);
   assert.match(readFileSync(`${FOLDER}_tabs/tabsModel.ts`, 'utf8'), /export const AREA = 'Business Continuity';/);
   assert.equal(subtitleFor('/bcm'), undefined, 'no second line: the page says what it holds in its own head');
 });
 
-test('the labels are the sidebar\'s names; the detail pages hang under their lists and say where they open from', () => {
-  assert.equal(routeFor('/bcm')?.label, 'Overview');
-  assert.equal(routeFor('/bcm/plans')?.label, 'Continuity Plans');
-  assert.equal(routeFor('/bcm/drills')?.label, 'Drills & Invocations');
+test('the sidebar has one leaf, Business Continuity; Plans, Drills and Findings are its tabs, and the detail pages hang under their lists and say where they open from', () => {
+  assert.equal(routeFor('/bcm')?.label, 'Business Continuity');
+  assert.equal(routeFor('/bcm/plans')?.label, 'Plans');
+  assert.equal(routeFor('/bcm/drills')?.label, 'Drills');
+  assert.equal(routeFor('/bcm/findings')?.label, 'Findings');
+  for (const tab of ['/bcm/plans', '/bcm/drills', '/bcm/findings']) {
+    assert.equal(routeFor(tab)?.parent, '/bcm', tab);
+    assert.ok(routeFor(tab)?.hidden && (routeFor(tab)?.hidden ?? '').length > 10, `${tab}: a reason it has no menu entry`);
+  }
   const plan = routeFor('/bcm/plans/12');
   const drill = routeFor('/bcm/drills/12');
   assert.equal(plan?.path, '/bcm/plans/:id');
@@ -64,12 +69,13 @@ test('the labels are the sidebar\'s names; the detail pages hang under their lis
   assert.equal(drill?.path, '/bcm/drills/:id');
   assert.equal(drill?.parent, '/bcm/drills');
   for (const e of [plan, drill]) assert.ok(e?.hidden && e.hidden.length > 10, `${e?.path}: a reason it has no menu entry`);
-  assert.deepEqual(breadcrumbFor('/bcm/plans/12').map((c) => c.label), ['Compliance Management', 'Business Continuity', 'Continuity Plans', 'Continuity plan']);
-  assert.deepEqual(breadcrumbFor('/bcm/drills/12').map((c) => c.label), ['Compliance Management', 'Business Continuity', 'Drills & Invocations', 'Drill']);
+  assert.deepEqual(breadcrumbFor('/bcm/plans/12').map((c) => c.label), ['Compliance Management', 'Business Continuity', 'Plans', 'Continuity plan']);
+  assert.deepEqual(breadcrumbFor('/bcm/drills/12').map((c) => c.label), ['Compliance Management', 'Business Continuity', 'Drills', 'Drill']);
 });
 
-test('the rights of the three leaves are the sidebar\'s and a detail page is offered to whoever is offered its list (the registry enforces nothing)', () => {
-  assert.deepEqual(routeFor('/bcm')?.permissions, ['bcm:dashboard:*']);
+test('the rights of the leaf are the sidebar\'s (the three it listed before), each tab keeps the right of its own list, and a detail page is offered to whoever is offered its list (the registry enforces nothing)', () => {
+  assert.deepEqual(routeFor('/bcm')?.permissions, ['bcm:dashboard:*', 'bcm:plans:*', 'bcm:drills:*']);
+  assert.deepEqual(routeFor('/bcm/findings')?.permissions, ['bcm:findings:*']);
   assert.deepEqual(routeFor('/bcm/plans')?.permissions, ['bcm:plans:*']);
   assert.deepEqual(routeFor('/bcm/drills')?.permissions, ['bcm:drills:*']);
   assert.deepEqual(routeFor('/bcm/plans/12')?.permissions, ['bcm:plans:*']);

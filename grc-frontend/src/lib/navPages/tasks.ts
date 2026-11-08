@@ -13,6 +13,6 @@ export const PAGES: PageSpec[] = [
   { path: '/tasks/reports', label: 'Task reports', area: 'task-management', parent: '/tasks', hidden: 'an old address that forwards to the Reports tab of Task Management; stored links and bookmarks carry it' },
   { path: '/tasks/my-tasks', label: 'My tasks', area: 'task-management', parent: '/tasks', hidden: 'an old address that forwards to My work, the first tab of Task Management; stored links and bookmarks carry it' },
   { path: '/tasks/sla', label: 'Task SLA levels', area: 'task-management', parent: '/tasks', hidden: 'an old address that forwards to the Settings tab of Task Management, where the SLA days of the organization are' },
-  { path: '/my-work', label: 'My work', area: 'task-management', parent: '/tasks', hidden: 'opens from My work in Task Management, from the Performance Overview banner and from notifications', ownHeading: true },
+  { path: '/my-work', label: 'My requirements', area: 'task-management', parent: '/tasks', hidden: 'opens from My work in Task Management, from the Performance Overview banner and from notifications', ownHeading: true, keywords: ['My work', 'Assigned requirements'] },
   // { path: '/my-runs', label: 'My runs', area: 'task-management', parent: '/tasks', hidden: 'opens from My work', ownHeading: true },   <- the Controls Automation pass's page, not this group's
 ];

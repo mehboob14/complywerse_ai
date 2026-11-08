@@ -44,7 +44,7 @@ test('every page of the frameworks folder is exactly one entry of the registry, 
   for (const page of pages) assert.equal(routes.filter((e) => e.path === page).length, 1, page);
   assert.equal(routes.filter((e) => e.path === '/compliance/organisation').length, 1);
   for (const spec of PAGES) assert.ok(pages.includes(spec.path), `${spec.path} has no page.tsx`);
-  assert.deepEqual(Object.keys(LEAVES).sort(), ['/compliance/organisation', '/frameworks/manage'], 'the sidebar leaves this group adds to');
+  assert.deepEqual(Object.keys(LEAVES).sort(), ['/compliance/organisation', '/frameworks'], 'the sidebar leaves this group adds to');
 });
 
 test('the heading flags: the hub, a journey, the Onboarding page, a framework\'s onboarding and the Organisation Profile draw the kit head; the forward draws nothing and carries none', () => {
@@ -71,7 +71,8 @@ test('the top bar names only the section on the pages that draw their own head',
     assert.equal(ownHeadingSection(url), 'Compliance Management', url);
     assert.equal(registryNamesPage(url), true, url);
   }
-  for (const url of ['/frameworks/manage', '/frameworks/overview/7']) assert.equal(ownHeadingSection(url), undefined, `${url}: a forward draws no head`);
+  assert.equal(ownHeadingSection('/frameworks/overview/7'), undefined, 'a forward draws no head');
+  assert.equal(ownHeadingSection('/frameworks/manage'), 'Compliance Management', 'the menu\'s old address is named as its target, the hub');
   assert.equal(routeFor('/frameworks/onboarding')?.path, '/frameworks/onboarding', 'the static segment wins over the journey page');
 });
 
@@ -94,9 +95,14 @@ test('the strip names the three pages of the area, in order, and each goes where
   for (const item of STRIP) assert.ok(routeFor(item.href.split('?')[0]), item.href);
 });
 
-test('the sidebar leaf still exists and still lights for every page of the area (the registry reads the menu; the menu is the parent\'s)', () => {
-  const leaf = routes.find((e) => e.path === '/frameworks/manage');
+test('the sidebar leaf is the hub itself, its old address /frameworks/manage is an alias of it, and every page of the area has the leaf\'s right', () => {
+  const leaf = routes.find((e) => e.path === '/frameworks');
   assert.equal(leaf?.label, 'Frameworks');
   assert.deepEqual(leaf?.permissions, ['compliance:frameworks:*']);
+  assert.ok(leaf?.groups.length, 'the hub is a menu entry');
+  const old = routes.find((e) => e.path === '/frameworks/manage');
+  assert.equal(old?.aliasOf, '/frameworks');
+  assert.equal(old?.label, 'Frameworks');
+  assert.equal(old?.hidden, undefined);
   for (const spec of PAGES) assert.equal(routes.find((e) => e.path === spec.path)?.permissions?.join(), 'compliance:frameworks:*', `${spec.path}: the right of the page it hangs under`);
 });

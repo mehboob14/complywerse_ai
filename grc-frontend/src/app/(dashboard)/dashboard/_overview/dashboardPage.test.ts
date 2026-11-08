@@ -116,9 +116,9 @@ test('the colours of the donut come from the tone table, not from the server or 
   assert.doesNotMatch(cards, /#2563eb|#7c3aed|#059669|#d97706|#dc2626|#64748b|\bcolor: s\.color|\.color\b/, 'the old segment colours (the server\'s and the blue/violet palette) are gone');
 });
 
-test('the page keeps its gates and its links: My Work for the same people, the head is the kit\'s, nothing else was added to the live component', () => {
+test('the page keeps its gates and its links: My requirements for the same people, the head is the kit\'s, nothing else was added to the live component', () => {
   assert.match(page, /const canSeeMyWork = isAdmin \|\| hasAnyPermission\(\['compliance:frameworks:\*', 'controls:control_library:\*', 'evidence:evidence_library:\*'\]\);/);
-  assert.match(live, /actions=\{canSeeMyWork \? <Button href="\/my-work" variant="primary" leftIcon=\{<Inbox aria-hidden \/>\}>My Work<\/Button> : undefined\}/);
+  assert.match(live, /actions=\{canSeeMyWork \? <Button href="\/my-work" variant="primary" leftIcon=\{<Inbox aria-hidden \/>\}>My requirements<\/Button> : undefined\}/);
   assert.match(live, /<PageHeader\s+variant="page"/);
   assert.match(live, /<ModuleOverview \/>\s*<CyberKpis \/>/);
   assert.match(live, /const SHOW_LEGACY_TABS = false;/, 'the switch is where the owner left it');

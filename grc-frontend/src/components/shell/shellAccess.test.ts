@@ -72,7 +72,7 @@ test('only administrators are offered Administration; an administrator is offere
 
 test('a person with two rights is offered the pages of both modules and no third', () => {
   const found = offered(PERSONAS.two, 'o');
-  assert.ok(found.includes('/governance/committees') && found.includes('/frameworks/manage'));
+  assert.ok(found.includes('/governance/committees') && found.includes('/frameworks'));
   assert.ok(found.every((path) => !path.startsWith('/erm') && !path.startsWith('/vendor-risk') && !path.startsWith('/cyber-assurance')));
 });
 

@@ -9,8 +9,8 @@ import type { AssessmentDetail, OverviewEntry, OverviewResult } from './types.ts
 export const WORKSPACE_PATH = '/assessments/a';
 export const workspaceHref = (id: number | string): string => `${WORKSPACE_PATH}/${id}`;
 
-/** Where "Back" goes. The register is the next group's page; until it exists the overview is the list of assessments. */
-export const BACK = { href: '/assessments', label: 'Back to Assessments' } as const;
+/** Where "Back" goes: the register, the list of every assessment. */
+export const BACK = { href: '/assessments/register', label: 'Back to All assessments' } as const;
 
 /** The id in the address: a positive whole number, else null (the page says it is not an assessment). */
 export function idOfParam(param: string | string[] | undefined): number | null {
