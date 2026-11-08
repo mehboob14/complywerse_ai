@@ -147,7 +147,7 @@ export const navigation: NavEntry[] = [
       { name: 'Overview', href: '/automation/overview', exact: true, activeMatch: ['/automation/checks'], icon: LayoutDashboard, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
       { name: 'Controls', href: '/automation/soc2-controls', activeMatch: '/automation/scope', icon: Layers, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
       { name: 'Audit periods', href: '/automation/assurance', icon: CalendarClock, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
-      { name: 'Connections', href: '/admin/evidence-collectors', icon: Server, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
+      { name: 'Connections', href: '/admin/evidence-collectors', icon: Server, requiredPermissions: ['admin:organization:edit'] },
     ],
   },
   {
