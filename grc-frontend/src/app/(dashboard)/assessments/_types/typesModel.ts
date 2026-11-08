@@ -132,7 +132,7 @@ export function countWords(r: Pick<TypeRow, 'count' | 'scoping'>): string {
 /** What the questionnaire column says. */
 export function questionnaireWords(q: Questionnaire): string {
   switch (q.state) {
-    case 'uploaded': return `Uploaded, ${q.items} ${q.items === 1 ? 'question' : 'questions'}`;
+    case 'uploaded': return `${q.items} ${q.items === 1 ? 'question' : 'questions'}`;
     case 'missing': return 'Not uploaded yet';
     case 'library': return 'From the NIST library';
     default: return '—';

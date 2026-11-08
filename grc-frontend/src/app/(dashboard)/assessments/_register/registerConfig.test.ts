@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { boardOf, filtersOf, noFilters, optionsOf, plainFilter, quickCounts, schemaFor, sortRows, type Ctx } from '../../bcm/_register/registerModel.ts';
-import { BOARD_STATUS, REGISTER, csvOf, dueValue, exportName, gradeValue, joinRows, subjectName, type RegisterRow } from './registerConfig.ts';
+import { BOARD_STATUS, REGISTER, csvOf, dueValue, exportName, gradeValue, joinRows, sublineOf, subjectName, type RegisterRow } from './registerConfig.ts';
 import { readAddress } from '../../../../lib/addressState.ts';
 import type { Board, ListRow, MyWork } from '../_data/types.ts';
 
@@ -67,6 +67,14 @@ test('subjects: an application, a function, or an uploaded workbook', () => {
   assert.equal(subjectName(rows[3]), '');
 });
 
+test('the line under a name says the kind and the subject only when the name does not already', () => {
+  assert.equal(sublineOf(rows[1]), '', '"CSIR Maturity - Enterprise CSIRT" says both');
+  assert.equal(sublineOf(rows[0]), 'OWASP ASVS', 'the name says the subject: ASVS - Payments app');
+  assert.equal(sublineOf({ ...rows[0], name: 'Payments review' }), 'OWASP ASVS · Payments app');
+  assert.equal(sublineOf(rows[3]), 'Saudi PDPL', 'an uploaded workbook has no subject');
+  assert.equal(sublineOf({ ...rows[3], name: 'Saudi PDPL toolkit' }), '');
+});
+
 test('the due facet: a finished assessment has nothing to chase; the others are overdue, soon, later or none', () => {
   assert.deepEqual(rows.map((r) => dueValue(r, NOW)), ['overdue', 'soon', 'none', 'none', 'later']);
 });
@@ -74,7 +82,9 @@ test('the due facet: a finished assessment has nothing to chase; the others are 
 test('facets: every option a row can have is offered, and the counts of the filters agree with the plain rule', () => {
   const opts = optionsOf(REGISTER, rows, ctx);
   assert.deepEqual(opts.category.map((o) => o.value), ['cyber', 'nca', 'digital', 'privacy', 'audit', 'other']);
-  assert.deepEqual(opts.type.map((o) => o.label), ['NCA DCC assessment', 'OWASP ASVS', 'Saudi PDPL', 'CSIR Maturity'].sort((a, b) => a.localeCompare(b)));
+  assert.ok(['NCA DCC assessment', 'OWASP ASVS', 'Saudi PDPL', 'CSIR Maturity'].every((l) => opts.type.some((o) => o.label === l)), 'the kinds the rows hold');
+  assert.equal(opts.type.find((o) => o.value === 'cti_maturity')?.label, 'CTI Maturity', 'a kind with no assessment keeps its name, so a link that chose it says so (the rail drops it while nobody holds it)');
+  assert.ok(!opts.type.some((o) => /_/.test(o.label)), 'no raw format word is a label');
   assert.deepEqual(opts.status.map((o) => o.value), ['scoping', 'draft', 'in_progress', 'in_review', 'completed', 'archived']);
   assert.deepEqual(opts.owner.map((o) => o.label), ['Bina Raza', 'Noor Ali', 'Unassigned']);
   assert.deepEqual(opts.subject.map((o) => o.label), ['Enterprise CSIRT', 'Payments app', 'Uploaded workbook']);

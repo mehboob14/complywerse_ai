@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  attentionTotal, categoryRows, countersOf, daysOf, mineLine, mineTotal, policyChanged, policyDraft, policyOf, policyProblem, portfolioClock, postureOf, whatIfBounds, whatIfMs, workRows, TARGET,
+  attentionTotal, categoryRows, countersOf, daysOf, mineLine, mineTotal, nameWithKind, policyChanged, policyDraft, policyOf, policyProblem, portfolioClock, postureOf, whatIfBounds, whatIfMs, workRows, TARGET,
 } from './overviewModel.ts';
 import type { Board, MyWork, Point, Policy } from '../_data/types.ts';
 

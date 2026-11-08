@@ -4,7 +4,7 @@
 import { dayNumber, dueWords, windowOf } from '../../bcm/bcmModel.ts';
 import { NONE, csvOf, ownerValue, peopleOptions, textKey, type Ctx, type FacetDef, type Option, type QuickDef, type RegisterDef, type SortDef } from '../../bcm/_register/registerModel.ts';
 import { grade as gradeWords, lifecycle, lifecycleOf } from '../../../../lib/statuses/assessments.ts';
-import { kindOf } from '../../../../components/assessments/workspace/kinds.ts';
+import { KINDS, kindOf } from '../../../../components/assessments/workspace/kinds.ts';
 import { gradeOf } from '../../../../components/assessments/workspace/workspaceModel.ts';
 import { subjectOf } from '../../../../components/compliance/scoping/scopingModel.ts';
 import { CATEGORIES, slugOf } from '../_data/categories.ts';
@@ -40,6 +40,14 @@ export const typeLabel = (r: Pick<ListRow, 'assessment_format'>): string => kind
 /** What the assessment is of: the application, the function, or (for an uploaded workbook) its own name. */
 export const subjectName = (r: Pick<ListRow, 'name' | 'primary_asset_name' | 'scope_model' | 'assessment_format'>): string => (r.scope_model ? subjectOf({ ...r, scope_model: r.scope_model }) : '');
 
+/** What goes under the name in a row: the kind and the subject, each only when the name does not say it already (a scoped assessment is named "<kind> - <subject>"). '' when the name is all there is. */
+export function sublineOf(r: Pick<ListRow, 'name' | 'primary_asset_name' | 'scope_model' | 'assessment_format'>): string {
+  const has = (word: string): boolean => !word || r.name.toLowerCase().includes(word.toLowerCase());
+  const kind = kindOf(r.assessment_format).label;
+  const subject = r.scope_model ? subjectName(r) : '';
+  return [has(kind) ? '' : kind, has(subject) ? '' : subject].filter(Boolean).join(' · ');
+}
+
 const GRADE_NONE = 'none';
 const GRADE_UNCOUNTED = 'uncounted';
 /** The score band of a row: the server's grade of its content score; "none" when the board counts it and nothing is answered; "uncounted" when the board does not count it. null while the board has not answered. */
@@ -66,7 +74,8 @@ const FACETS: FacetDef<RegisterRow>[] = [
   { key: 'category', title: 'Category', values: (r) => [slugOf(r.category)], options: () => CATEGORIES.map((c) => ({ value: c.slug, label: c.name })), open: true },
   {
     key: 'type', title: 'Type', values: (r) => [r.assessment_format], searchable: true, limit: 7, open: true,
-    options: (rows) => Array.from(new Set(rows.map((r) => r.assessment_format))).map((value) => ({ value, label: kindOf(value).label })).sort((a, b) => a.label.localeCompare(b.label)),
+    // every kind there is plus any the rows hold that nobody named: a kind with no assessment is dropped from the rail unless a link chose it, and then it has its name (a link from Types or an old address)
+    options: (rows) => Array.from(new Set([...Object.keys(KINDS), ...rows.map((r) => r.assessment_format)])).map((value) => ({ value, label: kindOf(value).label })).sort((a, b) => a.label.localeCompare(b.label)),
   },
   { key: 'status', title: 'Status', values: (r) => [lifecycleOf(r)], options: () => fromWords(lifecycle), open: true },
   { key: 'owner', title: 'Owner', values: (r) => [ownerValue(r.owner_id)], options: (rows) => peopleOptions(rows, (r) => r.owner_id, (r) => r.owner_name), searchable: true, limit: 7 },

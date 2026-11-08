@@ -65,8 +65,8 @@ test('the words of a row', () => {
   assert.equal(countWords({ count: 0, scoping: 0 }), 'None yet');
   assert.equal(countWords({ count: 1, scoping: 0 }), '1 assessment');
   assert.equal(countWords({ count: 3, scoping: 2 }), '3 assessments (2 being scoped)');
-  assert.equal(questionnaireWords({ state: 'uploaded', name: 'x', items: 1 }), 'Uploaded, 1 question');
-  assert.equal(questionnaireWords({ state: 'uploaded', name: 'x', items: 280 }), 'Uploaded, 280 questions');
+  assert.equal(questionnaireWords({ state: 'uploaded', name: 'x', items: 1 }), '1 question');
+  assert.equal(questionnaireWords({ state: 'uploaded', name: 'x', items: 280 }), '280 questions');
   assert.equal(questionnaireWords({ state: 'missing' }), 'Not uploaded yet');
   assert.equal(questionnaireWords({ state: 'library' }), 'From the NIST library');
   assert.equal(questionnaireWords({ state: 'none' }), '—');

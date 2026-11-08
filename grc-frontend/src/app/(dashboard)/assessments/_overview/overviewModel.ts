@@ -7,6 +7,7 @@ import { normaliseItem, DEFAULT_SLA_DAYS, type RawItem, type SlaDays, type WorkI
 import { remediationClock, type Clock } from '../../../../components/assessments/workspace/clockModel.ts';
 import { kindOf } from '../../../../components/assessments/workspace/kinds.ts';
 import { gradeOf, workspaceHref, type GradeWord } from '../../../../components/assessments/workspace/workspaceModel.ts';
+import { subjectOf } from '../../../../components/compliance/scoping/scopingModel.ts';
 import { categoryHref } from '../_data/categories.ts';
 import type { Board, BoardCategory, MyApproval, MyDraft, MyItem, MyWork, Point, Policy } from '../_data/types.ts';
 
@@ -47,6 +48,12 @@ export interface WorkRowModel {
   rank: number;
 }
 
+/** "NCA DCC-1:2022 · NCA DCC assessment": the kind is added after the name only when the name does not already say it. */
+export function nameWithKind(name: string, format: string): string {
+  const label = kindOf(format).label;
+  return name.toLowerCase().includes(label.toLowerCase()) ? name : [name, label].filter(Boolean).join(' · ');
+}
+
 const clip = (s: string, n: number): string => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
 const controlTitle = (i: MyItem): string => [i.item_number, clip(i.description, 140)].filter(Boolean).join(' ') || 'Control';
 
@@ -55,7 +62,7 @@ function itemRow(i: MyItem): WorkRowModel {
     key: `item:${i.item_id}`,
     kind: i.overdue ? { label: 'Overdue', tone: 'danger' } : { label: i.via === 'team' ? 'Your department' : 'Assigned', tone: 'progress' },
     title: controlTitle(i),
-    context: [i.assessment_name, kindOf(i.assessment_format).label].filter(Boolean).join(' · '),
+    context: nameWithKind(i.assessment_name, i.assessment_format),
     due: i.due,
     href: `${workspaceHref(i.assessment_id)}?tab=controls&item=${i.item_id}`,
     action: 'Open',
@@ -64,7 +71,7 @@ function itemRow(i: MyItem): WorkRowModel {
 }
 function draftRow(d: MyDraft): WorkRowModel {
   return {
-    key: `draft:${d.id}`, kind: { label: 'To scope', tone: 'pending' }, title: d.primary_asset_name || d.name,
+    key: `draft:${d.id}`, kind: { label: 'To scope', tone: 'pending' }, title: subjectOf({ name: d.name, primary_asset_name: d.primary_asset_name, scope_model: 'process', assessment_format: d.assessment_format }),
     context: kindOf(d.assessment_format).label, due: null, href: workspaceHref(d.id), action: 'Scope', rank: 2,
   };
 }
