@@ -3,7 +3,7 @@
 import { ACTION_PRIORITIES, ACTION_TYPES, PENDING, isOpenAction, isOverdueAction, shownStatus } from '../../../../lib/erm/mitigation.ts';
 import { mitigationStatus, severity, treatmentType } from '../../../../lib/statuses/monitoring.ts';
 import { parseUtc } from '../../../../lib/serverTime.ts';
-import { buildSchema, type RegisterDef } from './registerModel.ts';
+import { buildSchema, type RegisterDef } from '../../../../components/records/registerModel.ts';
 
 export interface ActionRow {
   id: number;

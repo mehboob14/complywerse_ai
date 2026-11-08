@@ -1,10 +1,10 @@
-// node --test "src/app/(dashboard)/erm/_monitoring/registerModel.test.ts"
+// node --test "src/components/records/registerModel.test.ts"
 // The common engine of the three monitoring registers: the address grammar, live facet counts, quick chips that count what they would show, sort with empty values last,
 // paging, and the applied-filter chips that come off one by one.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { readAddress, writeAddress } from '../../../../lib/addressState.ts';
+import { readAddress, writeAddress } from '../../lib/addressState.ts';
 import {
   appliedChips, buildSchema, clampPage, evaluateRegister, filterCount, indexRegister, matchKey, nextSort, pageCount, pageSlice, sortRows, stateOf, withoutChip,
   type RegisterDef, type RegisterState,

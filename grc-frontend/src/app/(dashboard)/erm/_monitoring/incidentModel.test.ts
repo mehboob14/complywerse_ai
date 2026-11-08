@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 
 import { readAddress } from '../../../../lib/addressState.ts';
 import { groupBoard } from '../../../../components/records/explorerModel.ts';
-import { evaluateRegister, indexRegister, sortRows, stateOf } from './registerModel.ts';
+import { evaluateRegister, indexRegister, sortRows, stateOf } from '../../../../components/records/registerModel.ts';
 import { INCIDENT_SCHEMA, incidentDef, linked, type IncidentRow } from './incidentModel.ts';
 
 const i = (id: number, over: Partial<IncidentRow>): IncidentRow => ({ id, title: `Incident ${id}`, incident_date: '2026-11-01T00:00:00', severity: 'medium', status: 'open', ...over });

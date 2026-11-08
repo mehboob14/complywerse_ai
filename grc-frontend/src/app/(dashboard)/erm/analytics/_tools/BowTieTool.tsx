@@ -17,7 +17,7 @@ import { scoreBand, BAND_LABEL } from '@/lib/erm/band';
 import { categoryLabel } from '@/lib/erm/categories';
 import { statusPill } from '@/lib/status';
 import { mitigationStatus, severity } from '@/lib/statuses/monitoring';
-import { riskOptions, useLeanRisks } from '../../_monitoring/lookups';
+import { riskOptions, useLeanRisks } from '@/components/records/lookups';
 
 interface BowTie {
   risk_id: number; risk_title: string; risk_description?: string | null; risk_category?: string | null; inherent_score?: number | null; residual_score?: number | null;

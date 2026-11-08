@@ -14,7 +14,7 @@ import { categoryLabel } from '@/lib/erm/categories';
 import { formatCount } from '@/lib/format';
 import { statusLabel } from '@/lib/format';
 import { bandColors, GRID, HOVER, INK, TIP } from '../../_monitoring/bandStyle';
-import { useLeanRisks } from '../../_monitoring/lookups';
+import { useLeanRisks } from '@/components/records/lookups';
 
 const SCHEMA = { by: oneOf(['category', 'unit', 'status'] as const, 'category') };
 const TABS = [{ key: 'category', label: 'By category' }, { key: 'unit', label: 'By business unit' }, { key: 'status', label: 'By status' }];

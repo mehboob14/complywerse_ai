@@ -3,7 +3,7 @@
 import { isDue, type Metric } from '../../governance/_metrics/metricModel.ts';
 import { STATE_RANK, kriState, type KriState } from '../../../../lib/erm/kri.ts';
 import { kriStatus } from '../../../../lib/statuses/monitoring.ts';
-import { buildSchema, type RegisterDef } from './registerModel.ts';
+import { buildSchema, type RegisterDef } from '../../../../components/records/registerModel.ts';
 
 export interface KriRow extends Metric {
   risk_id?: number | null;

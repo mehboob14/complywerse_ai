@@ -37,7 +37,7 @@ test('the explorer knows no module: it imports the kit, the library of shared he
     if (!m) return;
     const from = m[1];
     if (from.startsWith('./') || from.startsWith('../') && !/\(dashboard\)|governance/.test(from)) return;
-    if (/^@\/(components\/ui|lib\/)/.test(from) || /^(react|react-dom|lucide-react|clsx)$/.test(from)) return;
+    if (/^@\/(components\/ui|lib\/)/.test(from) || /^(react|react-dom|lucide-react|clsx|@tanstack\/react-query)$/.test(from)) return;
     found.push(`${name}:${i + 1} ${from}`);
   });
   assert.deepEqual(found, []);
