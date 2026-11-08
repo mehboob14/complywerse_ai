@@ -471,7 +471,7 @@ def get_issue_incident_sections_overview(
     scoped = [tenant_id] if (tenant_id and tenant_id in user_tenants) else user_tenants
     now = datetime.utcnow()
     if not scoped:
-        return {"as_of": now.isoformat(), "sections": {}, "attention_queue": {},
+        return {"as_of": now.isoformat(), "target": 85, "customized": False, "sections": {}, "attention_queue": {},
                 "performance": {"score": None, "grade": None, "components": []}}
 
     def _m(key, label, weight, num, den, formula, inverse=False, empty_score=None):
@@ -657,13 +657,14 @@ def get_issue_incident_sections_overview(
                               "serious_uncovered": len(serious_open) - serious_covered}},
     }
 
+    from grc.services import scorecard_config as sc_cfg
+    _cfg = {}
     try:
-        from grc.services import scorecard_config as sc_cfg
         _cfg = sc_cfg.get_config(db, scoped[0], "issue_incident") if scoped else {}
         _target = _cfg.get("target", 85)
         sc_cfg.apply_overrides(list(sections.values()), _cfg)
     except Exception:
-        _target = 85
+        _cfg, _target = {}, 85
     components = [{"key": s["key"], "label": s["label"], "score": s["score"],
                   "weight": s["weight"], "target": _target} for s in sections.values()]
     scored = [c for c in components if c["score"] is not None]
@@ -674,6 +675,8 @@ def get_issue_incident_sections_overview(
 
     return {
         "as_of": now.isoformat(),
+        "target": _target,                                     # the tenant's target (85 unless tuned) and whether it was tuned
+        "customized": sc_cfg.is_customized(_cfg, "issue_incident"),
         "sections": sections,
         "attention_queue": {
             "open_critical_issues": iss_crit_open,

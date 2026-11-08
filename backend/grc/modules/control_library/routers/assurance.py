@@ -9,11 +9,10 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, Body
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import SQLAlchemyError
 
-from ....models import get_db, GRCUser, ControlWorkItem, ControlWorkTest
+from ....models import get_db, GRCUser
 from ....routers.auth_router import require_auth, get_user_tenants
-from .workbench import ensure_tables, sync_internal_control_work_items
+from ..scorecard_rows import work_rows
 
 router = APIRouter(prefix="/assurance", tags=["Control Library - Assurance"])
 
@@ -47,36 +46,12 @@ def get_assurance_sections_overview(
     scoped = [tenant_id] if (tenant_id and tenant_id in user_tenants) else user_tenants
     now = datetime.utcnow()
     if not scoped:
-        return {"as_of": now.isoformat(), "sections": {}, "attention_queue": {},
+        return {"as_of": now.isoformat(), "target": 85, "customized": False, "sections": {}, "attention_queue": {},
                 "performance": {"score": None, "grade": None, "components": []}}
 
-    # Assurance reads the workbench layer — mirror internal controls into work items
-    # so tenants with a populated register get a real score without manual promotion.
-    try:
-        ensure_tables(db)
-        uid = getattr(current_user, "id", None)
-        for tid in scoped:
-            sync_internal_control_work_items(db, tid, created_by=uid)
-        db.flush()
-    except SQLAlchemyError:
-        db.rollback()
-
-    try:
-        wis = db.query(
-            ControlWorkItem.id, ControlWorkItem.status,
-            ControlWorkItem.design_effectiveness, ControlWorkItem.operating_effectiveness,
-            ControlWorkItem.last_tested_at, ControlWorkItem.next_test_date,
-            ControlWorkItem.is_key_control,
-        ).filter(ControlWorkItem.tenant_id.in_(scoped)).all()
-    except SQLAlchemyError:
-        db.rollback(); wis = []
-    try:
-        tests = db.query(
-            ControlWorkTest.work_item_id, ControlWorkTest.exceptions_found,
-            ControlWorkTest.tester_id, ControlWorkTest.reviewer_id, ControlWorkTest.status,
-        ).filter(ControlWorkTest.tenant_id.in_(scoped)).all()
-    except SQLAlchemyError:
-        db.rollback(); tests = []
+    # Assurance reads the workbench layer. An internal control with no work item yet is scored as the work item it would get
+    # (in memory): a read writes nothing. See scorecard_rows.
+    wis, tests = work_rows(db, scoped)
 
     _RATED = ("effective", "partially_effective", "ineffective")
     active = [w for w in wis if (w.status or "") == "active"]
@@ -140,13 +115,14 @@ def get_assurance_sections_overview(
                                "independently_reviewed": independent, "completed_tests": len(completed_tests)}},
     }
 
+    from grc.services import scorecard_config as sc_cfg
+    _cfg = {}
     try:
-        from grc.services import scorecard_config as sc_cfg
         _cfg = sc_cfg.get_config(db, scoped[0], "assurance")
         _target = _cfg.get("target", 85)
         sc_cfg.apply_overrides(list(sections.values()), _cfg)
     except Exception:
-        _target = 85
+        _cfg, _target = {}, 85
     components = [{"key": s["key"], "label": s["label"], "score": s["score"],
                    "weight": s["weight"], "target": _target} for s in sections.values()]
     scored = [c for c in components if c["score"] is not None]
@@ -157,6 +133,8 @@ def get_assurance_sections_overview(
 
     return {
         "as_of": now.isoformat(),
+        "target": _target,                                     # the tenant's target (85 unless tuned) and whether it was tuned
+        "customized": sc_cfg.is_customized(_cfg, "assurance"),
         "sections": sections,
         "attention_queue": {
             "controls_untested": (n - len(tested)) if n else 0,
