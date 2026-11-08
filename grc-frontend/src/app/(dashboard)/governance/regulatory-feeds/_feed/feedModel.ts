@@ -92,3 +92,16 @@ export function feedFormProblem(f: { name: string; source_url: string; poll_inte
   if (!Number.isInteger(f.poll_interval_hours) || f.poll_interval_hours < 1 || f.poll_interval_hours > 168) return 'Check it every 1 to 168 hours.';
   return '';
 }
+
+export interface PollResult { feed_source_name: string; success: boolean; items_found: number; new_items: number; error_message?: string | null }
+
+/** What a poll says it did, in words: how many feeds were read, how many new items came, and which could not be read. */
+export function pollWords(results: readonly PollResult[]): { title: string; message: string; failed: number } {
+  const ok = results.filter((r) => r.success);
+  const failed = results.filter((r) => !r.success);
+  const fresh = ok.reduce((n, r) => n + (r.new_items || 0), 0);
+  const feeds = `${ok.length} ${ok.length === 1 ? 'feed' : 'feeds'}`;
+  const title = failed.length === 0 ? 'Feeds checked' : ok.length === 0 ? 'No feed could be read' : 'Feeds checked, some could not be read';
+  const message = `${feeds} read, ${fresh === 0 ? 'nothing new' : `${fresh} new ${fresh === 1 ? 'item' : 'items'}`}.${failed.length ? ` Could not read: ${failed.map((f) => f.feed_source_name).join(', ')}.` : ''}`;
+  return { title, message, failed: failed.length };
+}

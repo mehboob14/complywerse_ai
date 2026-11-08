@@ -3,7 +3,7 @@
 // The requests Regulatory Changes and the Feed share, each under ONE query key, so the same answer is fetched once (the strip's badge, the Overview and the Feed read the feed counts; the Overview
 // and the register read the changes). A failure is an error the page says, never an empty list. The list is the complete load (the old page read the newest 100 and put the dashboard's total over it).
 import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import apiClient, { regulatoryApi } from '@/lib/api';
 import { canRetry } from '@/components/ui/ds/reportOutcome';
 import { feedApi, regulatoryExtra } from './api';
@@ -46,10 +46,11 @@ export const useOverview = () => useQuery({ queryKey: [...OVERVIEW_KEY], queryFn
 export const useMyWork = () => useQuery({ queryKey: [...MY_WORK_KEY], queryFn: async () => (await regulatoryExtra.myWork()).data as MyWorkPayload, retry });
 export const useFeedCounts = () => useQuery({ queryKey: [...FEED_COUNTS_KEY], queryFn: async () => (await feedApi.counts()).data as FeedCounts, retry, staleTime: 30_000 });
 export const useFeedSources = () => useQuery({ queryKey: [...FEED_SOURCES_KEY], queryFn: async () => ((await feedApi.sources()).data || []) as FeedSource[], retry });
-export const useFeedItems = (status: string, limit = 200) => useQuery({
-  queryKey: [...FEED_ITEMS_KEY, status, limit],
-  queryFn: async () => ((await feedApi.items({ status: status || undefined, limit })).data || []) as FeedItem[],
+export const useFeedItems = (status: string, limit = 200, search = '') => useQuery({
+  queryKey: [...FEED_ITEMS_KEY, status, limit, search],
+  queryFn: async () => ((await feedApi.items({ status: status || undefined, limit, search: search.trim() || undefined })).data || []) as FeedItem[],
   retry,
+  placeholderData: keepPreviousData,
 });
 
 /** The people and roles the pickers offer. A failure is the query's error: the picker says it, it never offers an empty list as if nobody existed. */

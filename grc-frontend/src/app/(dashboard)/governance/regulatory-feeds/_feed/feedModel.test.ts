@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 
 import {
   CATEGORIES, FEED_TABS, actionsOf, analysisFailed, analysisOf, assigneeKey, assigneeLabel, categoryLabel, descriptionOf, feedFormProblem, firstTab, isFeedTab, parseAssignee, plainText, statusOfTab,
-  tabCount, validFeedUrl,
+  pollWords, tabCount, validFeedUrl,
 } from './feedModel.ts';
 
 const COUNTS = { new: 7, analyzed: 2, processed: 1, ignored: 30, total: 40 };
@@ -78,4 +78,16 @@ test('the Add feed form: a name, an http(s) address with a host, 1 to 168 hours;
   assert.match(feedFormProblem({ name: 'SBP', source_url: 'sbp', poll_interval_hours: 24 }), /address/);
   assert.match(feedFormProblem({ name: 'SBP', source_url: 'https://a.test/rss', poll_interval_hours: 0 }), /1 to 168/);
   assert.equal(feedFormProblem({ name: 'SBP', source_url: 'https://a.test/rss', poll_interval_hours: 24 }), '');
+});
+
+test('a poll says how many feeds were read, how many items are new and which feeds failed', () => {
+  const ok = (name: string, n: number) => ({ feed_source_name: name, success: true, items_found: n + 3, new_items: n });
+  assert.deepEqual(pollWords([ok('SBP', 2), ok('SAMA', 3)]), { title: 'Feeds checked', message: '2 feeds read, 5 new items.', failed: 0 });
+  assert.equal(pollWords([ok('SBP', 0)]).message, '1 feed read, nothing new.');
+  assert.equal(pollWords([ok('SBP', 1)]).message, '1 feed read, 1 new item.');
+  const mixed = pollWords([ok('SBP', 1), { feed_source_name: 'ECB', success: false, items_found: 0, new_items: 0, error_message: 'timeout' }]);
+  assert.equal(mixed.title, 'Feeds checked, some could not be read');
+  assert.match(mixed.message, /Could not read: ECB\./);
+  assert.equal(pollWords([{ feed_source_name: 'ECB', success: false, items_found: 0, new_items: 0 }]).title, 'No feed could be read');
+  assert.equal(pollWords([]).message, '0 feeds read, nothing new.');
 });
