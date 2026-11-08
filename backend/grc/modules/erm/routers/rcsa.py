@@ -212,7 +212,7 @@ from ....schemas import (
     RCSATemplateCreate, RCSATemplateUpdate, RCSATemplateResponse, RCSATemplateDetailResponse,
     RCSAQuestionCreate, RCSAQuestionUpdate, RCSAQuestionResponse, RCSAQuestionUpsert,
     RCSACampaignCreate, RCSACampaignUpdate, RCSACampaignResponse,
-    RCSAAssessmentResponse, RCSAAssessmentDetailResponse, RCSAQuestionWithResponse, RCSAResponseDetail, RCSAEvidenceFile,
+    RCSAAssessmentResponse, RCSAAssessmentDetailResponse, RCSAQuestionWithResponse, RCSAResponseDetail, RCSAEvidenceFile, RCSAApprovalStep,
     RCSAResponseCreate, RCSAResponseUpdate, RCSAResponseResponse,
     RCSABulkResponseSave, RCSAFindingCreate, RCSAFindingUpdate, RCSAFindingResponse,
     RCSAApprovalWorkflowCreate, RCSAApprovalWorkflowUpdate, RCSAApprovalWorkflowResponse,
@@ -224,6 +224,7 @@ from ....schemas import (
 from ....routers.auth_router import (require_auth, get_user_tenants, get_user_primary_tenant, is_tenant_admin, is_platform_account,
                                      refuse_imported_accounts)
 from ....services import evidence_review
+from ..rcsa_work import viewer_may_review
 
 router = APIRouter(prefix="/rcsa", tags=["RCSA - Risk and Control Self-Assessment"])
 
@@ -278,7 +279,10 @@ def list_templates(
         query = query.filter(RCSATemplate.source == source)
     
     templates = query.order_by(RCSATemplate.name).offset(skip).limit(limit).all()
-    
+    used = dict(db.query(RCSACampaign.template_id, func.count(RCSACampaign.id))
+                .filter(RCSACampaign.template_id.in_([t.id for t in templates]))
+                .group_by(RCSACampaign.template_id).all()) if templates else {}
+
     return [
         RCSATemplateResponse(
             id=t.id,
@@ -295,7 +299,8 @@ def list_templates(
             created_by=t.created_by,
             created_at=t.created_at,
             updated_at=t.updated_at,
-            question_count=len(t.questions)
+            question_count=len(t.questions),
+            campaign_count=used.get(t.id, 0)
         )
         for t in templates
     ]
@@ -1007,8 +1012,21 @@ def list_campaigns(
     if status_filter:
         query = query.filter(RCSACampaign.status == status_filter)
     
-    campaigns = query.order_by(RCSACampaign.created_at.desc()).offset(skip).limit(limit).all()
-    
+    campaigns = query.order_by(RCSACampaign.created_at.desc(), RCSACampaign.id.desc()).offset(skip).limit(limit).all()
+    ids = [c.id for c in campaigns]
+    owners = {uid: name for uid, name in db.query(GRCUser.id, GRCUser.display_name).filter(
+        GRCUser.id.in_([c.created_by for c in campaigns if c.created_by])).all()} if campaigns else {}
+    open_by_campaign = dict(db.query(RCSAAssessment.campaign_id, func.count(RCSAFinding.id))
+                            .join(RCSAFinding, RCSAFinding.assessment_id == RCSAAssessment.id)
+                            .filter(RCSAAssessment.campaign_id.in_(ids), RCSAFinding.status.in_(["open", "in_progress"]))
+                            .group_by(RCSAAssessment.campaign_id).all()) if ids else {}
+
+    def counts_of(c):
+        out = {}
+        for a in c.assessments:
+            out[a.status] = out.get(a.status, 0) + 1
+        return out
+
     return [
         RCSACampaignResponse(
             id=c.id,
@@ -1029,7 +1047,10 @@ def list_campaigns(
             created_at=c.created_at,
             updated_at=c.updated_at,
             assessment_count=len(c.assessments),
-            completed_count=sum(1 for a in c.assessments if a.status == "approved")
+            completed_count=sum(1 for a in c.assessments if a.status == "approved"),
+            created_by_name=owners.get(c.created_by),
+            status_counts=counts_of(c),
+            open_findings=open_by_campaign.get(c.id, 0)
         )
         for c in campaigns
     ]
@@ -1143,6 +1164,8 @@ def get_campaign_detail(
             "risk_score": a.overall_risk_score,
             "control_score": a.overall_control_score,
             "findings_count": findings_count,
+            "open_findings_count": sum(1 for f in (a.findings or []) if f.status in ("open", "in_progress")),
+            "current_approval_tier": a.current_approval_tier,
             "submitted_at": a.submitted_at.isoformat() if a.submitted_at else None,
             "reviewed_at": a.completed_at.isoformat() if a.completed_at else None,
         }
@@ -1154,7 +1177,11 @@ def get_campaign_detail(
     
     avg_risk = round(sum(risk_scores) / len(risk_scores), 2) if risk_scores else None
     avg_control = round(sum(control_scores) / len(control_scores), 2) if control_scores else None
-    
+    status_counts = {}
+    for a in campaign.assessments:
+        status_counts[a.status] = status_counts.get(a.status, 0) + 1
+    owner = db.query(GRCUser.display_name).filter(GRCUser.id == campaign.created_by).scalar() if campaign.created_by else None
+
     return {
         "id": campaign.id,
         "tenant_id": campaign.tenant_id,
@@ -1162,6 +1189,12 @@ def get_campaign_detail(
         "description": campaign.description,
         "template_id": campaign.template_id,
         "template_name": campaign.template.name if campaign.template else None,
+        "created_by_name": owner,
+        "status_counts": status_counts,
+        "period_type": campaign.period_type,
+        "reminder_days_before": campaign.reminder_days_before,
+        "escalation_days_after": campaign.escalation_days_after,
+        "approval_workflow_id": campaign.approval_workflow_id,
         "status": campaign.status,
         "period": campaign.period_label or campaign.period_type,
         "start_date": campaign.start_date.isoformat() if campaign.start_date else None,
@@ -1704,19 +1737,21 @@ def get_assessment_detail(
             question_order=q.question_order or 0,
             ai_suggestion_enabled=q.ai_suggestion_enabled or False,
             risk_category=q.risk_category,
-            control_objective=q.control_objective
+            control_objective=q.control_objective,
+            options=list(q.options or [])
         ))
-    
+
     responses = []
     for r in assessment.responses:
         evidence_files = []
         if hasattr(r, 'evidence_links') and r.evidence_links:
             for link in r.evidence_links:
                 if link.evidence:
+                    path = link.evidence.file_path
                     evidence_files.append(RCSAEvidenceFile(
                         id=link.evidence.id,
                         filename=link.evidence.file_name or link.evidence.name,
-                        file_size=0,
+                        file_size=os.path.getsize(path) if path and os.path.exists(path) else 0,
                         uploaded_at=link.evidence.uploaded_at
                     ))
         responses.append(RCSAResponseDetail(
@@ -1732,7 +1767,29 @@ def get_assessment_detail(
     total_required = len([q for q in questions if q.is_required])
     answered = len([r for r in responses if r.likelihood or r.impact or r.effectiveness or r.yes_no_value is not None or r.text_value])
     progress = (answered / total_required * 100) if total_required > 0 else 0
-    
+
+    workflow = db.query(RCSAApprovalWorkflow).options(
+        joinedload(RCSAApprovalWorkflow.tiers)
+    ).filter(RCSAApprovalWorkflow.id == campaign.approval_workflow_id).first() if campaign.approval_workflow_id else None
+    history_rows = db.query(RCSAApprovalHistory).filter(
+        RCSAApprovalHistory.assessment_id == assessment_id
+    ).order_by(RCSAApprovalHistory.performed_at, RCSAApprovalHistory.id).all()
+    people = {}
+    wanted = {h.performed_by for h in history_rows if h.performed_by} | {h.delegated_to for h in history_rows if h.delegated_to}
+    if wanted:
+        people = {uid: name for uid, name in db.query(GRCUser.id, GRCUser.display_name).filter(GRCUser.id.in_(wanted)).all()}
+    history = [
+        RCSAApprovalStep(
+            action=h.action,
+            tier_number=h.tier_number or 0,
+            performer_name=people.get(h.performed_by),
+            delegate_name=people.get(h.delegated_to) if h.delegated_to else None,
+            comments=h.comments,
+            performed_at=h.performed_at
+        )
+        for h in history_rows
+    ]
+
     return RCSAAssessmentDetailResponse(
         id=assessment.id,
         campaign_id=assessment.campaign_id,
@@ -1743,7 +1800,20 @@ def get_assessment_detail(
         due_date=campaign.due_date,
         progress=progress,
         questions=questions,
-        responses=responses
+        responses=responses,
+        business_unit_id=assessment.business_unit_id,
+        assessor_id=assessment.assessor_id,
+        template_name=template.name,
+        campaign_status=campaign.status,
+        current_approval_tier=assessment.current_approval_tier or 0,
+        total_tiers=len(workflow.tiers) if workflow and workflow.tiers else 1,
+        submitted_at=assessment.submitted_at,
+        completed_at=assessment.completed_at,
+        overall_risk_score=assessment.overall_risk_score,
+        overall_control_score=assessment.overall_control_score,
+        approval_history=history,
+        viewer_may_review=viewer_may_review(db, current_user, assessment, workflow),
+        viewer_is_assessor=assessment.assessor_id == current_user.id
     )
 
 
@@ -2480,8 +2550,21 @@ def list_findings(
     if finding_type:
         query = query.filter(RCSAFinding.finding_type == finding_type)
     
-    findings = query.order_by(RCSAFinding.created_at.desc()).offset(skip).limit(limit).all()
-    
+    findings = query.order_by(RCSAFinding.created_at.desc(), RCSAFinding.id.desc()).offset(skip).limit(limit).all()
+    where = {}
+    if findings:
+        for aid, cid, cname, bname in db.query(RCSAAssessment.id, RCSACampaign.id, RCSACampaign.name, BusinessUnit.name) \
+                .join(RCSACampaign, RCSACampaign.id == RCSAAssessment.campaign_id) \
+                .outerjoin(BusinessUnit, BusinessUnit.id == RCSAAssessment.business_unit_id) \
+                .filter(RCSAAssessment.id.in_({f.assessment_id for f in findings})).all():
+            where[aid] = (cid, cname, bname)
+    def names(model, column, ids):
+        ids = {i for i in ids if i}
+        return dict(db.query(model.id, column).filter(model.id.in_(ids)).all()) if ids else {}
+    risk_titles = names(Risk, Risk.title, [f.linked_risk_id for f in findings])
+    control_names = names(InternalControl, InternalControl.name, [f.linked_internal_control_id for f in findings])
+    action_titles = names(RiskMitigationAction, RiskMitigationAction.title, [f.linked_mitigation_action_id for f in findings])
+
     return [
         RCSAFindingResponse(
             id=f.id,
@@ -2504,7 +2587,13 @@ def list_findings(
             remediation_owner_name=f.remediation_owner.display_name if f.remediation_owner else None,
             created_at=f.created_at,
             updated_at=f.updated_at,
-            closed_at=f.closed_at
+            closed_at=f.closed_at,
+            campaign_id=where.get(f.assessment_id, (None, None, None))[0],
+            campaign_name=where.get(f.assessment_id, (None, None, None))[1],
+            business_unit_name=where.get(f.assessment_id, (None, None, None))[2],
+            linked_risk_title=risk_titles.get(f.linked_risk_id),
+            linked_control_name=control_names.get(f.linked_internal_control_id),
+            linked_action_title=action_titles.get(f.linked_mitigation_action_id)
         )
         for f in findings
     ]
@@ -2790,6 +2879,18 @@ def create_mitigation_action_from_finding(
 # Dashboard Endpoints
 # =============================================================================
 
+@router.get("/my-work")
+def get_my_work(
+    limit: int = Query(30, ge=1, le=200),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """The Worklist: what is waiting for this person (units to complete or fix, submissions to review, findings they own) with true totals,
+    and for the risk team the campaigns they run. Read only; see modules/erm/rcsa_work.py."""
+    from ..rcsa_work import my_work
+    return my_work(db, current_user, get_user_tenants(current_user, db), limit)
+
+
 @router.get("/dashboard/summary", response_model=RCSADashboardSummary)
 def get_dashboard_summary(
     tenant_id: Optional[int] = None,
@@ -2816,15 +2917,15 @@ def get_dashboard_summary(
     total_campaigns = campaign_query.count()
     active_campaigns = campaign_query.filter(RCSACampaign.status == "active").count()
     
-    assessments = assessment_query.all()
+    assessments = assessment_query.options(joinedload(RCSAAssessment.campaign)).all()
     total_assessments = len(assessments)
     completed_assessments = sum(1 for a in assessments if a.status == "approved")
     pending_approval = sum(1 for a in assessments if a.status in ["submitted", "under_review"])
-    
+
     overdue_count = 0
     for a in assessments:
         if a.status not in ["approved", "rejected"]:
-            campaign = db.query(RCSACampaign).filter(RCSACampaign.id == a.campaign_id).first()
+            campaign = a.campaign
             if campaign and campaign.due_date and campaign.due_date < datetime.utcnow():
                 overdue_count += 1
     

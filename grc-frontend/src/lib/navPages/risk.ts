@@ -1,7 +1,7 @@
 // Navigation-registry entries of the Risk Management (ERM) pages (see navPages/index.ts for the contract). Written by R-REG, 2026-11-01, from the pages and the
 // links that open them (G6_registry_inventory.md); the group's builder adds `ownHeading: true` to an entry the day its page draws PageHeader variant="page".
 // KRIs (/erm/kris) is a sidebar leaf of the Governance group and Incidents (/erm/incidents) of Issue & Incident Management: their entries are in navRegistry.ts and issues.ts.
-// The area's own tab strip (erm/layout.tsx: Risk Register, Appetite, Mitigation Actions, Reviews, Dependencies) and the RCSA strip (erm/rcsa/layout.tsx) are not
+// The area's own tab strip (erm/layout.tsx: Risk Register, Appetite, Mitigation Actions, Reviews, Dependencies) and the RCSA sections (links in the page head of erm/rcsa) are not
 // modelled as `tab`s: nothing draws them from the registry, and the Work panel lists the area's pages (pagesForArea). The Overview leaf lights for the strip's pages (navAccess activeMatch).
 import type { PageSpec, RouteExtra } from '../navRegistry.ts';
 
@@ -14,7 +14,7 @@ export const LEAVES: Record<string, RouteExtra> = {
   '/erm': { title: 'Risk Management Overview', keywords: ['Enterprise Risk Management', 'ERM'], ownHeading: true },
   '/erm/risks': { keywords: ['Risks', 'Risk dashboard', 'Risk insights', 'Risk matrix', 'Heat map'], ownHeading: true },
   '/erm/risk-assessments': { keywords: ['Risk assessment dashboard'] },
-  '/erm/rcsa': { keywords: ['RCSA Dashboard', 'Risk and control self-assessment'] },
+  '/erm/rcsa': { keywords: ['RCSA Dashboard', 'Risk and control self-assessment', 'RCSA Worklist'], ownHeading: true },
   // Advanced Analytics is ONE page with a strip of tools (G9 monitoring): each tool keeps its address and draws the shared frame, whose head is the kit's page head.
   '/erm/analytics': { keywords: ['Advanced Risk Analytics', 'Heat map', 'Heatmap'], ownHeading: true },
   '/erm/analytics/bowtie': { keywords: ['Bow-Tie Risk Analysis', 'Bowtie'], ownHeading: true },
@@ -52,19 +52,19 @@ export const PAGES: PageSpec[] = [
   { path: `${ASSESSMENTS}/framework`, label: 'Framework Risk Assessments', area: AREA, parent: ASSESSMENTS, hidden: 'opens from the Risk Assessments dashboard and from the Blocked framework questions tile of the Overview' },
   { path: `${ASSESSMENTS}/framework/:id`, label: 'Framework risk assessment', area: AREA, parent: `${ASSESSMENTS}/framework`, hidden: 'opens from the Framework Risk Assessments list, from a Risk Assessments List row and from the Auditor Portal risk tab of a framework' },
 
-  // ---- RCSA: the page strip of erm/rcsa/layout.tsx (Dashboard, Campaigns, Assessments, Templates, Custom Templates, Findings, Approvals) ----
-  { path: `${RCSA}/campaigns`, label: 'RCSA Campaigns', area: AREA, parent: RCSA, hidden: 'a page of the RCSA strip' },
-  { path: `${RCSA}/campaigns/:id`, label: 'RCSA campaign', area: AREA, parent: `${RCSA}/campaigns`, hidden: 'opens from an RCSA Campaigns row and from the RCSA Dashboard' },
-  { path: `${RCSA}/assessments`, label: 'RCSA Assessments', area: AREA, parent: RCSA, hidden: 'a page of the RCSA strip' },
-  { path: `${RCSA}/assessments/:id`, label: 'RCSA assessment', area: AREA, parent: `${RCSA}/assessments`, hidden: 'opens from an RCSA Assessments row' },
-  { path: `${RCSA}/templates`, label: 'RCSA Templates', area: AREA, parent: RCSA, hidden: 'a page of the RCSA strip' },
-  { path: `${RCSA}/templates/:id`, label: 'RCSA template', area: AREA, parent: `${RCSA}/templates`, hidden: 'opens from an RCSA Templates row' },
-  { path: `${RCSA}/custom-templates`, label: 'Custom RCSA Templates', area: AREA, parent: RCSA, hidden: 'a page of the RCSA strip' },
-  { path: `${RCSA}/custom-templates/:id`, label: 'Custom RCSA template', area: AREA, parent: `${RCSA}/custom-templates`, hidden: 'opens from a Custom RCSA Templates row' },
-  { path: `${RCSA}/findings`, label: 'RCSA Findings', area: AREA, parent: RCSA, hidden: 'a page of the RCSA strip and the RCSA open findings tile of the Overview' },
-  { path: `${RCSA}/findings/:id`, label: 'RCSA finding', area: AREA, parent: `${RCSA}/findings`, hidden: 'opens from an RCSA Findings row' },
-  { path: `${RCSA}/approvals`, label: 'RCSA Approvals', area: AREA, parent: RCSA, hidden: 'a page of the RCSA strip' },
-  { path: `${RCSA}/approvals/:id`, label: 'RCSA approval', area: AREA, parent: `${RCSA}/approvals`, hidden: 'opens from an RCSA Approvals row' },
+  // ---- RCSA: the Worklist (the sidebar leaf) with Campaigns, Templates and Findings as links in its page head; the other old addresses forward ----
+  { path: `${RCSA}/campaigns`, label: 'RCSA Campaigns', area: AREA, parent: RCSA, hidden: 'a section of RCSA (the links under its title)', ownHeading: true },
+  { path: `${RCSA}/campaigns/:id`, label: 'RCSA campaign', area: AREA, parent: `${RCSA}/campaigns`, hidden: 'opens from an RCSA Campaigns row and from the Worklist', ownHeading: true },
+  { path: `${RCSA}/assessments`, label: 'RCSA Assessments', area: AREA, parent: RCSA, hidden: 'an old address: it forwards to the Worklist' },
+  { path: `${RCSA}/assessments/:id`, label: 'RCSA assessment', area: AREA, parent: RCSA, hidden: 'opens from a Worklist row and from the units table of a campaign', ownHeading: true },
+  { path: `${RCSA}/templates`, label: 'RCSA Templates', area: AREA, parent: RCSA, hidden: 'a section of RCSA (the links under its title)', keywords: ['Questionnaires', 'Registers'], ownHeading: true },
+  { path: `${RCSA}/templates/:id`, label: 'RCSA template', area: AREA, parent: `${RCSA}/templates`, hidden: 'opens from an RCSA Templates row', ownHeading: true },
+  { path: `${RCSA}/custom-templates`, label: 'Custom RCSA Templates', area: AREA, parent: `${RCSA}/templates`, hidden: 'an old address: it forwards to the Registers kind of the Templates page' },
+  { path: `${RCSA}/custom-templates/:id`, label: 'Custom RCSA template', area: AREA, parent: `${RCSA}/templates`, hidden: 'opens from an RCSA Templates row of the Registers kind', ownHeading: true },
+  { path: `${RCSA}/findings`, label: 'RCSA Findings', area: AREA, parent: RCSA, hidden: 'a section of RCSA (the links under its title) and the RCSA open findings tile of the Overview', ownHeading: true },
+  { path: `${RCSA}/findings/:id`, label: 'RCSA finding', area: AREA, parent: `${RCSA}/findings`, hidden: 'an old address: it forwards to the Findings register with the finding open' },
+  { path: `${RCSA}/approvals`, label: 'RCSA Approvals', area: AREA, parent: RCSA, hidden: 'an old address: it forwards to the Worklist, on what is waiting for review' },
+  { path: `${RCSA}/approvals/:id`, label: 'RCSA approval', area: AREA, parent: `${RCSA}/approvals`, hidden: 'an old address: it forwards to the page of the unit' },
 
   // ---- Advanced Analytics: the tools of its strip (the hub page with its cards is gone; /erm/analytics is the Heat map) ----
   { path: '/erm/analytics/heatmap', label: 'Advanced Analytics', area: AREA, aliasOf: '/erm/analytics' },
