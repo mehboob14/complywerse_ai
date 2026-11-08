@@ -20,7 +20,7 @@ export default function NcaTab({ assessmentId }: Props) {
   const readOnly = !hasPermission('compliance:assessments:edit');
   return (
     <div className="flex flex-col gap-[16px]">
-      <SegmentedControl label="View" name="nca-view" value={view} onChange={setView} options={[{ value: 'dcc', label: 'DCC controls' }, { value: 'plan', label: 'Audit plan' }]} />
+      <SegmentedControl className="self-start" label="View" name="nca-view" value={view} onChange={setView} options={[{ value: 'dcc', label: 'DCC controls' }, { value: 'plan', label: 'Audit plan' }]} />
       {view === 'dcc' ? <NcaDccLens assessmentId={assessmentId} readOnly={readOnly} onChanged={() => undefined} /> : <AuditPlanLens assessmentId={assessmentId} readOnly={readOnly} onChanged={() => undefined} />}
     </div>
   );

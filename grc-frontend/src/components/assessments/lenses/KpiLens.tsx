@@ -53,7 +53,8 @@ export default function KpiLens({ assessmentId, readOnly, onChanged }: LensProps
   if (query.isPending) return <SkeletonLines lines={6} label="Loading the KPI report" />;
   if (query.isError || !detail) return <ErrorState title="Couldn't load the KPI report" message={errorMessage(query.error)} onRetry={canRetry(query.error) ? () => { void query.refetch(); } : undefined} />;
 
-  const figures: Tile[] = [
+  const failed = live.isError;                                      // a failed read is never drawn as "no feed": nothing is said about where a KPI stands
+  const figures: Tile[] = failed ? [{ label: 'Live KPIs', value: EMPTY, note: 'not loaded' }, { label: 'On target', value: EMPTY }, { label: 'Below target', value: EMPTY }, { label: 'External', value: EMPTY }] : [
     { label: 'Live KPIs', value: formatCount(counts.live), note: `${formatCount(counts.total)} in the report`, info: 'KPIs the platform computes from its own modules.' },
     { label: 'On target', value: formatCount(counts.onTarget), tone: counts.onTarget ? 'success' : 'default' },
     { label: 'Below target', value: formatCount(counts.below), tone: counts.below ? 'danger' : 'default' },
@@ -64,8 +65,8 @@ export default function KpiLens({ assessmentId, readOnly, onChanged }: LensProps
       key: 'kpi', header: 'KPI', isRowHeader: true, width: 'w-[44%]',
       cell: (k) => (<span className="block min-w-0"><span className="block text-ds-label text-ds-fg-muted">{k.domain}</span><span className="line-clamp-2 break-words text-ds-body text-ds-fg" title={k.topic}>{k.topic}</span></span>),
     },
-    { key: 'state', header: 'Status', card: 'meta', cell: (k) => <StatusPill {...statusPill(kpiStanding, stateOf(k))} size="sm" /> },
-    { key: 'actual', header: 'Actual', align: 'right', card: 'meta', cell: (k) => <span className="text-ds-body tabular-nums text-ds-fg">{k.live ? pct(k.actual) : EMPTY}</span> },
+    { key: 'state', header: 'Status', card: 'meta', cell: (k) => (failed ? <StatusPill tone="neutral" label="Not loaded" size="sm" /> : <StatusPill {...statusPill(kpiStanding, stateOf(k))} size="sm" />) },
+    { key: 'actual', header: 'Actual', align: 'right', card: 'meta', cell: (k) => <span className="text-ds-body tabular-nums text-ds-fg">{k.live && !failed ? pct(k.actual) : EMPTY}</span> },
     { key: 'target', header: 'Target', align: 'right', priority: 2, card: 'meta', cell: (k) => <span className="text-ds-body tabular-nums text-ds-fg-body">{k.live ? pct(k.target) : EMPTY}</span> },
     { key: 'bar', header: 'Progress', priority: 3, card: 'hide', width: 'w-[160px]', cell: (k) => (k.live ? <ProgressBar value={k.actual} label={`${k.topic} actual`} showValue={false} tone={k.onTarget === false ? 'danger' : 'success'} /> : <span className="text-ds-body text-ds-fg-muted">{EMPTY}</span>) },
   ];

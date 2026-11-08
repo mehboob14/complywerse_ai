@@ -113,7 +113,7 @@ export default function AuditPlanLens({ assessmentId, readOnly }: LensProps) {
   const rows = useMemo(() => entries.filter((e) => (a.status.length === 0 || a.status.includes(e.status || 'planned')) && matchesText(`${e.audit_id} ${e.audit_name} ${e.lead_auditor} ${e.team_responsible}`, a.q)), [entries, a.q, a.status]);
   const counts = countPlan(entries);
 
-  const view = <SegmentedControl label="View" name="audit-plan-view" value={a.view} onChange={(v) => set({ view: v })} options={[{ value: 'plan', label: 'Audit plan' }, { value: 'settings', label: 'Settings' }]} />;
+  const view = <SegmentedControl className="self-start" label="View" name="audit-plan-view" value={a.view} onChange={(v) => set({ view: v })} options={[{ value: 'plan', label: 'Audit plan' }, { value: 'settings', label: 'Settings' }]} />;
   if (a.view === 'settings') {
     return (
       <div className="flex flex-col gap-[16px]">

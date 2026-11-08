@@ -214,12 +214,12 @@ export function maturityBand(avg: number): string {
 // ── PDPL ────────────────────────────────────────────────────────────────────────
 export const PDPL_LEVELS = ['Absent', 'Initial', 'Developing', 'Defined', 'Managed', 'Optimised'] as const;
 export const PDPL_LEVEL_DESC = [
-  'Nothing in place: the control is not implemented.',
+  'Nothing is in place: the control is not implemented.',
   'Ad hoc or informal: some awareness but nothing documented.',
   'Partly implemented: documented but inconsistent or incomplete.',
-  'Defined: documented and consistently implemented across the organization.',
-  'Managed: implemented and actively monitored, with records.',
-  'Optimised: fully embedded, regularly reviewed and improved.',
+  'Documented and consistently implemented across the organization.',
+  'Implemented and actively monitored, with records.',
+  'Fully embedded, regularly reviewed and improved.',
 ] as const;
 /** What a maturity score makes of the answer (the server does the same on every write): 3 to 5 complied, 1 to 2 partly, 0 not complied, none not answered. */
 export function answerFromMaturity(score: number | null | undefined): ControlStatus {

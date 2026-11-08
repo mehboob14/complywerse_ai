@@ -16,7 +16,7 @@ export default function PDPLAssessmentTab() {
     <Standalone format="pdpl_assessment_toolkit" title="Saudi PDPL" assessmentType="gap_assessment" starter={TOOLKIT}>
       {(id, readOnly) => (
         <div className="flex flex-col gap-[16px]">
-          <SegmentedControl label="View" name="pdpl-view" value={view} onChange={setView} options={[{ value: 'controls', label: 'Controls' }, { value: 'plan', label: 'Action plan' }]} />
+          <SegmentedControl className="self-start" label="View" name="pdpl-view" value={view} onChange={setView} options={[{ value: 'controls', label: 'Controls' }, { value: 'plan', label: 'Action plan' }]} />
           {view === 'controls' ? <PdplLens assessmentId={id} readOnly={readOnly} onChanged={() => undefined} /> : <PdplPlanLens assessmentId={id} readOnly={readOnly} onChanged={() => undefined} />}
         </div>
       )}
