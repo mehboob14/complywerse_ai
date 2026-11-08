@@ -5,10 +5,12 @@ import json
 from typing import List, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 from pydantic import BaseModel
 
 from ....models import (
+    IncidentAssetLink, IncidentVulnerabilityLink, IncidentRiskLink, EvidenceIncidentLink,
     Risk, RiskIncident, GRCUser, get_db, NormalizedControl, FrameworkControl,
     ControlObjective, FrameworkDomain, Framework
 )
@@ -79,7 +81,18 @@ def _normalize_tags(raw) -> Optional[list]:
     return None
 
 
-def _enrich_incident_response(incident: RiskIncident, db: Session) -> RiskIncidentResponse:
+def _link_counts_for(db: Session, incident_ids: List[int]) -> dict:
+    """How many assets, vulnerabilities, risks and evidence records each incident links to, in four grouped queries (the list used to ask four queries per incident)."""
+    out = {i: {"assets": 0, "vulnerabilities": 0, "risks": 0, "evidence": 0} for i in incident_ids}
+    if not incident_ids:
+        return out
+    for key, model in (("assets", IncidentAssetLink), ("vulnerabilities", IncidentVulnerabilityLink), ("risks", IncidentRiskLink), ("evidence", EvidenceIncidentLink)):
+        for incident_id, n in db.query(model.incident_id, func.count(model.id)).filter(model.incident_id.in_(incident_ids)).group_by(model.incident_id).all():
+            out[incident_id][key] = n
+    return out
+
+
+def _enrich_incident_response(incident: RiskIncident, db: Session, link_counts: Optional[dict] = None) -> RiskIncidentResponse:
     data = RiskIncidentResponse.model_validate(incident)
     if incident.risk:
         data.risk_title = incident.risk.title
@@ -97,6 +110,9 @@ def _enrich_incident_response(incident: RiskIncident, db: Session) -> RiskIncide
             or getattr(assignee, "username", None)
             or getattr(assignee, "email", None)
         )
+    if link_counts is not None:
+        data.link_counts = link_counts
+        return data
     try:
         links = serialize_links(db, incident.id)
         data.link_counts = {k: len(v) for k, v in links.items()}
@@ -202,7 +218,8 @@ def list_incidents(
         query = query.filter(RiskIncident.incident_date <= end_date)
     
     incidents = query.order_by(RiskIncident.incident_date.desc()).offset(skip).limit(limit).all()
-    return [_enrich_incident_response(incident, db) for incident in incidents]
+    counts = _link_counts_for(db, [i.id for i in incidents])
+    return [_enrich_incident_response(incident, db, counts.get(incident.id)) for incident in incidents]
 
 
 @router.post("", response_model=RiskIncidentResponse, status_code=status.HTTP_201_CREATED)

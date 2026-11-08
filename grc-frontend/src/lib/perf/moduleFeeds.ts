@@ -7,6 +7,7 @@ import { SCORECARD_QUERY_KEYS } from '../../components/dashboard/scorecard-query
 import { navPermissions } from '../../components/layout/navAccess.ts';
 import { ATTENTION as COMPLIANCE_ATTENTION, SECTION_HREF as COMPLIANCE_SECTION_HREF, journeyRows, portfolioLine, targetOf } from '../../components/compliance/overview/overviewModel.ts';
 import { ATTENTION as GOVERNANCE_ATTENTION } from '../../app/(dashboard)/governance/_overview/overviewModel.ts';
+import { ATTENTION as RISK_ATTENTION } from '../../app/(dashboard)/erm/_overview/overviewModel.ts';
 import { TARGET as ASSESSMENTS_TARGET, countersOf as assessmentCounters } from '../../app/(dashboard)/assessments/_overview/overviewModel.ts';
 import { countersOf as bcmCounters } from '../../app/(dashboard)/bcm/_overview/overviewModel.ts';
 import { tiles as vendorTiles } from '../../app/(dashboard)/vendor-risk/_lib/overviewModel.ts';
@@ -135,16 +136,14 @@ const queueCounters = (d: Raw, defs: ReadonlyArray<CounterDef>): Counter[] => de
 
 const govDef = (key: string) => counterDef(GOVERNANCE_ATTENTION, key);
 const complianceDef = (key: string) => counterDef(COMPLIANCE_ATTENTION, key);
+const riskDef = (key: string) => counterDef(RISK_ATTENTION, key);
 
-/** An area's one-line list of counters from its own scorecard. */
+/** The counters an area hands the band, in the words and with the addresses of the module's own Overview (Risk Management's are its own: the Issues scorecard's critical incidents are the same count). */
 const ISSUE_COUNTERS: CounterDef[] = [
   { key: 'sla_breached_issues', label: 'SLA-breached issues', href: '/issues', tone: 'danger' },
-  { key: 'open_critical_incidents', label: 'Critical open incidents', href: '/erm/incidents', tone: 'danger' },
+  riskDef('open_critical_incidents'),
 ];
-const RISK_COUNTERS: CounterDef[] = [
-  { key: 'critical_open_risks', label: 'Critical open risks', href: '/erm/risks', tone: 'danger' },
-  govDef('red_kris'),
-];
+const RISK_COUNTERS: CounterDef[] = [riskDef('critical_open_risks'), riskDef('red_kris')];
 
 // ── the areas ────────────────────────────────────────────────────────────────
 export type AreaKind = 'score' | 'count' | 'link';

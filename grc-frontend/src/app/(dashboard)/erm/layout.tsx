@@ -5,20 +5,20 @@ import { usePathname } from 'next/navigation';
 import {
   AlertTriangle,
   Calendar,
-  GitBranch,
+  BarChart3,
   ListTodo,
   Target,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
 const ermNavigation = [
-  { name: 'Risk Register', href: '/erm/risks', icon: AlertTriangle },
+  { name: 'Register', href: '/erm/risks', icon: AlertTriangle },
   { name: 'Appetite', href: '/erm/appetite', icon: Target },
   { name: 'Mitigation Actions', href: '/erm/mitigation-actions', icon: ListTodo },
-  // 'Internal Controls' moved to Control Testing & Assurance (/controls);
+  // Dependencies became a tool of Advanced Analytics (G9). 'Internal Controls' moved to Control Testing & Assurance (/controls);
   // 'KRIs' moved to Governance — removed from the ERM/Risk tab strip.
   { name: 'Reviews', href: '/erm/reviews', icon: Calendar },
-  { name: 'Dependencies', href: '/erm/dependencies', icon: GitBranch },
+  { name: 'Reports', href: '/erm/reports', icon: BarChart3 },
 ];
 
 export default function ERMLayout({

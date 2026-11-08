@@ -1333,6 +1333,8 @@ export const ermApi = {
       const queryString = params.toString();
       return apiClient.get<Risk[]>(`/erm/risks${queryString ? `?${queryString}` : ''}`);
     },
+    /** Every risk of the organisation in one request, compact (`lean=1`): { items, total, truncated, frameworks }. The register, the Overview and the pickers draw from it. */
+    getLean: () => apiClient.get<{ items: unknown[]; total: number; skip: number; limit: number; truncated: boolean; frameworks: Record<string, { name: string }> }>('/erm/risks', { params: { lean: 1, limit: 10000 } }),
     getById: (id: number) => apiClient.get<Risk>(`/erm/risks/${id}`),
     getDetail: (id: number) => apiClient.get<RiskDetail>(`/erm/risks/${id}/detail`),
     getDashboard: () => apiClient.get<RiskDashboard>('/erm/risks/dashboard'),
@@ -1398,6 +1400,9 @@ export const ermApi = {
       }>('/erm/risks/ai-suggest', data),
     generateTreatmentPlan: (riskId: number) =>
       apiClient.post<{ treatment_plan: string }>(`/erm/risks/${riskId}/ai-treatment-plan`),
+    /** Scores a risk (POST /erm/risks/{id}/assess): the ONLY way to change its likelihood, impact and scores. PUT /erm/risks/{id} has no score fields and ignores them. The inherent pair is required; the residual pair is optional and cannot be cleared. */
+    assess: (id: number, data: { inherent_likelihood: number; inherent_impact: number; residual_likelihood?: number; residual_impact?: number; risk_appetite?: string }) =>
+      apiClient.post<Risk>(`/erm/risks/${id}/assess`, data),
     linkAsset: (id: number, data: { asset_id: number }) =>
       apiClient.post(`/erm/risks/${id}/assets`, data),
     unlinkAsset: (id: number, linkId: number) =>
@@ -1412,8 +1417,12 @@ export const ermApi = {
       apiClient.put<RiskMitigationAction>(`/erm/mitigation-actions/${actionId}`, data),
     delete: (actionId: number) => 
       apiClient.delete(`/erm/mitigation-actions/${actionId}`),
-    complete: (actionId: number, actualReduction?: number) => 
-      apiClient.post<RiskMitigationAction>(`/erm/mitigation-actions/${actionId}/complete`, { actual_residual_reduction: actualReduction }),
+    // the route reads the achieved reduction as the QUERY parameter `actual_reduction` (it has no body model): sent in the body it was ignored
+    complete: (actionId: number, actualReduction?: number) =>
+      apiClient.post<RiskMitigationAction>(`/erm/mitigation-actions/${actionId}/complete`, null, { params: actualReduction === undefined || actualReduction === null ? undefined : { actual_reduction: actualReduction } }),
+    // every action of the tenant, one request (the per-risk list needed one request per risk and stopped at the newest 100 risks)
+    listAll: (params?: { status_filter?: string; risk_id?: number; owner_id?: number; limit?: number }) =>
+      apiClient.get<{ items: Array<RiskMitigationAction & { owner_name?: string | null; risk_title?: string | null; risk_category?: string | null; evidence_count?: number }>; total: number }>('/erm/mitigation-actions', { params }),
     getOverdue: () => 
       apiClient.get<RiskMitigationAction[]>('/erm/mitigation-actions/overdue'),
     aiSuggest: (data: { risk_id?: number; title?: string }) =>
@@ -1467,6 +1476,8 @@ export const ermApi = {
     metricOptions: () => apiClient.get('/erm/kris/metric-options'),
     templates: () => apiClient.get('/erm/kris/templates'),
     due: () => apiClient.get('/erm/kris/due'),
+    /** The KRIs and KPIs this person must report a value for now (manual, active, due): { items, total, overdue }. */
+    myUpdates: () => apiClient.get<{ items: Array<{ id: number; name: string; kind?: string; next_due_date?: string | null; overdue?: boolean }>; total: number; overdue: number }>('/erm/kri-workflow/my-updates'),
     upload: (file: File) => {
       const formData = new FormData();
       formData.append('file', file);
@@ -1585,7 +1596,7 @@ export const ermApi = {
       }>('/erm/incidents/ai-suggest', data),
   },
   reviews: {
-    getAll: (params?: { risk_id?: number; status_filter?: string; reviewer_id?: number }) => 
+    getAll: (params?: { risk_id?: number; status_filter?: string; reviewer_id?: number; skip?: number; limit?: number }) => 
       apiClient.get<RiskReview[]>('/erm/reviews', { params }),
     getById: (id: number) => apiClient.get<RiskReview>(`/erm/reviews/${id}`),
     create: (data: RiskReviewCreate) => apiClient.post<RiskReview>('/erm/reviews', data),
@@ -1601,6 +1612,8 @@ export const ermApi = {
     create: (data: RiskDependencyCreate) => apiClient.post<RiskDependency>('/erm/dependencies', data),
     delete: (id: number) => apiClient.delete(`/erm/dependencies/${id}`),
     getCascadeAnalysis: (riskId: number) => apiClient.get<CascadeAnalysis>(`/erm/dependencies/${riskId}/cascade`),
+    /** The scores recorded for a risk over time (review approvals write them): the History tab's score lines. */
+    getScoreHistory: (riskId: number, days = 3650) => apiClient.get(`/erm/dependencies/history/${riskId}`, { params: { days } }),
     getGraph: (riskId?: number) => 
       apiClient.get(`/erm/dependencies/graph`, { params: { risk_id: riskId } }),
   },
@@ -1616,7 +1629,7 @@ export const ermApi = {
     getDepartmentSummary: (departmentId: number) => 
       apiClient.get<DepartmentRiskSummary>(`/erm/reports/department/${departmentId}`),
     getAggregatedView: (groupBy?: string) => 
-      apiClient.get<AggregatedRiskView[]>('/erm/analytics/aggregated', { params: { group_by: groupBy } }),
+      apiClient.get<AggregatedRiskView[]>('/erm/reports/aggregated', { params: { group_by: groupBy } }),
     getAppetiteBreaches: () => apiClient.get<AppetiteBreach[]>('/erm/analytics/appetite-breaches'),
     getRiskTrends: (days?: number) => 
       apiClient.get<RiskTrendData[]>('/erm/analytics/trends', { params: { days } }),
@@ -1744,8 +1757,10 @@ export const ermApi = {
       apiClient.post(`/erm/risk-assessments/${id}/risks/bulk`, { risk_ids }),
     getAssessedRisks: (id: number, params?: { skip?: number; limit?: number }) => 
       apiClient.get(`/erm/risk-assessments/${id}/risks`, { params }),
-    getAvailableRisks: (id: number) => 
-      apiClient.get(`/erm/risk-assessments/${id}/available-risks`),
+    getAvailableRisks: (id: number, params?: { skip?: number; limit?: number; search?: string }) => 
+      apiClient.get(`/erm/risk-assessments/${id}/available-risks`, { params }),
+    /** Every assessment, manual and framework-based, with its progress (the Risk Assessments home). */
+    getRegister: () => apiClient.get<{ items: Array<Record<string, unknown>>; total: number; truncated: boolean }>('/erm/risk-assessments/register'),
     linkKRI: (assessmentId: number, assessmentRiskId: number, data: Record<string, unknown>) => 
       apiClient.post(`/erm/risk-assessments/${assessmentId}/risks/${assessmentRiskId}/kris`, data),
     unlinkKRI: (assessmentId: number, assessmentRiskId: number, linkId: number) => 
@@ -1800,6 +1815,7 @@ export const ermApi = {
         assessment_id: number;
         assessment_name: string;
         risks_created: number;
+        risks_reused?: number;
         rows_skipped: number;
         rows_errored: number;
         skipped_details: Array<{ row: number; reason: string }>;
@@ -3616,13 +3632,13 @@ export const rcsaApi = {
   activateCampaign: (id: number) => apiClient.post(`/erm/rcsa/campaigns/${id}/activate`),
   closeCampaign: (id: number) => apiClient.post(`/erm/rcsa/campaigns/${id}/close`),
   assignBusinessUnits: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/rcsa/campaigns/${id}/assign`, data),
-  sendReminders: (id: number) => apiClient.post(`/erm/rcsa/campaigns/${id}/reminders`),
-  exportResults: (id: number) => apiClient.get(`/erm/rcsa/campaigns/${id}/export`, { responseType: 'blob' }),
-  
+
   getDashboardSummary: () => apiClient.get('/erm/rcsa/dashboard/summary'),
   getFindingsBySeverity: () => apiClient.get('/erm/rcsa/dashboard/findings-by-severity'),
   getBUProgress: () => apiClient.get('/erm/rcsa/dashboard/business-unit-progress'),
   getRecentCampaigns: () => apiClient.get('/erm/rcsa/dashboard/recent-campaigns'),
+  /** The Worklist: what waits for this person, with the server's true totals (GET /erm/rcsa/my-work). */
+  getMyWork: (limit = 30) => apiClient.get('/erm/rcsa/my-work', { params: { limit } }),
 
   getAssessments: (params?: Record<string, unknown>) => apiClient.get('/erm/rcsa/assessments', { params }),
   getAssessment: (id: number) => apiClient.get(`/erm/rcsa/assessments/${id}/detail`),
@@ -3638,15 +3654,24 @@ export const rcsaApi = {
   rejectAssessment: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/rcsa/assessments/${id}/reject`, data),
   returnAssessment: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/rcsa/assessments/${id}/return`, data),
   delegateAssessment: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/rcsa/assessments/${id}/delegate`, data),
-  getPendingApprovals: (params?: Record<string, unknown>) => apiClient.get('/erm/rcsa/assessments/pending-approvals', { params }),
+  /** Evidence for one answer of a unit (multipart; the server keeps the file and links it to the answer). */
+  uploadEvidence: (assessmentId: number, questionId: number, file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('assessment_id', String(assessmentId));
+    fd.append('question_id', String(questionId));
+    return apiClient.post('/erm/rcsa/evidence/upload', fd, { headers: { 'Content-Type': undefined }, timeout: 2 * 60 * 1000 });
+  },
+  deleteEvidence: (evidenceId: number) => apiClient.delete(`/erm/rcsa/evidence/${evidenceId}`),
 
   getFindings: (params?: Record<string, unknown>) => apiClient.get('/erm/rcsa/findings', { params }),
-  getFinding: (id: number) => apiClient.get(`/erm/rcsa/findings/${id}`),
-  createFinding: (data: Record<string, unknown>) => apiClient.post('/erm/rcsa/findings', data),
+  /** A finding belongs to a unit: the unit is a query parameter (the body holds the finding). */
+  createFinding: (assessmentId: number, data: Record<string, unknown>) => apiClient.post('/erm/rcsa/findings', data, { params: { assessment_id: assessmentId } }),
   updateFinding: (id: number, data: Record<string, unknown>) => apiClient.put(`/erm/rcsa/findings/${id}`, data),
-  linkFindingToRisk: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/rcsa/findings/${id}/link-risk`, data),
-  linkFindingToControl: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/rcsa/findings/${id}/link-control`, data),
-  createFindingAction: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/rcsa/findings/${id}/create-action`, data),
+  // the three link calls take QUERY parameters (the old pages posted a JSON body, which the server ignores, and every call failed)
+  linkFindingToRisk: (id: number, riskId: number) => apiClient.post(`/erm/rcsa/findings/${id}/link-risk`, undefined, { params: { risk_id: riskId } }),
+  linkFindingToControl: (id: number, controlId: number) => apiClient.post(`/erm/rcsa/findings/${id}/link-control`, undefined, { params: { control_id: controlId } }),
+  createFindingAction: (id: number, riskId?: number) => apiClient.post(`/erm/rcsa/findings/${id}/create-action`, undefined, { params: riskId ? { risk_id: riskId } : undefined }),
 
   getApprovalWorkflows: () => apiClient.get('/erm/rcsa/approval-workflows'),
   createApprovalWorkflow: (data: Record<string, unknown>) => apiClient.post('/erm/rcsa/approval-workflows', data),

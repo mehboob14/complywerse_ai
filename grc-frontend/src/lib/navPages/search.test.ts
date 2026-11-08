@@ -29,7 +29,7 @@ test('the ranking: a name that starts with the query beats a word inside a name,
   // "register": the name Register of the vendor tab first (a short label counts as a name), then the names with the word, the menu's leaf before the page under it
   const register = find('register');
   assert.equal(register[0], '/vendor-risk/vendors');
-  assert.ok(register.indexOf('/erm/risks') >= 0 && register.indexOf('/erm/risks') < register.indexOf('/erm/risks/list'), 'equal matches keep registry order: the leaf before its page');
+  assert.ok(register.indexOf('/erm/risks') >= 0 && register.indexOf('/erm/risks/list') < 0, 'the Risk Register leaf is offered once: the old list address forwards to it and is not a page of its own');
   assert.equal(find('Risk Register')[0], '/erm/risks', 'the whole name first');
   assert.equal(find('risk register')[0], '/erm/risks', 'case does not matter');
   assert.equal(find('  RISK   register ')[0], '/erm/risks', 'nor spaces');

@@ -1,77 +1,50 @@
 'use client';
 
-// Small shared button used on Vuln / Risk / Asset / Control detail pages.
-// Single click opens the IssueForm with the linkage pinned + sensible
-// pre-fills so users can create an issue without leaving the source page.
-
+// "Create issue" on a record's page (Risk, Asset, Vulnerability, controls ...): one click opens the drawer with the record pinned and sensible pre-fills, so an issue can be raised without
+// leaving the record. Drawn only for a person who may raise issues (the server refuses anyone else), and not while that is still being read. The props are the old button's.
 import { useState } from 'react';
-import { AlertCircle } from 'lucide-react';
-import { IssueForm } from '@/app/(dashboard)/issues/_components/IssueForm';
+import { Plus } from 'lucide-react';
+import { Button } from '@/components/ui/ds';
+import { usePermissions } from '@/hooks/usePermissions';
+import type { CreatableSource, Presets } from './embedModel';
+import { IssueDrawer } from './IssueDrawer';
+
+export const CREATE_ISSUES = 'issue_management:issues:create';
 
 interface Props {
-  sourceType:
-    | 'vulnerability'
-    | 'risk'
-    | 'asset'
-    | 'control_framework'
-    | 'control_parsed'
-    | 'control_normalized'
-    | 'control_internal'
-    // v2 — governance + policy source types accepted by /issues/from-source
-    | 'governance_document'
-    | 'policy_statement';
+  sourceType: CreatableSource;
   sourceId: number;
-  /** Optional pre-filled values — falls back to backend-side derivation. */
-  presetFields?: Partial<{
-    title: string;
-    description: string;
-    impact: string;
-    urgency: string;
-    category: string;
-    issue_type: string;
-  }>;
-  /** Button label; defaults to "Create Issue". */
+  /** Optional pre-filled values; the record's kind supplies the rest. */
+  presetFields?: Presets;
+  /** Button label; defaults to "Create issue". */
   label?: string;
-  /** Visual variant. */
+  /** Visual variant: `compact` is the small button. */
   variant?: 'default' | 'compact';
   className?: string;
+  /** The record's name, shown in the drawer ("Linked to this risk: Payments outage"). */
+  sourceLabel?: string;
 }
 
-export function CreateIssueButton({
-  sourceType,
-  sourceId,
-  presetFields,
-  label = 'Create Issue',
-  variant = 'default',
-  className = '',
-}: Props) {
+export function CreateIssueButton({ sourceType, sourceId, presetFields, label = 'Create issue', variant = 'default', className, sourceLabel }: Props) {
   const [open, setOpen] = useState(false);
-
-  const base = 'inline-flex items-center gap-1.5 rounded-lg font-medium transition-colors';
-  const styled =
-    variant === 'compact'
-      ? 'border border-slate-200 bg-white px-2 py-1 text-[10px] text-slate-700 hover:bg-slate-50'
-      : 'border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs text-rose-700 hover:bg-rose-100';
-
+  const { hasPermission, isLoading } = usePermissions();
+  if (isLoading || !hasPermission(CREATE_ISSUES)) return null;
   return (
     <>
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          setOpen(true);
-        }}
-        className={`${base} ${styled} ${className}`}
-        title="Create a new Issue linked to this item"
+      <Button
+        size={variant === 'compact' ? 'sm' : 'md'}
+        leftIcon={<Plus aria-hidden />}
+        className={className}
+        onClick={(e) => { e.stopPropagation(); setOpen(true); }}
       >
-        <AlertCircle className={variant === 'compact' ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
         {label}
-      </button>
-      <IssueForm
+      </Button>
+      <IssueDrawer
         open={open}
         onClose={() => setOpen(false)}
         presetSource={{ source_type: sourceType, source_id: sourceId }}
         presetFields={presetFields}
+        sourceLabel={sourceLabel}
       />
     </>
   );

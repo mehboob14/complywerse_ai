@@ -135,9 +135,9 @@ test('the counters of the scorecard areas are the modules\' own definitions (lab
   const c = read('compliance', scorecard());
   assert.deepEqual(c.counters.map((x) => [x.label, x.value, x.href]), [['Controls without evidence', 5, '/controls']]);
   const r = read('risk', scorecard());
-  assert.deepEqual(r.counters.map((x) => [x.label, x.value, x.href]), [['Critical open risks', 2, '/erm/risks'], ['Breached KRIs', 1, '/erm/kris']]);
+  assert.deepEqual(r.counters.map((x) => [x.label, x.value, x.href]), [['Critical open risks', 2, '/erm/risks?quick=critical'], ['Red KRIs', 1, '/erm/kris']]);
   const i = read('issues', scorecard());
-  assert.deepEqual(i.counters.map((x) => [x.label, x.value, x.href]), [['SLA-breached issues', 6, '/issues'], ['Critical open incidents', 0, '/erm/incidents']]);
+  assert.deepEqual(i.counters.map((x) => [x.label, x.value, x.href]), [['SLA-breached issues', 6, '/issues'], ['Open critical incidents', 0, '/erm/incidents']]);
   const a = read('assurance', scorecard());
   assert.deepEqual(a.counters.map((x) => [x.label, x.value, x.href]), [['Overdue control tests', 4, '/control-library/assurance']]);
   const reg = read('regulatory', scorecard());
