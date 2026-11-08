@@ -4,14 +4,12 @@ import { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient, { assetsApi, getTenantSlug } from '@/lib/api';
 import ComplianceAssessmentsModule from './ComplianceAssessmentsModule';
-import NcaTab from '@/components/compliance/NcaTab';
 import PDPLAssessmentTab from '@/components/compliance/PDPLAssessmentTab';
 import AssessmentTypePage from '@/components/compliance/scoping/AssessmentTypePage';
 import MaturityAssessmentTab from '@/components/compliance/MaturityAssessmentTab';
 import KpiReportTab from '@/components/compliance/KpiReportTab';
 import DpiaAssessmentTab from '@/components/compliance/DpiaAssessmentTab';
 import NcaRegisterTab from '@/components/compliance/NcaRegisterTab';
-import DccToolTab from '@/components/compliance/DccToolTab';
 import type { Assessment, ControlItem, ComplianceStatus, Priority, DetailApi, EvidenceRow, AiRec, NewControl, SlaPoint } from './types';
 import type { SlaPolicy } from './slaEngine';
 
@@ -254,19 +252,8 @@ export default function AssessmentsRedesignClient({ initialTab }: { initialTab?:
     queryClient.invalidateQueries({ queryKey: ['redesign-sla-policy'] });
   };
 
-  // Dedicated NCA workspace deps (only fetched when the tab/back-end need them).
-  const { data: ncaContainer } = useQuery<{ id: number }>({
-    queryKey: ['nca-container'],
-    queryFn: async () => (await apiClient.get('/compliance/nca/container')).data,
-    staleTime: 60_000,
-  });
-  // Whether the user has uploaded their own DCC-1:2022 Excel tool. If so, the
-  // DCC Assessment tab shows THAT (their file), else the curated NCA container.
-  const { data: dccToolList = [] } = useQuery<{ id: number }[]>({
-    queryKey: ['dcc-tool-exists'],
-    queryFn: async () => (await apiClient.get('/compliance/assessments', { params: { limit: 1, assessment_format: 'nca_dcc_tool' } })).data?.assessments || [],
-    staleTime: 60_000,
-  });
+  // The NCA tab (the container and the organization's own DCC workbook) is gone: /assessments/nca forwards to the assessment workspace (Assessments > register), and nothing here asks for the
+  // container any more (GET /compliance/nca/container creates nothing now; POST makes it, from the workspace).
   const { data: ncaTenantUsers = [] } = useQuery<Array<{ id: number; label: string; email: string | null }>>({
     queryKey: ['nca-tenant-users'],
     queryFn: async () => {
@@ -334,12 +321,6 @@ export default function AssessmentsRedesignClient({ initialTab }: { initialTab?:
     if (tabKey === 'nca_audit') return <NcaRegisterTab kind="audit" />;
     if (tabKey === 'nca_risk') return <NcaRegisterTab kind="risk" />;
     if (tabKey === 'pdpl') return <PDPLAssessmentTab />;
-    if (tabKey === 'nca') {
-      // If the user uploaded their own DCC-1:2022 Excel tool, show that; else
-      // fall back to the curated NCA container (DCC catalog + audit plan).
-      if (dccToolList.length > 0) return <DccToolTab />;
-      return ncaContainer ? <NcaTab assessmentId={ncaContainer.id} tenantUsers={ncaTenantUsers} /> : <DccToolTab />;
-    }
     return undefined;
   };
 

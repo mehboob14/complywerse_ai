@@ -251,7 +251,8 @@ test('ownHeading is on exactly the pages that draw the kit head (PageHeader vari
   // MetricReport.tsx and _Standalone.tsx draw it; so do Controls Automation's _explorer/ControlsExplorer, review/_review/MappingReview and assurance/_periods/AuditPeriods, and ComplianceOverview.tsx and StatementsRegister.tsx (thin-shell pages), and the control workspace (soc2-controls/[code]/_workspace/ControlHeader); the Frameworks hub (_hub/FrameworksHub), the journey (_workspace/JourneyHeader), a framework's onboarding (the workspace) and the Organisation Profile draw theirs from a component too; so do the three Business Continuity registers (bcm/_plans/PlansRegister, _drills/DrillsRegister, _findings/FindingsRegister); so do the Control Catalog (controls/_catalog/CatalogPage) and the Control Library's pages (control-library/_library/*)
   const HEAD_FROM_A_COMPONENT = ['/governance/kpi-report', '/governance/mappings', '/automation/soc2-controls', '/automation/soc2-controls/review', '/automation/assurance', '/compliance', '/compliance/statements', '/automation/soc2-controls/:code',
     '/frameworks', '/frameworks/:id', '/frameworks/onboarding/:id', '/compliance/organisation', '/bcm/plans', '/bcm/drills', '/bcm/findings',
-    '/controls', '/control-library', '/control-library/:id', '/control-library/review'];
+    '/controls', '/control-library', '/control-library/:id', '/control-library/review',
+    '/assessments/register', '/assessments/types'];
   const DOCUMENTS_AREA_STRIP = ['/governance/documents/attestation', '/governance/documents/studio', '/governance/documents/overview', '/governance/exceptions', '/governance/reviews', '/governance/settings'];
   const drawing = pages.filter((p) => /<PageHeader[\s\S]{0,60}variant="page"/.test(read(p.file))).map((p) => p.route).sort();
   const flagged = routes.filter((e) => e.ownHeading).map((e) => e.path).sort();
