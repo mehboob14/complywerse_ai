@@ -31,7 +31,7 @@ test('it is exported from the kit index and from the ui barrel', () => {
 
 test('Governance Settings uses it for both of its view-only notices, with the words it always had, and keeps no copy of its own', () => {
   const page = read('src/app/(dashboard)/governance/settings/page.tsx');
-  const section = read('src/app/(dashboard)/governance/settings/_DepartmentsSection.tsx');
+  const section = read('src/components/admin/DepartmentsEditor.tsx');            // the Departments card's editor moved to Administration; Governance links to it
   assert.match(page, /<ReadOnlyNote>\s*View only\s*<InfoTip text="Only an administrator, or someone given the Governance Settings right, can change them\." label="Why these settings are view only" \/>\s*<\/ReadOnlyNote>/);
   assert.match(section, /<ReadOnlyNote>\s*View only\s*<InfoTip text="Only an administrator, or someone whose role lets them edit the organisation, can add or change departments\." label="Why departments are view only" \/>\s*<\/ReadOnlyNote>/);
   for (const [name, text] of [['page', page], ['section', section]] as const) {

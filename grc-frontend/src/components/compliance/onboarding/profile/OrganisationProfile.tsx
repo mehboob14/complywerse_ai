@@ -7,7 +7,7 @@
  * other fields go on saving); when a save fails for any other reason, saving stops and says so until the person tries again or changes something. What is
  * pending is sent as the page is left. A save the server answers with "not allowed" turns the page into a view-only one. The rules are profileModel.ts.
  */
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, ChevronRight } from 'lucide-react';
 import { PageHeading } from '@/components/ui/ds/PageHeading';
@@ -22,7 +22,7 @@ import SourceChip from '../SourceChip';
 import ProfileStages, { panelId, tabId } from './ProfileStages';
 import StillNeeded from './StillNeeded';
 import {
-  afterSave, batchToSend, fieldMap, isWide, keyOf, mergeRefs, mirrorsOrganisation, nextStage, openingStage, refusalOf, SAVE_WORDS, saveState, stageProgress,
+  afterSave, batchToSend, fieldMap, isWide, keyOf, mergeRefs, nextStage, openingStage, refusalOf, SAVE_WORDS, saveState, stageProgress,
   stillNeeded, valueAt, visibleFields, type Needed,
 } from './profileModel';
 
@@ -34,7 +34,14 @@ const OTHER_SCREENS = ['fw-onboarding-register', 'fw-onboarding', 'fw-onboarding
 
 const without = <T,>(map: Record<string, T>, keys: string[]): Record<string, T> => Object.fromEntries(Object.entries(map).filter(([k]) => !keys.includes(k)));
 
-export default function OrganisationProfile() {
+/** A stage in front of the profile's own, drawn by the page (Administration > Organisation puts the company's name and primary contact there). It is not part of the profile:
+ *  it has no progress, no review and nothing in "still needed". It stays mounted while another stage is open, so what was typed in it is not lost. */
+export interface ProfileLead { key: string; label: string; panel: ReactNode }
+
+const FIRST_OPEN = 'profile';                // ?stage=profile: the first profile stage that is still open (the address the framework onboarding pages link to)
+const DEFAULT_INFO = "General facts about the organisation, kept once. Nothing here holds a framework back: a framework's onboarding asks its own questions and only picks sites, systems, third parties and data types from here.";
+
+export default function OrganisationProfile({ lead, title = 'Organisation profile', info = DEFAULT_INFO }: { lead?: ProfileLead; title?: string; info?: string } = {}) {
   const qc = useQueryClient();
   const notify = useNotify();
   const tabsBase = useId();
@@ -156,13 +163,18 @@ export default function OrganisationProfile() {
   if (failure || !view || groups.length === 0) {
     return (
       <div className={SHELL}>
+        {lead && <PageHeading title={title} info={info} actions={<Button href="/frameworks/onboarding" rightIcon={<ChevronRight aria-hidden />}>Framework onboarding</Button>} />}
+        {lead && lead.panel}
         <ErrorState title="Couldn't open the organisation profile" message={errorMessage(failure)} onRetry={!failure || canRetry(failure) ? () => { void catalog.refetch(); void profile.refetch(); } : undefined} />
       </div>
     );
   }
 
-  if (opened.current === null) opened.current = openingStage(groups, address.stage, view.evaluation);
-  const stage = groups.some((g) => g.key === address.stage) ? address.stage : opened.current;
+  // with a lead stage the page opens on it (no stage in the address, its own, or one nobody knows); ?stage=profile opens the first profile stage still open
+  const asked = address.stage === FIRST_OPEN ? '' : address.stage;
+  const onLead = !!lead && address.stage !== FIRST_OPEN && !groups.some((g) => g.key === address.stage);
+  if (opened.current === null) opened.current = openingStage(groups, asked, view.evaluation);
+  const stage = groups.some((g) => g.key === asked) ? asked : opened.current;
   const group = groups.find((g) => g.key === stage) ?? groups[0];
   const refs = mergeRefs(view.refs, extraRefs);
   const locked = viewOnly;
@@ -177,8 +189,8 @@ export default function OrganisationProfile() {
   return (
     <div className={SHELL}>
       <PageHeading
-        title="Organisation profile"
-        info="General facts about the organisation, kept once. Nothing here holds a framework back: a framework's onboarding asks its own questions and only picks sites, systems, third parties and data types from here."
+        title={title}
+        info={info}
         meta={state !== 'idle' ? <span role="status" aria-live="polite">{SAVE_WORDS[state]}</span> : undefined}
         actions={(
           <>
@@ -196,8 +208,13 @@ export default function OrganisationProfile() {
       {!halt && Object.keys(errors).length > 0 && (
         <Notice tone="danger" title="Some answers were not saved" action={<Button size="sm" loading={save.isPending} onClick={tryAgain}>Try again</Button>}>Correct the fields marked below. The rest keeps saving.</Notice>
       )}
-      <ProfileStages base={tabsBase} groups={groups} states={view.evaluation.groups} current={group.key} onPick={pick} />
-      <div className="grid min-w-0 gap-[16px] xl:grid-cols-[minmax(0,1fr)_19rem]">
+      <ProfileStages base={tabsBase} groups={lead ? [{ key: lead.key, label: lead.label }, ...groups] : groups} states={view.evaluation.groups} current={onLead && lead ? lead.key : group.key} onPick={pick} />
+      {lead && (
+        <div role="tabpanel" id={panelId(tabsBase, lead.key)} aria-labelledby={tabId(tabsBase, lead.key)} tabIndex={0} hidden={!onLead} className="min-w-0 focus-visible:outline-none focus-visible:shadow-ds-ring">
+          <div className="flex min-w-0 flex-col gap-[16px]">{lead.panel}</div>
+        </div>
+      )}
+      {!onLead && <div className="grid min-w-0 gap-[16px] xl:grid-cols-[minmax(0,1fr)_19rem]">
         <div role="tabpanel" id={panelId(tabsBase, group.key)} aria-labelledby={tabId(tabsBase, group.key)} tabIndex={0} className="min-w-0 focus-visible:outline-none focus-visible:shadow-ds-ring">
           <SectionCard id={`stage-${group.key}`} title={group.label} meta={progress.text ? `${progress.text} filled` : undefined}>
             {group.source && <div className="mb-[12px]"><SourceChip source={group.source} /></div>}
@@ -210,7 +227,6 @@ export default function OrganisationProfile() {
                       field={f} source={f.source ?? null} value={key in draft ? draft[key] : valueAt(view.values, {}, key)} onChange={(v) => change(key, v)}
                       error={errors[key] ?? null} readOnly={locked} refs={refs} onRefs={(patch) => setExtraRefs((cur) => mergeRefs(cur, patch))} departments={view.departments}
                     />
-                    {mirrorsOrganisation(f) && <p className="mt-[4px] text-ds-label font-normal text-ds-fg-muted">Same value as in Administration &gt; Organization.</p>}
                   </div>
                 );
               })}
@@ -225,7 +241,7 @@ export default function OrganisationProfile() {
           </SectionCard>
         </div>
         <aside className="min-w-0"><StillNeeded groups={groups} required={needed.required} advice={needed.advice} onJump={goTo} /></aside>
-      </div>
+      </div>}
     </div>
   );
 }

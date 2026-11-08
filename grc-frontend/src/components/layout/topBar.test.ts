@@ -38,3 +38,10 @@ test('a page that draws its own heading shows only its section in the top bar, s
   assert.match(header, /if \(info\.section !== undefined\) \{/, 'the branch that prints the section and not the title (an empty section prints nothing)');
   assert.match(header, /registryNamesPage\(pathname\) \? titleFor\(pathname\)/, 'the registry names every Governance page and every page with ownHeading, in any module');
 });
+
+test('the user menu has one door to the people (Users: administrators open their page, anyone else who holds the users right the read-only list) and its rows are at least the control height', () => {
+  assert.match(header, /href=\{isAdmin \? '\/admin\/users' : '\/users'\}/);
+  assert.doesNotMatch(header, /Admin Users/, 'the second door for the same list is gone');
+  assert.match(header, /const MENU_ROW = '[^']*min-h-ds-control/, 'a row is 44px on a phone');
+  assert.match(header, /className=\{MENU_ROW\}/);
+});
