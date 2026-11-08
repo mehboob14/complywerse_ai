@@ -21,14 +21,14 @@ function pagesOf(folder: string): string[] {
 const pages = [...pagesOf('regulatory-changes'), ...pagesOf('regulatory-feeds')].sort();
 const file = (path: string) => readFileSync(`${GOV}${path.replace('/governance/', '').replace(/:([A-Za-z]+)/g, '[$1]')}/page.tsx`, 'utf8');
 
-test('every page of the two folders is exactly one entry, and the group declares only the two sidebar leaves (the change page is declared in navRegistry.ts)', () => {
+test('every page of the two folders is exactly one entry; the group declares the one sidebar leaf (Regulatory Changes) and the Feed page under it (the change page is declared in navRegistry.ts)', () => {
   assert.deepEqual(pages, ['/governance/regulatory-changes', '/governance/regulatory-changes/:id', '/governance/regulatory-feeds']);
   for (const p of pages) assert.equal(routes.filter((e) => e.path === p).length, 1, p);
-  assert.deepEqual(Object.keys(LEAVES).sort(), ['/governance/regulatory-changes', '/governance/regulatory-feeds']);
-  assert.deepEqual(PAGES, [], 'no page of the group is outside the menu');
+  assert.deepEqual(Object.keys(LEAVES), ['/governance/regulatory-changes']);
+  assert.deepEqual(PAGES.map((p) => [p.path, p.parent]), [['/governance/regulatory-feeds', '/governance/regulatory-changes']], 'the Feed is reached through the strip of Regulatory Changes');
 });
 
-test('both leaves draw the kit head, are flagged ownHeading, and the top bar names the section Compliance Management', () => {
+test('both pages draw the kit head, are flagged ownHeading, and the top bar names the section Compliance Management', () => {
   for (const p of ['/governance/regulatory-changes', '/governance/regulatory-feeds']) {
     assert.equal(routes.find((e) => e.path === p)?.ownHeading, true, `${p}: ownHeading`);
     assert.match(file(p), /<PageHeader\s+variant="page"/, `${p}: PageHeader variant="page"`);

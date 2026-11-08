@@ -85,7 +85,7 @@ test('every entry lights on its own page, and on the pages under it unless it is
 
 test('every Overview (and the dashboard) lights on its own page only, but Assessments: /assessments/<framework> is its own family', () => {
   const overviews = leaves.filter((l) => l.name === 'Overview' || l.name === 'Performance Overview');
-  assert.ok(overviews.length >= 7, 'the Overview entries are there');
+  assert.ok(overviews.length >= 6, 'the Overview entries are there (Business Continuity is one leaf now, with no Overview of its own)');
   for (const l of overviews) assert.equal(!!l.exact, l.href !== '/assessments', `${l.name} (${l.href})`);
 });
 
@@ -119,7 +119,12 @@ test('the mapping is the narrow one: a page that is not listed lights nothing, a
   assert.equal(activeNavHref('/erm/risks/12', navigation), '/erm/risks');
   assert.equal(activeNavHref('/erm/incidents', navigation), '/erm/incidents');
   assert.equal(activeNavHref('/compliance/access-reviews/4', navigation), '/compliance/access-reviews');
-  assert.equal(activeNavHref('/assessments/dpia', navigation), '/assessments/dpia');
+  assert.equal(activeNavHref('/assessments/dpia', navigation), '/assessments', 'the old type address forwards; the Assessments Overview is lit for the moment it is there');
+  assert.equal(activeNavHref('/assessments/register', navigation), '/assessments/register');
+  assert.equal(activeNavHref('/assessments/types', navigation), '/assessments/types');
+  assert.equal(activeNavHref('/cyber-security/questionnaires/7', navigation), '/assessments/types', 'a type\'s questionnaire is opened from Types');
+  assert.equal(activeNavHref('/cyber-security', navigation), '/assessments');
+  assert.equal(activeNavHref('/nca', navigation), '/assessments');
 });
 
 test('every activeMatch prefix is a folder of the app: a typo would leave its pages unlit', () => {
@@ -156,7 +161,7 @@ const CONTRACT: Array<[string, string | undefined]> = [
   ['/governance/kpi-report', '/governance/kpi-report'],
   ['/governance/regulatory-changes', '/governance/regulatory-changes'],
   ['/governance/regulatory-changes/5', '/governance/regulatory-changes'],
-  ['/governance/regulatory-feeds', '/governance/regulatory-feeds'],
+  ['/governance/regulatory-feeds', '/governance/regulatory-changes'],           // the Feed is a tab of Regulatory Changes: one leaf lights for both
   ['/erm/kris', '/erm/kris'],
   ['/is-projects', '/is-projects'],
   ['/is-projects/dashboard', '/is-projects'],

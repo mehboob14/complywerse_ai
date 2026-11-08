@@ -1,7 +1,7 @@
 // Navigation-registry entries of the Administration pages (/admin/*) and User Management (/users) (see navPages/index.ts for the contract). Written by R-REG, 2026-11-01.
 // Administration is the menu pinned at the foot of the rail (components/shell/ModuleIconRail.tsx AdminButton, shown to administrators only), not a leaf of `navigation`, so /admin is a root
 // outside the menu. Most of its sections are TABS of the /admin page (?tab=company|users|roles|departments|password-policy|integrations|cloud-connectors|connectors|evidence-collectors|identity|
-// workflow|audit): they are not pages, so their names are keywords of /admin; nine of them also exist as pages of their own, which the /admin page mounts as its tab bodies.
+// workflow|audit): they are not pages, so their names are keywords of /admin; eight of them also exist as pages of their own (Connections is a leaf of the Controls Automation menu now: navPages/controls.ts), which the /admin page mounts as its tab bodies.
 // `adminOnly` (inherited from /admin) is the menu's rule; the four pages of the scanner onboarding gate themselves with the agents right instead.
 import type { PageSpec, RouteExtra } from '../navRegistry.ts';
 
@@ -23,7 +23,6 @@ export const PAGES: PageSpec[] = [
   { path: `${ADMIN}/password-policy`, label: 'Password Policy', area: AREA, parent: ADMIN, hidden: TAB('Password Policy') },
   { path: `${ADMIN}/cloud-connectors`, label: 'Cloud Connectors', area: AREA, parent: ADMIN, hidden: TAB('Cloud Connectors') },
   { path: `${ADMIN}/connectors`, label: 'Connectors', area: AREA, parent: ADMIN, hidden: 'opens from the vendor pages that ask for a connector key (Breach alerts, Security ratings, Settings, a vendor record) and from a vulnerability; the Administration page shows the same view as its Connectors tab' },
-  { path: `${ADMIN}/evidence-collectors`, label: 'Connections', area: AREA, parent: ADMIN, hidden: 'opens from the Controls Automation Overview and from a control (Connect a source); the Administration page shows the same view as its Connections tab', keywords: ['Evidence collectors', 'All Connections'], ownHeading: true },
   { path: `${ADMIN}/audit-logs`, label: 'Audit Logs', area: AREA, parent: ADMIN, hidden: TAB('Audit Logs') },
   // the menu's items that are pages of their own
   { path: `${ADMIN}/ai-usage`, label: 'Token usage', area: AREA, parent: ADMIN, hidden: 'opens from the Administration menu (Token usage)', keywords: ['AI usage'] },

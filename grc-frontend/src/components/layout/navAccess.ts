@@ -5,7 +5,7 @@
 import {
   Activity, AlertCircle, AlertTriangle, BarChart3, Bookmark, Bot, Bug, Building2, CalendarClock, ClipboardCheck, ClipboardList,
   Crosshair, FileSpreadsheet, FileText, FolderKanban, Gavel, GitPullRequest, Landmark, Layers, LayoutDashboard, LifeBuoy,
-  ListTodo, Radar, Rss, ScrollText, Server, ShieldAlert, ShieldCheck, Target, Users, Workflow, Zap,
+  ListTodo, Radar, ScrollText, Server, ShieldAlert, ShieldCheck, Target, Users, Workflow, Zap,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -118,50 +118,36 @@ export const navigation: NavEntry[] = [
     requiredModules: ['compliance', 'controls', 'evidence', 'frameworks'],
     items: [
       { name: 'Overview', href: '/compliance', exact: true, activeMatch: ['/compliance/assessments', '/compliance/statements', '/controls', '/control-library'], icon: LayoutDashboard, requiredPermissions: ['compliance:frameworks:*', 'controls:control_library:*', 'evidence:evidence_library:*'] },
-      { name: 'Frameworks', href: '/frameworks/manage', activeMatch: '/frameworks', icon: Layers, requiredPermissions: ['compliance:frameworks:*'] },
+      { name: 'Frameworks', href: '/frameworks', activeMatch: '/frameworks', icon: Layers, requiredPermissions: ['compliance:frameworks:*'] },
       { name: 'Organisation Profile', href: '/compliance/organisation', icon: Building2, requiredPermissions: ['compliance:frameworks:*', 'compliance:org_profile:*'] },
       { name: 'Evidence Management', href: '/evidence', activeMatch: '/evidence-requirements', icon: FileText, requiredPermissions: ['evidence:evidence_library:*', 'evidence:evidence_upload:*'] },
       { name: 'Access Reviews', href: '/compliance/access-reviews', icon: Users, requiredPermissions: ['compliance:frameworks:*'] },
-      { name: 'Regulatory Changes', href: '/governance/regulatory-changes', icon: GitPullRequest, requiredPermissions: ['governance:regulatory_changes:*'] },
-      { name: 'Regulatory Feeds', href: '/governance/regulatory-feeds', icon: Rss, requiredPermissions: ['governance:regulatory_changes:*'] },
+      { name: 'Regulatory Changes', href: '/governance/regulatory-changes', activeMatch: '/governance/regulatory-feeds', icon: GitPullRequest, requiredPermissions: ['governance:regulatory_changes:*'] },
       {
         name: 'Assessments',
         icon: ClipboardCheck,
         items: [
-          { name: 'Overview', href: '/assessments', icon: LayoutDashboard, requiredPermissions: ['compliance:assessments:*'] },
-          // Cyber Security features now live on a dedicated hub page
-          // (/cyber-security) instead of a nested 7-item dropdown.
-          { name: 'Cyber Security', href: '/cyber-security', activeMatch: '/cyber-security', icon: ShieldAlert, requiredPermissions: ['compliance:assessments:*'] },
-          // NCA features now live on a dedicated hub page (/nca) instead of a
-          // nested 4-item dropdown.
-          { name: 'NCA', href: '/nca', activeMatch: '/nca', icon: ShieldCheck, requiredPermissions: ['compliance:assessments:*'] },
-          { name: 'Digital Operations Maturity', href: '/assessments/digital_ops_maturity', icon: Target, requiredPermissions: ['compliance:assessments:*'] },
-          { name: 'DPIA / PIA', href: '/assessments/dpia', icon: ClipboardList, requiredPermissions: ['compliance:assessments:*'] },
-          { name: 'Saudi PDPL', href: '/assessments/pdpl', icon: ShieldCheck, requiredPermissions: ['compliance:assessments:*'] },
+          // Three doors (Overview, the register, the kinds): the Cyber Security hub, NCA and the DPIA / PDPL / Digital Operations Maturity addresses are forwards into them now
+          { name: 'Overview', href: '/assessments', activeMatch: ['/cyber-security', '/nca'], icon: LayoutDashboard, requiredPermissions: ['compliance:assessments:*'] },
+          { name: 'All assessments', href: '/assessments/register', icon: ClipboardList, requiredPermissions: ['compliance:assessments:*'] },
+          { name: 'Types', href: '/assessments/types', activeMatch: '/cyber-security/questionnaires', icon: Layers, requiredPermissions: ['compliance:assessments:*'] },
         ],
       },
-      {
-        name: 'Business Continuity',
-        icon: LifeBuoy,
-        requiredModules: ['bcm'],
-        items: [
-          { name: 'Overview', href: '/bcm', exact: true, icon: LayoutDashboard, requiredPermissions: ['bcm:dashboard:*'] },
-          { name: 'Continuity Plans', href: '/bcm/plans', icon: ClipboardList, requiredPermissions: ['bcm:plans:*'] },
-          { name: 'Drills & Invocations', href: '/bcm/drills', icon: CalendarClock, requiredPermissions: ['bcm:drills:*'] },
-        ],
-      },
+      { name: 'Business Continuity', href: '/bcm', activeMatch: '/bcm', icon: LifeBuoy, requiredModules: ['bcm'], requiredPermissions: ['bcm:dashboard:*', 'bcm:plans:*', 'bcm:drills:*'] },
     ],
   },
-  // Scope is configured from Common controls, and checks and assurance live on
-  // each control; their standalone routes still work.
+  // Scope is configured from Controls, and checks live on each control; the audit periods
+  // and the connections have their own entries.
   {
     name: 'Controls Automation',
     icon: Zap,
     rail: 'Controls',
     requiredModules: ['controls'],
     items: [
-      { name: 'Overview', href: '/automation/overview', exact: true, activeMatch: ['/automation/assurance', '/automation/checks'], icon: LayoutDashboard, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
-      { name: 'Common Controls', href: '/automation/soc2-controls', activeMatch: '/automation/scope', icon: Layers, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
+      { name: 'Overview', href: '/automation/overview', exact: true, activeMatch: ['/automation/checks'], icon: LayoutDashboard, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
+      { name: 'Controls', href: '/automation/soc2-controls', activeMatch: '/automation/scope', icon: Layers, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
+      { name: 'Audit periods', href: '/automation/assurance', icon: CalendarClock, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
+      { name: 'Connections', href: '/admin/evidence-collectors', icon: Server, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
     ],
   },
   {

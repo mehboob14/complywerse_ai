@@ -85,7 +85,7 @@ test("the rights of a page without a menu entry are those of the page it hangs u
     '/governance/attestations', '/governance/attestations/campaigns', '/governance/attestations/campaigns/:id', '/governance/attestations/my',
     '/governance/attestations/complete/:id', '/governance/exceptions', '/governance/settings', '/governance/reviews', '/governance/reviews/calendar',
     '/governance/mappings', '/governance/workflows', '/governance/committees/:id', '/governance/committees/meetings/:id', '/governance/committees/actions',
-    '/governance/regulatory-changes/:id', '/is-projects/dashboard', '/is-projects/my-projects', '/is-projects/:id', '/attest/:token', '/documents',
+    '/governance/regulatory-changes/:id', '/is-projects/dashboard', '/is-projects/my-projects', '/is-projects/:id', '/attest/:token', '/governance/regulatory-feeds', '/documents',
   ]);
 });
 
@@ -123,6 +123,7 @@ test('a forward is another URL of an entry that is a page of its own, under the 
   assert.deepEqual(aliases.map((e) => [e.path, e.aliasOf]), [
     ['/governance/attestations', '/governance/documents/attestation'],
     ['/governance/reviews/calendar', '/governance/reviews'],                // not a forward: the same page opened on its calendar view
+    ['/frameworks/manage', '/frameworks'],                                   // the menu's old address for Frameworks: a server redirect that keeps the query
     ['/governance/approvals', '/needs-my-action'],                          // "My Approvals" became the global queue; the address forwards to it (a server redirect)
     // the rest of the app (R-REG): forwards and second addresses of the same page; navPages/coverage.test.ts reads every page file and holds each one to its target
     ['/erm/internal-controls', '/controls'],

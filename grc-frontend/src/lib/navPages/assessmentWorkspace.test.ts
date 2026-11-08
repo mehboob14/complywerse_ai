@@ -21,7 +21,7 @@ test('/assessments/a/<id> is one entry, flagged because the page draws the kit h
     assert.equal(routeFor(url)?.path, '/assessments/a/:id', url);
     assert.equal(ownHeadingSection(url), 'Compliance Management', url);
   }
-  assert.equal(routeFor('/assessments/dpia')?.path, '/assessments/dpia', 'a type page of the sidebar is not the workspace');
+  assert.equal(routeFor('/assessments/dpia')?.path, '/assessments/:framework', 'a type address is the forward, not the workspace');
   assert.equal(routeFor('/assessments/cs_kpi')?.path, '/assessments/:framework');
 });
 
