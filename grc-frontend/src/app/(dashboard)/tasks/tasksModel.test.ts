@@ -5,12 +5,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 
-import { readAddress, writeAddress } from '../../../lib/addressState.ts';
 import { withoutLocked } from '../../../lib/documentTasks.ts';
 import {
-  BOARD_SCHEMA, DEFAULT_PAGE_SIZE, FILTER_CATEGORIES, FILTER_SOURCES, KANBAN_LIMIT, SORT_KEYS, STATUSES, SYSTEM_CATEGORIES, SYSTEM_SOURCES, TITLE_MAX, VALID_TRANSITIONS,
+  DEFAULT_PAGE_SIZE, FILTER_CATEGORIES, FILTER_SOURCES, SORT_KEYS, STATUSES, SYSTEM_CATEGORIES, SYSTEM_SOURCES, TITLE_MAX, VALID_TRANSITIONS,
   activeCount, aiContextOf, aiContextRequest, aiDescriptionText, allowedTransitions, applyAiContext, assigneeNames, bars, bulkReport, coverage, createPayload, editDirty,
-  editFormOf, editPayload, emptyTask, fallbackFill, filterCount, formDirty, kanbanColumns, lastPage, listParams, myTasksView, orderBars, pageSizeOf, pickerOptions, recentlyCompleted, rowsOf, sortFromHeader,
+  editFormOf, editPayload, emptyTask, fallbackFill, formDirty, lastPage, myTasksView, orderBars, pageSizeOf, pickerOptions, recentlyCompleted, rowsOf,
   titleProblem, trendHeight, trendMax, userOptions, workloadBars, type EditForm, type NewTaskForm, type PickerOption, type TaskRow,
 } from './tasksModel.ts';
 import { TASK_SLA_DEFAULTS, TASK_SLA_ORDER, daysFromDraft } from './slaConfig.ts';
@@ -145,32 +144,11 @@ test('a title is checked against the table: empty, or longer than VARCHAR(255) (
   assert.equal(titleProblem('', 'sub-task title'), 'Enter a sub-task title');
 });
 
-// ── the list request ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-const state = (search = '') => readAddress(BOARD_SCHEMA, search);
-
-test('the list asks for what it always asked for (sort_by, sort_order, each filter under the server\'s name) and now for the page it shows', () => {
-  assert.deepEqual(listParams(state()), { sort_by: 'created_at', sort_order: 'desc', skip: 0, limit: DEFAULT_PAGE_SIZE });
-  assert.deepEqual(listParams(state('?q=gateway&source=Audit&priority=High&status=Open&category=Review&owner=7&sort=title:asc&page=3&size=25')), {
-    sort_by: 'title', sort_order: 'asc', search: 'gateway', source: 'Audit', priority: 'High', status: 'Open', category: 'Review', assigned_owner_id: '7', skip: 50, limit: 25,
-  });
-  assert.deepEqual(listParams(state('?view=kanban&page=4')), { sort_by: 'created_at', sort_order: 'desc', skip: 0, limit: KANBAN_LIMIT }, 'the Kanban is one request of the server\'s own default');
-  assert.equal(listParams(state('?size=7')).limit, DEFAULT_PAGE_SIZE, 'a size the pager does not offer is the default');
+// ── paging ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+test('a page size the pager does not offer is the default', () => {
   assert.equal(pageSizeOf(100), 100);
-});
-
-test('the board lives in the address: every filter, the sort, the page and the view; junk is the default; the plain address is the default state', () => {
-  const s = state('?status=Reopened&sort=due_date:desc&page=2&view=kanban&mine=1&q=%20patch%20');
-  assert.equal(s.status, 'Reopened');
-  assert.deepEqual(s.sort, { key: 'due_date', dir: 'desc' });
-  assert.equal(s.page, 2);
-  assert.equal(s.view, 'kanban');
-  assert.equal(writeAddress(BOARD_SCHEMA, '', state()), '');
-  const junk = state('?sort=nope:asc&page=-3&size=abc&view=cards');
-  assert.deepEqual([junk.sort, junk.page, junk.size, junk.view], [{ key: 'created_at', dir: 'desc' }, 1, DEFAULT_PAGE_SIZE, 'table']);
-  assert.equal(filterCount(state('?q=a&status=Open&owner=3')), 3);
-  assert.equal(filterCount(state('?page=2&view=kanban')), 0, 'the page and the view are not filters');
-  assert.deepEqual(sortFromHeader(null), { key: 'created_at', dir: 'desc' }, 'clearing a sort returns to newest first');
-  assert.deepEqual(sortFromHeader({ key: 'title', dir: 'asc' }), { key: 'title', dir: 'asc' });
+  assert.equal(pageSizeOf(25), 25);
+  assert.equal(pageSizeOf(7), DEFAULT_PAGE_SIZE);
 });
 
 test('how many pages there are and whether a list is cut: counts are the server\'s total, never the length of what loaded', () => {
@@ -217,14 +195,7 @@ test('a document task has no status steps; another task has the server\'s', () =
   assert.deepEqual(allowedTransitions({ status: 'planned', source_module: null, source_entity_type: null }), [], 'a status the workflow does not know has no step');
 });
 
-// ── Kanban and the people of a task ─────────────────────────────────────────────────────────────────────────────────────────────────────
-test('the Kanban has a column per status and a place for a task whose status is none of them', () => {
-  const k = kanbanColumns([{ id: 1, status: 'Open' }, { id: 2, status: 'in progress' }, { id: 3, status: 'planned' }, { id: 4, status: 'Verified' }, { id: 5, status: 'Open' }]);
-  assert.deepEqual(k.columns.map((c) => [c.status, c.tasks.length]), [['Open', 2], ['In Progress', 1], ['Under Review', 0], ['Completed', 0], ['Verified', 1], ['Reopened', 0]]);
-  assert.deepEqual(k.other.map((t) => t.id), [3]);
-  assert.deepEqual(kanbanColumns([]).other, []);
-});
-
+// ── the people of a task ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
 test('a person in a list is their name (else the user name, else the address, else the id) with the address under it', () => {
   assert.deepEqual(userOptions([{ id: 1, display_name: 'Ann', username: 'ann', email: 'a@x.test' }, { id: 2, display_name: null, username: 'bo', email: 'b@x.test' }, { id: 3, display_name: null, username: null, email: '' }]),
     [{ value: '1', label: 'Ann', description: 'a@x.test' }, { value: '2', label: 'bo', description: 'b@x.test' }, { value: '3', label: 'User #3', description: undefined }]);

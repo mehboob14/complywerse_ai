@@ -33,7 +33,7 @@ export function TaskLink({ id, title, className }: { id: number; title: string; 
 }
 
 /** Everyone on a task: the first person by name, "+N" for the others (the button lists them); "Unassigned" when nobody is. */
-export function Owners({ task, size = 20 }: { task: Pick<TaskRow, 'assignees' | 'assigned_owner'>; size?: 20 | 24 }) {
+export function Owners({ task, size = 20 }: { task: Parameters<typeof assigneeNames>[0]; size?: 20 | 24 }) {
   const names = assigneeNames(task);
   if (names.length === 0) return <PersonChip name={null} size={size} />;
   const rest = names.slice(1);

@@ -18,7 +18,7 @@ from ..models import (
 )
 from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant, require_tenant_permission
 from .auth_router import platform_account, refuse_imported_accounts
-from ..services import task_visibility
+from ..services import task_lean, task_visibility
 from ..services.ai_gateway.field_policies import AliasBook, ai_view
 
 logger = logging.getLogger(__name__)
@@ -197,17 +197,7 @@ def _serialize_user(user):
 
 
 def _calc_sla_status(task):
-    if task.status in ("Completed", "Verified"):
-        return "Completed"
-    if not task.due_date:
-        return "No SLA"
-    now = datetime.utcnow()
-    days_remaining = (task.due_date - now).days
-    if days_remaining < 0:
-        return "Breached"
-    elif days_remaining <= 3:
-        return "At Risk"
-    return "On Track"
+    return task_lean.sla_word(task.status, task.due_date, datetime.utcnow())
 
 
 def _auto_escalate_task(task, db):
@@ -222,14 +212,7 @@ def _auto_escalate_task(task, db):
     if not task.due_date:
         return
     now = datetime.utcnow()
-    days_overdue = (now - task.due_date).days
-    new_level = 0
-    if days_overdue > 7:
-        new_level = 3
-    elif days_overdue > 0:
-        new_level = 2
-    elif days_overdue >= -3:
-        new_level = 1
+    new_level = task_lean.escalation_for(task.status, task.due_date, now)
 
     if new_level > task.escalation_level:
         old_level = task.escalation_level
@@ -319,6 +302,7 @@ def _serialize_task(task, include_relations=False, prefetched: Optional[dict] = 
         "linked_framework_id": getattr(task, "linked_framework_id", None),
         "linked_requirement_id": getattr(task, "linked_requirement_id", None),
         "linked_regulatory_change_id": getattr(task, "linked_regulatory_change_id", None),
+        "linked_issue_id": getattr(task, "linked_issue_id", None),
         "evidence_notes": task.evidence_notes,
         "completed_at": task.completed_at.isoformat() if task.completed_at else None,
         "verified_at": task.verified_at.isoformat() if task.verified_at else None,
@@ -353,6 +337,14 @@ def _serialize_task(task, include_relations=False, prefetched: Optional[dict] = 
             logger.exception("Could not read the document request of task %s", task.id)
             result["document_request"] = None
     if include_relations:
+        sess = Session.object_session(task)
+        if sess is not None:
+            label, href = task_lean.source_info(sess, [task], {task.id: result.get("document_request")}).get(task.id, (None, None))
+            result["source_label"], result["source_href"] = label, href
+            result["links"] = task_lean.linked_records(sess, [task]).get(task.id, [])
+            said = task_lean.history_labels(sess, task.history or [])
+        else:
+            said = {}
         result["sub_tasks"] = [
             {
                 "id": st.id,
@@ -382,6 +374,8 @@ def _serialize_task(task, include_relations=False, prefetched: Optional[dict] = 
                 "field_changed": h.field_changed,
                 "old_value": h.old_value,
                 "new_value": h.new_value,
+                "old_label": said.get(h.id, (None, None))[0],
+                "new_label": said.get(h.id, (None, None))[1],
                 "user": _serialize_user(h.user),
                 "created_at": h.created_at.isoformat() if h.created_at else None,
             }
@@ -396,6 +390,14 @@ def _refuse_document_link(values: dict) -> None:
     refused = doc_lifecycle.refused_link(values)
     if refused:
         raise HTTPException(status_code=400, detail=refused)
+
+
+TITLE_MAX = 255        # grc_critical_tasks.title and grc_critical_task_subtasks.title are VARCHAR(255)
+
+
+def _refuse_long_title(title: str, noun: str) -> None:
+    if len(title or "") > TITLE_MAX:
+        raise HTTPException(status_code=400, detail=f"A {noun} title can be {TITLE_MAX} characters at most. This one has {len(title)}.")
 
 
 def _hidden(db: Session, user, task) -> bool:
@@ -490,6 +492,7 @@ def _handle_recurrence(task, db):
         status="Open",
         category=task.category,
         assigned_owner_id=task.assigned_owner_id,
+        assigned_user_ids=list(_assigned_ids(task)),        # everyone on the task, not the first owner only
         reviewer_id=task.reviewer_id,
         created_by_id=task.created_by_id,
         due_date=next_due,
@@ -498,6 +501,14 @@ def _handle_recurrence(task, db):
         recurrence_interval=interval,
         parent_task_id=task.id,
         approval_required=getattr(task, 'approval_required', False),
+        # what the task was about travels with it (the links a person can set; a regulatory change, committee action or issue is one record's twin and stays with it)
+        linked_risk_id=task.linked_risk_id,
+        linked_control_id=task.linked_control_id,
+        linked_vulnerability_id=task.linked_vulnerability_id,
+        linked_framework_id=getattr(task, "linked_framework_id", None),
+        linked_requirement_id=getattr(task, "linked_requirement_id", None),
+        custom_values=dict(task.custom_values) if isinstance(getattr(task, "custom_values", None), dict) else None,
+        evidence_notes=task.evidence_notes,
     )
     db.add(new_task)
     db.flush()
@@ -508,7 +519,7 @@ def _handle_recurrence(task, db):
             status="Open",
         )
         db.add(new_sub)
-    _add_history(db, new_task.id, None, "Auto-Created", "recurrence", None, f"Recurring from task #{task.id}")
+    _add_history(db, new_task.id, None, "Auto-Created", "recurrence", None, f"Repeated from “{task.title}”")
 
 
 def _send_notification_email(to_email, subject, html_body):
@@ -578,6 +589,14 @@ def list_tasks(
     search: Optional[str] = None,
     due_before: Optional[datetime] = None,
     due_after: Optional[datetime] = None,
+    assignee_id: Optional[int] = None,
+    reviewer_id: Optional[int] = None,
+    created_by_id: Optional[int] = None,
+    overdue: Optional[bool] = None,
+    sla_status: Optional[str] = None,
+    approval_status: Optional[str] = None,
+    source_module: Optional[str] = None,
+    lean: bool = False,
     sort_by: Optional[str] = "created_at",
     sort_order: Optional[str] = "desc",
     skip: int = 0,
@@ -585,8 +604,11 @@ def list_tasks(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
+    """The tasks the person may see, then their filters. ``assignee_id`` is ANY person on the task (``assigned_owner_id`` is the first owner only); ``overdue`` and ``sla_status`` are the
+    server's own SLA states worked out in SQL (``task_lean.sla_clause``); ``approval_status`` is Pending, Approved, Rejected or ``none``. ``lean=1`` answers the register's complete
+    load instead of a page of full tasks (``services/task_lean.py``): compact rows, ``limit`` up to 10,000, nothing written."""
     user_tenants = get_user_tenants(current_user, db)
-    cut, everyone = task_visibility.scope(db, current_user)        # the tasks the person may see, then their filters
+    cut, everyone = task_visibility.scope(db, current_user)
     query = cut(db.query(CriticalTask).options(
         joinedload(CriticalTask.assigned_owner),
         joinedload(CriticalTask.reviewer),
@@ -609,6 +631,23 @@ def list_tasks(
         query = query.filter(CriticalTask.due_date <= due_before)
     if due_after:
         query = query.filter(CriticalTask.due_date >= due_after)
+    now = datetime.utcnow()
+    if assignee_id:
+        query = query.filter(or_(CriticalTask.assigned_owner_id == assignee_id, task_visibility.assigned_to(db, assignee_id)))
+    if reviewer_id:
+        query = query.filter(CriticalTask.reviewer_id == reviewer_id)
+    if created_by_id:
+        query = query.filter(CriticalTask.created_by_id == created_by_id)
+    if overdue:
+        query = query.filter(task_lean.sla_clause("Breached", now))
+    if sla_status:
+        clause = task_lean.sla_clause(sla_status, now)
+        if clause is not None:
+            query = query.filter(clause)
+    if approval_status:
+        query = query.filter(CriticalTask.approval_status.is_(None) if approval_status == "none" else CriticalTask.approval_status == approval_status)
+    if source_module:
+        query = query.filter(CriticalTask.source_module == source_module)
 
     total = query.count()
 
@@ -619,6 +658,13 @@ def list_tasks(
         query = query.order_by(sort_col.asc())
     else:
         query = query.order_by(sort_col.desc())
+
+    if lean:           # the register's complete load: compact rows, true total, nothing written (the escalation level is worked out on read)
+        limit = task_lean.clamp(limit)
+        tasks = task_lean.lean_query(query.order_by(CriticalTask.id.desc())).offset(skip).limit(limit).all()
+        out = task_lean.list_lean(db, tasks, total, skip, limit, _prefetch(db, tasks), now)
+        out["scope"] = "all" if everyone else "mine"
+        return task_lean.respond(out)
 
     tasks = query.offset(skip).limit(limit).all()
     changed = False
@@ -804,12 +850,10 @@ def reports_summary(
         }
 
     trend_data = []
+    this_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     for i in range(11, -1, -1):
-        month_start = (now.replace(day=1) - timedelta(days=30 * i)).replace(day=1)
-        if i > 0:
-            month_end = (now.replace(day=1) - timedelta(days=30 * (i - 1))).replace(day=1)
-        else:
-            month_end = now
+        month_start = this_month - relativedelta(months=i)        # calendar months: twelve distinct ones, none skipped
+        month_end = this_month - relativedelta(months=i - 1) if i > 0 else now
         created = base.filter(
             CriticalTask.created_at >= month_start,
             CriticalTask.created_at < month_end,
@@ -1348,6 +1392,7 @@ def create_sub_task(
         raise HTTPException(status_code=404, detail="Task not found")
 
     user_tenants = get_user_tenants(current_user, db)
+    _refuse_long_title(payload.title, "sub-task")
     _validate_tenant_user(db, payload.assigned_owner_id, user_tenants)
     sub = CriticalTaskSubTask(task_id=task_id, **payload.model_dump())
     db.add(sub)
@@ -1383,6 +1428,8 @@ def update_sub_task(
         raise HTTPException(status_code=404, detail="Sub-task not found")
 
     update_data = payload.model_dump(exclude_unset=True)
+    if update_data.get("title") is not None:
+        _refuse_long_title(update_data["title"], "sub-task")
     if "assigned_owner_id" in update_data:
         user_tenants2 = get_user_tenants(current_user, db)
         _validate_tenant_user(db, update_data["assigned_owner_id"], user_tenants2, [sub.assigned_owner_id])
@@ -1471,10 +1518,12 @@ def get_history(
     entries = db.query(CriticalTaskHistory).options(
         joinedload(CriticalTaskHistory.user)
     ).filter(CriticalTaskHistory.task_id == task_id).order_by(CriticalTaskHistory.created_at.desc()).all()
+    said = task_lean.history_labels(db, entries)
     return [
         {
             "id": h.id, "action": h.action, "field_changed": h.field_changed,
             "old_value": h.old_value, "new_value": h.new_value,
+            "old_label": said.get(h.id, (None, None))[0], "new_label": said.get(h.id, (None, None))[1],
             "user": _serialize_user(h.user),
             "created_at": h.created_at.isoformat() if h.created_at else None,
         }
@@ -1896,7 +1945,8 @@ def ai_prioritize_tasks(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI analysis failed: {str(e)}")
+        logger.exception("Task Management AI call failed")
+        raise HTTPException(status_code=500, detail="The AI could not finish this just now. Try again in a moment.")
 
 
 @router.post("/{task_id}/ai/analyze-root-cause")
@@ -1931,7 +1981,8 @@ def ai_analyze_root_cause(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI analysis failed: {str(e)}")
+        logger.exception("Task Management AI call failed")
+        raise HTTPException(status_code=500, detail="The AI could not finish this just now. Try again in a moment.")
 
 
 @router.post("/ai/generate-description")
@@ -1963,7 +2014,8 @@ def ai_generate_description(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI generation failed: {str(e)}")
+        logger.exception("Task Management AI call failed")
+        raise HTTPException(status_code=500, detail="The AI could not finish this just now. Try again in a moment.")
 
 
 @router.post("/ai/predict-escalations")
@@ -2016,7 +2068,8 @@ def ai_predict_escalations(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI prediction failed: {str(e)}")
+        logger.exception("Task Management AI call failed")
+        raise HTTPException(status_code=500, detail="The AI could not finish this just now. Try again in a moment.")
 
 
 @router.post("/ai/balance-workload")
@@ -2083,5 +2136,6 @@ def ai_balance_workload(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI analysis failed: {str(e)}")
+        logger.exception("Task Management AI call failed")
+        raise HTTPException(status_code=500, detail="The AI could not finish this just now. Try again in a moment.")
 

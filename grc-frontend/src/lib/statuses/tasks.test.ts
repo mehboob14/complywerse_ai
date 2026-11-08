@@ -12,7 +12,8 @@ import { TASK_SLA_LABELS, TASK_SLA_ORDER } from '../../app/(dashboard)/tasks/sla
 
 const norm = (s: string) => s.trim().toLowerCase().replace(/[\s-]+/g, '_');
 const ROUTER = new URL('../../../../backend/grc/routers/critical_tasks_router.py', import.meta.url);
-const have = existsSync(ROUTER);
+const LEAN = new URL('../../../../backend/grc/services/task_lean.py', import.meta.url);      // the SLA words live in sla_word, which _calc_sla_status calls
+const have = existsSync(ROUTER) && existsSync(LEAN);
 
 function covers(registry: Statuses, offered: readonly string[], extras: readonly string[] = []) {
   for (const word of offered) assert.ok(registry.has(word), `${registry.record}: "${word}" is offered and not registered`);
@@ -29,9 +30,11 @@ test('every word the pages offer is registered, and nothing else is', () => {
   covers(slaLevel, TASK_SLA_ORDER);
 });
 
-test('the words are the ones the server writes (critical_tasks_router.py)', { skip: !have }, () => {
+test('the words are the ones the server writes (critical_tasks_router.py, and sla_word in services/task_lean.py for the SLA)', { skip: !have }, () => {
   const router = readFileSync(ROUTER, 'utf8');
-  for (const word of ['On Track', 'At Risk', 'Breached', 'No SLA']) assert.ok(router.includes(`return "${word}"`), `_calc_sla_status says ${word}`);
+  const lean = readFileSync(LEAN, 'utf8');
+  assert.match(router, /def _calc_sla_status\(task\):\s+return task_lean\.sla_word\(/, 'the router has no second copy of the SLA rule');
+  for (const word of ['On Track', 'At Risk', 'Breached', 'No SLA']) assert.ok(lean.includes(`"${word}"`), `sla_word says ${word}`);
   for (const word of ['Pending', 'Approved', 'Rejected']) assert.ok(router.includes(`task.approval_status = "${word}"`), `the approval routes write ${word}`);
   for (const word of STATUSES) assert.ok(router.includes(`"${word}"`), `${word} is a status of the router`);
 });
