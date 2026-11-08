@@ -106,6 +106,7 @@ export default function FrameworkAssessmentPage() {
   const cards = narrow || (room != null && room < 860);
   const phases = useMemo(() => phaseRows(questions, methodology?.phases ?? []), [questions, methodology]);
   const [ticked, setTicked] = useState<Set<number>>(new Set());
+  const [moreFilters, setMoreFilters] = useState(false);
   const tickedHere = useMemo(() => Array.from(ticked).filter((t) => shown.some((s) => s.id === t)), [ticked, shown]);
   useEffect(() => { if (a) document.title = `${a.name} · Framework risk assessment`; }, [a]);
 
@@ -281,17 +282,18 @@ export default function FrameworkAssessmentPage() {
           <div className="flex flex-col gap-[12px] pt-[12px]">
             <div className="flex flex-wrap items-center gap-[8px]">
               <TextInput type="search" value={filters.search} onChange={(e) => setFilters({ ...filters, search: e.target.value })} aria-label="Search the questions" placeholder="Search questions" autoComplete="off" className="min-w-[160px] max-w-[320px] flex-1" leftAdornment={<Search aria-hidden className="h-[14px] w-[14px]" />} />
-              {phaseOptions.length > 1 && (
+              {narrow && <Button aria-expanded={moreFilters} onClick={() => setMoreFilters((v) => !v)}>{filterCount(filters) > 0 ? `Filters (${filterCount(filters)})` : 'Filters'}</Button>}
+              {(!narrow || moreFilters) && phaseOptions.length > 1 && (
                 <Select aria-label="Phase" placeholder="All phases" className="w-[170px]" value={filters.phase[0] ?? ''} onChange={(e) => setFilters({ ...filters, phase: e.target.value ? [e.target.value] : [] })}>
                   {phaseOptions.map((p) => <option key={p.code} value={p.code}>{p.name}</option>)}
                 </Select>
               )}
-              <Select aria-label="Status" placeholder="Any status" className="w-[150px]" value={filters.status[0] ?? ''} onChange={(e) => setFilters({ ...filters, status: e.target.value ? [e.target.value] : [] })}>
+              {(!narrow || moreFilters) && <Select aria-label="Status" placeholder="Any status" className="w-[150px]" value={filters.status[0] ?? ''} onChange={(e) => setFilters({ ...filters, status: e.target.value ? [e.target.value] : [] })}>
                 {QUESTION_STATUSES.map((s) => <option key={s} value={s}>{STATUS_WORDS[s]}</option>)}
-              </Select>
-              <Select aria-label="Answered by" placeholder="Anyone" className="w-[170px]" value={filters.assignee[0] ?? ''} onChange={(e) => setFilters({ ...filters, assignee: e.target.value ? [e.target.value] : [] })}>
+              </Select>}
+              {(!narrow || moreFilters) && <Select aria-label="Answered by" placeholder="Anyone" className="w-[170px]" value={filters.assignee[0] ?? ''} onChange={(e) => setFilters({ ...filters, assignee: e.target.value ? [e.target.value] : [] })}>
                 {insightPeople.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </Select>
+              </Select>}
               {filterCount(filters) > 0 && <Button variant="link" onClick={() => setFilters(NO_QFILTERS)}>Clear filters</Button>}
               <span className="ml-auto text-ds-body text-ds-fg-muted">{formatCount(shown.length)} of {formatCount(counts.total)}</span>
             </div>
