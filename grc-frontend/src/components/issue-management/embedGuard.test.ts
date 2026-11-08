@@ -4,7 +4,7 @@
 // and the contract the consumer pages rely on (the exported names and props of the three components, the old IssueForm's name) is still there.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -17,8 +17,12 @@ const read = (f: string) => readFileSync(f, 'utf8');
 const code = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, '').split(/\r?\n/).map((l) => l.replace(/(^|\s)\/\/\s.*$/, '$1')).join('\n');
 const of = (name: string) => read(join(DIR, name));
 
-test('the folder has its files', () => {
-  assert.ok(FILES.length >= 11, `found ${FILES.length}`);
+test('the folder has its files, and the words of an issue come from the shared registries (no second list of states, types or categories here)', () => {
+  assert.ok(FILES.length >= 10, `found ${FILES.length}`);
+  assert.ok(!existsSync(join(DIR, 'embedWords.ts')), 'the temporary words are gone');
+  assert.match(of('RelatedIssuesPanel.tsx'), /from '@\/lib\/statuses\/issues'/);
+  assert.match(of('IssueDrawer.tsx'), /from '@\/lib\/statuses\/issues'/);
+  assert.match(of('IssueDrawer.tsx'), /from '@\/lib\/issues\/words'/);
 });
 
 test('the kit\'s rules hold in every file: no remapped class, no palette colour, nothing under 12px', () => {
