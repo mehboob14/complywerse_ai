@@ -1753,8 +1753,10 @@ export const ermApi = {
       apiClient.post(`/erm/risk-assessments/${id}/risks/bulk`, { risk_ids }),
     getAssessedRisks: (id: number, params?: { skip?: number; limit?: number }) => 
       apiClient.get(`/erm/risk-assessments/${id}/risks`, { params }),
-    getAvailableRisks: (id: number) => 
-      apiClient.get(`/erm/risk-assessments/${id}/available-risks`),
+    getAvailableRisks: (id: number, params?: { skip?: number; limit?: number; search?: string }) => 
+      apiClient.get(`/erm/risk-assessments/${id}/available-risks`, { params }),
+    /** Every assessment, manual and framework-based, with its progress (the Risk Assessments home). */
+    getRegister: () => apiClient.get<{ items: Array<Record<string, unknown>>; total: number; truncated: boolean }>('/erm/risk-assessments/register'),
     linkKRI: (assessmentId: number, assessmentRiskId: number, data: Record<string, unknown>) => 
       apiClient.post(`/erm/risk-assessments/${assessmentId}/risks/${assessmentRiskId}/kris`, data),
     unlinkKRI: (assessmentId: number, assessmentRiskId: number, linkId: number) => 
@@ -1809,6 +1811,7 @@ export const ermApi = {
         assessment_id: number;
         assessment_name: string;
         risks_created: number;
+        risks_reused?: number;
         rows_skipped: number;
         rows_errored: number;
         skipped_details: Array<{ row: number; reason: string }>;
