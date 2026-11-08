@@ -16,6 +16,33 @@ export const evidenceStatus = defineStatuses('evidence', {
   expired: 'danger',
   archived: 'neutral',
   stale: { tone: 'warning', label: 'Stale' },
+  // past its validity (the server works it out when it reads: the stored flag is only ever set by hand). A file can be Approved and Lapsed: it was approved, and is no longer in date.
+  lapsed: { tone: 'danger', label: 'Lapsed' },
+});
+
+// Where a file stands against its date (the Library's Freshness facet and the Insights cards): in date, ending within 30 days, past it, or no date at all.
+export const freshnessState = defineStatuses('evidence freshness', {
+  in_date: { tone: 'success', label: 'In date' },
+  expiring: { tone: 'warning', label: 'Expiring in 30 days' },
+  lapsed: { tone: 'danger', label: 'Lapsed' },
+  no_expiry: { tone: 'neutral', label: 'No expiry' },
+});
+
+// AuditPackage.status (models/_10: draft, finalized, exported, archived; audit_packages.py moves a draft to finalized, a finalized one to exported).
+export const packageStatus = defineStatuses('audit package', {
+  draft: 'neutral',
+  finalized: { tone: 'progress', label: 'Finalized' },
+  exported: 'success',
+  archived: 'neutral',
+});
+
+// AuditPackageAccessLog.action (audit_packages.py writes exported, downloaded, legal_hold_set, legal_hold_removed; the model also names viewed).
+export const packageLog = defineStatuses('audit package log', {
+  exported: { tone: 'success', label: 'Exported' },
+  downloaded: { tone: 'progress', label: 'Downloaded' },
+  viewed: { tone: 'neutral', label: 'Viewed' },
+  legal_hold_set: { tone: 'warning', label: 'Legal hold set' },
+  legal_hold_removed: { tone: 'neutral', label: 'Legal hold removed' },
 });
 
 // Where the AI review of an uploaded file stands (services/evidence_review.py writes it on the file: queued -> running (reading, rating, matching)

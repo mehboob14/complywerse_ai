@@ -6,9 +6,9 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 
 import { statusPill, type Statuses } from '../status.ts';
-import { evidenceStatus, expiryState, maturityLevel, ocrStatus, requirementStatus, reviewState } from './evidence.ts';
+import { evidenceStatus, expiryState, freshnessState, maturityLevel, ocrStatus, packageLog, packageStatus, requirementStatus, reviewState } from './evidence.ts';
 
-const ALL: Statuses[] = [evidenceStatus, reviewState, maturityLevel, expiryState, ocrStatus, requirementStatus];
+const ALL: Statuses[] = [evidenceStatus, reviewState, maturityLevel, expiryState, ocrStatus, requirementStatus, freshnessState, packageStatus, packageLog];
 
 test('every registered word has a tone, a readable label, and an unknown word is neutral with its own label', () => {
   for (const registry of ALL) {
@@ -73,4 +73,24 @@ test('requirement words: the five states of the catalogue workflow, in the order
   // the model's own comment on the column names the same five words (backend models/_17)
   const url = new URL('../../../../backend/grc/models/_17_framework_upload_parsing_models.py', import.meta.url);
   if (existsSync(url)) assert.match(readFileSync(url, 'utf8'), /draft -> submitted -> pending_review -> approved\/rejected/);
+});
+
+test('lapsed is a word of its own: danger, and a file can wear it beside Approved (the old "Stale" word still reads for an old address)', () => {
+  assert.deepEqual(statusPill(evidenceStatus, 'lapsed'), { tone: 'danger', label: 'Lapsed' });
+  assert.deepEqual(statusPill(evidenceStatus, 'stale'), { tone: 'warning', label: 'Stale' });
+  assert.deepEqual(freshnessState.words, ['in_date', 'expiring', 'lapsed', 'no_expiry']);
+  assert.deepEqual(freshnessState.words.map((w) => freshnessState.label(w)), ['In date', 'Expiring in 30 days', 'Lapsed', 'No expiry']);
+});
+
+test('audit package words: the lifecycle the server moves a package through, and every action its access log writes', () => {
+  assert.deepEqual(packageStatus.words.map((w) => packageStatus.label(w)), ['Draft', 'Finalized', 'Exported', 'Archived']);
+  assert.deepEqual(packageStatus.words.map((w) => packageStatus.tone(w)), ['neutral', 'progress', 'success', 'neutral']);
+  const url = new URL('../../../../backend/grc/modules/evidence/routers/audit_packages.py', import.meta.url);
+  if (existsSync(url)) {
+    const text = readFileSync(url, 'utf8');
+    const written = Array.from(text.matchAll(/action="([a-z_]+)"/g)).map((m) => m[1]).concat(Array.from(text.matchAll(/"(legal_hold_(?:set|removed))"/g)).map((m) => m[1]));
+    assert.ok(written.includes('exported') && written.includes('downloaded') && written.includes('legal_hold_set'));
+    for (const word of written) assert.ok(packageLog.has(word), `the log writes "${word}" and the page does not know it`);
+  }
+  assert.deepEqual(statusPill(packageLog, 'something_new'), { tone: 'neutral', label: 'Something new' });
 });

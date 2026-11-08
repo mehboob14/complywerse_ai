@@ -3,6 +3,7 @@
 // Every formula here is the one the workspace always used (lib.tsx, EvidenceWorkspace.tsx, SnapshotView.tsx, PipelineView.tsx); only the words are
 // said more plainly. The components draw, this file decides.
 import { formatCount } from '../../../../lib/format.ts';
+import { parseUtc } from '../../../../lib/serverTime.ts';
 import { pageRange, type PageRange } from '../../../../lib/pagerModel.ts';
 import type { ReviewBrief } from '../_review.tsx';
 
@@ -49,6 +50,14 @@ export interface EvidenceItem {
   asset_links_count?: number;
   incident_links_count?: number;
   policy_links_count?: number;
+  // what the lean complete load adds (GET /evidence-mgmt/items?lean=1)
+  /** past its validity: the server works it out when it reads (the stored flag is only ever set by hand) */
+  lapsed?: boolean;
+  /** risks, assets, incidents, policies and controls it is linked to, together */
+  links_count?: number;
+  /** the frameworks it answers, by name */
+  frameworks?: string[];
+  has_file?: boolean;
 }
 
 export interface EvidenceSummary {
@@ -56,6 +65,10 @@ export interface EvidenceSummary {
   by_status: Record<string, number>;
   by_type: Record<string, number>;
   stale_count: number;
+  /** past their validity, worked out when read (the same files as `stale_count`) */
+  lapsed_count?: number;
+  /** approved and still in date */
+  in_force_count?: number;
   expiring_soon_count: number;
   pending_review_count: number;
   by_month?: Array<{ month: string; uploaded: number; approved: number }>;
@@ -73,91 +86,7 @@ export function ownerOf(e: Pick<EvidenceItem, 'owner_name' | 'uploader_name'>): 
   return e.owner_name || e.uploader_name || null;
 }
 
-export function initialsOf(name: string | null | undefined): string {
-  if (!name) return '';
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (!parts.length) return '';
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-
 const plural = (n: number, word: string) => `${formatCount(n)} ${word}${n === 1 ? '' : 's'}`;
-
-// ── the filter ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-/** The statuses the Status filter offers. `stale` is not a status the server writes: it is the file's `is_stale` flag (past its validity). */
-export const STATUS_VALUES = ['draft', 'pending_review', 'approved', 'rejected', 'expired', 'archived', 'stale'] as const;
-
-export interface Filters {
-  /** the search text */
-  q: string;
-  /** statuses chosen (empty: all); `stale` means the is_stale flag */
-  status: readonly string[];
-  /** evidence types chosen (empty: all) */
-  types: readonly string[];
-}
-
-export const NO_FILTERS: Filters = { q: '', status: [], types: [] };
-export const isFiltered = (f: Filters): boolean => f.q.trim() !== '' || f.status.length > 0 || f.types.length > 0;
-
-/** A file passes the Status filter when it is in any chosen status; `stale` is the is_stale flag. Nothing chosen keeps everything. */
-export function matchesStatus(e: Pick<EvidenceItem, 'status' | 'is_stale'>, chosen: readonly string[]): boolean {
-  if (chosen.length === 0) return true;
-  return chosen.some((s) => (s === 'stale' ? !!e.is_stale : e.status === s));
-}
-
-/** What the search looks at: the name, the owner, the uploader and the source system (the server's own search also reads the description and the file
- *  name, which this one never did). */
-export const searchText = (e: EvidenceItem): string => `${e.name} ${e.owner_name ?? ''} ${e.uploader_name ?? ''} ${e.source_system ?? ''}`.toLowerCase();
-
-/** The files that pass the search, the status choice and the type choice. A file with no type never passes a type choice (it is "Other" in words,
- *  but the filter has always compared the stored value). */
-export function filterItems(items: readonly EvidenceItem[], f: Filters): EvidenceItem[] {
-  const q = f.q.trim().toLowerCase();
-  return items.filter((e) => {
-    if (!matchesStatus(e, f.status)) return false;
-    if (f.types.length > 0 && !f.types.includes(e.evidence_type ?? '')) return false;
-    if (q && !searchText(e).includes(q)) return false;
-    return true;
-  });
-}
-
-/** The Type filter's choices: the server's list of types when it answered, else the types found in the files. */
-export function typeOptions(server: ReadonlyArray<{ value: string; label: string }> | undefined, items: readonly EvidenceItem[]): Array<{ value: string; label: string }> {
-  if (server && server.length) return server.map((t) => ({ value: t.value, label: t.label }));
-  const found = Array.from(new Set(items.map((i) => i.evidence_type).filter((t): t is string => !!t)));
-  return found.map((t) => ({ value: t, label: typeLabel(t) }));
-}
-
-/** Where a selection falls after the list changes: the chosen file if it is still listed, else the first one, else none. */
-export function effectiveSelected(items: readonly EvidenceItem[], selectedId: number | null): number | null {
-  return selectedId != null && items.some((i) => i.id === selectedId) ? selectedId : (items[0]?.id ?? null);
-}
-
-// ── what is loaded and what is true ───────────────────────────────────────────────────────────────────────────────────────────────────────
-/** The list request is capped; the server says how many there are. When there are more than were loaded the page says so (null: it is all here). */
-export function cutNotice(loaded: number, total: number | null | undefined): { title: string; text: string } | null {
-  if (typeof total !== 'number' || total <= loaded) return null;
-  return {
-    title: `Showing the newest ${formatCount(loaded)} of ${formatCount(total)} evidence items`,
-    text: 'Search, filters and the views below use these items. The figures in the cards are for all of them.',
-  };
-}
-
-/** The four cards. They read the server's summary only: a failed summary is a failed card, never numbers worked out from a list that may be cut.
- *  Approved is a share of all items (null when there are none: nothing is not 0%). */
-export interface Tiles { total: number; approved: number; approvedPct: number | null; pending: number; expiring: number }
-export function tiles(summary: EvidenceSummary | null | undefined): Tiles | null {
-  if (!summary) return null;
-  const total = summary.total_count ?? 0;
-  const approved = summary.by_status?.approved ?? 0;
-  return {
-    total,
-    approved,
-    approvedPct: total > 0 ? Math.round((approved / total) * 100) : null,
-    pending: summary.pending_review_count ?? 0,
-    expiring: summary.expiring_soon_count ?? 0,
-  };
-}
 
 // ── expiry and maturity ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 export type ExpiryWord = 'expired' | 'expiring' | 'valid' | 'none';
@@ -167,7 +96,8 @@ export interface ExpiryReading { word: ExpiryWord; days: number | null; text: st
  *  30 days left is expiring). `now` is a parameter so a test can fix the clock. */
 export function expiryReading(expiry: string | null | undefined, now: number = Date.now()): ExpiryReading {
   if (!expiry) return { word: 'none', days: null, text: 'No expiry' };
-  const days = Math.ceil((new Date(expiry).getTime() - now) / 86_400_000);
+  // the server writes UTC without saying so: read as local time every day count was off by the viewer's offset
+  const days = Math.ceil(((parseUtc(expiry)?.getTime() ?? NaN) - now) / 86_400_000);
   if (Number.isNaN(days)) return { word: 'none', days: null, text: '—' };
   if (days < 0) return { word: 'expired', days, text: `Expired ${plural(-days, 'day')} ago` };
   if (days <= 30) return { word: 'expiring', days, text: days === 0 ? 'Expires today' : `${plural(days, 'day')} left` };
@@ -250,34 +180,7 @@ export function deriveApplicableFrameworks(
   return out;
 }
 
-// ── the board ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-/** The columns of the Pipeline, in the order a file moves through them. */
-export const PIPELINE_STATUSES = ['draft', 'pending_review', 'approved', 'expired', 'rejected'] as const;
-
-export interface BoardColumn { status: (typeof PIPELINE_STATUSES)[number]; count: number; shown: EvidenceItem[]; hidden: number }
-
-/** Each column's true count and its first `cap` cards (the rest are counted, not drawn: a board of 1,000 cards is not a board). */
-export function boardColumns(items: readonly EvidenceItem[], cap: number): BoardColumn[] {
-  return PIPELINE_STATUSES.map((status) => {
-    const all = items.filter((it) => it.status === status);
-    return { status, count: all.length, shown: all.slice(0, Math.max(0, cap)), hidden: Math.max(0, all.length - Math.max(0, cap)) };
-  });
-}
-
-/** Files that sit in no column (archived, or any status the board does not draw): said under the board, so the columns add up. */
-export const offBoard = (items: readonly EvidenceItem[]): number => items.filter((it) => !(PIPELINE_STATUSES as readonly string[]).includes(it.status)).length;
-
-export type Advance = { action: 'submit' | 'approve'; label: string; done: string };
-
-/** The one step a card can take: a draft is submitted (anyone may), a pending file is approved (only a person who may review). The step is a button on
- *  the card: there is no drag and drop, so this IS the keyboard way to move a file. */
-export function advanceStep(status: string, canReview: boolean): Advance | null {
-  if (status === 'draft') return { action: 'submit', label: 'Submit for review', done: 'Submitted for review' };
-  if (status === 'pending_review' && canReview) return { action: 'approve', label: 'Approve', done: 'Approved' };
-  return null;
-}
-
-// ── the Snapshot ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// ── the Insights figures ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 /** The parts of the status split, in the order they are told, with the server's count of each (archived and any other status are counted too, so the
  *  parts add up to the total). */
 export const SPLIT_ORDER = ['approved', 'pending_review', 'draft', 'rejected', 'expired', 'archived'] as const;
@@ -318,27 +221,7 @@ export function monthName(ym: string): string {
   return y && m && m >= 1 && m <= 12 ? MONTHS[m - 1] : ym;
 }
 
-// ── the owner leaderboard (the Performance view) ──────────────────────────────────────────────────────────────────────────────────────────
-export interface OwnerPerf { owner_id: number | null; owner_name: string | null; total: number; pending: number; approved: number; expired: number }
-const pct = (n: number, d: number): number => (d ? Math.round((n / d) * 100) : 0);
-export const approvedShare = (o: Pick<OwnerPerf, 'approved' | 'total'>): number => pct(o.approved, o.total);
-
-/** The leaderboard: owners ranked by approval rate (ties by volume), the top one, the one with the largest pending backlog, and the team's average rate. null when
- *  there are no owners. The same formulas the view always used. */
-export function ownerBoard(owners: readonly OwnerPerf[]): { rows: Array<OwnerPerf & { rank: number }>; top: OwnerPerf; needsSupport: OwnerPerf; teamAvg: number } | null {
-  if (!owners.length) return null;
-  const ranked = owners.slice().sort((a, b) => {
-    const ra = pct(a.approved, a.total);
-    const rb = pct(b.approved, b.total);
-    return rb !== ra ? rb - ra : b.total - a.total;
-  });
-  const needsSupport = owners.slice().sort((a, b) => b.pending - a.pending)[0];
-  const totalItems = owners.reduce((s, o) => s + o.total, 0);
-  const totalApproved = owners.reduce((s, o) => s + o.approved, 0);
-  return { rows: ranked.map((o, i) => ({ ...o, rank: i + 1 })), top: ranked[0], needsSupport, teamAvg: pct(totalApproved, totalItems) };
-}
-
-// ── the register's export ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// ── csv ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 /** One CSV cell: quoted when it holds a comma, a quote or a line break (a quote is doubled); a value that starts like a spreadsheet formula (= + - @) gets a leading
  *  apostrophe so Excel reads it as text, not as a formula someone typed into a file name. */
 export function csvCell(value: string | number | null | undefined): string {
@@ -347,43 +230,9 @@ export function csvCell(value: string | number | null | undefined): string {
   return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-/** The register as CSV: a header row and a row per file, in the order given (what the person sees, filters and sort applied). */
-export function registerCsv(items: readonly EvidenceItem[]): string {
-  const head = ['Name', 'Type', 'Status', 'Stale', 'Owner', 'Controls linked', 'Maturity %', 'Expiry', 'Uploaded'];
-  const day = (v: string | null | undefined) => (v ? v.slice(0, 10) : '');
-  const rows = items.map((e) => [
-    e.name, typeLabel(e.evidence_type), e.status, e.is_stale ? 'Yes' : 'No', ownerOf(e) ?? '', e.control_mappings_count ?? 0, normPct(e.quality_score) ?? '', day(e.expiry_date), day(e.uploaded_at),
-  ]);
-  return [head, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n');
-}
-
 // ── a page of a list ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 export interface PageOf<T> { range: PageRange; rows: T[] }
 export function pageOfRows<T>(rows: readonly T[], page: number, pageSize: number): PageOf<T> {
   const range = pageRange(page, pageSize, rows.length);
   return { range, rows: range.to === 0 ? [] : rows.slice(range.from - 1, range.to) };
-}
-/** The page a given file is on, so a link to a file opens the list where it is (1 when it is not listed). */
-export function pageOfId(items: ReadonlyArray<{ id: number }>, id: number, pageSize: number): number {
-  const at = items.findIndex((i) => i.id === id);
-  return at < 0 ? 1 : Math.floor(at / Math.max(1, pageSize)) + 1;
-}
-
-// ── the keys of a list ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-/** Where a key moves focus in a list of `count` options when it is on option `at` (-1: none yet): ArrowDown / ArrowUp by one, PageDown / PageUp by ten,
- *  Home and End to the ends. The list stops at its ends. null for any other key; -1 when there is nothing to move to. */
-export function optionAfter(count: number, at: number, key: string): number | null {
-  const moves = ['ArrowDown', 'ArrowUp', 'Home', 'End', 'PageDown', 'PageUp'];
-  if (count <= 0) return moves.includes(key) ? -1 : null;
-  const last = count - 1;
-  const clamp = (n: number) => Math.max(0, Math.min(last, n));
-  switch (key) {
-    case 'ArrowDown': return clamp(at + 1);
-    case 'ArrowUp': return at < 0 ? last : clamp(at - 1);
-    case 'PageDown': return clamp(at + 10);
-    case 'PageUp': return at < 0 ? last : clamp(at - 10);
-    case 'Home': return 0;
-    case 'End': return last;
-    default: return null;
-  }
 }

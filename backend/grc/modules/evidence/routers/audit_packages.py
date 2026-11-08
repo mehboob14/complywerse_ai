@@ -8,6 +8,7 @@ import zipfile
 import shutil
 from io import StringIO
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from pydantic import BaseModel
@@ -587,6 +588,28 @@ def export_package(
         "exported_at": package.exported_at.isoformat(),
         "download_url": f"/api/grc/evidence-mgmt/audit-packages/{package_id}/download"
     }
+
+
+@router.get("/{package_id}/download")
+def download_package(
+    package_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """The zip that ``POST /{id}/export`` built (the export used to answer with this address and nothing served it).
+
+    Only a file inside the packages folder is ever sent. If it is gone (a server that was rebuilt, a cleaned disk) the answer says to export again
+    instead of a bare 404. Every download is a row of the package's access log."""
+    package = get_package_or_404(package_id, current_user, db)
+    if package.status != "exported" or not package.export_path:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This package has not been exported yet. Export it first.")
+    root = os.path.realpath(AUDIT_PACKAGES_UPLOAD_DIR)
+    path = os.path.realpath(package.export_path)
+    if not path.startswith(root + os.sep) or not os.path.isfile(path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="The export file is no longer on the server. Export the package again.")
+    db.add(AuditPackageAccessLog(package_id=package_id, user_id=current_user.id, action="downloaded"))
+    db.commit()
+    return FileResponse(path, media_type="application/zip", filename=f"audit-package-{package.id}.zip")
 
 
 @router.post("/{package_id}/legal-hold")

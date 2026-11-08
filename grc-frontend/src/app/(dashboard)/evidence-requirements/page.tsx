@@ -15,6 +15,7 @@ import { integer, listOf, text } from '@/lib/addressState';
 import { priority, statusPill } from '@/lib/status';
 import { requirementStatus } from '@/lib/statuses/evidence';
 import { PageHeader } from '@/components/ui';
+import { EvidenceTabs } from '../evidence/_tabs/EvidenceTabs';
 import { InfoTip } from '@/components/ui/InfoTip';
 import {
   Button, Combobox, EmptyState, ErrorState, Menu, MultiSelect, Notice, Pager, ReadOnlyNote, RegisterTable, Skeleton, StatTile, StatusPill, TextInput, useAddressState,
@@ -86,17 +87,20 @@ export default function EvidenceRequirementsPage() {
   };
 
   const head = (
-    <PageHeader
-      variant="page"
-      title="Evidence requirements"
-      info="What each control of a framework asks you to show, how often to collect it and what makes it acceptable, with where each requirement stands in review: draft, submitted, pending review, approved or rejected."
-      meta={readOnly ? (
-        <ReadOnlyNote>
-          View only
-          <InfoTip text="Only people who may edit the evidence library can move a requirement through review." label="Why the requirements are view only" />
-        </ReadOnlyNote>
-      ) : undefined}
-    />
+    <div className="flex flex-col gap-[12px]">
+      <PageHeader
+        variant="page"
+        title="Evidence requirements"
+        info="What each control of a framework asks you to show, how often to collect it and what makes it acceptable, with where each requirement stands in review: draft, submitted, pending review, approved or rejected. Approved here means the requirement's wording is approved; it is not the evidence collected for it."
+        meta={readOnly ? (
+          <ReadOnlyNote>
+            View only
+            <InfoTip text="Only people who may edit the evidence library can move a requirement through review." label="Why the requirements are view only" />
+          </ReadOnlyNote>
+        ) : undefined}
+      />
+      <EvidenceTabs current="requirements" />
+    </div>
   );
 
   const picker = (

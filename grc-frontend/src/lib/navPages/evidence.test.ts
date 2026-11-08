@@ -1,9 +1,8 @@
 // node --test "src/lib/navPages/evidence.test.ts"
-// The navigation-registry entries of the Evidence Management group's own pages (`/evidence` and `/evidence-requirements`; the item page, the audit packages and the
-// coverage page belong to the next builders and stay commented out of navPages/evidence.ts): every page of the two folders that is declared has exactly one entry, every
-// entry that says it draws its own heading has a page that does, the page's heading is the registry's name, and the top bar names the section.
-// `/evidence-requirements` is written in navPages/evidence.ts but not enabled: the registry's rules need the Evidence Management leaf in navAccess.ts to carry
-// `activeMatch: '/evidence-requirements'` first (see the comment there); this test holds that state, and keeps holding once the line is enabled.
+// The navigation-registry entries of the Evidence Management pages: every page.tsx under the two folders has exactly one entry, every entry that says it draws its own heading has a page that
+// does (with the registry's name as its heading), the top bar names the section for those, the sidebar's Evidence Management leaf lights the Requirements page, and the three pages that are
+// not the leaf say where they open from (the strip of tabs under the head is page-local, so none of them is a registry tab). The record page /evidence/[id] belongs to the next group and
+// is declared without `ownHeading` until its page moves to the kit.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
@@ -15,15 +14,15 @@ import { ownHeadingSection, registryNamesPage, routeFor, routes, titleFor } from
 import { LEAVES, PAGES } from './evidence.ts';
 
 const DASHBOARD = fileURLToPath(new URL('../../app/(dashboard)/', import.meta.url));
-const NOT_MINE = ['[id]', 'audit-packages', 'coverage'];            // the other Evidence builders' pages (and their folders)
+const RECORD = '[id]';                                              // the record page's folder (its own group)
 
-/** `evidence-requirements/page.tsx` -> `/evidence-requirements`, `evidence/page.tsx` -> `/evidence`, for the folders this group owns. */
-function ownPages(): string[] {
+/** `evidence-requirements/page.tsx` -> `/evidence-requirements`, `evidence/audit-packages/page.tsx` -> `/evidence/audit-packages`, for the folders of this group. */
+function pagesOfFolders(): string[] {
   const out: string[] = [];
   const walk = (folder: string, base: string) => {
     if (existsSync(`${DASHBOARD}${folder}/page.tsx`)) out.push(base);
     for (const entry of readdirSync(`${DASHBOARD}${folder}`, { withFileTypes: true })) {
-      if (entry.isDirectory() && !NOT_MINE.includes(entry.name) && !entry.name.startsWith('_')) walk(`${folder}/${entry.name}`, `${base}/${entry.name}`);
+      if (entry.isDirectory() && entry.name !== RECORD && !entry.name.startsWith('_')) walk(`${folder}/${entry.name}`, `${base}/${entry.name}`);
     }
   };
   walk('evidence', '/evidence');
@@ -33,51 +32,50 @@ function ownPages(): string[] {
 
 const pageFile = (path: string) => readFileSync(`${DASHBOARD}${path.slice(1)}/page.tsx`, 'utf8');
 const entry = (path: string) => routes.filter((e) => e.path === path);
-const REQUIREMENTS = '/evidence-requirements';
 
-test('the two folders hold the two pages; /evidence is a sidebar leaf; the three Evidence-details pages are declared (by R-REG) without ownHeading until their builder moves them to the kit', () => {
-  assert.deepEqual(ownPages().sort(), ['/evidence', REQUIREMENTS]);
-  assert.equal(entry('/evidence').length, 1, 'the sidebar leaf is the entry');
-  assert.ok(entry(REQUIREMENTS).length <= 1, 'declared at most once');
-  assert.deepEqual(PAGES.map((p) => p.path).filter((p) => p !== REQUIREMENTS), ['/evidence/:id', '/evidence/audit-packages', '/evidence/coverage'], 'the details pages are declared in PAGES, in the order of the folder');
-  for (const details of ['/evidence/:id', '/evidence/audit-packages', '/evidence/coverage']) {
-    assert.equal(entry(details).length, 1, `${details} has its entry`);
-    assert.equal(entry(details)[0].ownHeading, undefined, `${details}: its page does not draw the kit head yet, so the top bar keeps naming it`);
-  }
+test('every page of the two folders has exactly one entry: the sidebar leaf, the four pages declared here, and the record page (declared for its next group)', () => {
+  assert.deepEqual(pagesOfFolders().sort(), ['/evidence', '/evidence-requirements', '/evidence/audit-packages', '/evidence/coverage']);
+  for (const path of ['/evidence', '/evidence-requirements', '/evidence/audit-packages', '/evidence/coverage', '/evidence/:id']) assert.equal(entry(path).length, 1, path);
+  assert.deepEqual(PAGES.map((p) => p.path), ['/evidence/:id', '/evidence/audit-packages', '/evidence/coverage', '/evidence-requirements']);
+  assert.equal(entry('/evidence/:id')[0].ownHeading, undefined, 'the record page does not draw the kit head yet, so the top bar keeps naming it');
 });
 
-test('the requirements catalogue entry, once enabled, is what the code says: no link opens it, it hangs under Evidence Management, it draws its own heading', () => {
-  const declared = entry(REQUIREMENTS)[0];
-  const sidebarReady = activeNavHref(REQUIREMENTS, navigation) === '/evidence';
-  if (!declared) {
-    assert.equal(sidebarReady, false, 'the entry is waiting for navAccess.ts: when the leaf lights this page, enable the entry in navPages/evidence.ts');
-    assert.equal(ownHeadingSection(REQUIREMENTS), undefined);
-    return;
+test('the pages of the tab strip say where they open from, hang under Evidence Management, and the forward is a page with no head of its own', () => {
+  for (const path of ['/evidence/audit-packages', '/evidence/coverage', '/evidence-requirements']) {
+    const e = entry(path)[0];
+    assert.equal(e.area, 'compliance-management', path);
+    assert.equal(e.parent, '/evidence', path);
+    assert.ok(e.hidden && e.hidden.length > 10, `${path}: says where it opens from`);
+    assert.equal(e.tab, undefined, `${path}: the strip is page-local, not a registry tab`);
   }
-  assert.equal(declared.label, 'Evidence requirements');
-  assert.equal(declared.area, 'compliance-management');
-  assert.equal(declared.parent, '/evidence');
-  assert.match(declared.hidden ?? '', /no link opens it/);
-  assert.equal(declared.ownHeading, true);
-  assert.equal(sidebarReady, true, 'the page lights the menu entry it hangs under');
-  assert.equal(ownHeadingSection(REQUIREMENTS), 'Compliance Management');
-  assert.equal(registryNamesPage(REQUIREMENTS), true);
-  assert.equal(titleFor(REQUIREMENTS), 'Evidence requirements');
-  assert.equal(routeFor(`${REQUIREMENTS}/`)?.path, REQUIREMENTS, 'a trailing slash is the same page');
+  assert.match(entry('/evidence/coverage')[0].hidden ?? '', /forwards to the Insights tab/);
+  assert.equal(entry('/evidence/coverage')[0].ownHeading, undefined, 'the forward draws nothing');
+  assert.doesNotMatch(pageFile('/evidence/coverage'), /PageHeader/);
+});
+
+test('the sidebar leaf lights the Requirements page (its activeMatch), and the top bar names the section for the pages that draw their own heading', () => {
+  assert.equal(activeNavHref('/evidence-requirements', navigation), '/evidence');
+  assert.equal(activeNavHref('/evidence', navigation), '/evidence');
+  for (const path of ['/evidence', '/evidence-requirements', '/evidence/audit-packages']) {
+    assert.equal(ownHeadingSection(path), 'Compliance Management', path);
+    assert.equal(registryNamesPage(path), true, path);
+  }
+  assert.equal(titleFor('/evidence-requirements'), 'Evidence requirements');
+  assert.equal(titleFor('/evidence/audit-packages'), 'Audit packages');
+  assert.equal(routeFor('/evidence-requirements/')?.path, '/evidence-requirements', 'a trailing slash is the same page');
 });
 
 test('an entry that says it draws its own heading has a page that does, with the registry\'s name as its heading', () => {
-  for (const path of ownPages()) {
+  for (const path of pagesOfFolders()) {
     const e = entry(path)[0];
     if (!e || !e.ownHeading) continue;
     const source = pageFile(path);
     assert.match(source, /<PageHeader\s+variant="page"/, `${path} draws the kit's page head`);
     assert.ok(source.includes(`title="${e.label}"`), `${path}: the heading is "${e.label}"`);
   }
-  // the catalogue's page head is written to the registry's name whether or not its entry is enabled yet
-  assert.match(pageFile(REQUIREMENTS), /<PageHeader\s+variant="page"\s+title="Evidence requirements"/);
+  assert.deepEqual(pagesOfFolders().filter((p) => entry(p)[0]?.ownHeading).sort(), ['/evidence', '/evidence-requirements', '/evidence/audit-packages']);
 });
 
-test('the group file declares leaves only for pages that moved to the kit (each with ownHeading)', () => {
+test('the group file declares leaves only for pages on the kit (each with ownHeading)', () => {
   for (const [path, extra] of Object.entries(LEAVES)) assert.equal(extra.ownHeading, true, `${path}: a leaf of this group is declared when its page draws the kit head`);
 });
