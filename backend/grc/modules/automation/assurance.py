@@ -297,11 +297,7 @@ def get_control_assurance(
     nc_id = _nc_or_404(db, scf_id, tenant_id)
 
     ensure_tables(db)
-    wi = _get_or_create_work_item(db, tenant_id, "normalized", nc_id,
-                                  created_by=getattr(current_user, "id", None))
-    if wi is None:
-        raise HTTPException(status_code=404, detail=f"No control {scf_id} in this tenant's catalog")
-    db.commit()
+    wi = _work_item_as_it_stands(db, tenant_id, nc_id)
 
     linked = _linked_evidence(db, tenant_id, nc_id)
     automated = _automated_results(db, tenant_id, scf_id)
@@ -326,7 +322,6 @@ def get_control_assurance(
     state = (db.query(SCFControlState)
              .filter(SCFControlState.tenant_id == tenant_id, SCFControlState.scope_id == scope.id,
                      SCFControlState.scf_id == scf_id).first())
-    db.commit()
 
     return {
         "scf_id": scf_id,
@@ -607,6 +602,34 @@ def _control_work_item(db: Session, current_user: GRCUser, scf_id: str) -> Tuple
     return tenant_id, nc_id, wi
 
 
+def _work_item_as_it_stands(db: Session, tenant_id: int, nc_id: int) -> ControlWorkItem:
+    """The control's work item for a READ. A control nobody has acted on has none yet and a GET must not
+    make one (hard rule 8; it also made "tracked" depend on who had browsed): the answer then has the
+    shape of an empty item (no id, the defaults). Anything that writes still goes through
+    `_control_work_item`, which creates it; `POST .../assurance/track` does just that."""
+    wi = (db.query(ControlWorkItem)
+          .filter(ControlWorkItem.tenant_id == tenant_id, ControlWorkItem.source_type == "normalized",
+                  ControlWorkItem.source_id == nc_id).first())
+    if wi is not None:
+        return wi
+    # not added to the session: a plain value to read from
+    return ControlWorkItem(tenant_id=tenant_id, source_type="normalized", source_id=nc_id, implementation_status="not_started",
+                           priority="medium", is_key_control=False, assigned_user_ids=[])
+
+
+@router.post("/controls/{scf_id}/assurance/track")
+def track_control(
+    scf_id: str,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_testing_edit),
+):
+    """Start tracking this control for testing: creates its work item (idempotent). The Assurance reads no longer do it."""
+    _, _, wi = _control_work_item(db, current_user, scf_id)
+    db.commit()
+    return {"scf_id": scf_id, "work_item": _serialize_item(db, wi)}
+
+
 def _users(db: Session, ids: Iterable[Optional[int]]) -> Dict[int, str]:
     ids = {i for i in ids if i}
     if not ids:
@@ -621,6 +644,8 @@ def _iso(v) -> Optional[str]:
 
 def _testing_record(db: Session, wi: ControlWorkItem) -> Dict[str, Any]:
     """Procedures with their outcomes and files, tests with their samples."""
+    if wi.id is None:                       # a control not tracked yet (see _work_item_as_it_stands): nothing has been recorded
+        return {"procedures": [], "control_files": [], "tests": []}
     procs = (db.query(ControlWorkTestProcedure)
              .filter(ControlWorkTestProcedure.work_item_id == wi.id)
              .order_by(ControlWorkTestProcedure.seq, ControlWorkTestProcedure.id).all())
@@ -716,8 +741,10 @@ def get_testing_record(
     current_user: GRCUser = Depends(require_auth),
 ):
     """Procedures, tests and samples, plus the sampling guidance for this control."""
-    _, _, wi = _control_work_item(db, current_user, scf_id)
-    db.commit()
+    tenant_id = get_user_primary_tenant(current_user, db)
+    nc_id = _nc_or_404(db, scf_id, tenant_id)
+    ensure_tables(db)
+    wi = _work_item_as_it_stands(db, tenant_id, nc_id)
     record = _testing_record(db, wi)
     record["sampling"] = {
         "key_control": bool(wi.is_key_control),
