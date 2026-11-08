@@ -154,7 +154,7 @@ export default function CreatePanel({ open, mode, onMode, onClose }: { open: boo
         ) : (
           <form className="flex flex-col gap-[16px]" onSubmit={(e) => { e.preventDefault(); if (canSubmit && !busy) submit(); }}>
             <FormField label="Title" required>
-              <TextInput autoFocus value={manual.title} maxLength={500} placeholder="e.g. Guidelines on cloud outsourcing" onChange={(e) => setManual({ ...manual, title: e.target.value })} />
+              <TextInput value={manual.title} maxLength={500} placeholder="e.g. Guidelines on cloud outsourcing" onChange={(e) => setManual({ ...manual, title: e.target.value })} />
             </FormField>
             <div className="grid gap-[12px] sm:grid-cols-2">
               <FormField label="Regulator">

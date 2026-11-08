@@ -95,7 +95,7 @@ export function TaskEditor({ changeId, task, onClose }: { changeId: number; task
     >
       <form className="flex flex-col gap-[16px]" onSubmit={(e) => { e.preventDefault(); if (!busy) save(); }}>
         <FormField label="Title" required error={!ok && changed.includes('title') ? 'Say what needs doing.' : undefined}>
-          <TextInput value={form.title} maxLength={500} autoFocus={isNew} placeholder="What needs doing" onChange={(e) => set({ title: e.target.value })} />
+          <TextInput value={form.title} maxLength={500} placeholder="What needs doing" onChange={(e) => set({ title: e.target.value })} />
         </FormField>
         {!isNew && <FormField label="Status"><SegmentedControl label="Status" name="task-status" options={STATUS_OPTIONS} value={form.status} onChange={(v) => set({ status: v })} /></FormField>}
         <div className="grid gap-[12px] sm:grid-cols-2">

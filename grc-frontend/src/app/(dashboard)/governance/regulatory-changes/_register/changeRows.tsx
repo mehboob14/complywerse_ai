@@ -20,10 +20,10 @@ import { EffectiveCell, OwnerCell, RegulatorCell, StatusCell, TasksCell } from '
 const plainClick = (e: { button: number; metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean }) => e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
 
 export const CHANGE_FIT: Record<'status' | 'priority' | 'effective' | 'tasks' | 'obligations' | 'owner', Omit<FitColumn, 'key'>> = {
-  status: { px: 148 },
-  tasks: { px: 132, dropRank: 5 },
-  effective: { px: 112, dropRank: 4 },
-  priority: { px: 92, dropRank: 3 },
+  status: { px: 172 },
+  tasks: { px: 132, dropRank: 4 },
+  effective: { px: 116, dropRank: 5 },
+  priority: { px: 112, dropRank: 3 },
   obligations: { px: 112, dropRank: 2 },
   owner: { px: 68, dropRank: 1, wide: { px: 168, titleMin: 420 } },
 };

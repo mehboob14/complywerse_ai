@@ -237,7 +237,7 @@ function AddObligation({ changeId, open, onClose }: { changeId: number; open: bo
     >
       <form className="flex flex-col gap-[16px]" onSubmit={(e) => { e.preventDefault(); if (ok && !add.isPending) { setProblem(''); add.mutate(); } }}>
         <FormField label="What the circular requires" required hint="At least a few words.">
-          <Textarea autoFocus rows={3} maxLength={4000} value={draft.summary} onChange={(e) => setDraft({ ...draft, summary: e.target.value })} placeholder="e.g. Report every major cyber incident to the State Bank within 24 hours" />
+          <Textarea rows={3} maxLength={4000} value={draft.summary} onChange={(e) => setDraft({ ...draft, summary: e.target.value })} placeholder="e.g. Report every major cyber incident to the State Bank within 24 hours" />
         </FormField>
         <div className="grid gap-[12px] sm:grid-cols-3">
           <FormField label="Clause" optional><TextInput value={draft.ref} maxLength={120} placeholder="e.g. 4.2" onChange={(e) => setDraft({ ...draft, ref: e.target.value })} /></FormField>

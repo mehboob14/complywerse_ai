@@ -33,7 +33,7 @@ export function AddFeedPanel({ open, onClose }: { open: boolean; onClose: () => 
     >
       <form className="flex flex-col gap-[16px]" onSubmit={(e) => { e.preventDefault(); if (!create.isPending) submit(); }}>
         <FormField label="Feed name" required error={shown && !form.name.trim() ? 'Give the feed a name.' : undefined}>
-          <TextInput autoFocus value={form.name} maxLength={255} placeholder="e.g. SBP press releases" onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          <TextInput value={form.name} maxLength={255} placeholder="e.g. SBP press releases" onChange={(e) => setForm({ ...form, name: e.target.value })} />
         </FormField>
         <FormField label="Feed address" required hint="Starts with https://" error={shown && form.name.trim() && why ? why : undefined}>
           <TextInput type="url" value={form.source_url} maxLength={1000} placeholder="https://example.org/rss/feed.xml" onChange={(e) => setForm({ ...form, source_url: e.target.value })} />

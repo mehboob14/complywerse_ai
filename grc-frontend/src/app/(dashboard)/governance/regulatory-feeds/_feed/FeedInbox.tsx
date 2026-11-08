@@ -58,6 +58,8 @@ export function FeedInbox({ canCreate, onAdd }: { canCreate: boolean; onAdd: () 
   const at = selected ? items.findIndex((i) => i.id === selected.id) : -1;
   const select = useCallback((id: number) => setAddress({ item: id }), [setAddress]);
   const after = (id: number) => { const i = items.findIndex((x) => x.id === id); return items[i + 1]?.id ?? items[i - 1]?.id ?? 0; };
+  /** An item that left this tab (it was converted, set aside, put back): the reader moves to the next one instead of saying the item is gone. */
+  const leave = (id: number) => { if (tab !== 'all' && selectedId === id) select(after(id)); };
 
   const ids = useMemo(() => items.map((i) => i.id), [items]);
   useExplorerKeys({
@@ -72,20 +74,23 @@ export function FeedInbox({ canCreate, onAdd }: { canCreate: boolean; onAdd: () 
   const analyze = useReportedMutation({
     mutationFn: (id: number) => feedApi.analyze(id),
     success: { title: 'Analysis ready', message: 'Read it, then convert it to a regulatory change or mark it not relevant.' }, failure: "Couldn't analyse the item", invalidate,
+    // the item is Analyzed now: follow it there, so the person reads the analysis they asked for
+    onSuccess: (_, id) => { if (tab === 'new') setAddress({ status: 'analyzed', item: id }); },
   });
   const convert = useReportedMutation({
     mutationFn: async (id: number) => (await feedApi.convert(id)).data as { id: number },
     failure: "Couldn't convert the item", retryable: false, invalidate,
-    onSuccess: (made) => { const w = convertedWords(); notify.success(w.message, { title: w.title, action: { label: 'Open the change', onClick: () => router.push(changeHref(made.id)) } }); },
+    onSuccess: (made, id) => { const w = convertedWords(); notify.success(w.message, { title: w.title, action: { label: 'Open the change', onClick: () => router.push(changeHref(made.id)) } }); leave(id); },
   });
   const restore = useReportedMutation({
     mutationFn: (id: number) => feedApi.restore(id), success: 'Put back in the list', failure: "Couldn't put the item back", invalidate,
+    onSuccess: (_, id) => leave(id),
   });
   const dismiss = useReportedMutation({
     mutationFn: (id: number) => feedApi.dismiss(id), failure: "Couldn't mark the item", invalidate,
     onSuccess: (_, id) => {
       notify.success('It is under Not relevant now.', { title: 'Marked not relevant', action: { label: 'Undo', onClick: () => restore.mutate(id) } });
-      if (selectedId === id) select(after(id));
+      leave(id);
     },
   });
   const busyFor = (id: number) => ({
@@ -113,7 +118,7 @@ export function FeedInbox({ canCreate, onAdd }: { canCreate: boolean; onAdd: () 
       <TextInput
         ref={searchRef} type="search" value={address.q} onChange={(e) => setAddress({ q: e.target.value, item: 0 })} aria-label="Search the feed" placeholder="Search the feed" autoComplete="off" className="max-w-[360px]"
       />
-      {counts.isError && !counts.data && <Notice tone="warning" title="The counts could not be loaded" action={<Button onClick={() => { void counts.refetch(); }}>Retry</Button>}>The items below are still the real ones.</Notice>}
+      {counts.isError && !counts.data && <Notice tone="warning" title="The counts could not be loaded" action={<Button onClick={() => { void counts.refetch(); }}>Retry</Button>}>The numbers beside the tabs are not shown until they load.</Notice>}
       {cut && <Notice tone="info" title={`Showing the newest ${formatCount(items.length)} of ${formatCount(total)}`}>Search to find an older item.</Notice>}
       {selectedId > 0 && !selected && !itemsQ.isPending && <Notice tone="warning" title="That item is not in this list" action={<Button variant="ghost" onClick={() => select(0)}>Dismiss</Button>}>It may have been moved to another tab.</Notice>}
 
