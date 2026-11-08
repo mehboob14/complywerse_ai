@@ -56,3 +56,12 @@ export const sortPatch = (scope: Scope, sort: Sort): Partial<HubAddress> => ({ s
 export const tabHref = (tab: Scope): string => (tab === 'journeys' ? '/frameworks' : `/frameworks?tab=${tab}`);
 /** The address that opens one library framework's details (what /frameworks/overview/<id> forwards to). */
 export const libraryOpenHref = (frameworkId: number): string => `/frameworks?tab=library&open=${frameworkId}`;
+
+export type StripKey = 'journeys' | 'library' | 'onboarding';
+export interface StripItem { key: StripKey; label: string; href: string }
+/** The strip under the heading, in order: Onboarding is a page of its own, the other two are registers of /frameworks. */
+export const STRIP: readonly StripItem[] = [
+  { key: 'journeys', label: 'Journeys', href: tabHref('journeys') },
+  { key: 'library', label: 'Library', href: tabHref('library') },
+  { key: 'onboarding', label: 'Onboarding', href: '/frameworks/onboarding' },
+];

@@ -5,7 +5,7 @@ import { readinessBand } from '../../../../lib/journeyModel.ts';
 import { readinessBandWords } from '../../../../lib/statuses/frameworkJourney.ts';
 import { frameworkState, targetWords } from '../../../../lib/statuses/frameworkHub.ts';
 import {
-  KIND_LABEL, NONE, QUICK_LABEL, haystack, inQuick, searchTerms, typeLabel, type HubRow, type Kind, type QuickId, type Scope,
+  NONE, QUICK_LABEL, compareKinds, haystack, inQuick, kindLabel, searchTerms, typeLabel, type HubRow, type QuickId, type Scope,
 } from './hubModel.ts';
 
 export type FacetKey = 'status' | 'state' | 'kind' | 'authority' | 'band' | 'due' | 'type';
@@ -75,7 +75,6 @@ export function ruleOf(f: Filters): Rule<HubRow> {
 // ── the options of the rail ──────────────────────────────────────────────────────────────────────────────────────────────
 export interface Option { value: string; label: string; title?: string }
 const byLabel = (a: Option, b: Option) => a.label.localeCompare(b.label);
-const KIND_ORDER: Kind[] = ['certification', 'compliance', 'other'];
 const BAND_ORDER = ['strong', 'building', 'early', 'start'];
 const DUE_ORDER = ['overdue', 'soon', 'later', 'none', 'done'];
 const JOURNEY_STATES = ['in_progress', 'not_started', 'on_hold', 'completed', 'cancelled'];
@@ -85,13 +84,14 @@ const LIBRARY_STATES = ['idle', 'onboarding', 'ready', 'in_progress', 'not_start
 export function railOptions(rows: readonly HubRow[], scope: Scope): Record<FacetKey, Option[]> {
   const authorities = new Set<string>();
   const types = new Set<string>();
+  const kinds = new Set<string>();
   let noAuthority = false;
-  rows.forEach((r) => { if (r.authority) authorities.add(r.authority); else noAuthority = true; types.add(r.typeKey); });
+  rows.forEach((r) => { if (r.authority) authorities.add(r.authority); else noAuthority = true; types.add(r.typeKey); kinds.add(r.kind); });
   const states = (scope === 'journeys' ? JOURNEY_STATES : LIBRARY_STATES).map((v) => ({ value: v, label: frameworkState.label(v) }));
   return {
     status: states,
     state: states,
-    kind: KIND_ORDER.map((v) => ({ value: v, label: KIND_LABEL[v] })),
+    kind: Array.from(kinds).sort(compareKinds).map((v) => ({ value: v, label: kindLabel(v) })),
     authority: Array.from(authorities).map((v) => ({ value: v, label: v })).sort(byLabel).concat(noAuthority ? [{ value: NONE, label: 'Not recorded' }] : []),
     band: BAND_ORDER.map((v) => ({ value: v, label: readinessBandWords.label(v) })).concat([{ value: NONE, label: 'No figures' }]),
     due: DUE_ORDER.map((v) => ({ value: v, label: targetWords.label(v) })),

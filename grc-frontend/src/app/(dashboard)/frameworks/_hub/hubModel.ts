@@ -67,16 +67,20 @@ export interface OnboardingRow {
 /** The library calls a framework "ISO 27001 Certification"; the hub says "ISO 27001" (the word is the kind's, shown as a chip). */
 export const stripCertificationPostfix = (value?: string | null): string => (value ?? '').replace(/\s+certification\s*$/i, '').trim();
 
-export type Kind = 'certification' | 'compliance' | 'other';
-export const kindOf = (classification?: string | null): Kind => {
-  const c = (classification ?? '').trim().toLowerCase();
-  return c === 'certification' || c === 'compliance' ? c : 'other';
+/** What the library classified a framework as: certification, compliance, regulatory, regulation, voluntary, policy ... (the word itself); 'other' when it has none. */
+export type Kind = string;
+export const OTHER_KIND = 'other';
+export const kindOf = (classification?: string | null): Kind => (classification ?? '').trim().toLowerCase().replace(/\s+/g, '_') || OTHER_KIND;
+export const kindLabel = (kind: Kind): string => (kind === OTHER_KIND ? 'Not classified' : statusLabel(kind));
+/** certification and compliance first (the two the platform has always known), then the others by name, "Not classified" last. */
+export const compareKinds = (a: Kind, b: Kind): number => {
+  const rank = (k: Kind) => (k === 'certification' ? 0 : k === 'compliance' ? 1 : k === OTHER_KIND ? 3 : 2);
+  return rank(a) - rank(b) || a.localeCompare(b);
 };
-export const KIND_LABEL: Record<Kind, string> = { certification: 'Certification', compliance: 'Compliance', other: 'Not classified' };
 
 const TYPE_LABEL: Record<string, string> = { iso: 'ISO', nist: 'NIST', pci_dss: 'PCI DSS', soc2: 'SOC 2', gdpr: 'GDPR', hipaa: 'HIPAA', cobit: 'COBIT', other: 'Custom' };
 export const typeKey = (value?: string | null): string => (value ?? '').trim().toLowerCase() || 'other';
-export const typeLabel = (key: string): string => TYPE_LABEL[key] ?? key.replace(/_/g, ' ').toUpperCase();
+export const typeLabel = (key: string): string => TYPE_LABEL[key] ?? statusLabel(key);
 
 /** Who stands behind the framework: the certification body of a certification, the regulator of a compliance framework (else whichever is recorded). */
 export function authorityOf(fw: Pick<LibraryItem, 'classification' | 'certification_body' | 'regulatory_authority'>): string | null {
@@ -311,7 +315,7 @@ export function sortRows(rows: readonly HubRow[], sort: Sort): HubRow[] {
 // ── search ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
 /** What the search looks at: the name, the framework's type, kind, authority and version, and the state in words. */
 export const haystack = (r: HubRow): string =>
-  `${r.name} ${r.journey ? r.journey.name : ''} ${typeLabel(r.typeKey)} ${KIND_LABEL[r.kind]} ${r.authority ?? ''} ${r.version ?? ''} ${frameworkState.label(r.state)}`.toLowerCase();
+  `${r.name} ${r.journey ? r.journey.name : ''} ${typeLabel(r.typeKey)} ${kindLabel(r.kind)} ${r.authority ?? ''} ${r.version ?? ''} ${frameworkState.label(r.state)}`.toLowerCase();
 export const searchTerms = (q: string): string[] => q.toLowerCase().split(/\s+/).filter(Boolean);
 
 // ── the board ────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -333,10 +337,11 @@ export function boardColumns(scope: Scope, rows: readonly HubRow[]): BoardColumn
       { id: 'completed', label: word('completed'), test: (r) => r.state === 'completed' },
     ];
   const taken = new Set(defs.map((d) => d.id));
-  const extra: BoardColumnDef<HubRow>[] = [
+  const optional: BoardColumnDef<HubRow>[] = [
     { id: 'cancelled', label: word('cancelled'), test: (r) => r.state === 'cancelled' },
     { id: 'unknown', label: word('unknown'), test: (r) => r.state === 'unknown' },
-  ].filter((d) => !taken.has(d.id) && rows.some((r) => d.test(r)));
+  ];
+  const extra = optional.filter((d) => !taken.has(d.id) && rows.some((r) => d.test(r)));
   return groupBoard(rows, defs.concat(extra));
 }
 
@@ -364,6 +369,22 @@ export function nextStep(row: HubRow): NextStep | null {
 /** A framework whose journeys are all finished may start a new one (a new certification cycle): the server allows it, and the old Manage page offered it. */
 export const canStartAnother = (row: HubRow): boolean => row.scope === 'library' && !!row.journey && !isActiveJourney(row.journey.status) && row.frameworkId != null;
 
+// ── the target date in words ─────────────────────────────────────────────────────────────────────────────────────────────
+const days = (n: number): string => `${n} ${n === 1 ? 'day' : 'days'}`;
+/** "Overdue by 3 days", "Due in 12 days", "Due today"; nothing when the date is far off, absent, or the journey is finished. */
+export function dueText(t: Pick<TargetState, 'days' | 'state'>): string | null {
+  if (t.days === null) return null;
+  if (t.state === 'overdue') return `Overdue by ${days(-t.days)}`;
+  if (t.state === 'soon') return t.days === 0 ? 'Due today' : `Due in ${days(t.days)}`;
+  return null;
+}
+
+/** Today as the date input holds it ("2026-11-08"), in the viewer's own calendar (toISOString would be the UTC day and could be yesterday or tomorrow). */
+export function todayDay(now: Date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
 // ── the posture tiles ────────────────────────────────────────────────────────────────────────────────────────────────────
 export interface HubTiles {
   /** journeys with work in them that have figures, and those that have none (said, not counted as zero) */
@@ -374,6 +395,8 @@ export interface HubTiles {
   band: ReadinessBand;
   implementedPct: number;
   implemented: number;
+  /** requirements whose approved evidence meets what they ask for (the numerator of Ready) */
+  approved: number;
   applicable: number;
   open: number;
   /** active journeys with a target within 30 days, and the late ones among them */
@@ -387,7 +410,7 @@ export function hubTiles(journeys: readonly JourneyItem[], today: Date = new Dat
   const states = active.map((j) => targetState(j.target_date, j.status, today).state);
   return {
     counted: p.journeys, missing: p.missing, completed: journeys.length - active.length, readyPct: p.readyPct, band: readinessBand(p.journeys > 0 ? p.readyPct : null),
-    implementedPct: p.implementedPct, implemented: p.implemented, applicable: p.applicable, open: p.open,
+    implementedPct: p.implementedPct, implemented: p.implemented, approved: p.approved, applicable: p.applicable, open: p.open,
     dueSoon: states.filter((s) => s === 'overdue' || s === 'soon').length, overdue: states.filter((s) => s === 'overdue').length,
   };
 }

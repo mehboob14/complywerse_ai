@@ -4,8 +4,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
+import { targetState } from '../../../../lib/journeyModel.ts';
 import {
-  boardColumns, canStartAnother, currentJourney, dedupeFrameworks, authorityOf, frameworkIdOf, haystack, headMeta, hubTiles, inQuick, journeyRows, kindOf, libraryRows, listedLibrary,
+  boardColumns, canStartAnother, compareKinds, dueText, todayDay, currentJourney, dedupeFrameworks, authorityOf, frameworkIdOf, haystack, headMeta, hubTiles, inQuick, journeyRows, kindLabel, kindOf, libraryRows, listedLibrary,
   needsAttention, nextSort, nextStep, quickCounts, searchTerms, sortFor, sortRows, stageOf, stripCertificationPostfix, typeLabel, DEFAULT_SORT,
   type HubRow, type JourneyItem, type LibraryItem, type OnboardingRow,
 } from './hubModel.ts';
@@ -30,9 +31,12 @@ const LIB = [fw(1, 'ISO 27001 Certification'), fw(2, 'PCI DSS', { classification
 test('names: the library says "ISO 27001 Certification", the hub says "ISO 27001"; kind, type and authority are read the way the pages always read them', () => {
   assert.equal(stripCertificationPostfix('ISO 27001 Certification'), 'ISO 27001');
   assert.equal(stripCertificationPostfix('  Certification of Origin '), 'Certification of Origin', 'only a trailing word');
-  assert.deepEqual(['certification', 'Compliance', null, 'x'].map(kindOf), ['certification', 'compliance', 'other', 'other']);
+  assert.deepEqual(['certification', 'Compliance', null, '', ' Regulatory '].map(kindOf), ['certification', 'compliance', 'other', 'other', 'regulatory']);
+  assert.deepEqual(['certification', 'regulatory', 'other'].map(kindLabel), ['Certification', 'Regulatory', 'Not classified'], 'the other classifications of the library are named, not lumped together');
+  assert.deepEqual(['other', 'voluntary', 'compliance', 'certification', 'regulatory'].sort(compareKinds), ['certification', 'compliance', 'regulatory', 'voluntary', 'other']);
   assert.equal(typeLabel('pci_dss'), 'PCI DSS');
-  assert.equal(typeLabel('weird_thing'), 'WEIRD THING');
+  assert.equal(typeLabel('weird_thing'), 'Weird thing');
+  assert.equal(typeLabel('regulatory'), 'Regulatory', 'a type the platform has no acronym for is said as a word, not shouted');
   assert.equal(authorityOf(fw(1, 'A')), 'BSI', 'a certification: its body');
   assert.equal(authorityOf(fw(2, 'B', { classification: 'compliance', regulatory_authority: 'NCA', certification_body: 'BSI' })), 'NCA', 'a compliance framework: its regulator');
   assert.equal(authorityOf(fw(3, 'C', { certification_body: null })), null, 'neither recorded: not recorded');
@@ -201,6 +205,7 @@ test('posture tiles are the journey model\'s figures over the journeys with work
   assert.equal(t.implemented, 80, 'verified are already in implemented: never added');
   assert.equal(t.implementedPct, 44.4);
   assert.equal(t.readyPct, 33.3, '60 of 180 requirements have approved evidence');
+  assert.equal(t.approved, 60);
   assert.equal(t.band, 'early', '33.3 is under the 50 line of Building and over the 25 line of Early');
   assert.equal(t.open, 100, 'requirements still to do on the counted journeys: 50 + 50 not started, none in progress');
   assert.deepEqual([t.dueSoon, t.overdue], [2, 1], 'overdue and due within 30 days among the journeys with work in them (a missing payload still has a date)');
@@ -213,4 +218,18 @@ test('the line under the heading is true totals', () => {
   assert.equal(headMeta(1, 1), '1 journey · 1 in the library');
   assert.equal(headMeta(null, 35), '35 in the library');
   assert.equal(headMeta(0, null), '0 journeys');
+});
+
+test('the target date in words, and today as a calendar day of the viewer', () => {
+  const t = (day: string | null, status = 'in_progress') => targetState(day, status, TODAY);
+  assert.equal(dueText(t('2026-11-05')), 'Overdue by 3 days');
+  assert.equal(dueText(t('2026-11-07')), 'Overdue by 1 day');
+  assert.equal(dueText(t('2026-11-08')), 'Due today');
+  assert.equal(dueText(t('2026-11-09')), 'Due in 1 day');
+  assert.equal(dueText(t('2026-12-08')), 'Due in 30 days');
+  assert.equal(dueText(t('2027-02-01')), null, 'far off: the date alone');
+  assert.equal(dueText(t(null)), null);
+  assert.equal(dueText(t('2026-01-01', 'completed')), null, 'a finished journey is never late');
+  assert.equal(todayDay(new Date(2026, 10, 8, 23, 59)), '2026-11-08');
+  assert.equal(todayDay(new Date(2026, 0, 3, 0, 1)), '2026-01-03');
 });
