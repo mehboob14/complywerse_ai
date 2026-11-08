@@ -9,7 +9,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { ErrorState, FormField, ReadOnlyNote, SaveBar, SectionCard, SkeletonLines, TextInput, useConfirm, useReportedMutation } from '@/components/ui/ds';
-import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
+import { canRetry, errorMessage, statusOf } from '@/components/ui/ds/reportOutcome';
 import { InfoTip } from '@/components/ui/InfoTip';
 import {
   bodyOf, CONTACT_EMAIL_INFO, contactEmailChanged, contactEmailQuestion, errorsOf, formOf, hasErrors, isDirty, SAVE_FAILED, SAVED, type CompanyForm,
@@ -73,7 +73,10 @@ export default function CompanyDetails() {
   if (company.isError || !company.data) {
     return (
       <SectionCard id="company" title="Company">
-        <ErrorState title="Couldn't open the company details" message={errorMessage(company.error)} onRetry={!company.error || canRetry(company.error) ? () => { void company.refetch(); } : undefined} />
+        <ErrorState
+          title="Couldn't open the company details"
+          message={statusOf(company.error) === 403 ? "You don't have access to the company details. Ask an administrator." : errorMessage(company.error)}
+          onRetry={!company.error || canRetry(company.error) ? () => { void company.refetch(); } : undefined} />
       </SectionCard>
     );
   }
