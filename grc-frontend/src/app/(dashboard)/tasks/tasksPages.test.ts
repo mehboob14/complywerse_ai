@@ -75,7 +75,7 @@ test('every page of the group that draws something draws the kit\'s page head (P
     assert.match(code(read(f)), /<PageHeader[\s\S]{0,40}variant="page"/, f);
   }
   // the tabs' views draw none: they sit under their page's head
-  for (const f of ['tasks/_work/MyWork.tsx', 'tasks/_SettingsTab.tsx', 'tasks/_ReportsView.tsx', 'tasks/_Board.tsx']) assert.doesNotMatch(code(read(f)), /<PageHeader/, f);
+  for (const f of ['tasks/_work/MyWork.tsx', 'tasks/_SettingsTab.tsx', 'tasks/_ReportsView.tsx', 'tasks/_insights/Insights.tsx', 'tasks/_Board.tsx']) assert.doesNotMatch(code(read(f)), /<PageHeader/, f);
   for (const f of ['tasks/my-tasks/page.tsx', 'tasks/reports/page.tsx', 'tasks/sla/page.tsx']) assert.doesNotMatch(code(read(f)), /<PageHeader/, `${f} is a forward`);
 });
 
@@ -96,7 +96,7 @@ test('the rights are the ones the pages always checked: New task needs critical_
   assert.match(work, /NoAccessState/, 'the one place that already decided "no access" says it with the kit');
   const register = ['tasks/_Board.tsx', 'tasks/_register/TaskRegister.tsx', 'tasks/_register/TaskRows.tsx', 'tasks/_register/TaskBoard.tsx', 'tasks/_register/TaskDrawer.tsx', 'tasks/_register/BulkTasks.tsx'].map((f) => code(read(f))).join(' ');
   const front = ['tasks/_work/MyWork.tsx', 'tasks/_work/WorkCard.tsx', 'tasks/_work/LoadCard.tsx', 'tasks/_work/workData.ts', 'tasks/_work/useTaskStep.ts'].map((f) => code(read(f))).join(' ');
-  assert.doesNotMatch(register + front + code(read('tasks/_ReportsView.tsx')), /NoAccessState/, 'no other page decides "no access": the server answers and the page says its words');
+  assert.doesNotMatch(register + front + code(read('tasks/_ReportsView.tsx')) + code(read('tasks/_insights/Insights.tsx')) + code(read('tasks/_insights/AiSheets.tsx')), /NoAccessState/, 'no other page decides "no access": the server answers and the page says its words');
   assert.doesNotMatch(front, /hasPermission\(/, 'My work checks no right to show a step: the person\'s own tasks are the server\'s answer, a step is offered by taskRecord.nextStep (Approve only to the reviewer who is not the owner: what the server lets act)');
   assert.equal((front.match(/isAdmin/g) ?? []).length, 2, 'the one right it reads is whether to OFFER the My Work link (the destructuring and the call of canOpenMyWork)');
   assert.match(code(read('tasks/page.tsx')), /<SettingsTab canEdit=\{canCreate\} \/>/, 'Settings are changed by people who may create tasks: the server\'s module-settings rule (critical_tasks:tasks:create)');
@@ -122,14 +122,18 @@ test('the requests are the old ones: the same API calls, the same bulk and list 
   assert.match(step, /criticalTasksApi\.requestApproval\(v\.task\.id, \{ comment: ''/);
   assert.match(step, /criticalTasksApi\.approveTask\(v\.task\.id, \{ comment: '' \}\)/);
   assert.match(step, /invalidate: TASK_REFRESH\.filter/);
-  assert.match(code(read('tasks/_ReportsView.tsx')), /queryKey: \['task-reports'\]/);
-  assert.match(code(read('tasks/_ReportsView.tsx')), /criticalTasksApi\.reportsSummary\(\)/);
+  const insights = code(read('tasks/_insights/Insights.tsx'));
+  assert.match(insights, /useLeanTasks\(\)/, 'the Reports tab counts the tasks the register loads (one request, the register\'s own numbers), not the server\'s summary: that cannot leave document requests out or be opened in All tasks');
+  assert.doesNotMatch(insights + code(read('tasks/_ReportsView.tsx')), /reportsSummary|task-reports/);
   const bulk = code(read('tasks/_register/BulkTasks.tsx'));
   assert.match(bulk, /\{ task_ids: v\.ids, action: v\.action, assigned_owner_id: v\.assignee \}/);
   assert.match(bulk, /\{ task_ids: v\.ids, action: v\.action, value: v\.value \}/);
   assert.match(bulk, /criticalTasksApi\.bulkAction\(bodyOf\(v\)\)/);
-  assert.match(code(read('tasks/_AiPriorities.tsx')), /criticalTasksApi\.update\(s\.task_id, \{ priority: s\.suggested_priority \}\)/);
-  assert.match(code(read('tasks/_ReportsView.tsx')), /criticalTasksApi\.update\(s\.task_id, \{ assigned_owner_id: s\.suggested_owner_id \}\)/);
+  assert.match(code(read('tasks/_AiPriorities.tsx')), /criticalTasksApi\.update\(r\.taskId, \{ priority: r\.suggested \}\)/, 'a suggestion is applied with just the priority, in the workflow\'s spelling');
+  assert.match(code(read('tasks/_insights/AiSheets.tsx')), /criticalTasksApi\.update\(r\.taskId, \{ assigned_user_ids: r\.people \}\)/, 'a reassignment sends the whole list of people: the old payload (assigned_owner_id) left the old owner on the task');
+  assert.match(code(read('tasks/_insights/AiSheets.tsx')), /criticalTasksApi\.aiPredictEscalations\(\)/);
+  assert.match(code(read('tasks/_insights/AiSheets.tsx')), /criticalTasksApi\.aiBalanceWorkload\(\)/);
+  assert.match(code(read('tasks/_AiPriorities.tsx')), /criticalTasksApi\.aiPrioritize\(\)/);
   assert.match(code(read('tasks/[id]/_workspace/useTaskActions.ts')), /criticalTasksApi\.transition\(taskId, \{ new_status: to \}\)/, 'the task page moves a task with the workflow\'s own transition (the step comment is now a comment in Activity)');
   assert.match(code(read('tasks/[id]/_workspace/SubTasks.tsx')), /criticalTasksApi\.createSubTask\(task\.id, subCreateBody\(v\)\)/, 'a sub-task is made with its title, and its owner and day when chosen');
   assert.match(code(read('tasks/[id]/_workspace/Activity.tsx')), /criticalTasksApi\.addComment\(taskId, \{ content \}\)/);
@@ -142,8 +146,7 @@ test('every mutation that changes a task refreshes what shows it: the board list
   assert.match(code(read('tasks/_create/useCreateTask.ts')), /REFRESH = \[\['critical-tasks'\], \['my-tasks'\], \['task-reports'\]\]/, 'a made task refreshes the lists, My Tasks and the reports');
   assert.match(code(read('tasks/_register/BulkTasks.tsx')), /invalidate: TASK_REFRESH/);
   assert.match(code(read('tasks/_register/taskData.ts')), /TASK_REFRESH[^=]*= \[\['critical-tasks'\], \['critical-task'\], \['my-tasks'\], \['task-reports'\]\]/, 'a bulk write refreshes the list, the open task, My Tasks and the reports');
-  assert.match(code(read('tasks/_AiPriorities.tsx')), /invalidate: \[\['critical-tasks'\]\]/);
-  assert.match(code(read('tasks/_ReportsView.tsx')), /invalidate: \[\['task-reports'\], \['critical-tasks'\]\]/);
+  assert.match(code(read('tasks/_insights/SuggestionRows.tsx')), /invalidate: TASK_REFRESH/, 'an applied AI suggestion (a priority, a reassignment) refreshes the list, the open task, My Tasks and the reports');
   for (const f of ['tasks/[id]/_workspace/useTaskActions.ts', 'tasks/[id]/_workspace/SubTasks.tsx', 'tasks/[id]/_workspace/Activity.tsx', 'tasks/[id]/_workspace/AiSheet.tsx']) assert.match(code(read(f)), /invalidate: TASK_REFRESH/, `${f}: a write on the task page refreshes the task, the lists, My Tasks and the reports`);
 });
 
