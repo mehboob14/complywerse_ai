@@ -22,6 +22,11 @@ export const lensApi = {
   setAnswer: async (itemId: number, body: AnswerBody): Promise<Record<string, unknown>> => (await apiClient.put(`${BASE}/items/${itemId}`, body)).data,
   setApplications: async (id: number, assetIds: number[]): Promise<unknown> => (await apiClient.put(`${BASE}/${id}/assets`, { asset_ids: assetIds })).data,
   setTargetLevel: async (id: number, assetId: number, level: number): Promise<unknown> => (await apiClient.put(`${BASE}/${id}/asset-level`, { asset_id: assetId, level })).data,
+  /** the live value of every KPI the platform owns the data for (a read: it writes nothing) */
+  kpiLive: async (): Promise<Record<string, import('@/components/dashboard/kpiShared').LiveMetric>> => (await apiClient.get(`${BASE}/kpi-live`)).data?.metrics ?? {},
+  /** keep today's value of every live KPI (one row per KPI and day): whoever shows KPI trends calls it once per visit, after the read */
+  snapshotKpis: async (): Promise<unknown> => (await apiClient.post(`${BASE}/kpi-live/snapshot`)).data,
+  addKpi: async (id: number, body: { item_number?: string; area_domain?: string; control_description: string; remarks?: string }): Promise<{ id: number }> => (await apiClient.post(`${BASE}/${id}/items`, body)).data,
   applications: async (): Promise<Application[]> => ((await assetsApi.getAll({ limit: 500 })).data ?? []) as Application[],
 };
 

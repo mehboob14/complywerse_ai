@@ -184,13 +184,15 @@ export const PDPL: Profile = {
   facts: (it) => { const f = pdplFacts(it.remarks); return [{ label: 'PDPL reference', value: f.ref }, { label: 'Question', value: f.question, long: true }, { label: 'Evidence to look for', value: it.evidenceReference, long: true }].filter((x) => x.value); },
   tiles: (items) => {
     const t = tally(items);
+    const assessed = t.complied + t.partial + t.notComplied;
+    const pct = assessed ? Math.round(((t.complied + t.partial * 0.5) / assessed) * 100) : 0;
     const scored = items.map((i) => i.maturity).filter((n): n is number => typeof n === 'number');
-    const avg = scored.length ? scored.reduce((a, b) => a + b, 0) / scored.length : 0;
+    const avg = scored.length ? scored.reduce((a, b) => a + b, 0) / scored.length : null;
     return [
-      { label: 'Compliant', value: count(t.complied), unit: `of ${count(t.total)}`, progress: t.total ? Math.round((t.complied / t.total) * 100) : null, tone: t.complied ? 'success' : 'default', info: 'Controls scored 3 or more.' },
-      { label: 'Partial', value: count(t.partial), note: 'scored 1 or 2', tone: t.partial ? 'warning' : 'default' },
-      { label: 'Not compliant', value: count(t.notComplied), note: 'scored 0', tone: t.notComplied ? 'danger' : 'default' },
-      { label: 'Not assessed', value: count(t.open), note: scored.length ? `average maturity ${avg.toFixed(1)} of 5` : undefined },
+      { label: 'Compliance', value: assessed ? `${pct}%` : '—', progress: assessed ? pct : null, info: 'Among the controls assessed: compliant controls count whole, partial ones half.' },
+      { label: 'Average maturity', value: avg === null ? '—' : avg.toFixed(1), unit: avg === null ? undefined : 'of 5', note: `${count(scored.length)} scored` },
+      { label: 'Gaps', value: count(t.partial + t.notComplied), tone: t.partial + t.notComplied ? 'warning' : 'default', note: `${count(t.notComplied)} not compliant · ${count(t.partial)} partial`, info: 'Controls scored below 3.' },
+      { label: 'Not assessed', value: count(t.open), note: `${count(t.complied)} compliant` },
     ];
   },
   meter: (items) => { const t = tally(items); return { text: `${count(t.complied)} of ${count(t.total)} compliant`, value: t.total ? Math.round((t.complied / t.total) * 100) : null }; },

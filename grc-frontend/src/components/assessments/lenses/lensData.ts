@@ -216,6 +216,20 @@ export function answerFromMaturity(score: number | null | undefined): ControlSta
   if (score == null || score < 0) return 'in_progress';
   return score >= 3 ? 'complied' : score <= 0 ? 'not_complied' : 'partially_complied';
 }
+/** The kind of document a piece of evidence the toolkit asks for is, so the template downloaded has the right shape (a register is a table, a policy has policy sections). */
+export function artifactTypeOf(name: string): string {
+  const n = name.toLowerCase();
+  if (/\b(policy|policies)\b/.test(n)) return 'Policy';
+  if (/\b(procedure|process|liaison)\b/.test(n)) return 'Procedure';
+  if (/\b(register|records?|ropa|inventory|log|map)\b/.test(n)) return 'Register';
+  if (/\b(plan|roadmap)\b/.test(n)) return 'Plan';
+  if (/\b(report|assessment|dpia|audit)\b/.test(n)) return 'Report';
+  if (/\b(nda|contract|clause|agreement|dpa)\b/.test(n)) return 'Contract';
+  if (/\b(letter|appointment|confirmation|attestation|mandate)\b/.test(n)) return 'Attestation';
+  if (/\b(raci|matrix|chart)\b/.test(n)) return 'Register';
+  if (/\b(form|template|consent)\b/.test(n)) return 'Form/Template';
+  return 'Evidence';
+}
 /** A control only has a gap to record once it is scored below 3. */
 export const isGapScore = (score: number | null | undefined): boolean => score != null && score < 3;
 

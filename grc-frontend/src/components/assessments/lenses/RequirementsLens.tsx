@@ -48,8 +48,12 @@ function scaleOptions(profile: Profile): Array<{ value: string; label: string }>
   return out;
 }
 
-export function RequirementsLens({ profile, assessmentId, readOnly, onChanged, panel }: LensProps & {
+export function RequirementsLens({ profile, assessmentId, readOnly, onChanged, panel, toolbar, groupActions }: LensProps & {
   profile: Profile;
+  /** buttons at the right of the filter bar (Add control) */
+  toolbar?: ReactNode;
+  /** under a group's heading, above its table (Delete this domain) */
+  groupActions?: (g: { name: string; items: LensItem[] }) => ReactNode;
   /** a drawer of the type's own instead of the workspace's (PDPL) */
   panel?: (p: { item: LensItem; prev: LensItem | null; next: LensItem | null; onOpen: (id: number) => void; onClose: () => void; assessmentName: string }) => ReactNode;
 }) {
@@ -204,6 +208,7 @@ export function RequirementsLens({ profile, assessmentId, readOnly, onChanged, p
         {facet && <MultiSelect className="w-full sm:w-auto" label={facet.label} showLabel placeholder="All" options={facet.options(inPart)} value={a.facet} onChange={(v) => set({ facet: v })} />}
         {filtering && <Button size="sm" variant="link" onClick={clear}>Clear filters</Button>}
         <span className="ml-auto text-ds-label text-ds-fg-muted" role="status">{count}{filtering ? ` of ${formatCount(base.length)}` : ''}{a.scope === 'hide' && outside > 0 ? ` · ${formatCount(outside)} above the target hidden` : ''}</span>
+        {toolbar}
       </div>
 
       {rows.length === 0 ? (
@@ -218,6 +223,7 @@ export function RequirementsLens({ profile, assessmentId, readOnly, onChanged, p
                 meta={`${formatCount(g.items.length)} ${g.items.length === 1 ? profile.noun : `${profile.noun}s`} · ${m.text}`}
                 trailing={<span className="w-[96px]"><ProgressBar value={m.value} label={`${g.name} progress`} showValue={false} /></span>}
               >
+                {groupActions && <div className="mb-[8px] flex justify-end">{groupActions(g)}</div>}
                 {table(g.items, `${profile.noun.charAt(0).toUpperCase() + profile.noun.slice(1)}s in ${g.name}`)}
               </AccordionRow>
             );

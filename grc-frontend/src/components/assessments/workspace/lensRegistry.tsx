@@ -27,6 +27,13 @@ export const LENSES: LensDef[] = [
   { key: 'dcc', label: 'Controls', slot: 'controls', appliesTo: (c) => c.format === 'nca_dcc_tool', Component: dynamic(() => import('../lenses/typeLenses').then((m) => m.DccLens)) },
   { key: 'nist', label: 'Determinations', slot: 'controls', appliesTo: (c) => isNist(c.format), Component: dynamic(() => import('./lenses/NistLens')) },
   { key: 'nca', label: 'NCA workspace', slot: 'controls', appliesTo: (c) => c.format === 'nca_container', Component: dynamic(() => import('./lenses/NcaLens')) },
+  { key: 'pdpl', label: 'Controls', slot: 'controls', appliesTo: (c) => c.format === 'pdpl_assessment_toolkit', Component: dynamic(() => import('../lenses/PdplLens')) },
+  { key: 'pdpl-plan', label: 'Action plan', slot: 'tab', appliesTo: (c) => c.format === 'pdpl_assessment_toolkit', Component: dynamic(() => import('../lenses/PdplPlanLens')) },
+  { key: 'dpia', label: 'Risks', slot: 'controls', appliesTo: (c) => c.format === 'dpia_pia', Component: dynamic(() => import('../lenses/DpiaLens')) },
+  { key: 'kpi', label: 'KPIs', slot: 'controls', appliesTo: (c) => c.format === 'kpi_report', Component: dynamic(() => import('../lenses/KpiLens')) },
+  { key: 'nca-vuln', label: 'Vulnerabilities', slot: 'controls', appliesTo: (c) => c.format === 'nca_vuln_register', Component: dynamic(() => import('../lenses/registerLenses').then((m) => m.VulnLens)) },
+  { key: 'nca-audit', label: 'Audits', slot: 'controls', appliesTo: (c) => c.format === 'nca_audit_register', Component: dynamic(() => import('../lenses/registerLenses').then((m) => m.AuditLens)) },
+  { key: 'nca-risk', label: 'Risks', slot: 'controls', appliesTo: (c) => c.format === 'nca_risk_register', Component: dynamic(() => import('../lenses/registerLenses').then((m) => m.RiskLens)) },
   { key: 'workbook', label: 'Workbook', slot: 'tab', appliesTo: (c) => c.format === 'xlsx_maturity', Component: dynamic(() => import('./lenses/WorkbookLens')) },
   { key: 'artifacts', label: 'Artifacts', slot: 'tab', appliesTo: (c) => !c.scoped && c.format !== 'nca_container', Component: dynamic(() => import('./lenses/ArtifactsLens')) },
 ];
