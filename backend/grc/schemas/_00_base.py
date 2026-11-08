@@ -1350,7 +1350,7 @@ class ControlImplementationUpdate(BaseModel):
 class ControlImplementationResponse(BaseModel):
     id: int
     journey_id: int
-    framework_control_id: int
+    framework_control_id: Optional[int] = None      # NULL for a requirement that comes from the parsed library (NDMO, UAE IA, uploaded frameworks)
     status: str
     implementation_notes: Optional[str]
     implementation_date: Optional[datetime]
