@@ -31,8 +31,10 @@ def ai_usage_status(
     return usage.status_payload(_tenant_slug(request))
 
 
-@router.get("/overview")
-def ai_usage_overview(
+# The path is /tracing/overview, not /overview: admin_router.py already serves GET /admin/ai-usage/overview (the token-usage dashboard) and is registered first, so the
+# tracing overview that used to sit here was never reachable (two handlers on one URL; the first wins). tests/test_route_uniqueness.py keeps it that way.
+@router.get("/tracing/overview")
+def ai_usage_tracing_overview(
     request: Request,
     start: Optional[str] = Query(None, description="ISO start datetime (UTC)"),
     end: Optional[str] = Query(None, description="ISO end datetime (UTC)"),
