@@ -41,6 +41,8 @@ export interface RegRow {
   riskId: number | null;
   /** a row the template put there (not one a person added) */
   seed: boolean;
+  /** its place in the register (0 first), when the server says */
+  seq: number | null;
 }
 
 export interface Person { id: number; name: string }
@@ -92,12 +94,12 @@ export function sectionsOf(sections: ReadonlyArray<{ title: string; keys: Readon
 export function rowOfEntry<T extends { id: number }>(entry: T): RegRow {
   const e = entry as unknown as Record<string, unknown>;
   const { data: _data, ...values } = e;
-  return { id: entry.id, values, riskId: (e.risk_register_id as number | null | undefined) ?? null, seed: !!e.is_seed };
+  return { id: entry.id, values, riskId: (e.risk_register_id as number | null | undefined) ?? null, seed: !!e.is_seed, seq: typeof e.seq === 'number' ? e.seq : null };
 }
 
 /** A generated entry (the values live in `data`). */
-export function rowOfData(e: { id: number; is_seed?: boolean; risk_register_id?: number | null; data?: Record<string, unknown> | null }): RegRow {
-  return { id: e.id, values: { ...(e.data ?? {}) }, riskId: e.risk_register_id ?? null, seed: !!e.is_seed };
+export function rowOfData(e: { id: number; seq?: number; is_seed?: boolean; risk_register_id?: number | null; data?: Record<string, unknown> | null }): RegRow {
+  return { id: e.id, values: { ...(e.data ?? {}) }, riskId: e.risk_register_id ?? null, seed: !!e.is_seed, seq: typeof e.seq === 'number' ? e.seq : null };
 }
 
 /** The editable copy of a row, and the empty one for "Add row" (a new Gap Analysis row starts "not started", as it always did). */
@@ -273,17 +275,24 @@ export function tableColumns(cols: RegColumn[], max = 6): TableColumn[] {
 }
 
 // ── names ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-/** What the row is called in a question or a button name ("Delete 4 Context?"): the reference and the main text, cut. */
-export function rowLabel(row: RegRow, cols: RegColumn[], max = 60): string {
+// a value that is only punctuation ("-", an em dash) says nothing
+/** The reference the risk picker writes ("#2007"): the risk's own number, which a person is not shown. */
+export const RISK_NUMBER = /^#\d+$/;
+
+const MEANINGFUL = /[^\s\-‐-―_.,;:|/\\]/;
+
+/** What the row is called in a question or a button name ("Delete 4 Context?"): the reference and the main text, cut. A row with no words is "Row 3" (its place
+ *  in the register) when the server says where it is, else `fallback`. */
+export function rowLabel(row: RegRow, cols: RegColumn[], max = 60, fallback = 'this row'): string {
   const parts: string[] = [];
   for (const c of cols) {
     if (c.kind === 'select' || c.kind === 'owner' || c.kind === 'date' || c.kind === 'datetime') continue;
     const t = String(row.values[c.key] ?? '').trim();
-    if (t) parts.push(t);
+    if (t && MEANINGFUL.test(t) && !RISK_NUMBER.test(t)) parts.push(t);
     if (parts.length === 2) break;
   }
   const text = parts.join(' ').replace(/\s+/g, ' ');
-  if (!text) return 'this row';
+  if (!text) return row.seq != null ? `Row ${row.seq + 1}` : fallback;
   return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
 }
 

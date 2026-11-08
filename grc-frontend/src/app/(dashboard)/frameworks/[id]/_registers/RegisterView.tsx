@@ -4,23 +4,24 @@
 // screen for both kinds of register. A title with what the register is for behind its (i), Add row and AI assess all, search and one filter, a table of
 // the six columns that say the most (the form has all of them), a row that opens its form, a menu per row, and the failures said where they happen.
 // The two adapters (FrameworkRegisterTab, FrameworkDynamicRegisterTab) read the rows and hand them here; the writes live here.
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { ExternalLink, Pencil, Plus, RotateCcw, Search, ShieldAlert, Sparkles, Trash2 } from 'lucide-react';
 import { evidenceApi, frameworkTemplatesApi } from '@/lib/api';
 import {
-  Button, EmptyState, Menu, Notice, RegisterTable, SectionCard, Select, StatusPill, TextInput, linkClasses, useConfirm, useReportedMutation,
+  Button, EmptyState, Menu, Notice, Pager, RegisterTable, SectionCard, Select, StatusPill, TextInput, linkClasses, useConfirm, useReportedMutation,
   type MenuItem, type RegisterColumn,
 } from '@/components/ui/ds';
 import { EMPTY, UNASSIGNED, formatCount, formatPercent } from '@/lib/format';
 import { apiErrorText, safeDetail } from '@/lib/apiError';
+import { pageRange } from '@/lib/pagerModel';
 import MoveToRiskDialog from './MoveToRiskDialog';
 import RegisterForm, { type FormContext } from './RegisterForm';
 import {
   FACET_ALL, aiItemsOf, aiPatchOf, aiRowsOf, bodyOf, cellText, coveragePct, draftOf, facetColumn, facetCounts, matchesFacet,
-  matchesSearch, movedCount, optionOf, ownerName, riskTitleOf, rowLabel, sameDraft, tableColumns, wantsEvidence,
+  matchesSearch, movedCount, optionOf, RISK_NUMBER, ownerName, riskTitleOf, rowLabel, sameDraft, tableColumns, wantsEvidence,
   type AiOut, type ControlLite, type Person, type RegColumn, type RegDef, type RegRow, type RiskLite,
 } from './registerModel';
 
@@ -39,9 +40,9 @@ interface Props {
   queryKey: readonly unknown[];
 }
 
-// A column's room: a pick-list, a person and a day have a fixed one; text shares what is left. A long header wraps instead of widening the table.
-const KIND_WIDTH: Partial<Record<RegColumn['kind'], string>> = { select: 'w-[150px]', owner: 'w-[140px]', date: 'w-[120px]', datetime: 'w-[170px]', auto: 'w-[110px]' };
-const widthOf = (col: RegColumn, i: number): string => `${KIND_WIDTH[col.kind] ?? (i === 0 ? 'min-w-[110px]' : 'min-w-[130px]')} !whitespace-normal`;
+// A column's preferred room (it gives way when the pane is narrow, so the actions column stays in view): a pick-list, a person and a day have less than text. A long header wraps.
+const KIND_WIDTH: Partial<Record<RegColumn['kind'], string>> = { select: 'w-[140px]', owner: 'w-[130px]', date: 'w-[110px]', datetime: 'w-[150px]', auto: 'w-[100px]' };
+const widthOf = (col: RegColumn, i: number): string => `${KIND_WIDTH[col.kind] ?? (i === 0 ? 'w-[120px]' : 'w-[140px]')} !whitespace-normal`;
 
 interface Editing { mode: 'add' | 'edit'; id?: number; draft: Record<string, unknown>; initial: Record<string, unknown> }
 
@@ -57,6 +58,8 @@ export default function RegisterView({ def, rows, loading, error, onRetry, journ
   const [move, setMove] = useState<{ row: RegRow; title: string } | null>(null);
   const [moveProblem, setMoveProblem] = useState<unknown>(null);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
 
   const scope = { journey_id: journeyId, framework_id: frameworkId };
   const facet = useMemo(() => facetColumn(def.columns), [def.columns]);
@@ -146,6 +149,9 @@ export default function RegisterView({ def, rows, loading, error, onRetry, journ
   );
   const counts = useMemo(() => (facet ? facetCounts(rows, facet) : []), [rows, facet]);
   const filtering = query.trim() !== '' || facetValue !== FACET_ALL;
+  useEffect(() => { setPage(1); }, [query, facetValue]);
+  const range = pageRange(page, pageSize, listed.length);
+  const visible = listed.slice(range.from > 0 ? range.from - 1 : 0, range.to);
   const moved = movedCount(rows);
   const facts = loading || error ? undefined : [
     `${formatCount(rows.length)} ${rows.length === 1 ? 'row' : 'rows'}`,
@@ -246,7 +252,7 @@ export default function RegisterView({ def, rows, loading, error, onRetry, journ
             />
             {facet && counts.length > 1 && (
               <Select aria-label={`Show rows by ${facet.label.toLowerCase()}`} value={facetValue} onChange={(e) => setFacetValue(e.target.value)} className="w-full sm:w-[220px]">
-                <option value={FACET_ALL}>{`All ${facet.label.toLowerCase()} values (${formatCount(rows.length)})`}</option>
+                <option value={FACET_ALL}>{`Any ${facet.label.toLowerCase()} (${formatCount(rows.length)})`}</option>
                 {counts.map((c) => <option key={c.value || 'unset'} value={c.value}>{`${c.label} (${formatCount(c.count)})`}</option>)}
               </Select>
             )}
@@ -258,13 +264,16 @@ export default function RegisterView({ def, rows, loading, error, onRetry, journ
         <RegisterTable
           caption={`${def.label} rows`}
           columns={columns}
-          rows={listed}
+          rows={visible}
           getRowId={(r) => r.id}
           loading={loading}
           error={failure}
           onRowActivate={openEdit}
           cardTitle={(r) => rowLabel(r, def.columns, 90)}
           cardActions={menu}
+          footer={listed.length > 25 && !error ? (
+            <Pager page={range.page} pageSize={pageSize} total={listed.length} onPage={setPage} onPageSize={(n) => { setPageSize(n); setPage(1); }} pageSizes={[25, 50, 100]} noun={{ one: 'row', other: 'rows' }} />
+          ) : undefined}
           empty={
             filtering
               ? <EmptyState kind="noMatches" bare title="No rows match" description="Nothing in this register matches the search or the filter." onClearFilters={clearFilters} />
@@ -319,7 +328,8 @@ function Cell({ col, row, people, first }: { col: RegColumn; row: RegRow; people
     const name = ownerName(row, people);
     return name ? <span className="whitespace-nowrap text-ds-body text-ds-fg-body">{name}</span> : <span className="whitespace-nowrap text-ds-body text-ds-fg-muted">{UNASSIGNED}</span>;
   }
-  const words = cellText(col, row, people);
+  const raw = cellText(col, row, people);
+  const words = col.picker === 'framework_risks' && RISK_NUMBER.test(raw) ? 'Linked risk' : raw;
   if (!words) return dash;
   const isCode = first || col.kind === 'auto';
   return (

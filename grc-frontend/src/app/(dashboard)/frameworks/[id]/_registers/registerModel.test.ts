@@ -187,9 +187,15 @@ test('the table keeps at most six columns: reference, main text, where it stands
   assert.equal(small.length, 3);
 });
 
-test('a row is named by its reference and main text, cut; a row with none says "this row"', () => {
+test('a row is named by its reference and main text, cut; a row with no words is "Row N" when its place is known, else "this row"; punctuation says nothing', () => {
   assert.equal(rowLabel(rowOfEntry(entry()), gap.columns), '4 Context Internal and external issues');
-  assert.equal(rowLabel(rowOfEntry(entry({ reference: null, title: null })), gap.columns), 'this row');
+  assert.equal(rowLabel(rowOfEntry(entry({ reference: null, title: null })), gap.columns), 'Row 1');
+  assert.equal(rowLabel(rowOfEntry(entry({ reference: null, title: null, seq: 4 })), gap.columns), 'Row 5');
+  assert.equal(rowLabel({ ...rowOfEntry(entry({ reference: null, title: null })), seq: null }, gap.columns), 'this row');
+  assert.equal(rowLabel({ ...rowOfEntry(entry({ reference: null, title: null })), seq: null }, gap.columns, 60, 'This row'), 'This row');
+  assert.equal(rowLabel(rowOfEntry(entry({ reference: ' - ', title: '—' })), gap.columns), 'Row 1', 'a dash is not a name');
+  assert.equal(rowLabel(rowOfData({ id: 1, seq: 2, data: { goal: '-', outcome: '' } }), dyn.columns), 'Row 3');
+  assert.equal(rowLabel(rowOfEntry(entry({ reference: '#2007', title: 'Laptop theft' })), gap.columns), 'Laptop theft', 'the risk number is not a name');
   const long = rowOfEntry(entry({ title: 'x'.repeat(200) }));
   assert.ok(rowLabel(long, gap.columns).length <= 60);
   assert.match(rowLabel(long, gap.columns), /…$/);
