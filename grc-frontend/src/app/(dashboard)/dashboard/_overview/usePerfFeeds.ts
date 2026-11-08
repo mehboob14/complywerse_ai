@@ -5,7 +5,7 @@
 // final and says so, anything else is tried once more. Nothing here knows what an answer means: that is moduleFeeds.ts.
 import { useQueries } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
-import { FEEDS, type FeedKey } from '@/lib/perf/moduleFeeds';
+import { FEEDS, journeyList, type FeedKey } from '@/lib/perf/moduleFeeds';
 import { loadOf, retryDashboard, type Load } from './overviewModel';
 
 export interface FeedState {
@@ -25,7 +25,11 @@ export function usePerfFeeds(keys: readonly FeedKey[], enabled: boolean): Feeds 
       const feed = FEEDS[key];
       return {
         queryKey: feed.queryKey,
-        queryFn: async () => (await apiClient.get(feed.path, feed.params ? { params: feed.params } : undefined)).data,
+        queryFn: async () => {
+          const data = (await apiClient.get(feed.path, feed.params ? { params: feed.params } : undefined)).data;
+          // the journeys list is shared with the Compliance Overview, which stores it as an array: store the same shape
+          return key === 'journeys' ? journeyList(data) : data;
+        },
         staleTime: 60_000,
         enabled,
         retry: retryDashboard,

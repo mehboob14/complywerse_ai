@@ -19,7 +19,7 @@ const strip = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace
 test('the requests come from lib/perf/moduleFeeds.ts under the module pages\' keys, with the stale time and the retry they had; a failure is thrown, never swallowed into null', () => {
   const hook = strip(files.hook);
   assert.match(hook, /queryKey: feed\.queryKey,/);
-  assert.match(hook, /queryFn: async \(\) => \(await apiClient\.get\(feed\.path, feed\.params \? \{ params: feed\.params \} : undefined\)\)\.data,/);
+  assert.match(hook, /const data = \(await apiClient\.get\(feed\.path, feed\.params \? \{ params: feed\.params \} : undefined\)\)\.data;\s*return key === 'journeys' \? journeyList\(data\) : data;/);
   assert.match(hook, /staleTime: 60_000,\s*enabled,\s*retry: retryDashboard,/);
   assert.doesNotMatch(hook, /\bcatch\b/, 'the old queryFn caught every failure into null, which read as "No data yet"');
   assert.equal((hook.match(/useQuer(y|ies)\(/g) ?? []).length, 1, 'one useQueries for every feed: no request is made anywhere else');
