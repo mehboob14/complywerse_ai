@@ -1,185 +1,123 @@
 'use client';
 
-// RelatedIssuesPanel
-// ─────────────────────────────────────────────────────────────────────────
-// Shared widget — drop onto ANY detail page to surface the Issues linked
-// to that entity. Shows: count chips per severity, list of open issues
-// (max 5), a "Show all" deep-link, and the existing <CreateIssueButton>
-// pre-wired to the same source so users can raise a new issue inline.
-//
-// Used on: vuln detail, asset detail, frameworks journey detail, IS
-// project detail, governance document detail (and any future detail page
-// that touches one of the supported source types).
-
-import { useQuery } from '@tanstack/react-query';
-import Link from 'next/link';
-import { Bug, AlertCircle, ChevronRight, Inbox } from 'lucide-react';
-import { issuesApi } from '@/lib/api';
+// "Issues" on a record's page: the open issues linked to this vulnerability, risk, asset, control, project ... with the "Create issue" button for the same record. Drawn only for a person
+// who may read issues (the server refuses everyone else; it used to say "No open issues" to them). The first five open issues, worst first, each with its severity, its state, how late
+// it is and who has it; the counts are the server's totals over EVERY linked issue, "View all" opens the register filtered to this record, and the closed ones are shown on request.
+// A request that failed says so with Retry: it is never drawn as "no issues". The props are the old panel's.
+import { useId, useState } from 'react';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import {
+  Button, ErrorState, PersonChip, SkeletonRows, StatusPill, TitleLink,
+} from '@/components/ui/ds';
+import { errorMessage } from '@/components/ui/ds/reportOutcome';
+import { formatCount } from '@/lib/format';
+import { statusPill } from '@/lib/status';
+import { severity } from '@/lib/statuses/monitoring';
+import { usePermissions } from '@/hooks/usePermissions';
 import { CreateIssueButton } from './CreateIssueButton';
+import { fetchBySource } from './embedApi';
+import { canCreateFrom, panelView, viewAllHref, type CreatableSource, type PanelRowView, type PanelSource, type Presets } from './embedModel';
+import { issueState } from './embedWords';
 
-interface Issue {
-  id: number;
-  code: string | null;
-  title: string;
-  severity: string | null;
-  workflow_state: string;
-  status: string;
-  sla_breached: boolean;
-  target_closure_date: string | null;
-  created_at: string | null;
-}
-
-interface BySourcePayload {
-  source_type: string;
-  source_id: number;
-  open: Issue[];
-  closed: Issue[];
-  total_open: number;
-  total_closed: number;
-  critical_open: number;
-}
+export const VIEW_ISSUES = 'issue_management:issues:view';
 
 interface Props {
-  sourceType:
-    | 'vulnerability'
-    | 'risk'
-    | 'asset'
-    | 'control_framework'
-    | 'control_parsed'
-    | 'control_normalized'
-    | 'control_internal'
-    | 'evidence'
-    | 'vendor'
-    | 'is_project'
-    | 'governance_document'
-    | 'policy_statement';
+  sourceType: PanelSource;
   sourceId: number;
   /** Optional title (defaults to "Issues"). */
   title?: string;
-  /** Optional inline create-button preset fields (forwarded to CreateIssueButton). */
-  createFields?: Parameters<typeof CreateIssueButton>[0]['presetFields'];
-  /** Smaller variant used inside nested tabs. */
+  /** Optional pre-fill for the Create issue button. */
+  createFields?: Presets;
+  /** The card without its box, for a nested tab. */
   compact?: boolean;
 }
 
-const SEV_TONE: Record<string, string> = {
-  critical: 'border-rose-300 bg-rose-50 text-rose-700',
-  high: 'border-orange-300 bg-orange-50 text-orange-700',
-  medium: 'border-amber-300 bg-amber-50 text-amber-700',
-  low: 'border-blue-200 bg-blue-50 text-blue-700',
-  informational: 'border-slate-200 bg-slate-50 text-slate-600',
-};
-
-const STATE_LABEL: Record<string, string> = {
-  new: 'New',
-  triage: 'Triage',
-  in_progress: 'In Progress',
-  resolution: 'Resolution',
-  closure_review: 'Closure Review',
-  closed: 'Closed',
-  cancelled: 'Cancelled',
-};
-
-export function RelatedIssuesPanel({
-  sourceType, sourceId, title = 'Issues', createFields, compact = false,
-}: Props) {
-  const { data, isLoading } = useQuery<BySourcePayload>({
-    queryKey: ['issues-by-source-panel', sourceType, sourceId],
-    queryFn: async () => (await issuesApi.bySource(sourceType, sourceId)).data,
-    staleTime: 15_000,
-    enabled: !!sourceId,
-  });
-
-  const isControl = sourceType.startsWith('control_');
-  // For the inline create button, only pass source types it actually supports.
-  const createButtonSourceType: Parameters<typeof CreateIssueButton>[0]['sourceType'] | null =
-    sourceType === 'evidence' || sourceType === 'vendor' || sourceType === 'is_project'
-      ? null  // these aren't currently wired into the from-source pre-fill — show list-only
-      : isControl
-        ? (sourceType as 'control_framework' | 'control_parsed' | 'control_normalized' | 'control_internal')
-        : (sourceType as 'vulnerability' | 'risk' | 'asset' | 'governance_document' | 'policy_statement');
-
-  const showCreate = createButtonSourceType !== null;
-
+function Row({ row }: { row: PanelRowView }) {
   return (
-    <div className={`rounded-xl border border-slate-200 bg-white shadow-sm ${compact ? '' : ''}`}>
-      <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2">
-        <div className="flex items-center gap-2">
-          <div className="flex h-6 w-6 items-center justify-center rounded-md bg-rose-50 ring-1 ring-rose-100">
-            <Bug className="h-3.5 w-3.5 text-rose-600" />
-          </div>
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-700">{title}</h3>
-          {data && (
-            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-700">
-              {data.total_open}
-            </span>
-          )}
-          {data && data.critical_open > 0 && (
-            <span className="inline-flex items-center gap-0.5 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-rose-700">
-              <AlertCircle className="h-2.5 w-2.5" />
-              {data.critical_open} crit
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-1.5">
-          {showCreate && createButtonSourceType && (
-            <CreateIssueButton
-              sourceType={createButtonSourceType}
-              sourceId={sourceId}
-              label="New"
-              variant="compact"
-              presetFields={createFields}
-            />
-          )}
-          {data && data.total_open > 0 && (
-            <Link
-              href={`/issues?source_type=${sourceType}&source_id=${sourceId}`}
-              className="inline-flex items-center gap-0.5 text-[10px] font-medium text-blue-600 hover:text-blue-700 hover:underline"
-            >
-              View all <ChevronRight className="h-3 w-3" />
-            </Link>
-          )}
-        </div>
+    <li className="flex min-h-ds-control flex-wrap items-center gap-x-[8px] gap-y-[4px] border-b border-ds-border py-[6px] last:border-b-0">
+      {row.code && <span className="shrink-0 text-ds-label tabular-nums text-ds-fg-muted">{row.code}</span>}
+      <TitleLink href={`/issues/${row.id}`} title={row.title} lines={2} className="min-w-0 flex-1 basis-[12rem]" />
+      <div className="flex flex-wrap items-center gap-[6px]">
+        <StatusPill size="sm" {...statusPill(severity, row.severity)} />
+        <StatusPill size="sm" {...statusPill(issueState, row.state)} />
+        {row.late && <StatusPill size="sm" tone="danger" label={row.late} />}
       </div>
-
-      <div className="p-2">
-        {isLoading ? (
-          <div className="py-4 text-center text-[11px] text-slate-400">Loading…</div>
-        ) : !data || data.total_open === 0 ? (
-          <div className="flex flex-col items-center justify-center py-5 text-center">
-            <Inbox className="mb-1 h-5 w-5 text-slate-300" />
-            <p className="text-[11px] text-slate-500">No open issues linked to this item.</p>
-          </div>
-        ) : (
-          <ul className="space-y-1">
-            {data.open.slice(0, 5).map((i) => {
-              const sev = (i.severity || 'medium').toLowerCase();
-              const tone = SEV_TONE[sev] || SEV_TONE.medium;
-              return (
-                <li key={i.id}>
-                  <Link
-                    href={`/issues/${i.id}`}
-                    className="flex items-center gap-2 rounded-md border border-transparent px-2 py-1 hover:border-slate-200 hover:bg-slate-50"
-                  >
-                    <span className={`rounded border px-1.5 py-px text-[9px] font-bold uppercase ${tone}`}>{sev}</span>
-                    <span className="text-[11px] font-semibold text-slate-700 shrink-0">{i.code}</span>
-                    <span className="text-[11px] text-slate-700 truncate flex-1" title={i.title}>{i.title}</span>
-                    <span className="text-[10px] text-slate-500 shrink-0">{STATE_LABEL[i.workflow_state] || i.workflow_state}</span>
-                    {i.sla_breached && (
-                      <span className="rounded bg-rose-50 px-1 text-[9px] font-bold uppercase text-rose-700 shrink-0">SLA</span>
-                    )}
-                  </Link>
-                </li>
-              );
-            })}
-            {data.open.length > 5 && (
-              <li className="px-2 py-1 text-[10px] text-slate-500 text-center">
-                +{data.open.length - 5} more
-              </li>
-            )}
-          </ul>
-        )}
-      </div>
-    </div>
+      <PersonChip name={row.assignee} size={24} className="shrink-0" />
+    </li>
   );
 }
+
+export function RelatedIssuesPanel({ sourceType, sourceId, title = 'Issues', createFields, compact = false }: Props) {
+  const headingId = useId();
+  const { hasPermission, isLoading: permissionsLoading } = usePermissions();
+  const canView = hasPermission(VIEW_ISSUES);
+  const [showClosed, setShowClosed] = useState(false);
+  const issues = useQuery({
+    queryKey: ['issues-by-source-panel', sourceType, sourceId, showClosed],
+    queryFn: () => fetchBySource(sourceType, sourceId, showClosed),
+    staleTime: 15_000,
+    retry: 1,                                                               // one more try, then say so (three tries kept the card on its skeleton for seven seconds)
+    enabled: !!sourceId && canView,
+    placeholderData: keepPreviousData,                                      // "Show closed" does not blank the card while it reads
+  });
+
+  if (!permissionsLoading && !canView) return null;                         // the server would refuse: nothing is drawn rather than a false "no issues"
+  const view = issues.data ? panelView(issues.data, Date.now()) : null;
+
+  return (
+    <section aria-labelledby={headingId} className={compact ? 'min-w-0' : 'min-w-0 rounded-ds-card border border-ds-border bg-ds-surface p-[16px]'}>
+      <div className="mb-[12px] flex flex-wrap items-center gap-x-[8px] gap-y-[8px]">
+        <h3 id={headingId} className="min-w-0 break-words !text-ds-section !text-ds-fg">{title}</h3>
+        {view && view.totalOpen > 0 && <StatusPill size="sm" tone="neutral" label={`${formatCount(view.totalOpen)} open`} />}
+        {view && view.criticalOpen > 0 && <StatusPill size="sm" tone="danger" label={`${formatCount(view.criticalOpen)} critical`} />}
+        {canCreateFrom(sourceType) && (
+          <div className="ml-auto">
+            <CreateIssueButton sourceType={sourceType as CreatableSource} sourceId={sourceId} presetFields={createFields} />
+          </div>
+        )}
+      </div>
+
+      {permissionsLoading || issues.isLoading ? (
+        <SkeletonRows rows={2} columns={3} label="Loading issues" />
+      ) : issues.isError || !view ? (
+        <ErrorState compact title="Couldn't load the issues" message={errorMessage(issues.error)} onRetry={() => { void issues.refetch(); }} />
+      ) : (
+        <>
+          {view.rows.length === 0 ? (
+            <p className="py-[8px] text-ds-body text-ds-fg-muted">No open issues.</p>
+          ) : (
+            <ul className="m-0 flex list-none flex-col p-0">
+              {view.rows.map((r) => <Row key={r.id} row={r} />)}
+            </ul>
+          )}
+          {(view.totalOpen > 0 || view.totalClosed > 0) && (
+            <div className="mt-[8px] flex flex-wrap items-center gap-x-[12px] gap-y-[4px]">
+              {view.totalOpen > 0 && (
+                <Button variant="link" size="sm" href={viewAllHref(sourceType, sourceId)}>
+                  {view.hidden > 0 ? `View all ${formatCount(view.totalOpen)} in the register` : 'Open in the register'}
+                </Button>
+              )}
+              {view.totalClosed > 0 && (
+                <Button variant="ghost" size="sm" aria-pressed={showClosed} onClick={() => setShowClosed((v) => !v)}>
+                  {showClosed ? 'Hide closed' : `Show closed (${formatCount(view.totalClosed)})`}
+                </Button>
+              )}
+            </div>
+          )}
+          {showClosed && view.closedRows.length > 0 && (
+            <div className="mt-[8px]">
+              <p className="mb-[2px] text-ds-label font-[600] text-ds-fg-muted">Closed</p>
+              <ul className="m-0 flex list-none flex-col p-0">
+                {view.closedRows.map((r) => <Row key={r.id} row={r} />)}
+              </ul>
+              {view.totalClosed > view.closedRows.length && (
+                <p className="mt-[4px] text-ds-label text-ds-fg-muted">Showing {formatCount(view.closedRows.length)} of {formatCount(view.totalClosed)} closed. The rest are in the register.</p>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
