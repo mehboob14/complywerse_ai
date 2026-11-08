@@ -1,93 +1,69 @@
 'use client';
 
-// AI Reprioritize: the AI looks at the board and suggests a priority for the tasks it would change; the person reads each suggestion in a dialog and applies them all or discards. The calls are the
-// old ones (aiPrioritize, then one update per suggestion with just the priority). What changed is what they say: a failed request is a message with Retry (it used to be swallowed), and applying says
-// how many priorities changed and how many could not, instead of closing as if all had worked.
-import { useState } from 'react';
-import Link from 'next/link';
+// AI Reprioritize: the AI looks at the open tasks and suggests a priority for the ones it would change. The answer opens in a sheet beside the page (it was a dialog over it): what the AI read in
+// words (it reads the 50 open tasks created most recently and the old dialog never said so), then one row per suggestion named by the task's title, the priority it has now and the one suggested,
+// the AI's reason and an Apply of its own; "Apply all" is the footer. A suggestion that would change nothing, or names something that is not one of the four priorities, is not offered. The calls
+// are the old ones (aiPrioritize, then one update per suggestion with just the priority); a failed request is a message with Retry, and every row says whether it was applied. The All tasks register
+// mounts the button; the rows and their writes are _insights/SuggestionRows.tsx, the sheet _insights/AiSheets.tsx.
+import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, Sparkles } from 'lucide-react';
+import { Button, EmptyState, useReportedMutation } from '@/components/ui/ds';
 import { criticalTasksApi } from '@/lib/api';
-import { AnimatedModal } from '@/components/ui/AnimatedModal';
-import { Button, EmptyState, useNotify, useReportedMutation } from '@/components/ui/ds';
 import { PriorityPill } from './_ui';
-
-interface Suggestion { task_id?: number; current_priority?: string; suggested_priority?: string; justification?: string }
+import { AiShell } from './_insights/AiSheets';
+import { aiReach, priorityRows, type PriorityRow, type PrioritySuggestion } from './_insights/aiModel';
+import { SuggestionRows, taskCount, useApplyRows, type SuggestionItem } from './_insights/SuggestionRows';
+import { useLeanTasks } from './_register/taskData';
 
 export function AiPriorities() {
-  const notify = useNotify();
-  const [suggestions, setSuggestions] = useState<Suggestion[] | null>(null);
+  const lean = useLeanTasks();
+  const rows = lean.data?.items;
+  const loaded = useRef(rows);
+  loaded.current = rows;
+  const truncated = useRef(false);
+  truncated.current = !!lean.data?.truncated;
+  const [open, setOpen] = useState(false);
+  const [list, setList] = useState<PriorityRow[]>([]);
 
   const ask = useReportedMutation({
     mutationFn: () => criticalTasksApi.aiPrioritize(),
-    success: 'Done',                                                   // not used: the dialog opens with the answer
+    success: 'Done',                                                   // not used: the sheet shows the answer, the wait and the failure
     failure: "AI couldn't suggest priorities",
-    toast: 'errors',
-    onSuccess: (res) => setSuggestions(((res.data as { suggestions?: Suggestion[] } | undefined)?.suggestions) ?? []),
+    toast: 'none',
+    onSuccess: (res) => setList(priorityRows((res.data as { suggestions?: PrioritySuggestion[] } | undefined)?.suggestions, loaded.current ?? [], !!loaded.current && !truncated.current)),
   });
-
-  const apply = useReportedMutation({
-    mutationFn: async (list: Suggestion[]) => {
-      let changed = 0;
-      let failed = 0;
-      let last: unknown = null;
-      for (const s of list) {
-        if (!s.task_id || !s.suggested_priority) continue;
-        try {
-          await criticalTasksApi.update(s.task_id, { priority: s.suggested_priority });
-          changed += 1;
-        } catch (error) {
-          failed += 1;
-          last = error;
-        }
-      }
-      if (changed === 0 && failed > 0) throw last;                      // nothing worked: say so with the server's words and offer Retry
-      return { changed, failed };
-    },
-    success: 'Done',                                                   // not used: the words depend on how many worked
-    failure: "Couldn't change the priorities",
-    invalidate: [['critical-tasks']],
-    toast: 'errors',
-    onSuccess: ({ changed, failed }) => {
-      const tasks = (n: number) => `${n} task${n === 1 ? '' : 's'}`;
-      if (failed > 0) notify.warning(`${tasks(failed)} could not be changed. Open the board and change ${failed === 1 ? 'it' : 'them'} by hand.`, { title: `Changed the priority of ${tasks(changed)}` });
-      else notify.success(`Changed the priority of ${tasks(changed)}`);
-      setSuggestions(null);
-    },
+  const writer = useApplyRows<PriorityRow>({
+    run: (r) => criticalTasksApi.update(r.taskId, { priority: r.suggested }),
+    done: (n) => `Changed the priority of ${taskCount(n)}`,
+    failed: "Couldn't change the priorities",
   });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { writer.reset(); }, [list]);
 
-  const list = suggestions ?? [];
+  const items: SuggestionItem[] = list.map((r) => ({
+    key: r.key, taskId: r.taskId, title: r.title, reason: r.reason,
+    change: <><PriorityPill word={r.current} /><ArrowRight aria-label="changes to" className="h-[16px] w-[16px] text-ds-fg-muted" /><PriorityPill word={r.suggested} /></>,
+  }));
+  const todo = list.filter((r) => writer.outcomes[r.key] !== '');
+  const close = () => setOpen(false);
+
   return (
     <>
-      <Button leftIcon={<Sparkles aria-hidden />} loading={ask.isPending} onClick={() => ask.mutate()}>AI Reprioritize</Button>
-      <AnimatedModal
-        isOpen={suggestions !== null}
-        onClose={() => setSuggestions(null)}
-        title="AI priority suggestions"
-        subtitle="Read each suggestion, then apply them all or discard."
-        size="2xl"
-        footer={list.length > 0 ? (
-          <div className="flex items-center justify-end gap-2">
-            <Button onClick={() => setSuggestions(null)}>Discard</Button>
-            <Button variant="primary" loading={apply.isPending} onClick={() => apply.mutate(list)}>{`Apply all (${list.length})`}</Button>
+      <Button leftIcon={<Sparkles aria-hidden />} onClick={() => { setOpen(true); setList([]); ask.mutate(); }}>AI Reprioritize</Button>
+      <AiShell
+        open={open} onClose={close} title="Priority suggestions" reach={aiReach('prioritize', rows ?? [], !!rows && !lean.data?.truncated)}
+        pending={ask.isPending} error={ask.error} failure="AI couldn't suggest priorities" onRetry={() => ask.mutate()}
+        footer={(
+          <div className="flex items-center justify-end gap-[8px]">
+            <Button onClick={close}>Close</Button>
+            {todo.length > 0 && <Button variant="primary" loading={writer.pending && writer.applying.length > 1} disabled={writer.pending} onClick={() => writer.apply(todo)}>{`Apply all (${todo.length})`}</Button>}
           </div>
-        ) : undefined}
+        )}
       >
-        <div className="flex flex-col gap-[12px] p-[16px]">
-          {list.length === 0 ? (
-            <EmptyState bare kind="firstUse" title="Every task is already prioritized well" info="The AI found no task whose priority it would change." />
-          ) : list.map((s, i) => (
-            <article key={s.task_id ?? i} className="rounded-ds-card border border-ds-border bg-ds-surface p-[12px]">
-              <div className="flex flex-wrap items-center gap-[8px]">
-                {s.task_id ? <Link href={`/tasks/${s.task_id}`} className="rounded-ds-control text-ds-body font-[600] text-ds-primary-text underline-offset-[2px] hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring">Task #{s.task_id}</Link> : <span className="text-ds-body text-ds-fg-muted">A task</span>}
-                <PriorityPill word={s.current_priority} />
-                <ArrowRight aria-label="changes to" className="h-[16px] w-[16px] text-ds-fg-muted" />
-                <PriorityPill word={s.suggested_priority} />
-              </div>
-              {s.justification && <p className="mt-[8px] text-ds-body text-ds-fg-muted [overflow-wrap:anywhere]">{s.justification}</p>}
-            </article>
-          ))}
-        </div>
-      </AnimatedModal>
+        {list.length === 0
+          ? <EmptyState bare kind="firstUse" title="Every task is already prioritized well" info="The AI found no task whose priority it would change." />
+          : <SuggestionRows items={items} outcomes={writer.outcomes} pending={writer.pending} applying={writer.applying} onApply={(key) => writer.apply(list.filter((r) => r.key === key))} />}
+      </AiShell>
     </>
   );
 }
