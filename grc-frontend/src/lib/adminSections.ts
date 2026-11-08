@@ -66,7 +66,7 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
     keywords: ['Organisation', 'Organization', 'Company', 'Company Profile', 'Organisation Profile', 'Organization Profile', 'Primary contact'],
   }),
   S({
-    id: 'departments', label: 'Departments', group: 'organisation', url: '/admin/departments', ownHeading: false,
+    id: 'departments', label: 'Departments', group: 'organisation', url: '/admin/departments', ownHeading: true,
     rights: ['admin:organization:edit'],            // reads: any signed-in person
     tabs: [{ tab: 'departments' }, { tab: 'teams' }],
     keywords: ['Teams', 'Sub-departments', 'Units', 'Level names'],

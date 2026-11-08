@@ -207,39 +207,43 @@ test('switching a department off is explained, and said, the same way from Admin
 
 const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 const ADMIN_PAGE = '../app/(dashboard)/admin/departments/page.tsx';
-const SETTINGS_SECTION = '../app/(dashboard)/governance/settings/_DepartmentsSection.tsx';
+const EDITOR = '../components/admin/DepartmentsEditor.tsx';                                // the one editor (Administration > Departments; Governance > Settings links to it)
+const SETTINGS_CARD = '../app/(dashboard)/governance/settings/_DepartmentsSection.tsx';
 
-test('the department form exists once and the deactivate question says the same words: Administration and Settings open the same form and ask with DEACTIVATE_NOTE', () => {
+test('the department form and the deactivate question exist once: the one editor opens the shared form and asks with DEACTIVATE_NOTE, and Administration is that editor', () => {
   const shared = source('../components/admin/DepartmentForm.tsx');
   assert.match(shared, /export function DepartmentFormModal/);
-  assert.match(shared, /export function DeactivateModal/);
-  for (const path of [ADMIN_PAGE, SETTINGS_SECTION]) {
-    const page = source(path);
-    assert.match(page, /import \{[^}]*\bDepartmentFormModal\b[^}]*\} from '@\/components\/admin\/DepartmentForm'/, `${path} does not use the shared DepartmentFormModal`);
-    assert.doesNotMatch(page, /function DepartmentFormModal\b/, `${path} has its own DepartmentFormModal`);
-  }
-  // Administration asks in the shared dialog; Settings asks through the kit's useConfirm (a dialog every page shares) with the very same note and the same call
-  assert.match(source(ADMIN_PAGE), /import \{[^}]*\bDeactivateModal\b[^}]*\} from '@\/components\/admin\/DepartmentForm'/);
-  const section = source(SETTINGS_SECTION);
-  assert.doesNotMatch(section, /function DeactivateModal\b/);
-  assert.match(section, /useConfirm\(\)/);
-  assert.match(section, /message: DEACTIVATE_NOTE/);
-  assert.match(section, /departmentsApi\.deactivate\(/);
-  assert.match(section, /drawer mode="create"/);                                                 // and the form is the drawer that asks before it discards typing
-  assert.match(section, /drawer mode="edit"/);
+  const editor = source(EDITOR);
+  assert.match(editor, /import \{[^}]*\bDepartmentFormModal\b[^}]*\} from '@\/components\/admin\/DepartmentForm'/, 'the editor does not use the shared DepartmentFormModal');
+  assert.doesNotMatch(editor, /function DepartmentFormModal\b/);
+  assert.doesNotMatch(editor, /function DeactivateModal\b/);
+  assert.match(editor, /useConfirm\(\)/);                                                         // the question is the kit's dialog every page shares
+  assert.match(editor, /message: DEACTIVATE_NOTE/);
+  assert.match(editor, /departmentsApi\.deactivate\(/);
+  assert.match(editor, /drawer mode="create"/);                                                 // and the form is the drawer that asks before it discards typing
+  assert.match(editor, /drawer mode="edit"/);
+  assert.match(source(ADMIN_PAGE), /import \{ DepartmentsEditor \} from '@\/components\/admin\/DepartmentsEditor'/);
+  assert.match(source(ADMIN_PAGE), /<DepartmentsEditor /);
 });
 
-test('Settings changes departments only for those the server lets, and links to the tab where members and roles are managed', () => {
-  const section = source(SETTINGS_SECTION);
+test('the editor changes departments only for those the server lets, and everyone who opens it reads the people of a department', () => {
+  const section = source(EDITOR);
   assert.match(section, /const EDIT_RIGHT = 'admin:organization:edit'/);                       // the right departments_router asks for
   assert.match(section, /hasPermission\(EDIT_RIGHT\)/);
   const router = new URL('../../../backend/grc/routers/admin_departments_router.py', import.meta.url);        // (when the backend is beside the frontend)
   if (existsSync(router)) assert.match(readFileSync(router, 'utf8'), /require_tenant_permission\("admin:organization:edit"\)/);
-  const link = /href="(\/admin\?tab=([a-z-]+))"/.exec(section);
-  assert.equal(link?.[1], '/admin?tab=departments');
-  const admin = source('../app/(dashboard)/admin/page.tsx');
-  assert.match(admin, new RegExp(`VALID_ADMIN_TABS = new Set<AdminTab>\\(\\[[^\\]]*'${link?.[2]}'`));     // a tab Administration really has
-  assert.match(admin, new RegExp(`activeTab === '${link?.[2]}' && <DepartmentsAdminPage />`));
+  assert.match(section, /const members: MenuItem = \{ key: 'members'/);                          // Members is in the menu of a read-only person too
+  assert.match(section, /<DepartmentMembers department=\{managing\} canEdit=\{canEdit\}/);
+  const members = source('../components/admin/DepartmentMembers.tsx');
+  assert.match(members, /\{canEdit && \(/);                                                       // the add box is for who may edit
+  assert.doesNotMatch(members, /window\.(confirm|alert|prompt)|<(button|select)\b/);
+});
+
+test('Governance Settings keeps a Departments card that says how many there are and links to Administration, with no editor of its own', () => {
+  const card = source(SETTINGS_CARD);
+  assert.match(card, /href="\/admin\/departments"/);
+  assert.match(card, /id="departments"/);
+  assert.doesNotMatch(card, /RegisterTable|DepartmentFormModal|departmentsApi/);
 });
 
 test('the Departments card comes first on Governance → Settings, and is there even when the approval settings are not', () => {
@@ -336,9 +340,8 @@ test('the head of a department is its owner wherever it is named; a membership r
   assert.match(shared, /<MultiSelectDropdown title="Owner"/);
   assert.match(shared, /label: 'No owner'/);
   assert.doesNotMatch(shared, /No lead|label="Lead"|title="Lead"/);
-  assert.match(source(SETTINGS_SECTION), /key: 'owner', header: 'Owner'/);
-  assert.doesNotMatch(source(SETTINGS_SECTION), /header: 'Lead'/);
-  assert.match(source(ADMIN_PAGE), /<th scope="col" className="px-3 py-2 text-left">Owner<\/th>/);
+  assert.match(source(EDITOR), /key: 'owner', header: 'Owner'/);
+  assert.doesNotMatch(source(EDITOR), /header: 'Lead'/);
   assert.deepEqual(MEMBER_ROLES.map((r) => r.label), ['Lead', 'Member', 'Viewer']);                        // a role in the department, not its owner
 });
 
@@ -432,7 +435,7 @@ test('the form: the Parent field names where the department will be and why plac
 });
 
 test('Settings is a tree editor: Level names for those who may edit, "Add <next level>" on a row, the level beside the name, no Parent column', () => {
-  const section = source(SETTINGS_SECTION);
+  const section = source(EDITOR);
   const header = section.slice(section.indexOf('actions={canEdit ?'), section.indexOf('</SectionCard>'));
   const [editors, readOnly] = header.split(') : permsLoading ? undefined : (');
   assert.match(editors, /<ListTree aria-hidden \/>[\s\S]*Level names/);                                       // Level names is one of the editors' actions

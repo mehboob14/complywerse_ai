@@ -13,13 +13,14 @@ const FILES = [
   `${ADMIN}/layout.tsx`, `${ADMIN}/page.tsx`, `${ADMIN}/_shell/SettingsLayout.tsx`,
   `${ADMIN}/settings/page.tsx`, `${ADMIN}/sso/page.tsx`, `${ADMIN}/connections/page.tsx`, `${ADMIN}/teams/page.tsx`,
   `${ADMIN}/password-policy/page.tsx`, `${ADMIN}/password-policy/passwordPolicyModel.ts`,
+  `${ADMIN}/departments/page.tsx`, 'src/components/admin/DepartmentsEditor.tsx', 'src/components/admin/DepartmentMembers.tsx', 'src/app/(dashboard)/governance/settings/_DepartmentsSection.tsx',
   `${ADMIN}/organization/page.tsx`, `${ADMIN}/organization/_company/CompanyDetails.tsx`, `${ADMIN}/organization/_company/companyModel.ts`,
   'src/lib/adminSections.ts', 'src/lib/navPages/admin.ts',
 ].filter((f) => existsSync(f));
 const read = (f: string) => readFileSync(f, 'utf8').replace(/\r\n/g, '\n');
 
 test('the shell group\'s files follow the kit rules: no palette class, named text size, named radius or shadow, no bare outline-none, nothing under 12px', () => {
-  assert.ok(FILES.length >= 13, 'the files are there');
+  assert.ok(FILES.length >= 17, 'the files are there');
   const bad = FILES.flatMap((f) => findViolations(read(f)).map((v) => `${f}:${v.line} ${v.rule}: ${v.text}`));
   assert.deepEqual(bad, []);
 });

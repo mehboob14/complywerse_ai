@@ -9,6 +9,7 @@ import { readFileSync } from 'node:fs';
 const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), 'utf8');
 const page = read('./page.tsx');
 const section = read('./_DepartmentsSection.tsx');
+const editor = read('../../../../components/admin/DepartmentsEditor.tsx');          // the departments are edited in Administration: the tree editor lives there now
 
 test('the settings live under the key and the address the document page\'s summary card reads, and a save updates that cache entry', () => {
   const card = read('../documents/[id]/_LifecycleTab.tsx');
@@ -44,13 +45,13 @@ test('leaving with unsaved changes asks, and the confirmation is the kit\'s: sai
 });
 
 test('the page is on the design-system kit: no legacy head, button strings, hex colours or bare form controls', () => {
-  for (const [name, text] of [['page', page], ['section', section]] as const) {
+  for (const [name, text] of [['page', page], ['section', section], ['editor', editor]] as const) {
     assert.doesNotMatch(text, /DocPageHeader|docUi|PageLoader|governance-light/, name);
     assert.doesNotMatch(text, /#[0-9a-fA-F]{6}\b/, `${name}: colours come from the --ds tokens`);
     assert.doesNotMatch(text, /<(button|select|textarea|input)\b/, `${name}: the kit's Button, Select, Textarea, TextInput, Checkbox and SegmentedControl`);
   }
   assert.match(page, /<PageHeader\s+variant="page"/);
-  assert.match(section, /<RegisterTable<Row>/);
+  assert.match(editor, /<RegisterTable<Row>/);
 });
 
 test('a number of days is the kit\'s TextInput with its unit inside the box, not a box with a word of its own beside it', () => {
