@@ -50,7 +50,7 @@ test('the group\'s entries: the sidebar leaf says its heading, the other five ha
     assert.ok(spec.hidden && spec.hidden.length > 20, `${spec.path}: where it opens from`);
   }
   assert.equal(routeFor('/tasks')?.label, 'Task Management', 'the sidebar\'s name');
-  assert.deepEqual(PAGES.map((p) => p.label).sort(), ['My tasks', 'My work', 'Task', 'Task SLA levels', 'Task reports']);
+  assert.deepEqual(PAGES.map((p) => p.label).sort(), ['My requirements', 'My tasks', 'Task', 'Task SLA levels', 'Task reports']);
 });
 
 test('/tasks/my-tasks, /tasks/reports and /tasks/sla are forwards for ever: a server redirect to the tab that holds their content, the query kept, nothing drawn, no heading flag', () => {
@@ -81,13 +81,13 @@ test('the heading of a page is its registry label (the task page keeps the task\
   }
 });
 
-test('the top bar names only the section: nothing on the module\'s top page, "Task Management" on a task and on My Work; a forward names itself for the moment it is there', () => {
+test('the top bar names only the section: nothing on the module\'s top page, "Task Management" on a task and on My requirements; a forward names itself for the moment it is there', () => {
   assert.equal(ownHeadingSection('/tasks'), '');
   for (const url of ['/tasks/7', '/my-work']) assert.equal(ownHeadingSection(url), 'Task Management', url);
   for (const url of ['/tasks', '/tasks/7', '/my-work']) assert.equal(registryNamesPage(url), true, url);
   for (const url of ['/tasks/reports', '/tasks/my-tasks', '/tasks/sla']) assert.equal(ownHeadingSection(url), undefined, url);
   assert.equal(titleFor('/tasks'), 'Task Management');
-  assert.equal(titleFor('/my-work'), 'My work');
+  assert.equal(titleFor('/my-work'), 'My requirements');
   const trail = breadcrumbFor('/tasks/7');
   assert.equal(trail[0].label, 'Task Management');
   assert.equal(trail[trail.length - 1].label, 'Task');

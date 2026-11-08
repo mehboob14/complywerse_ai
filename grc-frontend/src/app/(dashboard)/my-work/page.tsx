@@ -24,7 +24,7 @@ import {
   type Ctrl, type Journey, type Per,
 } from './workModel';
 
-const TITLE = routeFor('/my-work')?.label ?? 'My work';
+const TITLE = routeFor('/my-work')?.label ?? 'My requirements';
 const ROW = 'flex items-center gap-[12px] rounded-ds-control px-[12px] py-[10px] hover:bg-ds-surface-hover focus-visible:outline-none focus-visible:shadow-ds-ring';
 const plural = (n: number, one: string, many: string) => `${formatCount(n)} ${n === 1 ? one : many}`;
 
@@ -146,7 +146,7 @@ export default function MyWorkPage() {
     return (
       <div className="flex flex-col gap-[16px]">
         <PageHeader variant="page" title={TITLE} back={{ href: '/tasks', label: 'Back to Task Management' }} />
-        <NoAccessState title="My Work isn’t available for your role" reason="You need framework or evidence access to see assigned work." action={<Button href="/dashboard">Back to Performance Overview</Button>} />
+        <NoAccessState title="Requirements aren’t available for your role" reason="You need framework or evidence access to see assigned work." action={<Button href="/dashboard">Back to Performance Overview</Button>} />
       </div>
     );
   }
