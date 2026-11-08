@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 
 import {
   aliasesFor, controlOfDecision, CORE_TABS, isActiveJourney, journeyNumbers, journeyTabKeys, landingTab, openItem, portfolioNumbers, readinessBand,
-  recentActivity, REGISTERS_TAB, requirementCount, scopeCounts, scopeEffect, scopeList, stageRows, stageSummary, TAB_ALIASES, targetState, waitingForMe,
+  recentActivity, REGISTERS_TAB, requirementCount, roadmapOf, specScore, scopeCounts, scopeEffect, scopeList, stageRows, stageSummary, TAB_ALIASES, targetState, waitingForMe,
   type ControlLite, type ScopeRecordLite,
 } from './journeyModel.ts';
 import { resolveTab } from './tabsModel.ts';
@@ -204,6 +204,25 @@ test('recent activity: newest first, asked or decided, snapshots, capped; it rea
   assert.match(items[0].text, /Khalid approved the scope request for A\.5\.2/);
   assert.match(items[2].text, /Sara asked to put A\.5\.1 in scope/);
   assert.match(items[1].text, /2026 Assessment.*41%/);
+  // a snapshot of a framework with nothing tiered kept no score: it does not claim 0%
+  assert.doesNotMatch(recentActivity({ records: null, snapshots: [{ id: 2, label: 'Y', captured_at: '2026-11-08T08:00:00', overall_pct: 0, total_count: 0 }] })[0].text, /%/);
   assert.equal(recentActivity({ records: null, snapshots: null }).length, 0);
   assert.equal(recentActivity({ records: Array.from({ length: 9 }, (_, i) => REC(i + 1)), snapshots: [], limit: 3 }).length, 3);
+});
+
+test('the roadmap of a phased framework: a specification scores by its criteria, else by its status; out-of-scope ones and untiered frameworks give nothing', () => {
+  const spec = (id: number, over: Record<string, unknown> = {}) => ({ ...ctrl(id), priority_level: 'P1', ...over }) as ControlLite & { assessment_criteria?: string[] };
+  assert.equal(specScore(spec(1, { assessment_criteria: ['a', 'b', 'c', 'd'], criteria_status: { '0': true, '2': true } })), 50);
+  assert.equal(specScore(spec(1, { assessment_criteria: ['a', 'b'], criteria_status: {} }), { '0': true, '1': true }), 100, 'a tick not yet saved counts');
+  assert.deepEqual([spec(1, { status: 'implemented' }), spec(2, { status: 'verified' }), spec(3, { status: 'in_progress' }), spec(4)].map((c) => specScore(c)), [100, 100, 50, 0]);
+  const r = roadmapOf([
+    spec(1, { status: 'implemented' }), spec(2, { status: 'in_progress' }), spec(3, { priority_level: 'P2' }), spec(4, { priority_level: 'P3', status: 'verified' }),
+    spec(5, { is_applicable: false, status: 'implemented' }), spec(6, { priority_level: null }),
+  ]);
+  assert.ok(r);
+  assert.equal(r.total, 4, 'the out-of-scope and the untiered are not counted');
+  assert.deepEqual(r.tiers.map((t) => [t.tier, t.year, t.total, t.avg]), [['P1', 'Year 1', 2, 75], ['P2', 'Year 2', 1, 0], ['P3', 'Year 3', 1, 100]]);
+  assert.deepEqual([r.overall, r.compliant, r.tiers[0].compliant.length, r.tiers[0].inProgress.length, r.tiers[1].notStarted.length], [63, 2, 1, 1, 1]);
+  assert.equal(roadmapOf([ctrl(1)]), null);
+  assert.equal(roadmapOf(null), null);
 });

@@ -260,28 +260,30 @@ export interface ScopeRecordLite {
   requested_at?: string | null; reviewed_at?: string | null;
 }
 
-export interface WaitingInput {
+export interface WaitingInput<R extends ScopeRecordLite = ScopeRecordLite> {
   controls: readonly ControlLite[] | null | undefined;
   userId: number | null;
   /** the person may review evidence and scope decisions (the page's `frameworks:framework_library:edit`); without it only their own requirements wait */
   canReview: boolean;
-  records: readonly ScopeRecordLite[] | null | undefined;
+  records: readonly R[] | null | undefined;
 }
-export interface Waiting {
+export interface Waiting<R extends ScopeRecordLite = ScopeRecordLite, C extends ControlLite = ControlLite> {
   /** applicable requirements assigned to the person that are not done, critical first, then by priority tier and code */
-  mine: ControlLite[];
+  mine: C[];
   /** controls with evidence nobody has approved or rejected yet; `evidence` counts the files */
-  toReview: Array<{ control: ControlLite; evidence: number }>;
+  toReview: Array<{ control: C; evidence: number }>;
   evidenceToReview: number;
   /** scope decisions waiting for a reviewer, oldest first */
-  decisions: ScopeRecordLite[];
+  decisions: R[];
   /** what "N need you" counts: mine + files to review + decisions */
   total: number;
 }
 
 const tier = (c: ControlLite): number => { const m = /^P(\d)$/.exec(c.priority_level || ''); return m ? +m[1] : 9; };
 
-export function waitingForMe({ controls, userId, canReview, records }: WaitingInput): Waiting {
+export function waitingForMe<R extends ScopeRecordLite = ScopeRecordLite, C extends ControlLite = ControlLite>(
+  { controls, userId, canReview, records }: Omit<WaitingInput<R>, 'controls'> & { controls: readonly C[] | null | undefined },
+): Waiting<R, C> {
   const all = (controls || []).filter(inScope);
   const mine = userId === null ? [] : all
     .filter((c) => DONE.indexOf(c.status || '') < 0 && assigned(c).indexOf(userId) >= 0)
@@ -349,7 +351,7 @@ export interface ActivityItem { at: string; text: string; kind: 'decision' | 'sn
 /** The latest things that happened on the journey, newest first, from what the page has already loaded (no request of its own). */
 export function recentActivity(input: {
   records: readonly (ScopeRecordLite & { control_reference?: string | null; requested_by_name?: string | null; reviewed_by_name?: string | null })[] | null | undefined;
-  snapshots: ReadonlyArray<{ id: number; label?: string | null; year?: number | null; captured_at?: string | null; overall_pct?: number | null }> | null | undefined;
+  snapshots: ReadonlyArray<{ id: number; label?: string | null; year?: number | null; captured_at?: string | null; overall_pct?: number | null; total_count?: number | null }> | null | undefined;
   limit?: number;
 }): ActivityItem[] {
   const items: ActivityItem[] = [];
@@ -359,8 +361,56 @@ export function recentActivity(input: {
     else if (r.reviewed_at) items.push({ at: r.reviewed_at, kind: 'decision', tab: 'scope', text: `${r.reviewed_by_name || 'A reviewer'} ${r.status === 'approved' ? 'approved' : 'turned down'} the scope request for ${ref}` });
   }
   for (const s of input.snapshots || []) {
-    if (s.captured_at) items.push({ at: s.captured_at, kind: 'snapshot', tab: 'activity', text: `Snapshot "${s.label || s.year || 'Snapshot'}" captured${typeof s.overall_pct === 'number' ? ` at ${s.overall_pct}%` : ''}` });
+    if (s.captured_at) items.push({ at: s.captured_at, kind: 'snapshot', tab: 'activity', text: `Snapshot "${s.label || s.year || 'Snapshot'}" captured${typeof s.overall_pct === 'number' && (s.total_count ?? 1) > 0 ? ` at ${s.overall_pct}%` : ''}` });
   }
   const when = (x: ActivityItem) => (parseUtc(x.at)?.getTime() ?? 0);
   return items.sort((a, b) => when(b) - when(a)).slice(0, input.limit ?? 6);
+}
+
+// ── the 3-year roadmap of a phased framework (NDMO: every specification carries a tier P1, P2 or P3) ───────────
+
+export interface SpecLite extends ControlLite {
+  assessment_criteria?: string[] | null;
+  criteria_status?: Record<string, boolean> | null;
+  domain_name?: string;
+}
+
+/** A specification's score: the share of its assessment criteria that are met (the person's unsaved ticks win), else 100 for implemented or verified,
+ *  50 for in progress, 0. Same rule as the server's snapshot (`_spec_pct` in certification_router.py). */
+export function specScore(c: SpecLite, ticks?: Record<string, boolean> | null): number {
+  const criteria = c.assessment_criteria || [];
+  const state = ticks ?? c.criteria_status ?? {};
+  if (criteria.length > 0) return Math.round((criteria.filter((_, i) => state[String(i)]).length / criteria.length) * 100);
+  if (c.status === 'implemented' || c.status === 'verified') return 100;
+  return c.status === 'in_progress' ? 50 : 0;
+}
+
+export interface RoadmapTier<C extends SpecLite = SpecLite> {
+  tier: 'P1' | 'P2' | 'P3';
+  year: string;
+  total: number;
+  /** average score of the tier's specifications */
+  avg: number;
+  compliant: C[];
+  inProgress: C[];
+  notStarted: C[];
+}
+export interface Roadmap<C extends SpecLite = SpecLite> { tiers: RoadmapTier<C>[]; total: number; overall: number; compliant: number }
+
+/** The roadmap of a phased framework, or null when no specification carries a tier. Out-of-scope specifications are left out. */
+export function roadmapOf<C extends SpecLite>(controls: readonly C[] | null | undefined, ticksOf: (c: C) => Record<string, boolean> | null | undefined = () => null): Roadmap<C> | null {
+  const specs = (controls || []).filter((c) => ['P1', 'P2', 'P3'].indexOf(c.priority_level || '') >= 0 && c.is_applicable !== false);
+  if (specs.length === 0) return null;
+  const scored = specs.map((c) => ({ c, p: specScore(c, ticksOf(c)) }));
+  const tiers = (['P1', 'P2', 'P3'] as const).map((tier, i) => {
+    const mine = scored.filter((s) => s.c.priority_level === tier);
+    return {
+      tier, year: `Year ${i + 1}`, total: mine.length,
+      avg: mine.length ? Math.round(mine.reduce((a, s) => a + s.p, 0) / mine.length) : 0,
+      compliant: mine.filter((s) => s.p === 100).map((s) => s.c),
+      inProgress: mine.filter((s) => s.p > 0 && s.p < 100).map((s) => s.c),
+      notStarted: mine.filter((s) => s.p === 0).map((s) => s.c),
+    };
+  });
+  return { tiers, total: specs.length, overall: Math.round(scored.reduce((a, s) => a + s.p, 0) / specs.length), compliant: scored.filter((s) => s.p === 100).length };
 }
