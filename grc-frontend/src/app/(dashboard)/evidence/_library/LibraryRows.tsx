@@ -12,6 +12,7 @@ import { Menu, PersonChip, StatusPill, type MenuItem } from '@/components/ui/ds'
 import { RowLead, type RecordColumn, type RecordRow } from '@/components/records/RecordTable';
 import type { FitColumn } from '@/components/records/explorerFit';
 import { EMPTY, truncate } from '@/lib/format';
+import { parseUtc } from '@/lib/serverTime';
 import { statusPill } from '@/lib/status';
 import { evidenceStatus } from '@/lib/statuses/evidence';
 import { normPct, ownerOf, typeLabel } from '../_workspace/evidenceModel';
@@ -82,7 +83,9 @@ export function StatusCell({ row, now }: { row: LibraryRow; now: number }) {
 
 /** "12 days left", "Expired 3 days ago", "No expiry"; a file marked lapsed by hand with no date says that. */
 export function ExpiryCell({ row, now }: { row: LibraryRow; now: number }) {
-  if (!row.expiry_date && isLapsed(row, now)) return <span className="whitespace-nowrap text-ds-label font-[600] text-ds-danger">Marked as lapsed</span>;
+  // lapsed with no date that has gone by (marked by hand, or expired by hand): the date would say "days left" or nothing beside a word that says lapsed
+  const gone = parseUtc(row.expiry_date)?.getTime();
+  if (isLapsed(row, now) && (gone === undefined || gone >= now)) return <span className="whitespace-nowrap text-ds-label font-[600] text-ds-danger">Marked as lapsed</span>;
   if (row.status === 'archived') return <span className="text-ds-label text-ds-fg-muted">{EMPTY}<span className="sr-only">Archived</span></span>;
   return <ExpiryText expiry={row.expiry_date} />;
 }
@@ -143,7 +146,7 @@ export function rowActions(row: LibraryRow, env: RowEnv): MenuItem[] {
     { key: 'submit', label: 'Submit for review', icon: Send, onSelect: () => env.onSubmit(row.id), hidden: row.status !== 'draft' },
     { key: 'approve', label: 'Approve', icon: ThumbsUp, onSelect: () => env.onApprove(row.id), hidden: !(env.canReview && row.status === 'pending_review') },
     { key: 'renew', label: 'Renew', icon: RefreshCw, onSelect: () => env.onRenew(row.id), hidden: !(env.canEdit && lapsed && row.status !== 'archived') },
-    { key: 'package', label: 'Add to audit package', icon: FolderPlus, onSelect: () => env.onPackage(row.id), hidden: row.status !== 'approved' },
+    { key: 'package', label: 'Add to audit package', icon: FolderPlus, onSelect: () => env.onPackage(row.id), hidden: row.status !== 'approved' || !env.canReview },     // the audit packages page always asked for `create` to add evidence
     { key: 'delete', label: 'Delete', icon: Trash2, danger: true, onSelect: () => env.onDelete(row.id), hidden: !env.canDelete },
   ];
 }

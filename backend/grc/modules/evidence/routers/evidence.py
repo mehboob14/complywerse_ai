@@ -388,7 +388,8 @@ def get_evidence_dashboard(
         elif e.status == "approved":
             in_force_count += 1
         
-        if e.expiry_date and e.expiry_date <= thirty_days_from_now and e.expiry_date > datetime.utcnow():
+        # an archived file is out of play (freshness.py): it is not "expiring" for anyone
+        if e.status != "archived" and e.expiry_date and e.expiry_date <= thirty_days_from_now and e.expiry_date > datetime.utcnow():
             expiring_soon_count += 1
         
         if e.status == "pending_review":

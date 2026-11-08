@@ -75,7 +75,7 @@ export default function AuditPackagesPage() {
       key: 'name', header: 'Package', isRowHeader: true,
       cell: (p) => (
         <span className="block min-w-0">
-          <button type="button" onClick={() => set({ open: p.id })} title={p.name} dir="auto" className="line-clamp-2 break-words rounded-ds-control text-left font-[600] text-ds-fg hover:text-ds-primary-text hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring">{p.name}</button>
+          <button type="button" onClick={() => set({ open: p.id })} title={p.name} dir="auto" className="line-clamp-2 break-words rounded-ds-control py-[4px] text-left font-[600] text-ds-fg hover:text-ds-primary-text hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring">{p.name}</button>
           <span className={`block truncate text-ds-label ${MUTED}`}>{p.framework_name ?? 'No framework'}</span>
         </span>
       ),

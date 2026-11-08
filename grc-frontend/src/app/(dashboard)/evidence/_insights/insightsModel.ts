@@ -9,6 +9,8 @@ import { freshnessOf, isLapsed, ownerKey, type LibraryRow } from '../_library/li
 // ── the tiles ────────────────────────────────────────────────────────────────────────────────────────────────────────────
 export interface InsightTiles {
   total: number;
+  /** of the total, the files kept out of the Library until Archived is chosen */
+  archived: number;
   approved: number;
   /** approved as a share of all files (null when there are none: nothing is not 0%) */
   approvedPct: number | null;
@@ -28,7 +30,7 @@ export function insightTiles(summary: EvidenceSummary | null | undefined): Insig
   // an older server sent neither figure: the tile then says it was not recorded rather than guess from a list that may be cut
   const inForce = summary.in_force_count ?? 0;
   return {
-    total, approved, approvedPct: share(approved, total), inForce, inForcePct: summary.in_force_count == null ? null : share(inForce, total),
+    total, archived: summary.by_status?.archived ?? 0, approved, approvedPct: share(approved, total), inForce, inForcePct: summary.in_force_count == null ? null : share(inForce, total),
     pending: summary.pending_review_count ?? 0, expiring: summary.expiring_soon_count ?? 0, lapsed: summary.lapsed_count ?? summary.stale_count ?? 0,
   };
 }

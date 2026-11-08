@@ -141,6 +141,14 @@ def test_the_summary_counts_what_lapsed_and_what_is_in_force(world):
     assert s["pending_review_count"] == 1
 
 
+def test_an_archived_file_is_not_expiring_for_anyone(world):
+    world.db.add(m.Evidence(id=50, tenant_id=1, name="Archived, ends in a week", status="archived", uploaded_by=1, expiry_date=NOW + 7 * DAY, uploaded_at=NOW))
+    world.db.commit()
+    s = world.http.get("/evidence-mgmt/items/dashboard/summary").json()
+    assert s["total_count"] == 10 and s["expiring_soon_count"] == 1, "still only the draft ten days out"
+    assert s["by_status"]["archived"] == 2
+
+
 # ── the lean load ────────────────────────────────────────────────────────────
 LEAN_KEYS = {
     "id", "tenant_id", "name", "file_name", "file_type", "has_file", "version", "uploaded_by", "uploader_name", "owner_id", "owner_name", "uploaded_at", "status",

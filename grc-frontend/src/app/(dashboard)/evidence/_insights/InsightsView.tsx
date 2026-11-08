@@ -93,8 +93,8 @@ function WatchList({ id, title, rows, total, empty, href, viewAll, note }: { id:
         <>
           <ul className="m-0 list-none divide-y divide-ds-border p-0">
             {shown.map((r) => (
-              <li key={r.id} className="flex items-center gap-[12px] py-[6px]">
-                <Link href={`/evidence?open=${r.id}`} title={r.name} className="min-w-0 flex-1 truncate rounded-ds-control text-ds-body text-ds-fg hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring">{r.name}</Link>
+              <li key={r.id} className="flex items-center gap-[12px]">
+                <Link href={`/evidence?open=${r.id}`} title={r.name} className="flex min-h-ds-control min-w-0 flex-1 items-center truncate rounded-ds-control text-ds-body text-ds-fg hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring"><span className="truncate">{r.name}</span></Link>
                 {note ? note(r) : <ExpiryText expiry={r.expiry_date} />}
               </li>
             ))}
@@ -139,38 +139,41 @@ export function InsightsView() {
 
   return (
     <div className="flex flex-col gap-[16px]">
+      {summaryError ? (
+        <div className="rounded-ds-card border border-ds-border bg-ds-surface"><ErrorState compact title={summaryError.title} message={summaryError.message} onRetry={summaryError.onRetry} /></div>
+      ) : (
       <div className="grid grid-cols-2 gap-[12px] lg:grid-cols-3 xl:grid-cols-6">
-        <StatTile label="Files" value={tiles ? formatCount(tiles.total) : null} loading={summaryQ.isLoading} error={summaryError} note="In the library" />
+        <StatTile label="Files" value={tiles ? formatCount(tiles.total) : null} loading={summaryQ.isLoading} note={tiles && tiles.archived > 0 ? `Including ${formatCount(tiles.archived)} archived` : 'In the library'} />
         <StatTile
-          label="In force" value={tiles?.inForcePct == null ? null : `${tiles.inForcePct}%`} loading={summaryQ.isLoading} error={summaryError} tone="success"
+          label="In force" value={tiles?.inForcePct == null ? null : `${tiles.inForcePct}%`} loading={summaryQ.isLoading} tone="success"
           note={tiles ? `${formatCount(tiles.inForce)} of ${formatCount(tiles.total)}` : undefined} info="Approved and still in date. A file that was approved and has lapsed since is not in force."
         />
         <StatTile
-          label="Approved" value={tiles?.approvedPct == null ? null : `${tiles.approvedPct}%`} loading={summaryQ.isLoading} error={summaryError}
+          label="Approved" value={tiles?.approvedPct == null ? null : `${tiles.approvedPct}%`} loading={summaryQ.isLoading}
           note={tiles ? `${formatCount(tiles.approved)} of ${formatCount(tiles.total)}` : undefined} info={tiles && tiles.approvedPct == null ? 'Nothing has been uploaded yet.' : 'Every file whose status is Approved, lapsed or not.'}
         />
         <StatTile
-          label="Pending review" value={tiles ? formatCount(tiles.pending) : null} loading={summaryQ.isLoading} error={summaryError}
+          label="Pending review" value={tiles ? formatCount(tiles.pending) : null} loading={summaryQ.isLoading}
           link={tiles && tiles.pending > 0 ? { href: '/evidence?status=pending_review', label: `${formatCount(tiles.pending)} pending review. Open the pending files` } : undefined}
         />
         <StatTile
-          label="Expiring" value={tiles ? formatCount(tiles.expiring) : null} loading={summaryQ.isLoading} error={summaryError} tone={tiles && tiles.expiring > 0 ? 'warning' : 'default'} note="Within 30 days"
+          label="Expiring" value={tiles ? formatCount(tiles.expiring) : null} loading={summaryQ.isLoading} tone={tiles && tiles.expiring > 0 ? 'warning' : 'default'} note="Within 30 days"
           link={tiles && tiles.expiring > 0 ? { href: '/evidence?quick=expiring', label: `${formatCount(tiles.expiring)} expiring. Open them in the library` } : undefined}
         />
         <StatTile
-          label="Lapsed" value={tiles ? formatCount(tiles.lapsed) : null} loading={summaryQ.isLoading} error={summaryError} tone={tiles && tiles.lapsed > 0 ? 'danger' : 'default'} note="Past their date"
+          label="Lapsed" value={tiles ? formatCount(tiles.lapsed) : null} loading={summaryQ.isLoading} tone={tiles && tiles.lapsed > 0 ? 'danger' : 'default'} note="Past their date"
           link={tiles && tiles.lapsed > 0 ? { href: '/evidence?quick=lapsed', label: `${formatCount(tiles.lapsed)} lapsed. Open them in the library` } : undefined}
         />
       </div>
+      )}
 
+      {!summaryError && (
       <div className="grid grid-cols-1 gap-[16px] lg:grid-cols-3">
         <div className="lg:col-span-2">
           <SectionCard id="status-split" title="Files by status" info="Every file in the library by the status it has. The share in the middle is Approved.">
-            {summaryQ.isLoading ? <SkeletonLines lines={4} label="Loading the status split" /> : summaryError ? (
-              <ErrorState compact title={summaryError.title} message={summaryError.message} onRetry={summaryError.onRetry} />
-            ) : (summary?.total_count ?? 0) === 0 ? <p className={`text-ds-body ${MUTED}`}>No evidence yet.</p> : (
+            {summaryQ.isLoading ? <SkeletonLines lines={4} label="Loading the status split" /> : (summary?.total_count ?? 0) === 0 ? <p className={`text-ds-body ${MUTED}`}>No evidence yet.</p> : (
               <div className="flex flex-col gap-[16px] sm:flex-row sm:items-center">
-                <ChartFrame title="Files by status" height={112} data={{ columns: ['Status', 'Files'], rows: parts.map((p) => [splitWord(p.key), p.count]) }} className="w-[112px]">
+                <ChartFrame title="Share of files approved" height={112} data={{ columns: ['Status', 'Files'], rows: parts.map((p) => [splitWord(p.key), p.count]) }} className="w-[112px]">
                   <Donut parts={parts} rate={rate} />
                 </ChartFrame>
                 <ul className="m-0 flex list-none flex-col gap-[4px] p-0">
@@ -187,9 +190,7 @@ export function InsightsView() {
           </SectionCard>
         </div>
         <SectionCard id="trend" title="Added and approved" info="Files added (by upload date) and approved (by approval date) in each of the last six months.">
-          {summaryQ.isLoading ? <SkeletonLines lines={3} label="Loading the trend" /> : summaryError ? (
-            <ErrorState compact title={summaryError.title} message={summaryError.message} onRetry={summaryError.onRetry} />
-          ) : trend ? (
+          {summaryQ.isLoading ? <SkeletonLines lines={3} label="Loading the trend" /> : trend ? (
             <>
               <Trend months={trend.months} />
               <div className="mt-[4px] flex justify-between">{trend.months.map((m) => <span key={m.month} className={`text-ds-label ${MUTED}`}>{monthName(m.month)}</span>)}</div>
@@ -201,6 +202,7 @@ export function InsightsView() {
           ) : <p className={`text-ds-body ${MUTED}`}>Not recorded: the server sent no monthly figures.</p>}
         </SectionCard>
       </div>
+      )}
 
       <div className="grid grid-cols-1 gap-[16px] lg:grid-cols-2">
         <SectionCard
@@ -214,7 +216,7 @@ export function InsightsView() {
               {frameworks.map((f) => (
                 <li key={f.framework_id} className="min-w-0">
                   <div className="flex items-baseline justify-between gap-[8px]">
-                    <Link href={libraryLinkForFramework(f.framework_name)} title={`${f.framework_name}. Open its evidence in the library`} className="min-w-0 truncate rounded-ds-control text-ds-body font-[600] text-ds-fg hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring">{f.framework_name}</Link>
+                    <Link href={libraryLinkForFramework(f.framework_name)} title={`${f.framework_name}. Open its evidence in the library`} className="flex min-h-ds-control min-w-0 items-center truncate rounded-ds-control text-ds-body font-[600] text-ds-fg hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring"><span className="truncate">{f.framework_name}</span></Link>
                     <span className={`shrink-0 text-ds-label ${MUTED}`}>{coverageLine(f)}</span>
                   </div>
                   <ProgressBar value={Math.round(f.coverage_percentage)} label={`${f.framework_name}: controls with evidence linked`} tone={f.coverage_percentage >= 80 ? 'success' : f.coverage_percentage >= 50 ? 'warning' : 'danger'} className="mt-[4px] w-full" />
@@ -226,10 +228,8 @@ export function InsightsView() {
             </ul>
           )}
         </SectionCard>
-        <SectionCard id="by-type" title="Files by type" meta={typeCount > types.length ? `Top ${types.length} of ${formatCount(typeCount)} types` : undefined}>
-          {summaryQ.isLoading ? <SkeletonLines lines={4} label="Loading the types" /> : summaryError ? (
-            <ErrorState compact title={summaryError.title} message={summaryError.message} onRetry={summaryError.onRetry} />
-          ) : types.length === 0 ? <p className={`text-ds-body ${MUTED}`}>No evidence yet.</p> : (
+        {!summaryError && <SectionCard id="by-type" title="Files by type" meta={typeCount > types.length ? `Top ${types.length} of ${formatCount(typeCount)} types` : undefined}>
+          {summaryQ.isLoading ? <SkeletonLines lines={4} label="Loading the types" /> : types.length === 0 ? <p className={`text-ds-body ${MUTED}`}>No evidence yet.</p> : (
             <ul className="m-0 flex list-none flex-col gap-[8px] p-0">
               {types.map((t) => (
                 <li key={t.type} className="grid grid-cols-[minmax(0,8rem)_minmax(0,1fr)] items-center gap-[12px]">
@@ -239,7 +239,7 @@ export function InsightsView() {
               ))}
             </ul>
           )}
-        </SectionCard>
+        </SectionCard>}
       </div>
 
       {listError ? (

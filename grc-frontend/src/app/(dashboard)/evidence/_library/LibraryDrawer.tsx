@@ -47,7 +47,7 @@ export function LibraryDrawer({ row, now, actions, canReview, canEdit, canDelete
   const lapsed = row ? isLapsed(row, now) && row.status !== 'archived' : false;
   const p = actions.pending;
   const more: MenuItem[] = row ? [
-    { key: 'package', label: 'Add to audit package', icon: FolderPlus, onSelect: () => actions.addToPackage([row.id]), hidden: row.status !== 'approved' },
+    { key: 'package', label: 'Add to audit package', icon: FolderPlus, onSelect: () => actions.addToPackage([row.id]), hidden: row.status !== 'approved' || !canReview },
     { key: 'delete', label: 'Delete', icon: Trash2, danger: true, onSelect: () => actions.remove(row.id), hidden: !canDelete, disabled: p.remove === row.id },
   ] : [];
   const draft = row?.status === 'draft';

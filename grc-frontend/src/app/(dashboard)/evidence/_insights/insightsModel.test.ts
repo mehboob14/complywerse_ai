@@ -23,7 +23,7 @@ const row = (over: Partial<EvidenceItem> = {}): EvidenceItem => {
 
 test('the tiles: true totals from the summary, Approved (the status) beside In force (approved and in date), and no files is not 0%', () => {
   const s: EvidenceSummary = { total_count: 200, by_status: { approved: 80, draft: 60, pending_review: 40, expired: 20 }, by_type: {}, stale_count: 25, lapsed_count: 25, in_force_count: 60, expiring_soon_count: 7, pending_review_count: 40 };
-  assert.deepEqual(insightTiles(s), { total: 200, approved: 80, approvedPct: 40, inForce: 60, inForcePct: 30, pending: 40, expiring: 7, lapsed: 25 });
+  assert.deepEqual(insightTiles(s), { total: 200, archived: 0, approved: 80, approvedPct: 40, inForce: 60, inForcePct: 30, pending: 40, expiring: 7, lapsed: 25 });
   assert.equal(insightTiles({ total_count: 0, by_status: {}, by_type: {}, stale_count: 0, expiring_soon_count: 0, pending_review_count: 0 })?.approvedPct, null);
   const older = insightTiles({ total_count: 10, by_status: { approved: 5 }, by_type: {}, stale_count: 2, expiring_soon_count: 0, pending_review_count: 0 });
   assert.equal(older?.inForcePct, null, 'a server that sends no in-force figure: not recorded, not guessed');

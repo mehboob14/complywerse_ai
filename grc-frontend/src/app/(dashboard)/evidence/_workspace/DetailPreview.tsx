@@ -203,7 +203,7 @@ export function DetailPreview({ evidenceId, onReassess, canReview, busy }: {
             <Button variant="link" size="sm" leftIcon={<ScanText aria-hidden />} onClick={() => setOcrOpen(true)}>View text</Button>
           </Tile>
           <Tile label="Validity">
-            <span className="text-ds-label text-ds-fg-body">{formatDate(collection, { calendar: true })} → {formatDate(expiry, { calendar: true })}</span>
+            {(collection || expiry) && <span className="text-ds-label text-ds-fg-body">{formatDate(collection, { calendar: true, empty: 'Not set' })} → {formatDate(expiry, { calendar: true, empty: 'Not set' })}</span>}
             <ExpiryText expiry={expiry} />
           </Tile>
         </div>

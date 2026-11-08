@@ -95,6 +95,7 @@ export function LibraryExplorer({ address, setAddress, onUploadClick, head }: Li
   const rows: LibraryRow[] = libQ.data?.items ?? NO_ROWS;
   const total = libQ.data?.total;
   const cut = !!libQ.data?.truncated;
+  const archivedCount = useMemo(() => rows.reduce((n, r) => n + (r.status === 'archived' ? 1 : 0), 0), [rows]);
   const noList = libQ.isError && !libQ.data;                         // the list could not be read at all: never drawn as an empty library
   const loading = libQ.isPending;
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -142,7 +143,6 @@ export function LibraryExplorer({ address, setAddress, onUploadClick, head }: Li
   };
   const quick: FilterChip[] = QUICK_SHOWN.map((id) => ({
     key: id, label: QUICK_LABEL[id], active: activeQuick === id, count: quickCounts[id] ?? 0, title: quickNote(id),
-    flag: id === 'lapsed' && (quickCounts.lapsed ?? 0) > 0 ? { label: 'Past their validity', tone: 'danger' as const } : undefined,
   }));
   const onQuick = (id: string) => setFilters({ ...filters, quick: id === 'all' || activeQuick === id ? null : (id as QuickId) });
   const moreQuick: MenuItem[] = [{
@@ -209,6 +209,7 @@ export function LibraryExplorer({ address, setAddress, onUploadClick, head }: Li
   const noun = { one: 'file', other: 'files' };
   const chips = filterChips(filters, options);
   const nothing = rows.length === 0;
+  const pool = filters.status.includes('archived') ? rows.length : rows.length - archivedCount;             // what the filters are applied to: the archived files only join when Archived is chosen
   const sortItems: MenuItem[] = SORT_KEYS.map((k, i) => ({
     key: `sort:${k}`, label: SORT_LABEL[k], checked: sort.key === k, radio: true, section: i === 0 ? 'Sort by' : undefined,
     trailing: sort.key === k ? (sort.dir === 'asc' ? '↑ ascending' : '↓ descending') : undefined, onSelect: () => setSort(nextSort(sort, k as SortKey)),
@@ -216,7 +217,7 @@ export function LibraryExplorer({ address, setAddress, onUploadClick, head }: Li
   const bulkDefs: BulkActionDef[] = [
     { id: 'submit', label: 'Submit for review', icon: Send, onRun: () => { void actions.bulk('submit', tickedRows); } },
     ...(canCreate ? [{ id: 'approve', label: 'Approve', icon: ThumbsUp, onRun: () => { void actions.bulk('approve', tickedRows); } }] : []),
-    { id: 'package', label: 'Add to audit package', icon: FolderPlus, onRun: () => { void actions.bulk('package', tickedRows); } },
+    ...(canCreate ? [{ id: 'package', label: 'Add to audit package', icon: FolderPlus, onRun: () => { void actions.bulk('package', tickedRows); } }] : []),
     { id: 'export', label: 'Export selection', icon: Download, onRun: () => exportRows(tickedRows, true) },
   ];
   const bulkMore: MenuItem[] = [{ key: 'delete', label: 'Delete', icon: Trash2, danger: true, hidden: !canDelete, onSelect: () => { void actions.bulk('delete', tickedRows); } }];
@@ -291,8 +292,9 @@ export function LibraryExplorer({ address, setAddress, onUploadClick, head }: Li
     );
   })();
 
-  const shownTotal = total ?? rows.length;
-  const meta = noList || loading ? undefined : `${formatCount(shownTotal)} ${shownTotal === 1 ? 'file' : 'files'}${cut ? ` (showing ${formatCount(rows.length)})` : ''}`;
+  // "286 files · 12 archived": the files the list shows, and the ones it keeps out until Archived is chosen (the server's true total, less the archived ones it was sent)
+  const live = (total ?? rows.length) - archivedCount;
+  const meta = noList || loading ? undefined : `${formatCount(live)} ${live === 1 ? 'file' : 'files'}${archivedCount ? ` · ${formatCount(archivedCount)} archived` : ''}${cut ? ` (showing ${formatCount(rows.length)})` : ''}`;
 
   return (
     <>
@@ -339,7 +341,7 @@ export function LibraryExplorer({ address, setAddress, onUploadClick, head }: Li
         applied={loading || noList ? null : (
           <AppliedFilters
             chips={chips.map((c) => ({ key: c.key, label: c.label }))}
-            summary={`${formatCount(filtered.length)} of ${formatCount(rows.length)} ${rows.length === 1 ? 'file' : 'files'}`}
+            summary={`${formatCount(filtered.length)} of ${formatCount(pool)} ${pool === 1 ? 'file' : 'files'}`}
             onRemove={(key) => { const chip = chips.find((c) => c.key === key); if (chip) setFilters(removeChip(filters, chip)); }}
             onClear={() => setFilters(NO_FILTERS)}
           />
