@@ -90,10 +90,12 @@ export interface PickDocument { id: number; title: string; document_code?: strin
 export interface PickStatement { id: number; statement_code?: string | null; statement_summary?: string | null; statement_text?: string | null }
 
 const pick = { staleTime: 60_000, retry: retryRead, retryDelay: RETRY_AFTER } as const;
+/** How many risks, assets or incidents one request asks for (the server's own default is 100, and it cut the old pickers there without saying). A list that fills it says it was cut. */
+export const PICK_LOAD = 1000;
 
-export const useRisks = (on: boolean) => useQuery({ queryKey: ['risks-list'], queryFn: async () => rows<PickRisk>((await apiClient.get('/risks')).data), enabled: on, ...pick });
-export const useAssets = (on: boolean) => useQuery({ queryKey: ['assets-list'], queryFn: async () => rows<PickAsset>((await apiClient.get('/assets')).data), enabled: on, ...pick });
-export const useIncidents = (on: boolean) => useQuery({ queryKey: ['incidents-list'], queryFn: async () => rows<PickIncident>((await apiClient.get('/erm/incidents')).data), enabled: on, ...pick });
+export const useRisks = (on: boolean) => useQuery({ queryKey: ['evidence-pick-risks'], queryFn: async () => rows<PickRisk>((await apiClient.get('/risks', { params: { limit: PICK_LOAD } })).data), enabled: on, ...pick });
+export const useAssets = (on: boolean) => useQuery({ queryKey: ['evidence-pick-assets'], queryFn: async () => rows<PickAsset>((await apiClient.get('/assets', { params: { limit: PICK_LOAD } })).data), enabled: on, ...pick });
+export const useIncidents = (on: boolean) => useQuery({ queryKey: ['evidence-pick-incidents'], queryFn: async () => rows<PickIncident>((await apiClient.get('/erm/incidents', { params: { limit: PICK_LOAD } })).data), enabled: on, ...pick });
 /** Every common (SCF) control: `available-controls` stops at 50. */
 export const useCommonControls = (on: boolean) =>
   useQuery({ queryKey: ['common-control-options'], queryFn: async () => ((await apiClient.get('/evidence-mgmt/links/common-control-options')).data as { controls: PickControl[] }).controls, enabled: on, ...pick, staleTime: 5 * 60 * 1000 });

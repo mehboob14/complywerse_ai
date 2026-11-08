@@ -1,6 +1,7 @@
 // The rules of the evidence record page, apart from React so `node --test` can pin them (recordModel.test.ts): the timeline of what happened to the file, which actions a person is
 // offered, the tabs and their numbers, where Back goes. The formulas are the workspace's (evidenceModel.ts: the 30-day line, the percent rule, the AI-review word; libraryModel.ts:
 // what is lapsed, when a file counts as sent back); this file only reads them together. Times are the server's naive UTC (parseUtc).
+import { parseUtc } from '../../../../../lib/serverTime.ts';
 import { reviewState } from '../../../../../lib/statuses/evidence.ts';
 import { expiryReading, normPct, reviewWord, type EvidenceItem } from '../../_workspace/evidenceModel.ts';
 import { isLapsed, returnedNote } from '../../_library/libraryModel.ts';
@@ -126,7 +127,7 @@ export function timelineOf(
   if (d.status === 'pending_review') steps.push({ key: 'decision', label: 'Waiting for review', state: 'now', when: null, who: null, text: null });
   else if (d.status === 'approved' || (d.status === 'expired' && d.approved_at)) steps.push({ key: 'decision', label: 'Approved', state: 'done', when: d.approved_at, who: nameOf(d.approved_by), text: null });
   else if (d.status === 'rejected') steps.push({ key: 'decision', label: 'Rejected', state: 'bad', when: d.reviewed_at, who: nameOf(d.reviewed_by), text: d.review_comments ? clip(d.review_comments) : null });
-  else if (d.status === 'draft' && back) steps.push({ key: 'decision', label: 'Sent back', state: 'warn', when: d.reviewed_at, who: nameOf(d.reviewed_by), text: clip(back) });
+  else if (d.status === 'draft' && back) steps.push({ key: 'decision', label: 'Sent back', state: 'warn', when: d.reviewed_at, who: nameOf(d.reviewed_by), text: null });   // the note is said in full under the strip (the page), not cut here
   else if (d.status === 'draft') steps.push({ key: 'decision', label: 'Not reviewed yet', state: 'todo', when: null, who: null, text: null });
 
   // how long it is valid
@@ -198,4 +199,25 @@ export function editProblem(form: EditForm): string | null {
     if (!Number.isInteger(n) || n < 1) return 'The validity is a whole number of days, 1 or more.';
   }
   return null;
+}
+
+// ── the review trail (Details tab) ───────────────────────────────────────────────────────────────────────────────────────
+export interface TrailStep { label: string; at: string; by: string | null }
+
+/** Who did what and when, oldest first. An approval stamps the review at the same moment, so it is said once (as the approval); a review that was not an approval is a return or a rejection. */
+export function trailOf(
+  d: Pick<EvidenceDetail, 'status' | 'submitted_at' | 'submitted_by' | 'reviewed_at' | 'reviewed_by' | 'approved_at' | 'approved_by'>,
+  sentBack: string | null,
+  nameOf: (id: number | null | undefined) => string | null = () => null,
+): TrailStep[] {
+  const steps: Array<TrailStep & { t: number }> = [];
+  const add = (label: string, at: string | null, by: number | null) => {
+    const t = parseUtc(at)?.getTime();
+    if (at && t !== undefined) steps.push({ label, at, by: nameOf(by), t });
+  };
+  add('Sent for review', d.submitted_at, d.submitted_by);
+  const sameMoment = !!d.approved_at && !!d.reviewed_at && parseUtc(d.approved_at)?.getTime() === parseUtc(d.reviewed_at)?.getTime();
+  if (!sameMoment) add(d.status === 'rejected' ? 'Rejected' : sentBack ? 'Sent back' : 'Reviewed', d.reviewed_at, d.reviewed_by);
+  add('Approved', d.approved_at, d.approved_by);
+  return steps.sort((a, b) => a.t - b.t).map(({ label, at, by }) => ({ label, at, by }));
 }

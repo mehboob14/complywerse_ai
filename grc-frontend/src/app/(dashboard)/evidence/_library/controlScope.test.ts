@@ -61,6 +61,10 @@ test('the files are those of a control that exists; a control that does not exis
   assert.deepEqual(scopeWords(found), { title: 'Evidence linked to A.5.3 · Segregation of duties in ISO 27001', message: '2 files are linked to it.', found: true });
   assert.equal(scopeWords({ ...found, evidence_ids: [5] }).message, '1 file is linked to it.');
   assert.equal(scopeWords({ ...found, evidence_ids: [] }).message, 'No file is linked to this control yet.');
+  const loaded = [{ id: 1, status: 'approved' }, { id: 3, status: 'archived' }, { id: 7, status: 'draft' }];
+  assert.equal(scopeWords(found, loaded).message, '1 file is linked to it, and 1 archived (choose Archived under Status to see it).', 'the sentence counts what the list shows and says what it keeps out');
+  assert.equal(scopeWords({ ...found, evidence_ids: [3] }, loaded).message, 'The only file linked to it is archived (choose Archived under Status to see it).');
+  assert.equal(scopeWords({ ...found, evidence_ids: [9] }, loaded).message, 'No file is linked to this control yet.');
   const gone = scopeWords({ control: null, evidence_ids: [] });
   assert.deepEqual([gone.found, gone.title], [false, 'That control was not found']);
   assert.equal(scopeWords({ control: { kind: 'common', id: 5, code: 'IAC-01', title: null, framework: null }, evidence_ids: [] }).title, 'Evidence linked to IAC-01');

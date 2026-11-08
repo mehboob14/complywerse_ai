@@ -105,7 +105,7 @@ export function LibraryExplorer({ address, setAddress, onUploadClick, head }: Li
   const scopeIds = useMemo(() => idsOf(scopeQ.data), [scopeQ.data]);
   const scopeBusy = !!scope && scopeQ.isPending;                       // until the control's files are known the list is not drawn, so it is never briefly the whole library
   const scopeFailed = !!scope && scopeQ.isError && !scopeQ.data;
-  const scopeSaid = scope && scopeQ.data ? scopeWords(scopeQ.data) : null;
+  const scopeSaid = scope && scopeQ.data ? scopeWords(scopeQ.data, libQ.data?.items) : null;
   const loading = libQ.isPending || scopeBusy;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const now = useMemo(() => Date.now(), [libQ.data]);

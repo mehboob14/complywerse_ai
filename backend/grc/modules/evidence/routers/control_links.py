@@ -90,8 +90,10 @@ def evidence_for_control(
     elif ref.isdigit() and kind == "parsed":
         pc = (db.query(ParsedFrameworkControl).options(joinedload(ParsedFrameworkControl.uploaded_framework))
               .filter(ParsedFrameworkControl.id == int(ref)).first())
-        if pc and pc.uploaded_framework and pc.uploaded_framework.tenant_id in user_tenants:
-            control = {"kind": kind, "id": pc.id, "code": pc.control_id, "title": pc.title, "framework": pc.uploaded_framework.name}
+        fw = pc.uploaded_framework if pc else None
+        # the frameworks a tenant can see: its own, the shared ones and the platform's (the rule the clause suggestions use)
+        if fw and (fw.tenant_id in user_tenants or fw.tenant_id is None or fw.is_shared):
+            control = {"kind": kind, "id": pc.id, "code": pc.control_id, "title": pc.title, "framework": fw.name}
             column = EvidenceControlMapping.parsed_control_id == pc.id
     elif ref.isdigit():
         fc = (db.query(FrameworkControl)

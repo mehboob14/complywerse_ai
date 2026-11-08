@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { RECORD_TABS, backTo, editBody, editDirty, editFormOf, editProblem, fileKindOf, holderOf, offeredTo, recordTabs, reviewOf, scoreOf, timelineOf, type TimelineInput } from './recordModel.ts';
+import { RECORD_TABS, backTo, editBody, editDirty, editFormOf, editProblem, fileKindOf, holderOf, offeredTo, recordTabs, reviewOf, scoreOf, timelineOf, trailOf, type TimelineInput } from './recordModel.ts';
 
 const DAY = 86_400_000;
 const NOW = Date.parse('2026-11-08T10:00:00Z');
@@ -81,11 +81,11 @@ test('timeline: a file sent back says so with the reviewer\'s note, and the file
   const t = timelineOf(back, NOW, { nameOf: names });
   assert.equal(only(t, 'decision')?.label, 'Sent back');
   assert.equal(only(t, 'decision')?.state, 'warn');
-  assert.equal(only(t, 'decision')?.text, 'Please add the signed page.');
+  assert.equal(only(t, 'decision')?.text, null, 'the note is said in full under the strip, not cut inside it');
   assert.equal(only(t, 'decision')?.who, 'Olivia Owner');
   assert.equal(only(t, 'sent')?.label, 'Not sent for review');
-  const long = timelineOf({ ...back, review_comments: 'x'.repeat(400) }, NOW);
-  assert.ok((only(long, 'decision')?.text ?? '').length <= 141, 'a long note is cut for the strip; the Details tab has all of it');
+  const rejected400 = timelineOf(file({ status: 'rejected', reviewed_at: iso(-5), review_comments: 'x'.repeat(400) }), NOW);
+  assert.ok((only(rejected400, 'decision')?.text ?? '').length <= 141, 'the note of a rejection is cut for the strip; the Details tab has all of it');
 });
 
 test('timeline: a draft never reviewed has a to-do decision; a note on an approval that came after is not a return', () => {
@@ -171,4 +171,16 @@ test('the edit form needs a name and a whole number of days for the validity', (
   assert.match(editProblem({ ...ok, validity_period_days: '0' }) ?? '', /whole number/);
   assert.match(editProblem({ ...ok, validity_period_days: '1.5' }) ?? '', /whole number/);
   assert.equal(editProblem({ ...ok, validity_period_days: '90' }), null);
+});
+
+test('the review trail says an approval once, a return as a return, and lists what happened oldest first', () => {
+  const none = { status: 'draft', submitted_at: null, submitted_by: null, reviewed_at: null, reviewed_by: null, approved_at: null, approved_by: null };
+  assert.deepEqual(trailOf(none, null), []);
+  const approved = { ...none, status: 'approved', submitted_at: iso(-5), submitted_by: 2, reviewed_at: iso(-3), reviewed_by: 3, approved_at: iso(-3), approved_by: 3 };
+  assert.deepEqual(trailOf(approved, null, names).map((t) => [t.label, t.by]), [['Sent for review', 'Bilal Ahmed'], ['Approved', 'Olivia Owner']], 'the review and the approval are one moment: said once');
+  const returned = { ...none, submitted_at: iso(-5), reviewed_at: iso(-2), reviewed_by: 3 };
+  assert.deepEqual(trailOf(returned, 'Please add the signed page.', names).map((t) => t.label), ['Sent for review', 'Sent back']);
+  assert.deepEqual(trailOf({ ...returned, status: 'rejected' }, null, names).map((t) => t.label), ['Sent for review', 'Rejected']);
+  const later = { ...approved, approved_at: iso(-1) };
+  assert.deepEqual(trailOf(later, null, names).map((t) => t.label), ['Sent for review', 'Reviewed', 'Approved'], 'an approval a day after the review are two moments');
 });

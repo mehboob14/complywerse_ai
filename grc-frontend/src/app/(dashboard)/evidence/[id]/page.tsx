@@ -14,7 +14,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, FileText, Pencil, RefreshCw, Send, Trash2 } from 'lucide-react';
 import { PageHeader } from '@/components/ui';
-import { Button, ErrorState, Menu, SkeletonRows, TabPanel, Tabs, useTabParam, type MenuItem } from '@/components/ui/ds';
+import { Button, ErrorState, Menu, Notice, SkeletonRows, TabPanel, Tabs, useTabParam, type MenuItem } from '@/components/ui/ds';
 import { canRetry, errorMessage, statusOf } from '@/components/ui/ds/reportOutcome';
 import EvidenceViewer from '@/components/evidence/EvidenceViewer';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -152,6 +152,7 @@ export default function EvidenceRecordPage() {
       </div>
 
       <RecordTimeline steps={steps} />
+      {sentBack && <Notice tone="info" title="Sent back for changes">{sentBack}</Notice>}
 
       {offered.decide && (
         <DecisionBar

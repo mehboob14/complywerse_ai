@@ -6,11 +6,11 @@
 // found in two steps (the document, then its statements, several at a time). A link that fails is said by the page's mutation; nothing here assumes it worked.
 import { useMemo, useState } from 'react';
 import { ArrowLeft, Check, Loader2, Search } from 'lucide-react';
-import { Button, Checkbox, ErrorState, Sheet, SkeletonRows, TabPanel, Tabs, TextInput } from '@/components/ui/ds';
+import { Button, Checkbox, ErrorState, Notice, Sheet, SkeletonRows, TabPanel, Tabs, TextInput } from '@/components/ui/ds';
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { formatCount } from '@/lib/format';
 import { LINKABLE, LINK_LABEL, auditObservationId, matchItems, type LinkType, type PickItem } from './linkModel';
-import { useAuditOptions, useCommonControls, useDocuments, useIncidents, useRisks, useAssets, useStatements } from './recordData';
+import { PICK_LOAD, useAuditOptions, useCommonControls, useDocuments, useIncidents, useRisks, useAssets, useStatements } from './recordData';
 import type { LinkRequest } from './recordActions';
 import type { AllLinks, ControlsResponse } from './recordTypes';
 
@@ -21,7 +21,7 @@ const ROW = 'flex min-h-ds-control w-full items-center gap-[8px] rounded-ds-cont
 interface Source { isPending: boolean; isError: boolean; error: unknown; refetch: () => unknown }
 
 /** A searchable list of records to link, with the states of its request. */
-function PickPanel({ source, items, searchLabel, empty, busy, onPick }: {
+function PickPanel({ source, items, searchLabel, empty, busy, onPick, cutAt }: {
   source: Source;
   items: readonly PickItem[];
   searchLabel: string;
@@ -29,6 +29,8 @@ function PickPanel({ source, items, searchLabel, empty, busy, onPick }: {
   /** the value being linked right now */
   busy: string | null;
   onPick: (value: string) => void;
+  /** the list is the first N the server could be asked for: say so */
+  cutAt?: number;
 }) {
   const [query, setQuery] = useState('');
   const { shown, total } = useMemo(() => matchItems(items, query), [items, query]);
@@ -41,6 +43,7 @@ function PickPanel({ source, items, searchLabel, empty, busy, onPick }: {
       <p role="status" className={`text-ds-label ${MUTED}`}>
         {total === 0 ? 'Nothing matches.' : total > shown.length ? `Showing ${formatCount(shown.length)} of ${formatCount(total)}. Search to narrow it down.` : `${formatCount(total)} ${total === 1 ? 'match' : 'matches'}`}
       </p>
+      {cutAt != null && <Notice tone="info">Only the first {formatCount(cutAt)} are listed here, so a record further down cannot be found by search.</Notice>}
       <ul className="m-0 list-none p-0">
         {shown.map((i) => (
           <li key={i.value} className="border-b border-ds-border last:border-b-0">
@@ -199,13 +202,13 @@ export function LinkSheet({ open, onClose, evidenceId, name, start, controls, li
             />
           </TabPanel>
           <TabPanel tabKey="risks" lazy>
-            <PickPanel source={risksQ} items={riskItems} searchLabel="Search risks" empty="Every risk is already linked." busy={idle} onPick={(v) => link({ kind: 'risks', ids: [Number(v)] }, v)} />
+            <PickPanel source={risksQ} items={riskItems} searchLabel="Search risks" empty="Every risk is already linked." busy={idle} cutAt={(risksQ.data?.length ?? 0) >= PICK_LOAD ? PICK_LOAD : undefined} onPick={(v) => link({ kind: 'risks', ids: [Number(v)] }, v)} />
           </TabPanel>
           <TabPanel tabKey="assets" lazy>
-            <PickPanel source={assetsQ} items={assetItems} searchLabel="Search assets" empty="Every asset is already linked." busy={idle} onPick={(v) => link({ kind: 'assets', ids: [Number(v)] }, v)} />
+            <PickPanel source={assetsQ} items={assetItems} searchLabel="Search assets" empty="Every asset is already linked." busy={idle} cutAt={(assetsQ.data?.length ?? 0) >= PICK_LOAD ? PICK_LOAD : undefined} onPick={(v) => link({ kind: 'assets', ids: [Number(v)] }, v)} />
           </TabPanel>
           <TabPanel tabKey="incidents" lazy>
-            <PickPanel source={incidentsQ} items={incidentItems} searchLabel="Search incidents" empty="Every incident is already linked." busy={idle} onPick={(v) => link({ kind: 'incidents', ids: [Number(v)] }, v)} />
+            <PickPanel source={incidentsQ} items={incidentItems} searchLabel="Search incidents" empty="Every incident is already linked." busy={idle} cutAt={(incidentsQ.data?.length ?? 0) >= PICK_LOAD ? PICK_LOAD : undefined} onPick={(v) => link({ kind: 'incidents', ids: [Number(v)] }, v)} />
           </TabPanel>
         </div>
       </Tabs>

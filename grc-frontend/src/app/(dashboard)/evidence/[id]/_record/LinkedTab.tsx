@@ -32,7 +32,7 @@ function Row({ item, type, busy, onUnlink, onDetails }: { item: LinkedItem; type
         {item.control ? (
           <button
             type="button" onClick={() => onDetails(item.control!)} aria-label={`Details of ${item.code ?? item.title}: ${item.title}`}
-            className="-mx-[6px] block max-w-full rounded-ds-control px-[6px] py-[2px] text-left hover:bg-ds-surface-hover focus-visible:outline-none focus-visible:shadow-ds-ring"
+            className="-mx-[6px] flex min-h-ds-control max-w-full items-center rounded-ds-control px-[6px] py-[2px] text-left hover:bg-ds-surface-hover focus-visible:outline-none focus-visible:shadow-ds-ring"
           >
             <span dir="auto" className="break-words text-ds-body font-[600] text-ds-fg [overflow-wrap:anywhere]">{item.title}</span>
           </button>

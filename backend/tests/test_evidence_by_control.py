@@ -31,6 +31,8 @@ def seed(db):
     db.add(m.UploadedFramework(id=8, tenant_id=2, name="Other ECC", file_name="g.pdf", file_path="g.pdf", file_type="pdf", uploaded_by=2))
     db.add(m.ParsedFrameworkControl(id=3, uploaded_framework_id=7, control_id="NCA-1-1", title="A parsed control"))      # the same number as the framework control above
     db.add(m.ParsedFrameworkControl(id=80, uploaded_framework_id=8, control_id="OT-1", title="Someone else's control"))
+    db.add(m.UploadedFramework(id=9, tenant_id=None, name="Platform library", file_name="p.pdf", file_path="p.pdf", file_type="pdf", uploaded_by=1, is_shared=True))
+    db.add(m.ParsedFrameworkControl(id=90, uploaded_framework_id=9, control_id="PL-1", title="A control of a shared framework"))
     db.add(m.NormalizedControl(id=5, code="SCF-IAC-01", scf_id="IAC-01", name="Identity and access"))
     db.flush()
     for i, tenant in ((1, 1), (2, 1), (3, 1), (4, 2)):
@@ -94,6 +96,13 @@ def test_a_control_of_another_organisation_or_one_that_does_not_exist_is_an_empt
     assert ask(world, "999") == {"control": None, "evidence_ids": []}
     assert ask(world, "NOPE-1", "common") == {"control": None, "evidence_ids": []}
     assert ask(world, "abc") == {"control": None, "evidence_ids": []}              # a framework control id is a number
+
+
+def test_a_control_of_a_shared_or_platform_framework_is_seen_by_every_tenant(world):
+    world.db.add(m.EvidenceControlMapping(evidence_id=1, parsed_control_id=90, uploaded_framework_id=9))
+    world.db.commit()
+    body = ask(world, "90", "parsed")
+    assert body["evidence_ids"] == [1] and body["control"]["framework"] == "Platform library"
 
 
 def test_a_control_with_no_files_names_itself_and_lists_none(world):

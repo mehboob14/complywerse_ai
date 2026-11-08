@@ -40,16 +40,20 @@ export function withControlScope<R extends { id: number }>(rule: Rule<R>, ids: R
   return { ...rule, extra: (row, i) => ids.has(row.id) && (rule.extra ? rule.extra(row, i) : true) };
 }
 
-/** What the Library says about the scope: the control it is opened on, or why it cannot be. */
-export function scopeWords(answer: ControlAnswer | undefined): { title: string; message: string; found: boolean } {
+/** What the Library says about the scope: the control it is opened on, or why it cannot be. `rows` are the files the Library has loaded: the sentence counts the ones it shows (an archived
+ *  file stays out of the list until Archived is chosen, so it is said apart). Without them it counts the ids the server sent. */
+export function scopeWords(answer: ControlAnswer | undefined, rows?: ReadonlyArray<{ id: number; status: string }>): { title: string; message: string; found: boolean } {
   const c = answer?.control;
   if (!c) return { title: 'That control was not found', message: 'It may have been removed, or it belongs to another organisation. All the evidence is shown.', found: false };
   const name = [c.code, c.title].filter(Boolean).join(' · ') || 'this control';
   const where = c.framework ? ` in ${c.framework}` : '';
-  const n = answer?.evidence_ids.length ?? 0;
-  return {
-    title: `Evidence linked to ${name}${where}`,
-    message: n === 0 ? 'No file is linked to this control yet.' : `${n} ${n === 1 ? 'file is' : 'files are'} linked to it.`,
-    found: true,
-  };
+  const ids = new Set(answer?.evidence_ids ?? []);
+  const mine = rows ? rows.filter((r) => ids.has(r.id)) : null;
+  const archived = mine ? mine.filter((r) => r.status === 'archived').length : 0;
+  const n = mine ? mine.length - archived : ids.size;
+  const seeThem = `(choose Archived under Status to see ${archived === 1 ? 'it' : 'them'})`;
+  const message = n === 0 && !archived ? 'No file is linked to this control yet.'
+    : n === 0 ? `${archived === 1 ? 'The only file linked to it is archived' : `All ${archived} files linked to it are archived`} ${seeThem}.`
+    : `${n} ${n === 1 ? 'file is' : 'files are'} linked to it${archived ? `, and ${archived} archived ${seeThem}` : ''}.`;
+  return { title: `Evidence linked to ${name}${where}`, message, found: true };
 }

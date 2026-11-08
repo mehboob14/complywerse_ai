@@ -5,16 +5,13 @@
 import { ClampedText, Fact, FactList, Notice, SectionCard } from '@/components/ui/ds';
 import { formatDate, formatDateTime } from '@/lib/format';
 import { typeLabel } from '../../_workspace/evidenceModel';
+import { trailOf } from './recordModel';
 import type { EvidenceDetail } from './recordTypes';
 
 const MUTED = 'text-ds-fg-muted';
 
 export function DetailsTab({ evidence, nameOf, sentBack }: { evidence: EvidenceDetail; nameOf: (id: number | null | undefined) => string | null; sentBack: string | null }) {
-  const trail = [
-    { label: 'Sent for review', at: evidence.submitted_at, by: nameOf(evidence.submitted_by) },
-    { label: evidence.status === 'rejected' ? 'Rejected' : sentBack ? 'Sent back' : 'Reviewed', at: evidence.reviewed_at, by: nameOf(evidence.reviewed_by) },
-    { label: 'Approved', at: evidence.approved_at, by: nameOf(evidence.approved_by) },
-  ].filter((t) => t.at);
+  const trail = trailOf(evidence, sentBack, nameOf);
   return (
     <div className="flex flex-col gap-[16px]">
       <SectionCard id="about" title="About this file">
@@ -33,7 +30,6 @@ export function DetailsTab({ evidence, nameOf, sentBack }: { evidence: EvidenceD
 
       <SectionCard id="trail" title="Review trail">
         <div className="flex flex-col gap-[12px]">
-          {sentBack && <Notice tone="info" title="Sent back for changes">{sentBack}</Notice>}
           {evidence.review_comments && !sentBack && <Notice tone="info" title="The reviewer's note">{evidence.review_comments}</Notice>}
           {trail.length === 0 ? (
             <p className={`text-ds-body ${MUTED}`}>Nobody has reviewed this file yet.</p>
