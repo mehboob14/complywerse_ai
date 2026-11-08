@@ -233,7 +233,7 @@ def create_entry(
         data["status"] = "Open"
 
     row = AIRiskAssessmentEntry(
-        tenant_id=tenant.id,
+        tenant_id=tenant,
         source="manual",
         created_by_user_id=current_user.id,
         created_at=datetime.utcnow(),
@@ -464,7 +464,7 @@ async def upload_template(
             residual = _residual_from_score(score)
 
         row = AIRiskAssessmentEntry(
-            tenant_id=tenant.id,
+            tenant_id=tenant,
             risk_id_external=risk_id_ext,
             ai_system_use_case=ai_system,
             risk_description=descr,

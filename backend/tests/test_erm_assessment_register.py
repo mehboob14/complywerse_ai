@@ -152,3 +152,18 @@ def test_the_upload_can_use_the_register_risks_that_already_exist(db, http):
     one = http.post("/risk-assessments/upload-excel", files={"file": ("r.xlsx", workbook("Risk 2", "Totally different"), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
                     data={"name": "Mixed", "reuse_existing": "true"}).json()
     assert (one["risks_created"], one["risks_reused"]) == (1, 1) and db.query(Risk).count() == before + 1
+
+
+def test_an_ai_system_risk_can_be_created_and_listed(db):
+    """The register of the organisation's own AI systems' risks: creating an entry used to answer 500 for everyone (`get_user_primary_tenant` gives an id, the router read `.id` off it)."""
+    ai = importlib.import_module("grc.routers.ai_risk_assessment_router")
+    app = FastAPI()
+    app.include_router(ai.router)
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[require_auth] = lambda: db.get(GRCUser, 7)
+    http = TestClient(app)
+    made = http.post("/erm/ai-risk-assessment", json={"ai_system_use_case": "Fraud model", "risk_description": "Drift", "likelihood": 4, "impact": 5})
+    assert made.status_code == 201, made.text
+    body = made.json()
+    assert (body["ai_system_use_case"], body["risk_score"], body["status"]) == ("Fraud model", 20, "Open")
+    assert [r["id"] for r in http.get("/erm/ai-risk-assessment").json()] == [body["id"]]
