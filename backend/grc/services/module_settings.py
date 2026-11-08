@@ -318,7 +318,8 @@ MODULES: Dict[str, Dict[str, Any]] = {
     "tasks": {
         "label": "Task Management",
         "record": "Task",
-        "sections": ("statuses", "sla", "fields", "lists"),
+        # no "statuses": no task page reads a tenant's status levels (the workflow is fixed in critical_tasks_router.VALID_TRANSITIONS), so the Settings tab no longer offers them; stored values are untouched
+        "sections": ("sla", "fields", "lists"),
         "permissions": {"view": "critical_tasks:tasks:view", "edit": "critical_tasks:tasks:create"},
         "priorities": ("critical", "high", "medium", "low", "info"),
         "lists": {

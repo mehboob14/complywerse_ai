@@ -425,10 +425,11 @@ def test_a_dropdown_can_depend_on_another_and_a_category_keeps_subcategories():
 def test_registers_ship_sla_days_and_statuses_a_tenant_can_extend():
     for key in ("risks", "tasks", "evidence", "assets", "vendors", "controls"):
         module = ms.spec(key)
-        assert "sla" in module["sections"] and "statuses" in module["sections"]
+        assert "sla" in module["sections"] and ("statuses" in module["sections"] or key == "tasks")
         assert any(s["terminal"] for s in module["defaults"]["statuses"])
         assert module["defaults"]["sla"]["by_priority"]["critical"] > 0
     assert "sla" not in ms.spec("vulnerabilities")["sections"]
+    assert ms.spec("tasks")["sections"] == ("sla", "fields", "lists"), "Task Management offers no status levels: no task page reads them"
     assert ms.spec("tasks")["defaults"]["sla"]["by_priority"]["info"] == 365
     cleaned = ms._clean_statuses(ms.spec("risks")["defaults"]["statuses"] + [
         {"key": "awaiting_regulator", "label": "Awaiting regulator"},
