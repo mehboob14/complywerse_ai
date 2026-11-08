@@ -109,7 +109,7 @@ export default function AuditPackagesPage() {
           {listQ.isError && listQ.data && <ErrorState compact title="Couldn't refresh the packages" message={`${errorMessage(listQ.error)} What is shown may be out of date.`} onRetry={canRetry(listQ.error) ? () => { void listQ.refetch(); } : undefined} />}
 
           <div className="flex flex-wrap items-center gap-x-[12px] gap-y-[8px]">
-            <FilterChips label="Package status" chips={listQ.isLoading ? [] : chips} onToggle={onChip} className="min-w-0" />
+            <FilterChips label="Package status" chips={listQ.isLoading ? [] : chips} onToggle={onChip} overflow="scroll" className="min-w-0 max-w-full" />
             <TextInput
               className="w-full sm:ml-auto sm:w-[260px]" type="search" aria-label="Search audit packages" placeholder="Search packages" maxLength={100} leftAdornment={<Search aria-hidden />}
               value={a.q} onChange={(e) => refilter({ q: e.target.value })}
