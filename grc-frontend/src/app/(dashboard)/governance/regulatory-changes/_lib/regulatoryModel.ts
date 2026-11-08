@@ -65,6 +65,9 @@ export function effectiveOf(value: string | null | undefined, today: Date): Effe
 }
 export const EFFECTIVE_LABEL: Record<Effective, string> = { past: 'In force', soon: 'Within 30 days', later: 'Later', none: 'No date' };
 
+/** The priorities of a change, an obligation and a task, most urgent first (the platform's scale; the words are lib/status.ts `priority`). */
+export const PRIORITIES = ['critical', 'high', 'medium', 'low'] as const;
+
 // ── regulators ───────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 /** The sources the server accepts for a circular (REGULATORY_CHANGE_SOURCES): the circular form offers them, nothing here is invented. */

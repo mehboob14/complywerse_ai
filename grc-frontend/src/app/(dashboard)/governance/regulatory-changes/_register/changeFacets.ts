@@ -3,7 +3,7 @@
 import { indexRows, type Chosen, type FacetIndex, type FacetSpec, type Rule } from '../../../../../components/records/facetEngine.ts';
 import { priority } from '../../../../../lib/status.ts';
 import { changeStatus } from '../../../../../lib/statuses/regulatory.ts';
-import { BUCKETS, BUCKET_LABEL, EFFECTIVE_LABEL, bucketOf, effectiveOf, isOpen, isReading, regulatorName, type Effective } from '../_lib/regulatoryModel.ts';
+import { BUCKETS, BUCKET_LABEL, EFFECTIVE_LABEL, PRIORITIES, bucketOf, effectiveOf, isOpen, isReading, regulatorName, type Effective } from '../_lib/regulatoryModel.ts';
 import type { ChangeRow, Person } from '../_lib/types.ts';
 
 export type FacetKey = 'status' | 'priority' | 'regulator' | 'owner' | 'effective' | 'work';
@@ -12,7 +12,6 @@ export const FACET_TITLE: Record<FacetKey, string> = { status: 'Status', priorit
 export const OPEN_AT_FIRST: readonly FacetKey[] = ['status', 'priority', 'regulator', 'work'];
 export const SEARCHABLE: readonly FacetKey[] = ['owner'];
 export const NO_OWNER = 'none';
-export const PRIORITIES = ['critical', 'high', 'medium', 'low'] as const;
 
 export const QUICK_IDS = ['all', 'open', 'mine', 'soon', 'late', 'reading'] as const;
 export type QuickId = (typeof QUICK_IDS)[number];
