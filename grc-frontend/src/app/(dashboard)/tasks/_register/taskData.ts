@@ -26,9 +26,8 @@ export function useLeanTasks() {
   return useQuery<LeanTasks>({
     queryKey: [...TASKS_KEY],
     queryFn: async () => (await criticalTasksApi.list({ lean: 1, limit: LOAD_LIMIT })).data as LeanTasks,
-    placeholderData: keepPreviousData,
-    staleTime: 60_000,
-    refetchOnWindowFocus: false,
+    placeholderData: keepPreviousData,            // the rows already on screen stay while a newer answer comes
+    refetchOnWindowFocus: false,                  // ten thousand tasks are not fetched again because a window was clicked; opening the tab again asks (a task edited on its own page is seen)
     retry: retryRead,
   });
 }
