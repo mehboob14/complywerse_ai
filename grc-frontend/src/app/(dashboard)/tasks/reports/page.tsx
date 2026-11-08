@@ -1,17 +1,13 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-// /tasks/reports: the Task Reports view (the page's own head, with a way back to Task Management). The same view is the "Reports" tab of /tasks; the numbers and the words are in _ReportsView.
-import { PageHeader } from '@/components/ui';
-import { routeFor } from '@/lib/navRegistry';
-import { ReportsView } from '../_ReportsView';
-
-const TITLE = routeFor('/tasks/reports')?.label ?? 'Task reports';
-
-export default function TaskReportsPage() {
-  return (
-    <div className="flex flex-col gap-[16px]">
-      <PageHeader variant="page" title={TITLE} back={{ href: '/tasks', label: 'Back to Task Management' }} info="Analytics for the tasks you may see: status, priority, SLA, workload and the trend over the last twelve months." />
-      <ReportsView />
-    </div>
-  );
+// /tasks/reports was the page of the Task Reports view, and a tab of /tasks. The Reports tab is the one place now: this address stays for ever (stored links and bookmarks carry it) and forwards
+// to it, with whatever query the link had. A server redirect: no flash of an old page.
+export default function TaskReportsForward({ searchParams }: { searchParams?: Record<string, string | string[] | undefined> }) {
+  const query = new URLSearchParams({ tab: 'reports' });
+  Object.keys(searchParams ?? {}).forEach((key) => {
+    if (key === 'tab') return;
+    const value = searchParams?.[key];
+    (Array.isArray(value) ? value : value === undefined ? [] : [value]).forEach((v) => query.append(key, v));
+  });
+  redirect(`/tasks?${query.toString()}`);
 }

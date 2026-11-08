@@ -92,12 +92,7 @@ export function titleProblem(title: string, noun = 'title'): string | null {
 }
 
 // ── tabs ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-export const TASK_TABS = ['board', 'my-tasks', 'sla', 'reports'] as const;
-export type TaskTab = (typeof TASK_TABS)[number];
-/** an old name for a tab: the "Settings" tab is the one called `sla` */
-export const TAB_ALIASES: Readonly<Record<string, TaskTab>> = { settings: 'sla', mine: 'my-tasks', report: 'reports' };
-export const TAB_LABELS: Record<TaskTab, string> = { board: 'Task Board', 'my-tasks': 'My Tasks', sla: 'Settings', reports: 'Reports' };
-
+// the tabs of the Task Management page (My work, All tasks, Reports, Settings) are taskTabs.ts
 export const DETAIL_TABS = ['details', 'subtasks', 'comments', 'evidence', 'history'] as const;
 export type DetailTab = (typeof DETAIL_TABS)[number];
 
