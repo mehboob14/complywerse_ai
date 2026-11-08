@@ -1,62 +1,83 @@
-// Navigation-registry entries of the Third-Party Vendor Risk pages (see navPages/index.ts for the contract). Written by R-REG, 2026-11-01.
-// The sidebar has ONE leaf (/vendor-risk, the Overview); the module draws its own 8-entry rail inside the page (vendor-risk/_lib/railModel.ts, D50) and the shell will lift that rail
-// into itself, so the rail is modelled here: the four rail entries that group pages are tab strips (`tab.area` 'vendor-vendors' | 'vendor-monitoring' | 'vendor-insights' | 'vendor-setup',
-// same tabs and order as RAIL; vendorRegistry.test.ts holds them equal), the three single entries (Intake, Findings, Questionnaires) and the Overview's drill-downs hang under the leaf.
-// A tab's `label` is its page's heading (the sidebar-style name); `shortLabel` is the text the rail's strip shows when that differs.
+// Navigation-registry entries of the Third-Party Vendor Risk pages (see navPages/index.ts for the contract). Rewritten by vendor-shell, 2026-11-08: the module's navigation is ONE model,
+// vendor-risk/_lib/railModel.ts (the eight entries, their tabs, who draws each page's head), and this file DERIVES the registry from it, so a group that moves a tab edits one line there and
+// nothing here. The pages that are neither an entry nor a tab (details, drill-downs, forwards) are listed below.
+// Two states of the sidebar are valid and both are tested: today it has ONE leaf (/vendor-risk, the Overview) and the other seven entries are pages that hang under it; once the parent lists the
+// eight entries as sub-items (SIDEBAR of railModel.ts), the entries it lists become sidebar leaves (extras here in LEAVES, no longer pages) with no edit of this file. What the sidebar lists is
+// read from navAccess, the one place that decides it.
 // Public pages of the module (the supplier's questionnaire and the examiner link, vendor-risk/questionnaires/[token] and examiner/[token]) are outside the shell and not entries.
+import { flattenLeaves, navigation } from '../../components/layout/navAccess.ts';
 import type { PageSpec, RouteExtra } from '../navRegistry.ts';
+import { RAIL, headOf, type RailEntry, type RailTab } from '../../app/(dashboard)/vendor-risk/_lib/railModel.ts';
 
 const AREA = 'third-party-vendor-risk';
 const V = '/vendor-risk';
-const RAIL = 'a page of the Third-party risk rail';
+const MENU = 'a page of the Third-party risk menu';
+
+const leaves = flattenLeaves(navigation);
+const listed = new Set(leaves.map((leaf) => leaf.href));
+/** The name of the Overview's leaf: "Third-Party Vendor Risk" while it is the module's only leaf, "Overview" in the group. */
+const OVERVIEW = (leaves.find((leaf) => leaf.href === V) as { name: string }).name;
+const heading = (path: string): Pick<RouteExtra, 'ownHeading'> => (headOf(path) === 'legacy' ? {} : { ownHeading: true });
+const last = (href: string): string => href.split('/').pop() as string;
+
+/** One page of the model as a registry entry (the entry's own page, or one tab of its strip). */
+function entryPage(e: RailEntry, tab: RailTab | undefined, index: number): PageSpec {
+  const first = index === 0;
+  const name = tab ? tab.name : e.name;
+  const title = tab?.title;
+  return {
+    path: tab ? tab.href : e.href,
+    label: title ?? name,
+    ...(title ? { shortLabel: name } : {}),
+    area: AREA,
+    parent: first ? V : (e.tabs as RailTab[])[0].href,
+    ...(tab ? { tab: { area: `vendor-${e.key}`, id: last(tab.href), order: index + 1 } } : { hidden: `${MENU} (${e.name}); ` + (e.key === 'intake' ? 'the Request vendor button opens it with the request dialog' : 'it opens from the menu') }),
+    keywords: (tab ?? e).keywords,
+    ...heading(tab ? tab.href : e.href),
+  };
+}
+
+// every entry of the model except the Overview (the sidebar's own leaf, below), as pages: tabs when it has them
+const ENTRIES: PageSpec[] = RAIL.filter((e) => e.key !== 'overview').reduce<PageSpec[]>((all, e) => all.concat(e.tabs ? e.tabs.map((t, i) => entryPage(e, t, i)) : [entryPage(e, undefined, 0)]), []);
+
+/** What the sidebar adds to the leaf of an entry once it lists it: the page's own heading and tab text where they differ from the menu's name, and the words a search finds it by. */
+function leafExtra(page: PageSpec, e: RailEntry): RouteExtra {
+  const name = (e.tabs ? e.tabs[0].title ?? e.tabs[0].name : e.name);
+  return {
+    ...(name !== e.name ? { title: name } : {}),
+    ...(e.tabs && e.tabs[0].name !== e.name ? { shortLabel: e.tabs[0].name } : {}),
+    ...(page.tab ? { tab: page.tab } : {}),
+    ...(page.keywords ? { keywords: page.keywords.filter((k) => k.toLowerCase() !== e.name.toLowerCase()) } : {}),
+    ...(page.ownHeading ? { ownHeading: true } : {}),
+  };
+}
+
+const entryOfPath = (path: string): RailEntry => RAIL.find((e) => (e.tabs ? e.tabs[0].href : e.href) === path) as RailEntry;
 
 export const LEAVES: Record<string, RouteExtra> = {
-  [V]: { title: 'Third-Party Vendor Risk Overview', keywords: ['TPRM', 'Vendor risk', 'Suppliers', 'Third-party risk'] },
+  [V]: { title: 'Third-Party Vendor Risk Overview', keywords: ['TPRM', 'Vendor risk', 'Suppliers', 'Third-party risk'], ...heading(V) },
+  ...Object.fromEntries(ENTRIES.filter((p) => listed.has(p.path)).map((p) => [p.path, leafExtra(p, entryOfPath(p.path))])),
 };
 
 export const PAGES: PageSpec[] = [
   // ---- the Overview's drill-downs (cards of the Overview page) ----
-  { path: `${V}/attention`, label: 'Needs attention', area: AREA, parent: V, hidden: 'opens from the Needs attention card of the Overview', keywords: ['Attention queue'] },
-  { path: `${V}/actions`, label: 'Planned actions', area: AREA, parent: V, hidden: 'opens from the Planned actions card of the Overview' },
+  { path: `${V}/attention`, label: 'Needs attention', area: AREA, parent: V, hidden: 'opens from the Work queue link of the Overview and from the Needs attention counter', keywords: ['Attention queue', 'Work queue'], ...heading(`${V}/attention`) },
+  { path: `${V}/actions`, label: 'Planned actions', area: AREA, parent: V, hidden: 'opens from the My work card of the Overview', ...heading(`${V}/actions`) },
   // The two pages removed from the rail (D50) still forward to the Overview.
-  { path: `${V}/procurement`, label: 'Third-Party Vendor Risk', area: AREA, aliasOf: V },
-  { path: `${V}/shadow-saas`, label: 'Third-Party Vendor Risk', area: AREA, aliasOf: V },
+  { path: `${V}/procurement`, label: OVERVIEW, area: AREA, aliasOf: V },
+  { path: `${V}/shadow-saas`, label: OVERVIEW, area: AREA, aliasOf: V },
 
-  // ---- single rail entries ----
-  { path: `${V}/intake`, label: 'Intake', area: AREA, parent: V, hidden: `${RAIL} (Intake); the module header's Request vendor button opens it with the request dialog`, keywords: ['Vendor requests', 'Request vendor'] },
-  { path: `${V}/intake/:id`, label: 'Vendor request', area: AREA, parent: `${V}/intake`, hidden: 'opens from an Intake card and from the request dialog once a request is filed' },
-  { path: `${V}/findings`, label: 'Findings', area: AREA, parent: V, hidden: `${RAIL} (Findings) and from the vendor tiles of the Risk Management Overview`, keywords: ['Vendor findings', 'Remediation'] },
-  { path: `${V}/questionnaires`, label: 'Questionnaires', area: AREA, parent: V, hidden: `${RAIL} (Questionnaires)`, keywords: ['Questionnaire templates', 'Due diligence'] },
+  // ---- the entries and tabs the sidebar does not list (yet) ----
+  ...ENTRIES.filter((p) => !listed.has(p.path)),
+
+  // ---- pages that open from an entry or a tab ----
+  { path: `${V}/intake/:id`, label: 'Vendor request', area: AREA, parent: `${V}/intake`, hidden: 'opens from an Intake row and from the request dialog once a request is filed' },
   { path: `${V}/questionnaires/:token/builder`, label: 'Questionnaire builder', area: AREA, parent: `${V}/questionnaires`, hidden: 'opens from a questionnaire (Edit or New) in Questionnaires' },
-
-  // ---- Vendors: the Register and its tabs ----
-  { path: `${V}/vendors`, label: 'Vendors', shortLabel: 'Register', area: AREA, parent: V, tab: { area: 'vendor-vendors', id: 'register', order: 1 }, keywords: ['Vendor register', 'Suppliers'] },
-  { path: `${V}/assessments`, label: 'Vendor Assessments', shortLabel: 'Assessments', area: AREA, parent: `${V}/vendors`, tab: { area: 'vendor-vendors', id: 'assessments', order: 2 } },
-  { path: `${V}/contracts`, label: 'Contracts', area: AREA, parent: `${V}/vendors`, tab: { area: 'vendor-vendors', id: 'contracts', order: 3 } },
-  { path: `${V}/reviews`, label: 'Yearly check-ins', shortLabel: 'Check-ins', area: AREA, parent: `${V}/vendors`, tab: { area: 'vendor-vendors', id: 'check-ins', order: 4 }, keywords: ['Vendor reviews', 'Annual reviews'] },
   { path: `${V}/vendors/:id`, label: 'Vendor', area: AREA, parent: `${V}/vendors`, hidden: 'opens from a Register row and from the vendor name on most pages of the module and of the Auditor Portal' },
   { path: `${V}/vendors/:id/summary`, label: 'Vendor summary report', area: AREA, parent: `${V}/vendors`, hidden: 'opens from the vendor record\'s menu ("Summary report")' },
   { path: `${V}/assessments/:id`, label: 'Vendor assessment', area: AREA, parent: `${V}/assessments`, hidden: 'opens from a questionnaire sent to a vendor and from a vendor\'s assessment dialog' },
-
-  // ---- Monitoring and its tabs ----
-  { path: `${V}/monitoring`, label: 'Monitoring Signals', shortLabel: 'Signals', area: AREA, parent: V, tab: { area: 'vendor-monitoring', id: 'signals', order: 1 }, keywords: ['Monitoring', 'Continuous monitoring'] },
-  { path: `${V}/alerts`, label: 'Breach alerts', area: AREA, parent: `${V}/monitoring`, tab: { area: 'vendor-monitoring', id: 'alerts', order: 2 } },
-  { path: `${V}/security`, label: 'Security ratings', area: AREA, parent: `${V}/monitoring`, tab: { area: 'vendor-monitoring', id: 'security', order: 3 } },
-  { path: `${V}/technology`, label: 'Technology', area: AREA, parent: `${V}/monitoring`, tab: { area: 'vendor-monitoring', id: 'technology', order: 4 }, keywords: ['Vendor technology', 'Technology stack'] },
-  { path: `${V}/concentration`, label: 'Concentration', area: AREA, parent: `${V}/monitoring`, tab: { area: 'vendor-monitoring', id: 'concentration', order: 5 }, keywords: ['Concentration risk', 'Subprocessors'] },
-
-  // ---- Insights and its tabs ----
-  { path: `${V}/risk-360`, label: 'Risk 360°', area: AREA, parent: V, tab: { area: 'vendor-insights', id: 'risk-360', order: 1 }, keywords: ['Risk 360', 'Insights'] },
-  { path: `${V}/comply-analysis`, label: 'Comply analyses', area: AREA, parent: `${V}/risk-360`, tab: { area: 'vendor-insights', id: 'comply-analysis', order: 2 }, keywords: ['Comply analysis', 'FAIR'] },
-  { path: `${V}/reports`, label: 'Reports', area: AREA, parent: `${V}/risk-360`, tab: { area: 'vendor-insights', id: 'reports', order: 3 }, keywords: ['Vendor reports'] },
-  { path: `${V}/exchange`, label: 'Vendor Exchange', shortLabel: 'Exchange', area: AREA, parent: `${V}/risk-360`, tab: { area: 'vendor-insights', id: 'exchange', order: 4 } },
   { path: `${V}/comply-analysis/:id`, label: 'Comply analysis', area: AREA, parent: `${V}/comply-analysis`, hidden: 'opens from a row of Comply analyses' },
   { path: `${V}/reports/:id`, label: 'Vendor report', area: AREA, parent: `${V}/reports`, hidden: 'opens from a kept report in Reports, and straight after one is generated' },
-
-  // ---- Setup and its tabs ----
-  { path: `${V}/roster`, label: 'Roster', area: AREA, parent: V, tab: { area: 'vendor-setup', id: 'roster', order: 1 }, keywords: ['Reviewers', 'Vendor roster'] },
-  { path: `${V}/policy`, label: 'Policy', area: AREA, parent: `${V}/roster`, tab: { area: 'vendor-setup', id: 'policy', order: 2 }, keywords: ['Vendor policy', 'Alert rules', 'Tiers'] },
-  { path: `${V}/settings`, label: 'Third-party risk settings', shortLabel: 'Settings', area: AREA, parent: `${V}/roster`, tab: { area: 'vendor-setup', id: 'settings', order: 3 }, keywords: ['Vendor settings'] },
   { path: `${V}/settings/emails`, label: 'Emails', area: AREA, parent: `${V}/settings`, hidden: 'opens from Third-party risk settings (the emails link)', keywords: ['Vendor emails'] },
   // The alert rules moved into the Policy page (its #alert-rules section); the old address forwards there.
   { path: `${V}/settings/alert-rules`, label: 'Policy', area: AREA, aliasOf: `${V}/policy` },

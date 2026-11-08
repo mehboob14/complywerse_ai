@@ -2,7 +2,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { RAIL, entryOf, tabActive } from './railModel.ts';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+import { Building2 } from 'lucide-react';
+import { activeNavHref } from '../../../../components/layout/navActive.ts';
+import type { NavEntry } from '../../../../components/layout/navAccess.ts';
+import { HEAD, RAIL, SIDEBAR, WITH_ACTIONS, entryOf, headOf, tabActive, tabsOf } from './railModel.ts';
 
 test('the rail is short: eight entries in the order the work flows, no Shadow SaaS and no Procurement', () => {
   assert.deepEqual(RAIL.map((e) => e.name), ['Overview', 'Vendors', 'Intake', 'Findings', 'Questionnaires', 'Monitoring', 'Insights', 'Setup']);
@@ -45,4 +51,53 @@ test('an entry with tabs links to its first tab, and a tab is on for its page an
 
 test('only Intake and Findings carry a count, as in the reference product', () => {
   assert.deepEqual(RAIL.filter((e) => e.count).map((e) => [e.key, e.count]), [['intake', 'intake_pending'], ['findings', 'open_findings']]);
+});
+
+test('the strip of a page is the tabs of its entry: none for the Overview, Intake, Findings and Questionnaires, the same four on every page of Vendors', () => {
+  assert.deepEqual(tabsOf('/vendor-risk/vendors/12').map((t) => t.name), ['Register', 'Assessments', 'Contracts', 'Check-ins']);
+  assert.deepEqual(tabsOf('/vendor-risk/alerts?x=1').map((t) => t.name), ['Signals', 'Breach alerts', 'Security ratings', 'Technology', 'Concentration']);
+  assert.deepEqual(tabsOf('/vendor-risk/settings/emails').map((t) => t.name), ['Roster', 'Policy', 'Settings']);
+  for (const path of ['/vendor-risk', '/vendor-risk/attention', '/vendor-risk/intake', '/vendor-risk/findings', '/vendor-risk/questionnaires', '/risks']) assert.deepEqual(tabsOf(path), [], path);
+});
+
+test('every address of the model is unique, and every tab and entry is a page of the module', () => {
+  const hrefs = RAIL.flatMap((e) => (e.tabs ? e.tabs.map((t) => t.href) : [e.href]));
+  assert.equal(new Set(hrefs).size, hrefs.length);
+  for (const h of hrefs.concat(RAIL.flatMap((e) => e.also ?? []))) assert.ok(h.startsWith('/vendor-risk'), h);
+});
+
+// ---- who draws a page's head ----
+
+const FILE = (route: string): string => {
+  const rest = route.replace(/^\/vendor-risk/, '').replace(/^\//, '');
+  return fileURLToPath(new URL(`../${rest ? `${rest}/` : ''}page.tsx`, import.meta.url));
+};
+
+test('HEAD: a page that draws its head draws the page head of the kit; a page the layout draws has no heading of its own; every row is a real page', () => {
+  for (const [path, by] of Object.entries(HEAD)) {
+    const source = readFileSync(FILE(path), 'utf8');
+    if (by === 'page') assert.match(source, /<PageHeader[\s\S]{0,80}variant="page"/, `${path} draws PageHeader variant="page"`);
+    if (by === 'layout') assert.ok(!/<h1|<PageHeader|ModuleHeader/.test(source), `${path}: the layout draws its head, so the page draws none`);
+  }
+  assert.equal(headOf('/vendor-risk/vendors/12'), 'legacy');
+  assert.equal(headOf('/vendor-risk/alerts'), 'legacy');
+  for (const path of WITH_ACTIONS) assert.ok(headOf(path) === 'layout' || Object.keys(HEAD).length === 0, `${path}: the buttons are drawn only by the layout head`);
+});
+
+// ---- what the sidebar lists ----
+
+test('SIDEBAR is the eight entries: the Overview lights on its own page, every other tab and drill-down lights the entry it belongs to (deepest match, as the sidebar decides)', () => {
+  assert.deepEqual(SIDEBAR.map((s) => s.name), RAIL.map((e) => e.name));
+  assert.deepEqual(SIDEBAR.filter((s) => s.exact).map((s) => s.name), ['Overview']);
+  const nav: NavEntry[] = [{ name: 'Third-Party Vendor Risk', icon: Building2, items: SIDEBAR.map((s) => ({ ...s, icon: Building2 })) }];
+  for (const e of RAIL) {
+    const pages = (e.tabs ? e.tabs.map((t) => t.href) : [e.href]).concat(e.also ?? []);
+    for (const page of pages) {
+      assert.equal(activeNavHref(page, nav), e.href, `${page} lights ${e.name}`);
+      if (e.key !== 'overview') assert.equal(activeNavHref(`${page}/12`, nav), e.href, `${page}/12 lights ${e.name}`);
+    }
+  }
+  assert.equal(activeNavHref('/vendor-risk/vendors/12/summary', nav), '/vendor-risk/vendors');
+  assert.equal(activeNavHref('/vendor-risk/questionnaires/abc/builder', nav), '/vendor-risk/questionnaires');
+  assert.equal(activeNavHref('/vendor-risk/settings/emails', nav), '/vendor-risk/roster');
 });
