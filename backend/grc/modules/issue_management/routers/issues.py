@@ -409,7 +409,8 @@ def _apply_inline_linkages(
         ))
         counts["policy_statements"] = counts.get("policy_statements", 0) + 1
 
-    # Controls — the polymorphic link table needs a target_type discriminator.
+    # Controls — the polymorphic link table has one FK column per control family (there is no target_type column: passing one
+    # raised a TypeError, so a create with a linked control was a 500).
     # The frontend defaults to internal controls; advanced users can write
     # framework/parsed/normalized links via the detail-page link panel.
     _CONTROL_MODEL_MAP = {
@@ -421,7 +422,6 @@ def _apply_inline_linkages(
     for ic_id in _ids_in_tenant(InternalControl, body.get("linked_internal_control_ids") or []):
         db.add(IssueControlLink(
             issue_id=issue.id,
-            target_type="internal",
             internal_control_id=ic_id,
             created_by=user_id,
         ))
@@ -457,7 +457,6 @@ def _apply_inline_linkages(
             continue
         link_row = IssueControlLink(
             issue_id=issue.id,
-            target_type=target_type,
             created_by=user_id,
         )
         setattr(link_row, fk_name, cid)
