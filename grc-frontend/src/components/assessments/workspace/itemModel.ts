@@ -178,9 +178,8 @@ export interface ItemPatch {
   maturity_score?: number | null;
 }
 
-/** The patch from the item as it was to the draft as it is. `remarks` is never sent for a format that keeps structured data there. */
-export function patchOf(item: WorkItem, draft: ItemDraft, { structuredRemarks = false }: { structuredRemarks?: boolean } = {}): ItemPatch {
-  const was = draftOf(item);
+/** The patch from the draft as it was opened to the draft as it is. `remarks` is never sent for a format that keeps structured data there. */
+export function patchBetween(was: ItemDraft, draft: ItemDraft, { structuredRemarks = false }: { structuredRemarks?: boolean } = {}): ItemPatch {
   const out: ItemPatch = {};
   const same = (a: string, b: string): boolean => a.trim() === b.trim();
   if (draft.status !== was.status) out.compliance_status = draft.status;
@@ -199,6 +198,9 @@ export function patchOf(item: WorkItem, draft: ItemDraft, { structuredRemarks = 
   if (draft.maturity !== was.maturity) out.maturity_score = draft.maturity === '' ? null : Number(draft.maturity);
   return out;
 }
+
+/** The patch from the control as the server has it to the draft as it is. */
+export const patchOf = (item: WorkItem, draft: ItemDraft, options: { structuredRemarks?: boolean } = {}): ItemPatch => patchBetween(draftOf(item), draft, options);
 
 export const hasChanges = (patch: ItemPatch): boolean => Object.keys(patch).length > 0;
 

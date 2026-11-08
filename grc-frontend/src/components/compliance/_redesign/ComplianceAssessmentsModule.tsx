@@ -1,6 +1,7 @@
 'use client';
 
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Search, Bell, Download, Plus, ChevronRight, ChevronDown, ChevronLeft,
@@ -89,6 +90,8 @@ export default function ComplianceAssessmentsModule({
   const tabLabel = FRAMEWORK_TABS.find((t) => t.key === activeTab)?.label ?? '';
   const selected = assessments.find((a) => a.id === selectedId) ?? assessments[0];
 
+  // One assessment opens in ONE place, the assessment workspace (/assessments/a/<id>): the in-place detail below it is no longer reached.
+  const router = useRouter();
   const go = (tab: string) => {
     setActiveTab(tab);
     if (tab === 'overview') { setView('overview'); return; }
@@ -97,10 +100,10 @@ export default function ComplianceAssessmentsModule({
     if (dedicated) { setView('list'); return; }
     // Regular framework: open its assessment directly (no list-of-one page).
     const inFramework = assessments.filter((a) => a.framework === tab);
-    if (inFramework.length >= 1) { setSelectedId(inFramework[0].id); setView('detail'); }
+    if (inFramework.length >= 1) { router.replace(`/assessments/a/${inFramework[0].id}`); }
     else { setView('list'); } // 0 assessments → framework empty state
   };
-  const openAssessment = (id: Assessment['id']) => { setSelectedId(id); setView('detail'); };
+  const openAssessment = (id: Assessment['id']) => { router.push(`/assessments/a/${id}`); };
   const backToOverview = () => { setActiveTab('overview'); setView('overview'); };
 
   // Open the tab named by the route (/assessments/<framework>). Re-run once
