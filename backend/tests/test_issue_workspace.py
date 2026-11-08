@@ -35,12 +35,13 @@ def http(monkeypatch):
     db.commit()
     for module in (issues_router, links_router):
         monkeypatch.setattr(module, "get_user_tenants", lambda user, session: [1])
+    monkeypatch.setattr(issues_router, "get_user_primary_tenant", lambda user, session: 1)
     app = FastAPI()
     app.include_router(issues_router.router)
     app.include_router(links_router.router)
     app.dependency_overrides[m.get_db] = lambda: db
     app.dependency_overrides[require_auth] = lambda: db.get(m.GRCUser, ME)
-    for gate in (issues_router._require_view, issues_router._require_edit, links_router._require_view, links_router._require_edit):
+    for gate in (issues_router._require_view, issues_router._require_edit, issues_router._require_create, links_router._require_view, links_router._require_edit):
         app.dependency_overrides[gate] = lambda: True
     client = TestClient(app)
     client.db = db
@@ -122,6 +123,14 @@ def test_an_edit_refuses_a_blank_title_and_a_root_cause_that_does_not_fit_in_pla
     http.db.expire_all()
     assert http.db.get(m.Issue, i.id).title == "Unpatched gateway"
     assert http.patch(f"/issues/{i.id}", json={"title": "  Unpatched edge gateway ", "root_cause": "No window"}).json()["title"] == "Unpatched edge gateway"
+
+
+def test_a_new_issue_with_a_title_or_root_cause_that_does_not_fit_is_refused_in_words(http):
+    too_long = http.post("/issues", json={"title": "x" * 256, "impact": "high", "urgency": "low"})
+    assert too_long.status_code == 400 and "255" in too_long.json()["detail"]
+    assert http.post("/issues", json={"title": "Fine", "root_cause": "y" * 256}).status_code == 400
+    assert http.post("/issues", json={"title": "x" * 255, "impact": "high", "urgency": "low"}).status_code == 201
+    assert http.db.query(m.Issue).count() == 1, "the refused ones left nothing behind"
 
 
 def test_an_edit_records_what_changed_in_words_and_keeps_the_old_changes_key(http):

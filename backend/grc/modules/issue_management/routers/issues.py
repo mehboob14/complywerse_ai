@@ -311,6 +311,10 @@ def create_issue(
     title = (body.get("title") or "").strip()
     if not title:
         raise HTTPException(status_code=400, detail="Title is required")
+    if len(title) > 255:  # the column is 255 wide: a refusal in words, not a 500 from the database
+        raise HTTPException(status_code=400, detail="Keep the title under 255 characters.")
+    if body.get("root_cause") and len(str(body["root_cause"])) > 255:
+        raise HTTPException(status_code=400, detail="Keep the root cause under 255 characters; the analysis has room for the rest.")
 
     impact = body.get("impact")
     urgency = body.get("urgency")
