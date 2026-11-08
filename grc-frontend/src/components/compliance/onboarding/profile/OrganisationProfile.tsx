@@ -177,10 +177,15 @@ export default function OrganisationProfile() {
   return (
     <div className={SHELL}>
       <PageHeading
-        title="Organisation profile"
+        title="Organisation Profile"
         info="Asked once and reused by every framework's onboarding. A framework asks only for what is specific to it and picks sites, systems, third parties and data types from here."
         meta={state !== 'idle' ? <span role="status" aria-live="polite">{SAVE_WORDS[state]}</span> : undefined}
-        actions={locked ? <ReadOnlyNote>View only <InfoTip label="Why this page is view only" text="Your last change was not saved. Only people who can edit frameworks can change the organisation profile." /></ReadOnlyNote> : undefined}
+        actions={(
+          <>
+            {locked && <ReadOnlyNote>View only <InfoTip label="Why this page is view only" text="Your last change was not saved. Only people who can edit frameworks can change the organisation profile." /></ReadOnlyNote>}
+            <Button href="/frameworks/onboarding" rightIcon={<ChevronRight aria-hidden />}>Framework onboarding</Button>
+          </>
+        )}
       />
       {halt && (
         <Notice
