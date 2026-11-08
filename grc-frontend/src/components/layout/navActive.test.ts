@@ -93,12 +93,10 @@ test('every Overview (and the dashboard) lights on its own page only, but Assess
 // Governance), so each is mapped to it by the narrowest prefix: path (dynamic ids as 1) -> the entry that lights
 const OVERVIEW_PAGES: Array<[string, string]> = [
   ['/erm/ai-risk-assessment', '/erm'],
-  ['/erm/appetite', '/erm'],
   ['/erm/dependencies', '/erm'],
   ['/erm/framework-controls/1', '/erm'],
   ['/erm/internal-controls', '/erm'],
   ['/erm/internal-controls/1', '/erm'],
-  ['/erm/mitigation-actions', '/erm'],
   ['/erm/reports', '/erm'],
   ['/erm/reviews', '/erm'],
   ['/compliance/assessments', '/compliance'],
@@ -108,8 +106,8 @@ const OVERVIEW_PAGES: Array<[string, string]> = [
   ['/assessments/1', '/assessments'],
 ];
 
-test('the 14 pages with no entry of their own still light their area\'s Overview', () => {
-  assert.equal(OVERVIEW_PAGES.length, 14);
+test('the 12 pages with no entry of their own still light their area\'s Overview', () => {
+  assert.equal(OVERVIEW_PAGES.length, 12);
   for (const [path, want] of OVERVIEW_PAGES) assert.equal(activeNavHref(path, navigation), want, path);
 });
 

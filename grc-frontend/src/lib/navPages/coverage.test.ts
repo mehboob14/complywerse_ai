@@ -273,7 +273,7 @@ test('breadcrumbFor gives a sane trail for an example URL of every module', () =
   assert.deepEqual(labels('/erm/rcsa/campaigns/4'), ['Risk Management', 'Operational Risk', 'RCSA', 'RCSA Campaigns', 'RCSA campaign']);
   assert.deepEqual(labels('/erm/analytics/heatmap'), ['Risk Management', 'Operational Risk', 'Advanced Analytics'], 'the heat map is the home of Advanced Analytics: its older address is the same page');
   assert.deepEqual(labels('/erm/analytics/dependencies'), ['Risk Management', 'Operational Risk', 'Advanced Analytics', 'Risk Dependencies']);
-  assert.deepEqual(labels('/erm/appetite'), ['Risk Management', 'Overview', 'Risk Appetite']);
+  assert.deepEqual(labels('/erm/appetite'), ['Risk Management', 'Operational Risk', 'Risk Appetite']);
   assert.deepEqual(labels('/erm/kris'), ['Governance', 'KRIs']);
   assert.deepEqual(labels('/vendor-risk/assessments/5'), ['Third-Party Vendor Risk', 'Vendors', 'Vendor Assessments', 'Vendor assessment']);
   assert.deepEqual(labels('/vendor-risk/policy'), ['Third-Party Vendor Risk', 'Roster', 'Policy']);

@@ -20,12 +20,13 @@ export const LEAVES: Record<string, RouteExtra> = {
   '/erm/analytics/bowtie': { keywords: ['Bow-Tie Risk Analysis', 'Bowtie'], ownHeading: true },
   '/erm/analytics/scenario': { keywords: ['What-if scenarios'], ownHeading: true },
   '/erm/kris': { ownHeading: true },
+  // Sidebar leaves since the Risk revamp (G9): they were tab-strip pages of the area before.
+  '/erm/appetite': { keywords: ['Appetite', 'Risk appetite', 'Risk appetite management', 'Tolerance'], ownHeading: true },
+  '/erm/mitigation-actions': { keywords: ['Mitigation', 'Treatment actions'], ownHeading: true },
 };
 
 export const PAGES: PageSpec[] = [
   // ---- the Overview's pages: its tab strip and its tiles ----
-  { path: '/erm/appetite', label: 'Risk Appetite', area: AREA, parent: '/erm', hidden: `${STRIP} (Appetite) and from the Appetite breaches tile of the Overview`, keywords: ['Appetite', 'Risk appetite', 'Risk appetite management', 'Tolerance'], ownHeading: true },
-  { path: '/erm/mitigation-actions', label: 'Mitigation Actions', area: AREA, parent: '/erm', hidden: `${STRIP} and from the Overdue mitigation actions tile of the Overview`, ownHeading: true },
   { path: '/erm/reviews', label: 'Risk Reviews', area: AREA, parent: '/erm', hidden: `${STRIP} (Reviews) and from the Overdue risk reviews tile of the Overview`, keywords: ['Reviews', 'Review schedule'], ownHeading: true },
   // Dependencies became a tool of Advanced Analytics: the old address forwards to it.
   { path: '/erm/dependencies', label: 'Risk Dependencies', area: AREA, aliasOf: '/erm/analytics/dependencies' },

@@ -5,7 +5,7 @@
 import {
   Activity, AlertCircle, AlertTriangle, BarChart3, Bookmark, Bot, Bug, Building2, CalendarClock, ClipboardCheck, ClipboardList,
   Crosshair, FileSpreadsheet, FileText, FolderKanban, Gavel, GitPullRequest, Landmark, Layers, LayoutDashboard, LifeBuoy,
-  ListTodo, Radar, Rss, ScrollText, Server, ShieldAlert, ShieldCheck, Target, Users, Workflow, Zap,
+  Gauge, ListChecks, ListTodo, Radar, Rss, ScrollText, Server, ShieldAlert, ShieldCheck, Target, Users, Workflow, Zap,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -87,7 +87,7 @@ export const navigation: NavEntry[] = [
     requiredModules: ['risks', 'erm'],
     items: [
       // the area's own pages that have no entry (its tab strip) light the Overview, as they always did
-      { name: 'Overview', href: '/erm', exact: true, activeMatch: ['/erm/ai-risk-assessment', '/erm/appetite', '/erm/dependencies', '/erm/framework-controls', '/erm/internal-controls', '/erm/mitigation-actions', '/erm/reports', '/erm/reviews'], icon: LayoutDashboard, requiredPermissions: ['erm:risks:*'] },
+      { name: 'Overview', href: '/erm', exact: true, activeMatch: ['/erm/ai-risk-assessment', '/erm/dependencies', '/erm/framework-controls', '/erm/internal-controls', '/erm/reports', '/erm/reviews'], icon: LayoutDashboard, requiredPermissions: ['erm:risks:*'] },
       {
         name: 'Operational Risk',
         icon: Layers,
@@ -95,6 +95,8 @@ export const navigation: NavEntry[] = [
           { name: 'Risk Register', href: '/erm/risks', icon: AlertTriangle, requiredPermissions: ['erm:risks:*'] },
           { name: 'Risk Assessments', href: '/erm/risk-assessments', icon: ClipboardList, requiredPermissions: ['risks:risk_assessment:*', 'erm:rcsa:*'] },
           { name: 'RCSA', href: '/erm/rcsa', icon: ClipboardList, requiredPermissions: ['erm:rcsa:*'] },
+          { name: 'Mitigation Actions', href: '/erm/mitigation-actions', icon: ListChecks, requiredPermissions: ['erm:risks:*'] },
+          { name: 'Risk Appetite', href: '/erm/appetite', icon: Gauge, requiredPermissions: ['erm:risks:*'] },
           // moved out of Advanced Analytics into the sidebar
           { name: 'Scenario Analysis', href: '/erm/analytics/scenario', icon: Target, requiredPermissions: ['erm:risks:*'] },
           { name: 'Bow-Tie Analysis', href: '/erm/analytics/bowtie', icon: Workflow, requiredPermissions: ['erm:risks:*'] },
