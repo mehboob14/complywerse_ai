@@ -6,6 +6,7 @@ import { GovernanceDocumentMarkdown } from '@/components/governance/GovernanceDo
 import apiClient from '@/lib/api';
 import { buildArtifactTemplate, type ArtifactMeta } from './artifactTemplates';
 import { downloadAsFormat } from './downloadUtils';
+import { useConfirm, useNotify } from '@/components/ui/ds';
 import {
   FileText,
   Plus,
@@ -276,13 +277,14 @@ function DownloadMenu({
  *  live data, not the markdown stored in `artifact.content`; everything else is
  *  rendered from its content in the formats that suit it. */
 export function ArtifactDownload({ artifact, label = '' }: { artifact: TenantArtifact; label?: string }) {
+  const notify = useNotify();
   if (artifact.is_platform_native) {
     return (
       <button
         onClick={() =>
           downloadFromServer(`/artifacts/${artifact.id}/export`, {},
             `${(artifact.name || 'artifact').replace(/[^A-Za-z0-9._-]+/g, '_').slice(0, 80)}.xlsx`)
-            .catch((e) => { console.error('Platform artifact export failed', e); alert('Download failed — see console for details.'); })
+            .catch((e) => { console.error('Platform artifact export failed', e); notify.error('The file could not be downloaded. Try again.', { title: "Couldn't download the file" }); })
         }
         className="p-1.5 rounded-lg text-purple-500 hover:bg-purple-50 transition-colors"
         title="Download live platform data as XLSX"
@@ -300,7 +302,7 @@ export function ArtifactDownload({ artifact, label = '' }: { artifact: TenantArt
       formats={p === 'XLSX' || p === 'CSV' ? ['xlsx', 'csv', 'pdf', 'md'] : ['docx', 'pdf', 'md']}
       onPick={(fmt) =>
         downloadFromServer(`/artifacts/${artifact.id}/export`, { fmt }, `${artifact.name}.${fmt}`)
-          .catch(() => alert('Download failed.'))
+          .catch(() => notify.error('The file could not be downloaded. Try again.', { title: "Couldn't download the file" }))
       }
     />
   );
@@ -321,6 +323,7 @@ interface CatalogContent {
 export function ViewArtifactModal({
   item, frameworkKey, onClose, onCreate,
 }: { item: CatalogItem; frameworkKey: string; onClose: () => void; onCreate?: () => void }) {
+  const notify = useNotify();
   const [downloading, setDownloading] = useState<string | null>(null);
   const { data, isLoading } = useQuery<CatalogContent>({
     queryKey: ['artifact-content', frameworkKey, item.artifact_id],
@@ -346,7 +349,7 @@ export function ViewArtifactModal({
         `${item.name}.${fmt}`,
       );
     } catch {
-      alert('Download failed — has this artifact been generated yet?');
+      notify.error('Has this document been generated yet? It can only be downloaded once it exists.', { title: "Couldn't download the file" });
     } finally {
       setDownloading(null);
     }
@@ -629,6 +632,7 @@ export function EditArtifactModal({
   onClose: () => void;
   isPending: boolean;
 }) {
+  const notify = useNotify();
   const [name, setName]               = useState(artifact.name);
   const [content, setContent]         = useState(artifact.content || '');
   const [description, setDescription] = useState(artifact.description || '');
@@ -710,7 +714,7 @@ export function EditArtifactModal({
                       window.URL.revokeObjectURL(url);
                     } catch (e) {
                       console.error('Platform artifact export failed', e);
-                      alert('Download failed — see console for details.');
+                      notify.error('The file could not be downloaded. Try again.', { title: "Couldn't download the file" });
                     }
                   }}
                   className="text-xs text-purple-700 hover:text-purple-900 flex items-center gap-1 px-3 py-1.5 border border-purple-200 bg-purple-50 rounded-lg hover:bg-purple-100"
@@ -787,6 +791,7 @@ export default function ArtifactsTab({
   relevanceText?: string;
 }) {
   const queryClient = useQueryClient();
+  const { confirm, confirmDialog } = useConfirm();
   const [activeSubTab, setActiveSubTab]     = useState<'catalog' | 'my-artifacts'>('catalog');
   const [activeStage, setActiveStage]       = useState<string>('all');
   const [searchQuery, setSearchQuery]       = useState('');
@@ -1004,10 +1009,10 @@ export default function ArtifactsTab({
                   <div key={item.id} className="flex items-center gap-2 rounded-lg border border-blue-100 bg-white px-2.5 py-1.5">
                     <Icon className="h-3.5 w-3.5 shrink-0 text-blue-600" />
                     <span className="min-w-0 flex-1 truncate text-xs font-medium text-gray-800">{item.name}</span>
-                    <span className="hidden shrink-0 text-[10px] text-gray-400 sm:inline">{item.artifact_type}</span>
+                    <span className="hidden shrink-0 text-[12px] text-gray-400 sm:inline">{item.artifact_type}</span>
                     {!item.is_platform_native && (
                       <button onClick={() => downloadTemplate(item)} title="Download this template"
-                        className="inline-flex shrink-0 items-center gap-1 rounded-md bg-blue-600 px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-blue-700">
+                        className="inline-flex shrink-0 items-center gap-1 rounded-md bg-blue-600 px-2 py-0.5 text-[12px] font-semibold text-white hover:bg-blue-700">
                         <Download className="h-3 w-3" /> Download
                       </button>
                     )}
@@ -1015,7 +1020,7 @@ export default function ArtifactsTab({
                 );
               })}
             </div>
-            <p className="mt-2 text-[10px] text-blue-600">Best-match templates based on this control. Not the right one? Browse or search the full catalog below.</p>
+            <p className="mt-2 text-[12px] text-blue-600">Best-match templates based on this control. Not the right one? Browse or search the full catalog below.</p>
           </div>
         )}
 
@@ -1237,7 +1242,7 @@ export default function ArtifactsTab({
                             <Edit2 className="h-4 w-4" />
                           </button>
                           <button
-                            onClick={() => { if (confirm(`Delete "${artifact.name}"?`)) deleteMutation.mutate(artifact.id); }}
+                            onClick={async () => { if (await confirm({ title: `Delete “${artifact.name}”?`, message: 'The document is removed from your list. This cannot be undone.', confirmLabel: 'Delete', tone: 'danger' })) deleteMutation.mutate(artifact.id); }}
                             className="p-1.5 rounded-lg text-rose-400 hover:bg-rose-50 transition-colors"
                             title="Delete"
                           >
@@ -1253,6 +1258,7 @@ export default function ArtifactsTab({
           </div>
         )}
       </div>
+      {confirmDialog}
     </>
   );
 }

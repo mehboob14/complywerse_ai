@@ -10,9 +10,9 @@
 //
 // The first def whose slot is 'controls' and that applies wins, so put the more specific lens before a general one.
 //
-// Today's entries put the older tabs of components/compliance behind the contract so that no type loses a screen when its three old detail pages forward here. The group that builds the
-// kit lenses (assess-lenses) replaces the Component of an entry, or deletes the entry once the built-in controls are enough. The singletons whose older tab finds its own assessment
-// (PDPL, DPIA, the Digital Operations workbook, the KPI report, the NCA registers, the DCC tool) have no entry yet: they open as the built-in controls until their lens exists.
+// The type lenses (components/assessments/lenses, written once on the kit): the requirements lens with a profile per type (ASVS, OWASP Testing, MASVS, the maturity types, the DCC tool, the PDPL
+// toolkit, the NCA workspace's controls), DPIA, the three NCA registers, the KPI report, the PDPL action plan and the audit plan. Still behind the contract as adapters of the older detail screen:
+// NIST determinations, the maturity-model workbook and Artifacts (the shared tab, brought to the kit's rules but not rebuilt).
 import dynamic from 'next/dynamic';
 import type { LensDef } from './lens';
 import { isNist } from './kinds';

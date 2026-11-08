@@ -156,9 +156,9 @@ export function PdplPanel({ assessmentId, assessmentName, item, prev, next, onOp
               {!g && !guide.isPending && !guide.isError && <p className="text-ds-body text-ds-fg-muted">What to check for this control, what good looks like and the evidence to collect, written for someone who sees it for the first time.</p>}
               {g && (
                 <div className="flex flex-col gap-[8px] text-ds-body text-ds-fg-body">
-                  {g.how_to_assess && <div><p className="font-[600] text-ds-fg">What to check</p><p className="whitespace-pre-line break-words">{g.how_to_assess}</p></div>}
-                  {g.what_good_looks_like && <div><p className="font-[600] text-ds-fg">What good looks like</p><p className="whitespace-pre-line break-words">{g.what_good_looks_like}</p></div>}
-                  {(g.evidence_examples ?? []).length > 0 && <div><p className="font-[600] text-ds-fg">Evidence to collect</p><ul className="list-disc pl-[20px]">{(g.evidence_examples ?? []).map((e, i) => <li key={i} className="break-words">{e}</li>)}</ul></div>}
+                  {g.how_to_assess && <div><p className="text-ds-body font-[600] text-ds-fg">What to check</p><p className="whitespace-pre-line break-words text-ds-body text-ds-fg-body">{g.how_to_assess}</p></div>}
+                  {g.what_good_looks_like && <div><p className="text-ds-body font-[600] text-ds-fg">What good looks like</p><p className="whitespace-pre-line break-words text-ds-body text-ds-fg-body">{g.what_good_looks_like}</p></div>}
+                  {(g.evidence_examples ?? []).length > 0 && <div><p className="text-ds-body font-[600] text-ds-fg">Evidence to collect</p><ul className="list-disc pl-[20px]">{(g.evidence_examples ?? []).map((e, i) => <li key={i} className="break-words">{e}</li>)}</ul></div>}
                 </div>
               )}
             </div>
