@@ -36,7 +36,7 @@ test('both leaves draw the kit head, are flagged ownHeading, and the top bar nam
     assert.equal(registryNamesPage(p), true, p);
   }
   assert.match(file('/governance/regulatory-changes/:id'), /<PageHeader\s+variant="page"/, 'the change page draws the kit head too, with the change\'s own title');
-  assert.equal(routes.find((e) => e.path === '/governance/regulatory-changes/:id')?.ownHeading, undefined, 'not flagged here: its entry is in navRegistry.ts (the parent\'s)');
+  assert.equal(routes.find((e) => e.path === '/governance/regulatory-changes/:id')?.ownHeading, true, 'flagged: its entry is in navRegistry.ts');
 });
 
 test('the heading of each leaf is its registry name', () => {

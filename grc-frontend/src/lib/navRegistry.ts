@@ -201,7 +201,7 @@ const pages: Draft[] = [
   gov(`${COMMITTEES}/:id`, 'Committee', { parent: COMMITTEES, hidden: 'opens from the Committees list', ownHeading: true }),
   gov(`${COMMITTEES}/meetings/:id`, 'Meeting', { parent: COMMITTEES, hidden: 'opens from a committee', ownHeading: true }),
   gov(`${COMMITTEES}/actions`, 'Oversight Actions', { parent: COMMITTEES, hidden: 'opens from the Committees page and the Overview\'s overdue-actions counter', ownHeading: true }),
-  gov(`${REGULATORY}/:id`, 'Regulatory change', { parent: REGULATORY, hidden: 'opens from the Regulatory Changes list' }),
+  gov(`${REGULATORY}/:id`, 'Regulatory change', { parent: REGULATORY, hidden: 'opens from the Regulatory Changes list', ownHeading: true }),
   gov(`${PROJECTS}/dashboard`, 'Overview', { title: 'Projects Overview', parent: PROJECTS, hidden: 'no link opens it; the Projects page shows the same view as its Overview tab', ownHeading: true }),
   gov(`${PROJECTS}/my-projects`, 'My Projects', { parent: PROJECTS, hidden: 'no link opens it; the Projects page shows the same view as its My Projects tab', ownHeading: true }),
   gov(`${PROJECTS}/:id`, 'Project', { parent: PROJECTS, hidden: 'opens from the Projects list', ownHeading: true }),

@@ -411,7 +411,7 @@ test('the Header names Governance pages from the registry and keeps no Governanc
 test('a page that draws its own heading is flagged in the registry, and only its section is shown in the top bar', () => {
   assert.deepEqual(routes.filter((e) => e.ownHeading && e.area === 'governance').map((e) => e.path).sort(), [
     '/governance', '/governance/committees', '/governance/committees/:id', '/governance/committees/actions', '/governance/committees/meetings/:id', '/governance/kpi-report',
-    '/governance/mappings', '/governance/workflows', '/is-projects', '/is-projects/:id', '/is-projects/dashboard', '/is-projects/my-projects',
+    '/governance/mappings', '/governance/regulatory-changes', '/governance/regulatory-changes/:id', '/governance/regulatory-feeds', '/governance/workflows', '/is-projects', '/is-projects/:id', '/is-projects/dashboard', '/is-projects/my-projects',
   ]);
   assert.equal(ownHeadingSection('/governance'), 'Governance');
   assert.equal(ownHeadingSection('/governance/kpi-report'), 'Governance');
