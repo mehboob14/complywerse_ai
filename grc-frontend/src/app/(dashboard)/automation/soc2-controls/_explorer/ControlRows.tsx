@@ -75,8 +75,8 @@ export function NextTestCell({ row, now }: { row: Row; now: Date }) {
   if (!row.next_test_date) return <span className="text-ds-body text-ds-fg-muted">{EMPTY}<span className="sr-only">No test scheduled</span></span>;
   const late = testOverdue(row, now);
   return (
-    <span className={`whitespace-nowrap text-ds-body ${late ? 'font-[600] text-ds-danger' : 'text-ds-fg-body'}`}>
-      {formatDate(row.next_test_date)}{late && <span className="ml-[4px] text-ds-label">overdue</span>}
+    <span className={`inline-flex flex-col whitespace-nowrap text-ds-body ${late ? 'font-[600] text-ds-danger' : 'text-ds-fg-body'}`}>
+      {formatDate(row.next_test_date)}{late && <span className="text-ds-label">overdue</span>}
     </span>
   );
 }

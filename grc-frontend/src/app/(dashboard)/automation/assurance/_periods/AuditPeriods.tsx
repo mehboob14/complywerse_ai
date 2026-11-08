@@ -15,10 +15,10 @@ import {
   type MenuItem,
 } from '@/components/ui/ds';
 import { canRetry, errorMessage, statusOf } from '@/components/ui/ds/reportOutcome';
-import { usePermissions } from '@/hooks/usePermissions';
 import { scfApi, type ScfAuditPeriod, type ScfFrameworkStatus } from '@/lib/api';
 import { formatCount } from '@/lib/format';
 import { titleFor } from '@/lib/navRegistry';
+import { useRights } from '../../soc2-controls/_explorer/controlsRights';
 import { statusPill } from '@/lib/status';
 import { auditPeriod } from '@/lib/statuses/controls';
 import {
@@ -43,8 +43,7 @@ export function AuditPeriods() {
   const qc = useQueryClient();
   const notify = useNotify();
   const { confirm, confirmDialog } = useConfirm();
-  const { hasPermission, isLoading: rightsLoading } = usePermissions();
-  const canManage = !rightsLoading && hasPermission('compliance:frameworks:*');
+  const canManage = useRights().can('frameworks');
   const noRight = 'You need the right to manage frameworks.';
 
   const summaryQ = useQuery({ queryKey: ['scf-assurance-summary'], queryFn: async () => (await scfApi.getAssuranceSummary()).data, retry });
@@ -165,8 +164,7 @@ export function AuditPeriods() {
         {periodsQ.data && periods.length === 0 && (
           <EmptyState
             kind="firstUse" bare icon={Snowflake} title="No audit periods yet"
-            description="A period names the dates an audit covers, and holds the statement that was true during it."
-            action={canManage ? <Button variant="primary" leftIcon={<CalendarPlus aria-hidden />} onClick={() => setCreating(true)}>New audit period</Button> : undefined}
+            description={canManage ? 'A period names the dates an audit covers, and holds the statement that was true during it. Use New audit period above to add the first.' : 'A period names the dates an audit covers, and holds the statement that was true during it.'}
           />
         )}
         {periods.length > 0 && (

@@ -31,7 +31,6 @@ import { useExplorerKeys } from '@/components/records/useExplorerKeys';
 import { useSelection } from '@/components/records/useSelection';
 import ModuleSettingsPanel from '@/components/settings/ModuleSettingsPanel';
 import { ScopeDialog } from '@/components/soc2/ScopeDialog';
-import { usePermissions } from '@/hooks/usePermissions';
 import { automationApi, scfApi } from '@/lib/api';
 import { formatCount, truncate } from '@/lib/format';
 import { routeFor } from '@/lib/navRegistry';
@@ -43,6 +42,7 @@ import { ControlCard, RowMenu, controlColumns, hrefOf, type RowEnv } from './Con
 import { ControlsStrip } from './ControlsStrip';
 import { EXPLORER_SCHEMA, arrivedPatch, filtersPatch, pageOf, type ExplorerAddress, type ExplorerView } from './controlsAddress';
 import { useControls, useDefaultScope, useMeId, useTenantUsers } from './controlsData';
+import { useRights } from './controlsRights';
 import {
   FACET_TITLE, NO_FILTERS, OPEN_AT_FIRST, RAIL_ORDER, SEARCHABLE, chosenOf, filterChips, filterCount, indexControls, isFiltering, orderedOptions, railOptions, removeChip, ruleOf,
   type FacetKey, type Filters,
@@ -70,12 +70,11 @@ export function ControlsExplorer() {
   const router = useRouter();
   const qc = useQueryClient();
   const uid = useId();
-  const { hasPermission, isLoading: rightsLoading } = usePermissions();
-  const can = (right: string) => !rightsLoading && hasPermission(right);
-  const canCreate = can('controls:control_library:create');
-  const canScope = can('compliance:frameworks:*');
-  const canAssign = can('controls:controls:assign');
-  const canRefresh = can('compliance:scan:execute');
+  const { can } = useRights();                                         // the rights as the server reads them: see controlsRightsModel.ts
+  const canCreate = can('createControl');
+  const canScope = can('frameworks');
+  const canAssign = can('assign');
+  const canRefresh = can('scan');
 
   // ── the page's state: in the address ──
   const [address, setAddress] = useAddressState(EXPLORER_SCHEMA);

@@ -17,13 +17,13 @@ import {
 } from '@/components/ui/ds';
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { overlayIsOpen, placeOf } from '@/components/records/useExplorerKeys';
-import { usePermissions } from '@/hooks/usePermissions';
 import { automationApi, scfApi } from '@/lib/api';
 import { formatCount } from '@/lib/format';
 import { text } from '@/lib/addressState';
 import { titleFor } from '@/lib/navRegistry';
 import { confidenceTone } from '@/lib/statuses/controls';
 import { ControlsStrip } from '../../_explorer/ControlsStrip';
+import { useRights } from '../../_explorer/controlsRights';
 import { VERDICT_WORDS, canRetarget, identity, matchWords, nextKey, openKey, queueWords, questionFor, type Queue, type QueueItem, type Verdict } from './reviewModel';
 
 const SCHEMA = { framework: text() };
@@ -97,8 +97,8 @@ function ControlName({ scfId }: { scfId: string }) {
 
 export function MappingReview() {
   const { confirm, confirmDialog } = useConfirm();
-  const { hasPermission, isLoading: rightsLoading } = usePermissions();
-  const canDecide = !rightsLoading && hasPermission('compliance:scan:execute');
+  const { can, loading: rightsLoading } = useRights();
+  const canDecide = can('scan');
   const [address, setAddress] = useAddressState(SCHEMA);
   const framework = address.framework;
   const [chosen, setChosen] = useState<string | null>(null);

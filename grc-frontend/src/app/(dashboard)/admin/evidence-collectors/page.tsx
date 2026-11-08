@@ -13,13 +13,13 @@ import { PageHeader } from '@/components/ui';
 import { Button, EmptyState, ErrorState, Pager, SegmentedControl, Select, SkeletonRows, StatusPill, TextInput, useAddressState } from '@/components/ui/ds';
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { BrandLogo } from '@/components/integrations/BrandLogo';
-import { usePermissions } from '@/hooks/usePermissions';
 import { automationApi } from '@/lib/api';
 import { formatCount, formatDate } from '@/lib/format';
 import { titleFor } from '@/lib/navRegistry';
 import { statusPill } from '@/lib/status';
 import { collectionHealth, connection } from '@/lib/statuses/controls';
 import { CATEGORY_LABEL } from '../../automation/overview/_overview/overviewModel';
+import { useRights } from '../../automation/soc2-controls/_explorer/controlsRights';
 import {
   CONNECTIONS_SCHEMA, SHOWS, SHOW_LABEL, categoriesOf, countsOf, defaultShow, lastCollected, readingOf, returnLabel, safeReturn, visibleConnectors, type Connector, type Show,
 } from './connectionsModel';
@@ -66,8 +66,7 @@ export default function ConnectionsPage() {
   const qc = useQueryClient();
   const pathname = usePathname();
   const standalone = pathname === '/admin/evidence-collectors';
-  const { hasPermission, isLoading: rightsLoading } = usePermissions();
-  const canConnect = !rightsLoading && hasPermission('compliance:scan:execute');
+  const canConnect = useRights().can('scan');
 
   const [address, setAddress] = useAddressState(CONNECTIONS_SCHEMA);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -122,7 +121,7 @@ export default function ConnectionsPage() {
         <SegmentedControl
           label="Which connections"
           name="connections-show"
-          options={SHOWS.map((s) => ({ value: s, label: `${SHOW_LABEL[s]} ${formatCount(counts[s])}` }))}
+          options={SHOWS.map((s) => ({ value: s, label: catalogQ.data ? `${SHOW_LABEL[s]} ${formatCount(counts[s])}` : SHOW_LABEL[s] }))}
           value={show}
           onChange={(v) => setAddress({ show: v as Show })}
         />

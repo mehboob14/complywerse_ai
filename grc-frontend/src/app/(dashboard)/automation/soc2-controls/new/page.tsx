@@ -6,14 +6,14 @@ import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/ui';
 import { Button, Notice, useReportedMutation } from '@/components/ui/ds';
 import { CustomControlForm, toWriteBody, type CustomControlFormValues } from '@/components/soc2/CustomControlForm';
-import { usePermissions } from '@/hooks/usePermissions';
 import { scfApi } from '@/lib/api';
+import { useRights } from '../_explorer/controlsRights';
 import { titleFor } from '@/lib/navRegistry';
 
 export default function NewCustomControlPage() {
   const router = useRouter();
-  const { hasPermission, isLoading } = usePermissions();
-  const canCreate = !isLoading && hasPermission('controls:control_library:create');
+  const { can, loading: isLoading } = useRights();
+  const canCreate = can('createControl');
 
   const create = useReportedMutation({
     mutationFn: async (v: CustomControlFormValues) => (await scfApi.createCustomControl({ ...toWriteBody(v), name: v.name.trim() })).data,

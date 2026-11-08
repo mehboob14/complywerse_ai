@@ -67,3 +67,7 @@ test('none of the utilities the platform stylesheet repaints in the shell: palet
 test('the Overview and the explorer name no model or vendor, and no screen says "Steampipe"', () => {
   assert.deepEqual(offenders(/Steampipe|gpt-|openai|anthropic/i), []);
 });
+
+test("the buttons ask for the rights as the server reads them (useRights), never the platform's wildcard reading", () => {
+  assert.deepEqual(offenders(/hasPermission\(|hasAnyPermission\(/), []);
+});

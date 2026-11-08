@@ -14,11 +14,11 @@ import { CounterBand, type BandCounter } from '@/components/overview/CounterBand
 import { layoutOf, workRowLimit } from '@/components/overview/cockpitModel';
 import { useNarrow } from '@/components/overview/useNarrow';
 import { ScopeDialog } from '@/components/soc2/ScopeDialog';
-import { usePermissions } from '@/hooks/usePermissions';
 import { formatCount } from '@/lib/format';
 import { clockOf } from '@/lib/inbox/inboxView';
 import { titleFor } from '@/lib/navRegistry';
 import { useControls, useMeId } from '../soc2-controls/_explorer/controlsData';
+import { useRights } from '../soc2-controls/_explorer/controlsRights';
 import {
   CrosswalkFacts, DomainTable, EvidenceFacts, FrameworkList, ImplementationFacts, Orphans, PostureCard, SetupCard, SourcesList, TrendTable, WorkCard,
 } from './_overview/OverviewParts';
@@ -27,9 +27,9 @@ import { COUNTERS, buildWork, listCounter, plainCounter, setupSteps, showSetup }
 
 export default function ControlsAutomationOverviewPage() {
   const narrow = useNarrow();
-  const { hasPermission, isLoading: rightsLoading } = usePermissions();
-  const canScope = !rightsLoading && hasPermission('compliance:frameworks:*');
-  const canConnect = !rightsLoading && hasPermission('compliance:scan:execute');
+  const { can } = useRights();
+  const canScope = can('frameworks');
+  const canConnect = can('scan');
   const me = useMeId();
   const [scopeOpen, setScopeOpen] = useState(false);
 
