@@ -90,6 +90,9 @@ const rowOf = (id: number | null) => (): HTMLElement | null => {
 export function RecordDetail({ id, title, subtitle, nav, actions, footer, children }: {
   id: number | null; title: ReactNode; subtitle?: ReactNode; nav: DetailNav; actions?: ReactNode; footer?: ReactNode; children: ReactNode;
 }) {
+  // the row to give focus back to is the one that WAS open: by the time the panel closes `id` is null again, so the last open one is remembered
+  const lastOpen = useRef<number | null>(null);
+  if (id != null) lastOpen.current = id;
   return (
     <SidePanel
       open={id != null}
@@ -98,7 +101,7 @@ export function RecordDetail({ id, title, subtitle, nav, actions, footer, childr
       subtitle={subtitle}
       dockFrom={Infinity}
       width="md"
-      restoreFocus={rowOf(id)}
+      restoreFocus={rowOf(lastOpen.current)}
       actions={(
         <>
           <IconButton label="Previous" aria-disabled={!nav.hasPrev || undefined} onClick={() => { if (nav.hasPrev) nav.onStep(-1); }}><ChevronUp aria-hidden /></IconButton>
