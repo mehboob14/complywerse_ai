@@ -149,7 +149,7 @@ export function runText(value: unknown): string | null {
 /** The words for an activity view that has nothing to read: the server says whether the view is on; its own message can name the service, so it is never shown. */
 export const ACTIVITY_OFF = {
   title: 'Detailed activity is not switched on',
-  message: 'Token totals by module and by person are on the Tokens and By person views. The call-by-call view appears here once an administrator switches it on for this organisation.',
+  message: 'Token totals by module and by person are on the Tokens and By person views. The call-by-call view appears here once it is set up for this organisation.',
 } as const;
 
 // ── the budgets form ─────────────────────────────────────────────────────────

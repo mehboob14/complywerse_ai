@@ -167,7 +167,7 @@ export default function ImportFieldsFromTemplate({ moduleKey }: { moduleKey: str
                 {fresh.length} new field{fresh.length === 1 ? '' : 's'}
               </span>
               <span className="text-slate-500">in {result.file.name}</span>
-              <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${result.by === 'ai' ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
+              <span className={`rounded-full px-2 py-0.5 text-[12px] font-medium ${result.by === 'ai' ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
                 {result.by === 'ai' ? 'Suggested by AI' : 'From the file’s headings'}
               </span>
               {fresh.length > 1 && (
@@ -204,7 +204,7 @@ export default function ImportFieldsFromTemplate({ moduleKey }: { moduleKey: str
                           <input type="checkbox" checked={r.required} onChange={(e) => patch(r.id, { required: e.target.checked })} /> Required
                         </label>
                       </div>
-                      <p className="mt-1.5 text-[11px] text-slate-500">
+                      <p className="mt-1.5 text-[12px] text-slate-500">
                         Found in {r.where}{r.example ? <> · e.g. <span className="text-slate-700">{r.example}</span></> : null}
                       </p>
                       {isDropdown(r.type) && (
@@ -213,11 +213,11 @@ export default function ImportFieldsFromTemplate({ moduleKey }: { moduleKey: str
                             value={r.optionsText} aria-label="Dropdown options, one per line" placeholder="One option per line"
                             onChange={(e) => patch(r.id, { optionsText: e.target.value })} />
                           {r.selected && optionList(r.optionsText).length === 0 && (
-                            <p className="mt-1 text-[11px] text-amber-700">Add at least one option, or this is added as short text.</p>
+                            <p className="mt-1 text-[12px] text-amber-700">Add at least one option, or this is added as short text.</p>
                           )}
                         </div>
                       )}
-                      {r.help && <p className="mt-1.5 text-[11px] text-slate-500">Help text from the file: {r.help}</p>}
+                      {r.help && <p className="mt-1.5 text-[12px] text-slate-500">Help text from the file: {r.help}</p>}
                     </div>
                   </div>
                 </div>

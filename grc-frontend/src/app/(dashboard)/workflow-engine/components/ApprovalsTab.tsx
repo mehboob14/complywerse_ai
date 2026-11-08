@@ -3,6 +3,10 @@
 import { AlertTriangle, CheckCircle, Clock, MessageSquare, UserCheck, XCircle } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { workflowEngineApi } from '@/lib/api';
+import { formatDateTime } from '@/lib/format';
+import { parseUtc } from '@/lib/serverTime';
+import { ErrorState, useNotify } from '@/components/ui/ds';
+import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 
 type ApprovalRequest = {
   id: number;
@@ -20,11 +24,12 @@ type ApprovalRequest = {
 };
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString();
+  return formatDateTime(iso);
 }
 
 function isOverdue(due: string): boolean {
-  return new Date(due) < new Date();
+  const at = parseUtc(due);
+  return !!at && at.getTime() < Date.now();
 }
 
 type Filter = 'pending' | 'mine' | 'all';
@@ -32,6 +37,8 @@ type Filter = 'pending' | 'mine' | 'all';
 export function ApprovalsTab() {
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const notify = useNotify();
+  const [error, setError] = useState<{ message: string; retry: boolean } | null>(null);
   const [filter, setFilter] = useState<Filter>('pending');
   const [deciding, setDeciding] = useState<number | null>(null);
   const [comment, setComment] = useState('');
@@ -39,6 +46,7 @@ export function ApprovalsTab() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const inbox = await workflowEngineApi.executions.inbox();
       const items = (inbox.data?.items ?? inbox.data ?? []) as ApprovalRequest[];
@@ -54,8 +62,9 @@ export function ApprovalsTab() {
         step_name: a.step_name,
       }));
       setApprovals(mapped);
-    } catch {
+    } catch (e) {
       setApprovals([]);
+      setError({ message: errorMessage(e, 'The approvals could not be loaded.'), retry: canRetry(e) });
     } finally {
       setLoading(false);
     }
@@ -70,9 +79,10 @@ export function ApprovalsTab() {
         decision: decision === 'approved' ? 'approve' : 'reject',
         comment: msg,
       });
+      notify.success(decision === 'approved' ? 'Approved' : 'Rejected');
       await load();
     } catch (e) {
-      console.error('Decision error:', e);
+      notify.error(e, { title: decision === 'approved' ? "The approval wasn't recorded" : "The rejection wasn't recorded", fallback: 'Nothing was changed. Try again.' });
     } finally {
       setDeciding(null);
       setCommentFor(null);
@@ -115,7 +125,9 @@ export function ApprovalsTab() {
 
       <div className="flex-1 overflow-y-auto p-5">
         {loading ? (
-          <div className="text-center py-16 text-xs text-gray-400">Loading approvals...</div>
+          <div role="status" className="text-center py-16 text-xs text-gray-500">Loading approvals...</div>
+        ) : error ? (
+          <ErrorState title="Couldn't load the approvals" message={error.message} onRetry={error.retry ? () => { void load(); } : undefined} />
         ) : filtered.length === 0 ? (
           <div className="text-center py-16 text-xs text-gray-400">
             <UserCheck size={32} className="mx-auto mb-3 text-gray-200" />
@@ -140,26 +152,26 @@ export function ApprovalsTab() {
                         {a.workflow_name || `Approval #${a.id}`}
                       </span>
                       {a.status === 'pending' ? (
-                        <span className="text-[10px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-semibold shrink-0">
+                        <span className="text-[12px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-semibold shrink-0">
                           Pending
                         </span>
                       ) : a.status === 'approved' ? (
-                        <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold shrink-0">
+                        <span className="text-[12px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold shrink-0">
                           Approved
                         </span>
                       ) : (
-                        <span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-semibold shrink-0">
+                        <span className="text-[12px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-semibold shrink-0">
                           Rejected
                         </span>
                       )}
                       {a.due_at && isOverdue(a.due_at) && a.status === 'pending' && (
-                        <span className="flex items-center gap-1 text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-semibold shrink-0">
+                        <span className="flex items-center gap-1 text-[12px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-semibold shrink-0">
                           <AlertTriangle size={9} />
                           Overdue
                         </span>
                       )}
                     </div>
-                    <div className="text-[11px] text-gray-500 space-y-0.5">
+                    <div className="text-[12px] text-gray-500 space-y-0.5">
                       {a.step_name && <p>Step: <span className="text-gray-700 font-medium">{a.step_name}</span></p>}
                       {a.requested_by && <p>Requested by: <span className="text-gray-700">{a.requested_by}</span></p>}
                       <p className="flex items-center gap-1">
@@ -195,7 +207,7 @@ export function ApprovalsTab() {
                             <button
                               onClick={() => decide(a.id, commentFor.action, comment)}
                               disabled={deciding === a.id}
-                              className={`flex-1 text-[10px] font-bold py-1.5 rounded-lg transition-colors ${
+                              className={`flex-1 text-[12px] font-bold py-1.5 rounded-lg transition-colors ${
                                 commentFor.action === 'approved'
                                   ? 'bg-green-600 hover:bg-green-700 text-white'
                                   : 'bg-red-600 hover:bg-red-700 text-white'
@@ -205,7 +217,7 @@ export function ApprovalsTab() {
                             </button>
                             <button
                               onClick={() => { setCommentFor(null); setComment(''); }}
-                              className="text-[10px] px-2 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600"
+                              className="text-[12px] px-2 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600"
                             >
                               Cancel
                             </button>
@@ -215,14 +227,14 @@ export function ApprovalsTab() {
                         <>
                           <button
                             onClick={() => setCommentFor({ id: a.id, action: 'approved' })}
-                            className="flex items-center gap-1.5 text-[11px] font-semibold bg-green-50 hover:bg-green-100 border border-green-300 text-green-700 px-3 py-1.5 rounded-lg transition-colors"
+                            className="flex items-center gap-1.5 text-[12px] font-semibold bg-green-50 hover:bg-green-100 border border-green-300 text-green-700 px-3 py-1.5 rounded-lg transition-colors"
                           >
                             <CheckCircle size={12} />
                             Approve
                           </button>
                           <button
                             onClick={() => setCommentFor({ id: a.id, action: 'rejected' })}
-                            className="flex items-center gap-1.5 text-[11px] font-semibold bg-red-50 hover:bg-red-100 border border-red-300 text-red-700 px-3 py-1.5 rounded-lg transition-colors"
+                            className="flex items-center gap-1.5 text-[12px] font-semibold bg-red-50 hover:bg-red-100 border border-red-300 text-red-700 px-3 py-1.5 rounded-lg transition-colors"
                           >
                             <XCircle size={12} />
                             Reject

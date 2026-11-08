@@ -16,14 +16,14 @@ function Drivers({ t, features }: { t: Stats; features: Feature[] }) {
   if (t.calls === 0) return null;
   const fresh = Math.max(0, t.input_tokens - t.cached_tokens);
   const columns: RegisterColumn<Feature>[] = [
-    { key: 'feature', header: 'Feature', isRowHeader: true, cell: (f) => f.label },
+    { key: 'feature', header: 'Feature', isRowHeader: true, width: 'w-[220px]', cell: (f) => f.label },
     { key: 'calls', header: 'Calls', align: 'right', card: 'meta', cell: (f) => fmtNumber(f.calls) },
     { key: 'in', header: 'Sent per call', align: 'right', priority: 2, card: 'meta', cell: (f) => fmtTokens(Math.round(f.input_tokens / Math.max(1, f.calls))) },
     { key: 'out', header: 'Returned per call', align: 'right', priority: 2, card: 'meta', cell: (f) => fmtTokens(Math.round(f.output_tokens / Math.max(1, f.calls))) },
-    { key: 'reasoning', header: 'Hidden reasoning', align: 'right', priority: 3, cell: (f) => pct(f.reasoning_tokens, f.output_tokens) },
-    { key: 'provider', header: 'Read from the provider cache', align: 'right', priority: 3, cell: (f) => pct(f.cached_tokens, f.input_tokens) },
-    { key: 'ours', header: 'Answered from our cache', align: 'right', priority: 3, cell: (f) => fmtNumber(f.cache_hits) },
-    { key: 'again', header: 'Asked again unchanged', align: 'right', priority: 3, cell: (f) => fmtNumber(f.repeat_calls) },
+    { key: 'reasoning', header: 'Reasoning', align: 'right', priority: 3, cell: (f) => pct(f.reasoning_tokens, f.output_tokens) },
+    { key: 'provider', header: 'Provider cache', align: 'right', priority: 3, cell: (f) => pct(f.cached_tokens, f.input_tokens) },
+    { key: 'ours', header: 'Our cache', align: 'right', priority: 3, cell: (f) => fmtNumber(f.cache_hits) },
+    { key: 'again', header: 'Repeated', align: 'right', priority: 3, cell: (f) => fmtNumber(f.repeat_calls) },
   ];
   return (
     <SectionCard id="drivers" title="Where the tokens go" info="Read from the record of every call. Nothing here is estimated.">

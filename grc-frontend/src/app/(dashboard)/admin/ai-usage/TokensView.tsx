@@ -90,7 +90,7 @@ export function TokensView({ range, onRange, onBudgets }: { range: RangeKey; onR
     {
       key: 'module', header: 'Module', isRowHeader: true,
       cell: (m) => (
-        <span className="flex min-w-0 flex-wrap items-center gap-x-[8px] gap-y-[2px]">
+        <span className="flex min-w-0 flex-nowrap items-center gap-x-[8px]">
           <span aria-hidden className="h-[10px] w-[10px] shrink-0 rounded-[3px]" style={{ background: m.color }} />
           <span className="min-w-0 truncate font-[600] text-ds-fg">{m.label}</span>
           {m.budget_pct != null && budgetBand(m.budget_pct) !== 'ok' && <StatusPill size="sm" {...statusPill(budgetUse, budgetBand(m.budget_pct))} label={`${m.budget_pct.toFixed(0)}% of budget`} />}
@@ -100,7 +100,7 @@ export function TokensView({ range, onRange, onBudgets }: { range: RangeKey; onR
     { key: 'tokens', header: 'Tokens', align: 'right', card: 'meta', cell: (m) => <span className="tabular-nums">{fmtTokens(m.tokens)}</span> },
     { key: 'cost', header: 'Cost', align: 'right', priority: 2, card: 'meta', cell: (m) => <span className="tabular-nums text-ds-fg-muted">{costOn ? money(m.cost) : '—'}</span> },
     { key: 'share', header: 'Share of total', priority: 2, card: 'meta', cell: (m) => <Share share={m.share} color={m.color} />, cardCell: (m) => `${m.share.toFixed(1)}%` },
-    { key: 'trend', header: 'Against the period before', priority: 2, card: 'meta', cell: (m) => <Trend pct={m.trend} />, cardCell: (m) => trendOf(m.trend).text },
+    { key: 'trend', header: 'Change', priority: 2, card: 'meta', cell: (m) => <Trend pct={m.trend} />, cardCell: (m) => trendOf(m.trend).text },
   ];
 
   return (
@@ -143,7 +143,7 @@ export function TokensView({ range, onRange, onBudgets }: { range: RangeKey; onR
         />
         <StatTile
           label="Daily average" value={data ? fmtTokens(data.summary.daily_average) : null} loading={!data}
-          note={data ? <>This period: <Trend pct={data.summary.trend_pct} /></> : undefined}
+          note={data ? (trendOf(data.summary.trend_pct).direction === 'same' ? 'No change from the period before' : <><Trend pct={data.summary.trend_pct} /> than the period before</>) : undefined}
         />
         <StatTile
           label="Top module" value={data ? (data.top_module ? data.top_module.label : 'No use yet') : null} loading={!data}
@@ -234,7 +234,7 @@ export function TokensView({ range, onRange, onBudgets }: { range: RangeKey; onR
           id="by-module" title="Use by module" meta={data ? `${data.modules.length} ${data.modules.length === 1 ? 'module' : 'modules'}` : undefined}
           actions={(
             <>
-              <TextInput aria-label="Search modules and features" placeholder="Search modules and features" className="w-[220px]" leftAdornment={<Search aria-hidden size={14} />} value={query} onChange={(e) => setQuery(e.target.value)} />
+              <TextInput aria-label="Search modules and features" placeholder="Search modules" className="w-[200px]" leftAdornment={<Search aria-hidden size={14} />} value={query} onChange={(e) => setQuery(e.target.value)} />
               <Button size="sm" onClick={() => setExpanded(data ? data.modules.map((m) => m.module_key) : [])}>Open all</Button>
               <Button size="sm" onClick={() => setExpanded([])}>Close all</Button>
             </>

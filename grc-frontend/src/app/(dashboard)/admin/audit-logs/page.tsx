@@ -157,8 +157,11 @@ export default function AuditLogPage() {
           {PRESETS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
           {(filters.from || filters.to) && <option value="custom">Chosen days</option>}
         </Select>
-        <TextInput type="date" aria-label="From day" className="w-[150px]" value={filters.from} max={filters.to || undefined} onChange={(e) => pick({ from: e.target.value, range: 'all' })} />
-        <TextInput type="date" aria-label="To day" className="w-[150px]" value={filters.to} min={filters.from || undefined} onChange={(e) => pick({ to: e.target.value, range: 'all' })} />
+        <span className="inline-flex items-center gap-[6px]" role="group" aria-label="Choose days">
+          <TextInput type="date" aria-label="From day" className="w-[150px]" value={filters.from} max={filters.to || undefined} onChange={(e) => pick({ from: e.target.value, range: 'all' })} />
+          <span aria-hidden className="text-ds-fg-muted">to</span>
+          <TextInput type="date" aria-label="To day" className="w-[150px]" value={filters.to} min={filters.from || undefined} onChange={(e) => pick({ to: e.target.value, range: 'all' })} />
+        </span>
         {narrowed > 0 && <Button variant="link" onClick={clear}>Clear filters</Button>}
       </div>
 
