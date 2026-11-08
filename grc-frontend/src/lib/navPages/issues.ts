@@ -4,7 +4,7 @@ import type { PageSpec, RouteExtra } from '../navRegistry.ts';
 
 export const LEAVES: Record<string, RouteExtra> = {
   '/issues': { keywords: ['Issue Management', 'CAPA', 'Corrective actions', 'Issue register'] },
-  '/erm/incidents': { keywords: ['Risk incidents', 'Incident register', 'Incident log'] },
+  '/erm/incidents': { keywords: ['Risk incidents', 'Incident register', 'Incident log'], ownHeading: true },
 };
 
 export const PAGES: PageSpec[] = [

@@ -10,7 +10,7 @@ import logging
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func
+from sqlalchemy import case, func
 from openai import OpenAI
 
 from ....models import (
@@ -427,6 +427,129 @@ def get_risk_assessment_dashboard(
         # ---- Cross-section roll-up for the headline KPI strip ----
         "combined_total": len(assessments) + len(fw_assessments),
     }
+
+
+REGISTER_LIMIT = 5000
+
+
+@router.get("/register")
+def get_assessment_register(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """One list of every assessment of the organisation, manual and framework-based, for the Risk Assessments home.
+
+    Additive (nothing else reads it): a row per assessment with its kind, status, owner, framework, and the progress the home shows
+    (`total_items` = risks assessed / questions, `done_items` = risks with a residual score / questions completed, `blocked_items`,
+    `mine_items` = questions assigned to the signed-in person that are not completed). Two grouped counts, no query per row.
+    `total` is the true number of assessments; `truncated` says the list was cut at REGISTER_LIMIT."""
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return {"items": [], "total": 0, "truncated": False}
+
+    manual = (
+        db.query(RiskAssessment)
+        .options(joinedload(RiskAssessment.lead_assessor), joinedload(RiskAssessment.approver), joinedload(RiskAssessment.framework), joinedload(RiskAssessment.business_unit))
+        .filter(RiskAssessment.tenant_id.in_(user_tenants))
+        .order_by(RiskAssessment.updated_at.desc(), RiskAssessment.id.desc())
+        .limit(REGISTER_LIMIT)
+        .all()
+    )
+    manual_total = db.query(func.count(RiskAssessment.id)).filter(RiskAssessment.tenant_id.in_(user_tenants)).scalar() or 0
+    risk_counts = {
+        aid: (n, scored)
+        for aid, n, scored in db.query(
+            RiskAssessmentRisk.assessment_id,
+            func.count(RiskAssessmentRisk.id),
+            func.count(RiskAssessmentRisk.residual_score),
+        ).group_by(RiskAssessmentRisk.assessment_id).all()
+    }
+
+    framework = (
+        db.query(FrameworkRiskAssessment)
+        .options(joinedload(FrameworkRiskAssessment.creator), joinedload(FrameworkRiskAssessment.uploaded_framework), joinedload(FrameworkRiskAssessment.framework))
+        .filter(FrameworkRiskAssessment.tenant_id.in_(user_tenants))
+        .order_by(FrameworkRiskAssessment.updated_at.desc(), FrameworkRiskAssessment.id.desc())
+        .limit(REGISTER_LIMIT)
+        .all()
+    )
+    framework_total = db.query(func.count(FrameworkRiskAssessment.id)).filter(FrameworkRiskAssessment.tenant_id.in_(user_tenants)).scalar() or 0
+    q_counts: dict = {}
+    for aid, st, n, mine in db.query(
+        FrameworkRiskQuestion.assessment_id,
+        FrameworkRiskQuestion.status,
+        func.count(FrameworkRiskQuestion.id),
+        func.sum(case((FrameworkRiskQuestion.assigned_user_id == current_user.id, 1), else_=0)),
+    ).group_by(FrameworkRiskQuestion.assessment_id, FrameworkRiskQuestion.status).all():
+        slot = q_counts.setdefault(aid, {"total": 0, "done": 0, "blocked": 0, "mine": 0})
+        slot["total"] += n
+        if st == "completed":
+            slot["done"] += n
+        else:
+            slot["mine"] += int(mine or 0)
+        if st == "blocked":
+            slot["blocked"] += n
+
+    def preview(text: Optional[str]) -> Optional[str]:
+        text = (text or "").strip()
+        return text[:240] if text else None
+
+    items = []
+    for a in manual:
+        n, scored = risk_counts.get(a.id, (0, 0))
+        items.append({
+            "kind": "manual",
+            "id": a.id,
+            "name": a.name,
+            "status": a.status or "draft",
+            "description_preview": preview(a.description),
+            "owner_id": a.lead_assessor_id,
+            "owner_name": a.lead_assessor.display_name if a.lead_assessor else None,
+            "framework_name": a.framework.name if a.framework else None,
+            "business_unit_name": a.business_unit.name if a.business_unit else None,
+            "assessment_type": a.assessment_type,
+            "methodology": a.methodology,
+            "period_start": a.assessment_period_start.isoformat() if a.assessment_period_start else None,
+            "period_end": a.assessment_period_end.isoformat() if a.assessment_period_end else None,
+            "approver_name": a.approver.display_name if a.approver else None,
+            "approved_at": a.approved_at.isoformat() if a.approved_at else None,
+            "total_items": n,
+            "done_items": scored,
+            "blocked_items": 0,
+            "mine_items": 0,
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+            "updated_at": a.updated_at.isoformat() if a.updated_at else None,
+        })
+    for a in framework:
+        c = q_counts.get(a.id, {"total": 0, "done": 0, "blocked": 0, "mine": 0})
+        fw = a.uploaded_framework or a.framework
+        items.append({
+            "kind": "framework",
+            "id": a.id,
+            "name": a.name,
+            "status": a.status or "in_progress",
+            "description_preview": preview(a.description),
+            "owner_id": a.created_by,
+            "owner_name": a.creator.display_name if a.creator else None,
+            "framework_name": fw.name if fw else None,
+            "business_unit_name": None,
+            "assessment_type": None,
+            "methodology": None,
+            "period_start": None,
+            "period_end": None,
+            "approver_name": None,
+            "approved_at": None,
+            "total_items": c["total"],
+            "done_items": c["done"],
+            "blocked_items": c["blocked"],
+            "mine_items": c["mine"],
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+            "updated_at": a.updated_at.isoformat() if a.updated_at else None,
+        })
+
+    items.sort(key=lambda r: (r["updated_at"] or "", r["id"]), reverse=True)
+    total = manual_total + framework_total
+    return {"items": items, "total": total, "truncated": len(items) < total}
 
 
 @router.get("/{assessment_id}/risk-breakdown")
@@ -890,11 +1013,15 @@ def update_assessment_risk(
     ii = ar.inherent_impact
     if il and ii:
         ar.inherent_score = il * ii
+    elif "inherent_likelihood" in update_data or "inherent_impact" in update_data:
+        ar.inherent_score = None            # an axis was cleared: the old score is no longer true
 
     rl = ar.residual_likelihood
     ri = ar.residual_impact
     if rl and ri:
         ar.residual_score = rl * ri
+    elif "residual_likelihood" in update_data or "residual_impact" in update_data:
+        ar.residual_score = None
 
     ar.assessed_by = current_user.id
     ar.assessed_at = datetime.utcnow()
@@ -1199,6 +1326,7 @@ def get_assessment_summary(
     total_inherent = 0.0
     total_residual = 0.0
     scored_count = 0
+    residual_count = 0
     total_kris = 0
     total_incidents = 0
     total_rcsa_findings = 0
@@ -1215,6 +1343,7 @@ def get_assessment_summary(
             scored_count += 1
         if ar.residual_score is not None:
             total_residual += ar.residual_score
+            residual_count += 1
 
         total_kris += len(ar.linked_kris)
         total_incidents += len(ar.linked_incidents)
@@ -1228,7 +1357,7 @@ def get_assessment_summary(
         "by_risk_rating": by_rating,
         "by_treatment_decision": by_treatment,
         "avg_inherent_score": round(total_inherent / scored_count, 2) if scored_count > 0 else 0,
-        "avg_residual_score": round(total_residual / scored_count, 2) if scored_count > 0 else 0,
+        "avg_residual_score": round(total_residual / residual_count, 2) if residual_count > 0 else 0,
         "total_linked_kris": total_kris,
         "total_linked_incidents": total_incidents,
         "total_linked_rcsa_findings": total_rcsa_findings,
@@ -1371,16 +1500,17 @@ Return ONLY the JSON object, no additional text."""
         if result.get("control_effectiveness") not in valid_effectiveness:
             result["control_effectiveness"] = "partially_effective"
 
+        result["source"] = "ai"            # the answer says where it came from (a rules answer below says "rules")
         return result
 
     except HTTPException:
         raise
     except json.JSONDecodeError:
         logger.warning("AI returned non-JSON response for assessment risk suggestion")
-        return _fallback_suggestion(risk_context, kri_info, incident_info, rcsa_info)
+        return {**_fallback_suggestion(risk_context, kri_info, incident_info, rcsa_info), "source": "rules"}
     except Exception as e:
         logger.error(f"AI suggestion error: {e}")
-        return _fallback_suggestion(risk_context, kri_info, incident_info, rcsa_info)
+        return {**_fallback_suggestion(risk_context, kri_info, incident_info, rcsa_info), "source": "rules"}
 
 
 def _fallback_suggestion(risk_context, kri_info, incident_info, rcsa_info):
@@ -1434,6 +1564,7 @@ def get_available_risks(
     assessment_id: int,
     skip: int = 0,
     limit: int = 100,
+    search: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -1449,8 +1580,10 @@ def get_available_risks(
     query = db.query(Risk).filter(Risk.tenant_id.in_(user_tenants))
     if existing_risk_ids:
         query = query.filter(~Risk.id.in_(existing_risk_ids))
+    if search and search.strip():
+        query = query.filter(func.lower(Risk.title).contains(search.strip().lower()))
 
-    risks = query.order_by(Risk.title).offset(skip).limit(limit).all()
+    risks = query.order_by(Risk.title, Risk.id).offset(skip).limit(limit).all()
 
     return [
         {
@@ -1610,6 +1743,7 @@ async def upload_excel_risk_assessment(
     assessment_type: str = Form("ad_hoc"),
     methodology: str = Form("qualitative"),
     scope: Optional[str] = Form(None),
+    reuse_existing: bool = Form(False),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
@@ -1686,8 +1820,15 @@ async def upload_excel_risk_assessment(
         db.flush()
 
         created_risks = []
+        reused_risks = []
         skipped_rows = []
         error_rows = []
+        # `reuse_existing`: a row whose title is already in the Risk Register is assessed on that risk instead of making a second one
+        register_titles = {}
+        if reuse_existing:
+            for rid, rtitle in db.query(Risk.id, Risk.title).filter(Risk.tenant_id == tenant_id).order_by(Risk.id).all():
+                register_titles.setdefault((rtitle or "").strip().lower(), rid)
+        used_in_assessment = set()
 
         for row_idx, row in enumerate(rows[header_row_index + 1:], start=header_row_index + 2):
             try:
@@ -1756,28 +1897,41 @@ async def upload_excel_risk_assessment(
                             except ValueError:
                                 target_date = None
 
-                risk = Risk(
-                    tenant_id=tenant_id,
-                    title=title_str,
-                    description=description or None,
-                    category=mapped_category,
-                    risk_category=mapped_category,
-                    inherent_likelihood=inh_likelihood,
-                    inherent_impact=inh_impact,
-                    inherent_score=inh_score,
-                    residual_likelihood=res_likelihood,
-                    residual_impact=res_impact,
-                    residual_score=res_score,
-                    status=_map_status(raw_status),
-                    treatment_plan=mitigation or None,
-                    due_date=target_date,
-                )
-                db.add(risk)
-                db.flush()
+                existing_id = register_titles.get(title_str.lower()) if reuse_existing else None
+                if existing_id is not None and existing_id in used_in_assessment:
+                    skipped_rows.append({"row": row_idx, "reason": "Same risk twice in this file"})
+                    continue
+                if existing_id is not None:
+                    risk_id_for_row = existing_id
+                    used_in_assessment.add(existing_id)
+                    reused_risks.append({"row": row_idx, "risk_id": existing_id, "title": title_str})
+                else:
+                    risk = Risk(
+                        tenant_id=tenant_id,
+                        title=title_str,
+                        description=description or None,
+                        category=mapped_category,
+                        risk_category=mapped_category,
+                        inherent_likelihood=inh_likelihood,
+                        inherent_impact=inh_impact,
+                        inherent_score=inh_score,
+                        residual_likelihood=res_likelihood,
+                        residual_impact=res_impact,
+                        residual_score=res_score,
+                        status=_map_status(raw_status),
+                        treatment_plan=mitigation or None,
+                        due_date=target_date,
+                    )
+                    db.add(risk)
+                    db.flush()
+                    risk_id_for_row = risk.id
+                    if reuse_existing:
+                        register_titles.setdefault(title_str.lower(), risk.id)
+                        used_in_assessment.add(risk.id)
 
                 assessment_risk = RiskAssessmentRisk(
                     assessment_id=assessment.id,
-                    risk_id=risk.id,
+                    risk_id=risk_id_for_row,
                     inherent_likelihood=inh_likelihood,
                     inherent_impact=inh_impact,
                     inherent_score=inh_score,
@@ -1791,12 +1945,13 @@ async def upload_excel_risk_assessment(
                 )
                 db.add(assessment_risk)
 
-                created_risks.append({
-                    "row": row_idx,
-                    "risk_id": risk.id,
-                    "title": title_str,
-                    "category": mapped_category,
-                })
+                if existing_id is None:
+                    created_risks.append({
+                        "row": row_idx,
+                        "risk_id": risk_id_for_row,
+                        "title": title_str,
+                        "category": mapped_category,
+                    })
 
             except Exception as row_error:
                 logger.error(f"Error processing row {row_idx}: {str(row_error)}")
@@ -1809,6 +1964,7 @@ async def upload_excel_risk_assessment(
             "assessment_id": assessment.id,
             "assessment_name": assessment.name,
             "risks_created": len(created_risks),
+            "risks_reused": len(reused_risks),
             "rows_skipped": len(skipped_rows),
             "rows_errored": len(error_rows),
             "skipped_details": skipped_rows[:10],

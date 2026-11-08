@@ -1,994 +1,405 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+/**
+ * Risk Management > Risk Assessments > a framework assessment: the workspace. A head with the name, the stage and the framework; a notice that says how the questions were written (the AI, the
+ * method, or standard template questions: the server always said and no screen showed it); a counters band (all, mine, still to answer, blocked, unassigned: each a filter, each the true
+ * number) with the progress; and tabs Questions, Insights and Details.
+ *
+ * Questions is a table of all of them with filters, a status you change where it is, ticks for assigning or setting the status of many, and a drawer for one question (its answers, the AI
+ * suggestion, the scores, accepting the risk and adding it to the register, its files) with "Next to answer", so a person answering their own questions ("Mine", also ?mine=1 and the deep link
+ * ?question=<id>) never scrolls a list of 150. Regenerate says what it will delete, in numbers, and nothing is deleted before that is read. A failed load is an error with Retry, not a spinner.
+ */
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ermApi, tenantApi } from '@/lib/api';
-import { ArrowLeft, Loader2, Plus, RefreshCw, Trash2, Upload, CheckCircle2, Sparkles, BookOpen, Wand2, Check, X } from 'lucide-react';
-import Link from 'next/link';
-import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
-import type { FrameworkMethodology } from '@/types';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Archive, FileEdit, Plus, RefreshCw, Search, Trash2, X } from 'lucide-react';
+import { PageHeader } from '@/components/ui';
+import {
+  Button, Combobox, EmptyState, ErrorState, FilterChips, Menu, Notice, Pager, ProgressBar, SectionCard, Select, SkeletonRows, StatusPill, TabPanel, Tabs, TextInput, useAddressState, useConfirm, useNotify,
+  useReportedMutation, useTabParam, type FilterChip, type MenuItem,
+} from '@/components/ui/ds';
+import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
+import { useContainerWidth } from '@/components/records/useContainerWidth';
+import { useNarrow } from '@/components/overview/useNarrow';
+import { ermApi } from '@/lib/api';
+import { formatCount, formatDate, truncate } from '@/lib/format';
+import { statusPill } from '@/lib/status';
+import { frameworkAssessmentStatus } from '@/lib/statuses/riskAssessments';
+import { riskLevel } from '@/lib/statuses/risk';
+import { TONE } from '@/lib/status';
+import { failureWords, useMeId } from '../../../risks/_register/riskData';
+import { BarRow } from '../../_register/BarRow';
+import { ASSESSMENT_REFRESH, useAssessmentPeople, useAssessmentRights } from '../../_register/assessmentData';
+import { QuestionDrawer } from './_framework/QuestionDrawer';
+import { QuestionsTable } from './_framework/QuestionsTable';
+import { AddQuestionSheet, EditDetailsSheet, MoveSheet, RegenerateSheet } from './_framework/Sheets';
+import {
+  FRAMEWORK_SCHEMA, NO_QFILTERS, QUESTION_STATUSES, QUICK_IDS, QUICK_LABEL, assigneeRows, batchWords, countsOf, filterCount, filterQuestions, filtersOf, filtersPatch, madeNotice, madeOf, nextToAnswer, phaseRows,
+  questionIdOf, rating, regenerateFacts, type FrameworkAddress, type FrameworkAssessment, type Made, type Question,
+} from './_framework/frameworkModel';
 
-interface EvidenceItem {
-  id: number;
-  file_name: string;
-  description?: string | null;
-  uploaded_at?: string | null;
-  uploader_name?: string | null;
-}
+const TABS = ['questions', 'insights', 'details'] as const;
+type Tab = (typeof TABS)[number];
+const PAGE_SIZES = [25, 50, 100] as const;
+const STATUS_WORDS: Record<string, string> = { not_started: 'Not started', in_progress: 'In progress', completed: 'Completed', blocked: 'Blocked' };
+const STAGES: Array<[string, string]> = [['in_progress', 'In progress'], ['completed', 'Completed'], ['archived', 'Archived']];
 
-interface QuestionItem {
-  id: number;
-  question_text: string;
-  status: string;
-  assigned_user_id?: number | null;
-  assigned_user_name?: string | null;
-  inherent_likelihood?: number | null;
-  inherent_impact?: number | null;
-  inherent_score?: number | null;
-  residual_likelihood?: number | null;
-  residual_impact?: number | null;
-  residual_score?: number | null;
-  is_risk_accepted?: boolean;
-  acceptance_notes?: string | null;
-  linked_risk_id?: number | null;
-  moved_to_risk_register_at?: string | null;
-  evidence?: EvidenceItem[];
-  // Methodology metadata — populated for methodology-driven questions only.
-  methodology_code?: string | null;
-  phase_code?: string | null;
-  clause_reference?: string | null;
-  methodology_fields?: Record<string, string> | null;
-  source_quote?: string | null;
-}
-
-interface AssessmentDetail {
-  id: number;
-  tenant_id: number;
-  name: string;
-  description?: string | null;
-  status: string;
-  framework_name?: string | null;
-  questions: QuestionItem[];
-}
-
-interface UserOption {
-  id: number;
-  username: string;
-  display_name: string;
-  email: string;
-}
-
-interface TenantUserApiItem {
-  id?: number;
-  user_id?: number;
-  username?: string;
-  display_name?: string;
-  email?: string;
-  user?: {
-    id?: number;
-    username?: string;
-    display_name?: string;
-    email?: string;
-  } | null;
-}
-
-const STATUS_OPTIONS = [
-  { value: 'not_started', label: 'Not Started' },
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'blocked', label: 'Blocked' },
-];
-
-const ASSESSMENT_STATUS = [
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'archived', label: 'Archived' },
-];
-
-const RISK_SCALE_OPTIONS = [1, 2, 3, 4, 5];
-
-export default function FrameworkRiskAssessmentDetailPage() {
+export default function FrameworkAssessmentPage() {
   const params = useParams();
   const router = useRouter();
-  const queryClient = useQueryClient();
-  const assessmentId = Number(params.id);
+  const qc = useQueryClient();
+  const notify = useNotify();
+  const { confirm, confirmDialog } = useConfirm();
+  const id = Number(params.id);
+  const key = useMemo(() => ['framework-risk-assessment', id] as const, [id]);
+  const { canWrite, ready } = useAssessmentRights();
+  const me = useMeId();
+  const people = useAssessmentPeople();
+  const narrow = useNarrow();
+  const box = useRef<HTMLDivElement>(null);
+  const room = useContainerWidth(box);
+  const [tab, setTab] = useTabParam<Tab>('tab', TABS, { fallback: 'questions', aliases: { insights: 'insights' } });
+  const [address, setAddress] = useAddressState(FRAMEWORK_SCHEMA);
+  const filters = filtersOf(address as FrameworkAddress);
+  const openId = questionIdOf(address as FrameworkAddress);
 
-  const [newQuestion, setNewQuestion] = useState('');
-  const [generateCount, setGenerateCount] = useState('20');
-  const [generateScope, setGenerateScope] = useState<'full' | 'sample'>('full');
-  const [uploadingQuestionId, setUploadingQuestionId] = useState<number | null>(null);
-  const [movingQuestionId, setMovingQuestionId] = useState<number | null>(null);
-
-  const { data: assessment, isLoading } = useQuery({
-    queryKey: ['framework-risk-assessment', assessmentId],
-    queryFn: async () => {
-      const res = await ermApi.frameworkRiskAssessments.getById(assessmentId);
-      return res.data as AssessmentDetail;
-    },
-    enabled: Number.isFinite(assessmentId),
+  const q = useQuery({
+    queryKey: [...key],
+    queryFn: async () => (await ermApi.frameworkRiskAssessments.getById(id)).data as unknown as FrameworkAssessment,
+    enabled: Number.isFinite(id) && id > 0,
     refetchOnMount: 'always',
     staleTime: 0,
+    retry: (failures, e) => failures < 2 && canRetry(e),
   });
-
-  // Methodology registry — used to resolve scale labels, phase names, and
-  // per-field labels for any methodology-driven question on this assessment.
-  // Cached aggressively because the registry is static.
-  const { data: methodologies } = useQuery({
+  const meth = useQuery({
     queryKey: ['framework-methodologies'],
-    queryFn: async () => {
-      const res = await ermApi.frameworkRiskAssessments.getMethodologies();
-      return res.data.methodologies;
-    },
+    queryFn: async () => (await ermApi.frameworkRiskAssessments.getMethodologies()).data.methodologies,
     staleTime: 60 * 60 * 1000,
   });
+  const a = q.data;
+  const questions = useMemo(() => a?.questions ?? [], [a]);
+  const methodology = useMemo(() => {
+    const code = questions.find((x) => x.methodology_code)?.methodology_code;
+    return code ? (meth.data ?? []).find((m) => m.code === code) : undefined;
+  }, [questions, meth.data]);
+  const phaseName = useCallback((code: string | null | undefined) => (code ? methodology?.phases.find((p) => p.code === code)?.name ?? code.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()) : 'No phase'), [methodology]);
 
-  // Resolve the active methodology for this assessment by looking at the
-  // first methodology-driven question. If none exist, methodology stays
-  // undefined and the legacy AI question card is rendered.
-  const activeMethodology: FrameworkMethodology | undefined = useMemo(() => {
-    if (!methodologies || !assessment) return undefined;
-    const code = assessment.questions.find((q) => q.methodology_code)?.methodology_code;
-    if (!code) return undefined;
-    return methodologies.find((m) => m.code === code);
-  }, [methodologies, assessment]);
+  // ── how the questions were written: read once from the address, or set by a regenerate ──
+  const [made, setMade] = useState<Made | null>(() => madeOf((address as FrameworkAddress).made));
+  useEffect(() => { if ((address as FrameworkAddress).made) setAddress({ made: '' }); }, [address, setAddress]);
 
-  const { data: users } = useQuery({
-    queryKey: ['tenant-users', assessment?.tenant_id],
-    queryFn: async () => {
-      try {
-        const res = await tenantApi.getTenantUsers(assessment?.tenant_id);
-        const data = res.data;
-        const rows = Array.isArray(data) ? (data as TenantUserApiItem[]) : [];
-        return rows
-          .map((row) => {
-            const user = row.user || row;
-            const id = Number(user.id ?? row.user_id ?? row.id);
-            if (!Number.isFinite(id)) return null;
-            const displayName = String(
-              user.display_name || user.username || user.email || `User ${id}`
-            );
-            return {
-              id,
-              username: String(user.username || `user_${id}`),
-              display_name: displayName,
-              email: String(user.email || ''),
-            } as UserOption;
-          })
-          .filter((u): u is UserOption => !!u);
-      } catch {
-        return [] as UserOption[];
-      }
-    },
-    enabled: !!assessment?.tenant_id,
-  });
+  // ── derived ──
+  const counts = useMemo(() => countsOf(questions, me), [questions, me]);
+  const shown = useMemo(() => filterQuestions(questions, filters, me), [questions, filters, me]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const [pageNo, setPageNo] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(50);
+  const viewKey = `${shown.length}|${pageSize}|${JSON.stringify(filters)}`;
+  const [seen, setSeen] = useState(viewKey);
+  if (seen !== viewKey) { setSeen(viewKey); setPageNo(1); }
+  const pages = Math.max(1, Math.ceil(shown.length / pageSize));
+  const pageClamped = Math.min(Math.max(1, pageNo), pages);
+  const pageRows = useMemo(() => shown.slice((pageClamped - 1) * pageSize, pageClamped * pageSize), [shown, pageClamped, pageSize]);
+  const openQ = openId ? questions.find((x) => x.id === openId) ?? null : null;
+  const openAt = openQ ? shown.findIndex((x) => x.id === openQ.id) : -1;
+  // fixed columns: tick 44, answered by 160, status 150, level 96, files 60, open 52 = 562 (+ phase 130); the question needs ~280. Under 860 each question is a card.
+  const roomy = room == null || room >= 1000;
+  const cards = narrow || (room != null && room < 860);
+  const phases = useMemo(() => phaseRows(questions, methodology?.phases ?? []), [questions, methodology]);
+  const [ticked, setTicked] = useState<Set<number>>(new Set());
+  const [moreFilters, setMoreFilters] = useState(false);
+  const tickedHere = useMemo(() => Array.from(ticked).filter((t) => shown.some((s) => s.id === t)), [ticked, shown]);
+  useEffect(() => { if (a) document.title = `${a.name} · Framework risk assessment`; }, [a]);
 
-  const updateAssessmentMutation = useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
-      ermApi.frameworkRiskAssessments.update(assessmentId, data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['framework-risk-assessment', assessmentId] }),
-  });
-
-  const deleteAssessmentMutation = useMutation({
-    mutationFn: () => ermApi.frameworkRiskAssessments.delete(assessmentId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['framework-risk-assessments'] });
-      queryClient.invalidateQueries({ queryKey: ['framework-risk-assessment-assigned-questions'] });
-      router.push('/erm/risk-assessments/framework');
-    },
-  });
-
-  const generateMutation = useMutation({
-    mutationFn: () =>
-      ermApi.frameworkRiskAssessments.generateQuestions(assessmentId, {
-        count: Number(generateCount) || 20,
-        replace_existing: true,
-        // Pass scope only when a methodology is active — backend ignores it
-        // for the AI fallback path so this is safe either way.
-        scope: activeMethodology ? generateScope : undefined,
-        // Lock regeneration to the methodology already in use on this
-        // assessment so the user doesn't accidentally fall back to AI.
-        methodology_code: activeMethodology?.code,
-      }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['framework-risk-assessment', assessmentId] }),
-  });
-
-  const addQuestionMutation = useMutation({
-    mutationFn: (question_text: string) =>
-      ermApi.frameworkRiskAssessments.addQuestion(assessmentId, { question_text }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['framework-risk-assessment', assessmentId] });
-      setNewQuestion('');
-    },
-  });
-
-  const updateQuestionMutation = useMutation({
-    mutationFn: ({ questionId, data }: { questionId: number; data: Record<string, unknown> }) =>
-      ermApi.frameworkRiskAssessments.updateQuestion(assessmentId, questionId, data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['framework-risk-assessment', assessmentId] }),
-  });
-
-  const deleteQuestionMutation = useMutation({
-    mutationFn: (questionId: number) =>
-      ermApi.frameworkRiskAssessments.deleteQuestion(assessmentId, questionId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['framework-risk-assessment', assessmentId] }),
-  });
-
-  const moveToRiskRegisterMutation = useMutation({
-    mutationFn: ({ questionId }: { questionId: number }) =>
-      ermApi.frameworkRiskAssessments.moveQuestionToRiskRegister(assessmentId, questionId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['framework-risk-assessment', assessmentId] });
-      queryClient.invalidateQueries({ queryKey: ['erm-risks'] });
-    },
-    onSettled: () => {
-      setMovingQuestionId(null);
-    },
-  });
-
-  const uploadEvidenceMutation = useMutation({
-    mutationFn: async ({ questionId, file }: { questionId: number; file: File }) => {
-      const formData = new FormData();
-      formData.append('file', file);
-      return ermApi.frameworkRiskAssessments.uploadEvidence(assessmentId, questionId, formData);
-    },
-    onSuccess: () => {
-      setUploadingQuestionId(null);
-      queryClient.invalidateQueries({ queryKey: ['framework-risk-assessment', assessmentId] });
-    },
-    onError: () => setUploadingQuestionId(null),
-  });
-
-  const deleteEvidenceMutation = useMutation({
-    mutationFn: (evidenceId: number) =>
-      ermApi.frameworkRiskAssessments.deleteEvidence(assessmentId, evidenceId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['framework-risk-assessment', assessmentId] }),
-  });
-
-  const questionList = useMemo(() => assessment?.questions || [], [assessment]);
-
-  const updateQuestionRiskValues = (questionId: number, data: Record<string, unknown>) => {
-    updateQuestionMutation.mutate({ questionId, data });
-  };
-
-  if (isLoading || !assessment) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <Loader2 className="animate-spin text-primary-600" size={32} />
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6 text-[var(--color-text)]">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-        <div className="flex items-center gap-3">
-          <button onClick={() => router.push('/erm/risk-assessments/framework')} className="cw-btn-secondary rounded-lg p-2">
-            <ArrowLeft size={16} />
-          </button>
-          <div>
-            <h1 className="text-lg sm:text-xl font-semibold text-[var(--color-text)]">{assessment.name}</h1>
-            <p className="text-sm text-[var(--color-muted)]">
-              {assessment.framework_name || 'Framework'} · {assessment.questions.length} questions
-            </p>
-          </div>
-        </div>
-        <div className="cw-card flex flex-col gap-3 p-4 sm:flex-row sm:items-end">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-[var(--color-muted)]">Assessment Status</label>
-            <MultiSelectDropdown
-              title="Assessment Status"
-              triggerVariant="input"
-              multiSelect={false}
-              selectedValues={[assessment.status]}
-              onApply={(vals) => vals[0] && updateAssessmentMutation.mutate({ status: vals[0] })}
-              items={ASSESSMENT_STATUS.map((s) => ({ value: s.value, label: s.label }))}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-[var(--color-muted)]">
-              {activeMethodology ? `Regenerate (${activeMethodology.display_name})` : 'Regenerate Questions'}
-            </label>
-            <div className="flex items-center gap-2">
-              {activeMethodology ? (
-                <>
-                  <MultiSelectDropdown
-                    title="Coverage"
-                    triggerVariant="input"
-                    multiSelect={false}
-                    selectedValues={[generateScope]}
-                    onApply={(vals) => setGenerateScope((vals[0] as 'full' | 'sample') || 'full')}
-                    items={[
-                      { value: 'full', label: 'Full coverage' },
-                      { value: 'sample', label: 'Sampled' },
-                    ]}
-                  />
-                  {generateScope === 'sample' && (
-                    <MultiSelectDropdown
-                      title="Sample size"
-                      triggerVariant="input"
-                      multiSelect={false}
-                      selectedValues={[generateCount]}
-                      onApply={(vals) => setGenerateCount(vals[0] || '20')}
-                      items={[10, 15, 20, 25, 30, 40, 50].map((count) => ({
-                        value: String(count),
-                        label: String(count),
-                      }))}
-                    />
-                  )}
-                </>
-              ) : (
-                <MultiSelectDropdown
-                  title="Count"
-                  triggerVariant="input"
-                  multiSelect={false}
-                  selectedValues={[generateCount]}
-                  onApply={(vals) => setGenerateCount(vals[0] || '20')}
-                  items={[10, 15, 20, 25, 30, 40, 50].map((count) => ({
-                    value: String(count),
-                    label: String(count),
-                  }))}
-                />
-              )}
-              <button
-                className="cw-btn-secondary flex items-center gap-2 rounded-lg px-3 py-2"
-                onClick={() => {
-                  const desc = activeMethodology
-                    ? generateScope === 'full'
-                      ? `full ${activeMethodology.display_name} coverage`
-                      : `${Number(generateCount) || 20} sampled questions`
-                    : `${Number(generateCount) || 20} questions`;
-                  if (confirm(`Regenerate ${desc}? This will replace existing questions and evidence.`)) {
-                    generateMutation.mutate();
-                  }
-                }}
-                disabled={generateMutation.isPending}
-              >
-                {generateMutation.isPending ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />}
-                Regenerate
-              </button>
-            </div>
-          </div>
-          <div className="sm:ml-auto">
-            <button
-              className="cw-btn-danger inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm"
-              disabled={deleteAssessmentMutation.isPending}
-              onClick={() => {
-                if (confirm(`Delete assessment \"${assessment.name}\"? This will remove all questions and evidence.`)) {
-                  deleteAssessmentMutation.mutate();
-                }
-              }}
-            >
-              {deleteAssessmentMutation.isPending ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
-              Delete Assessment
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="cw-card p-5 space-y-4">
-        <div className="flex items-center gap-2 text-sm font-semibold text-[var(--color-text)]">
-          <Sparkles size={16} /> Question Workspace
-        </div>
-        {!activeMethodology && (
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-subtle)] px-4 py-3 text-xs text-[var(--color-muted)]">
-            No methodology mapped for this framework — questions were AI-generated using the framework&apos;s parsed control text as context. Use the regenerate panel above to switch the assessment over to a specific methodology.
-          </div>
-        )}
-        <div className="text-sm font-semibold text-[var(--color-text)]">Add Manual Question</div>
-        <div className="flex items-center gap-2">
-          <input
-            className="cw-field flex-1 rounded-lg px-3 py-2"
-            value={newQuestion}
-            onChange={(e) => setNewQuestion(e.target.value)}
-            placeholder="Type a framework-specific manual question"
-          />
-          <button
-            className="cw-btn-primary flex items-center gap-2 rounded-lg px-4 py-2"
-            onClick={() => newQuestion.trim() && addQuestionMutation.mutate(newQuestion.trim())}
-            disabled={!newQuestion.trim() || addQuestionMutation.isPending}
-          >
-            {addQuestionMutation.isPending ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />}
-            Add
-          </button>
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        {questionList.map((question, index) => (
-          <div key={question.id} className="cw-card space-y-4 p-5">
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-1">
-                <div className="text-xs text-[var(--color-muted)]">Question {index + 1}</div>
-                <div className="text-sm font-semibold text-[var(--color-text)]">{question.question_text}</div>
-                {question.assigned_user_name && (
-                  <div className="text-xs text-[var(--color-muted)]">Assigned to {question.assigned_user_name}</div>
-                )}
-              </div>
-              <button
-                className="cw-btn-danger flex items-center gap-1 rounded-lg px-3 py-2 text-sm"
-                onClick={() => deleteQuestionMutation.mutate(question.id)}
-              >
-                <Trash2 size={14} /> Delete
-              </button>
-            </div>
-
-            <div className="grid gap-3 lg:grid-cols-3">
-              <div>
-                <label className="block text-xs font-medium text-[var(--color-muted)] mb-1">Status</label>
-                <MultiSelectDropdown
-                  title="Status"
-                  triggerVariant="input"
-                  multiSelect={false}
-                  selectedValues={[question.status]}
-                  onApply={(vals) => vals[0] && updateQuestionMutation.mutate({ questionId: question.id, data: { status: vals[0] } })}
-                  items={STATUS_OPTIONS.map((s) => ({ value: s.value, label: s.label }))}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-[var(--color-muted)] mb-1">Assignee</label>
-                <MultiSelectDropdown
-                  title="Assignee"
-                  triggerVariant="input"
-                  multiSelect={false}
-                  forceSearch
-                  selectedValues={question.assigned_user_id ? [String(question.assigned_user_id)] : []}
-                  onApply={(vals) => updateQuestionMutation.mutate({
-                    questionId: question.id,
-                    data: { assigned_user_id: vals[0] ? Number(vals[0]) : null },
-                  })}
-                  items={(users || []).map((u) => ({
-                    value: String(u.id),
-                    label: u.display_name || u.username,
-                    subLabel: u.email || undefined,
-                  }))}
-                  placeholder="Unassigned"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-[var(--color-muted)] mb-1">Evidence Upload</label>
-                <label className="cw-btn-secondary flex cursor-pointer items-center justify-center gap-2 rounded-lg px-3 py-2">
-                  <Upload size={14} /> Upload File
-                  <input
-                    type="file"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      setUploadingQuestionId(question.id);
-                      uploadEvidenceMutation.mutate({ questionId: question.id, file });
-                      e.currentTarget.value = '';
-                    }}
-                  />
-                </label>
-                {uploadingQuestionId === question.id && (
-                  <div className="mt-1 text-xs text-[var(--color-muted)] flex items-center gap-1">
-                    <Loader2 className="animate-spin" size={12} /> Uploading...
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <MethodologyQuestionCard
-              assessmentId={assessmentId}
-              question={question}
-              methodology={activeMethodology}
-              onSave={(fields) =>
-                updateQuestionMutation.mutate({
-                  questionId: question.id,
-                  data: { methodology_fields: fields },
-                })
-              }
-              onApplyScores={(scores) =>
-                updateQuestionMutation.mutate({ questionId: question.id, data: scores })
-              }
-              isSaving={updateQuestionMutation.isPending}
-            />
-
-            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-subtle)] p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="text-xs font-semibold uppercase tracking-wide text-[var(--color-muted)]">
-                  {activeMethodology
-                    ? `Risk Rating · ${activeMethodology.display_name}`
-                    : 'Question Risk Assessment'}
-                </div>
-                {activeMethodology && (
-                  <span className="text-[10px] text-[var(--color-muted)]">
-                    Likelihood &amp; impact labels follow {activeMethodology.reference_standard}
-                  </span>
-                )}
-              </div>
-              <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
-                <ScaleSelect
-                  label="Inherent Likelihood"
-                  scale={activeMethodology?.likelihood_scale}
-                  value={question.inherent_likelihood}
-                  onChange={(v) => updateQuestionRiskValues(question.id, { inherent_likelihood: v })}
-                />
-                <ScaleSelect
-                  label="Inherent Impact"
-                  scale={activeMethodology?.impact_scale}
-                  value={question.inherent_impact}
-                  onChange={(v) => updateQuestionRiskValues(question.id, { inherent_impact: v })}
-                />
-                <div>
-                  <label className="block text-xs font-medium text-[var(--color-muted)] mb-1">Inherent Score</label>
-                  <div className="cw-field w-full rounded-lg px-3 py-2 text-sm bg-white/70">{question.inherent_score ?? '-'}</div>
-                </div>
-                <ScaleSelect
-                  label="Residual Likelihood"
-                  scale={activeMethodology?.likelihood_scale}
-                  value={question.residual_likelihood}
-                  onChange={(v) => updateQuestionRiskValues(question.id, { residual_likelihood: v })}
-                />
-                <ScaleSelect
-                  label="Residual Impact"
-                  scale={activeMethodology?.impact_scale}
-                  value={question.residual_impact}
-                  onChange={(v) => updateQuestionRiskValues(question.id, { residual_impact: v })}
-                />
-                <div>
-                  <label className="block text-xs font-medium text-[var(--color-muted)] mb-1">Residual Score</label>
-                  <div className="cw-field w-full rounded-lg px-3 py-2 text-sm bg-white/70">{question.residual_score ?? '-'}</div>
-                </div>
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-2">
-                <div>
-                  <label className="inline-flex items-center gap-2 text-sm text-[var(--color-text)]">
-                    <input
-                      type="checkbox"
-                      checked={!!question.is_risk_accepted}
-                      onChange={(e) => updateQuestionRiskValues(question.id, { is_risk_accepted: e.target.checked })}
-                    />
-                    Accept Risk
-                  </label>
-                  <p className="mt-1 text-xs text-[var(--color-muted)]">
-                    Mark accepted risk before moving to Risk Register.
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-[var(--color-muted)] mb-1">Acceptance Notes</label>
-                  <textarea
-                    className="cw-field w-full rounded-lg px-3 py-2 text-sm"
-                    rows={2}
-                    defaultValue={question.acceptance_notes || ''}
-                    placeholder="Add acceptance rationale or treatment notes"
-                    onBlur={(e) => updateQuestionRiskValues(question.id, { acceptance_notes: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                {question.linked_risk_id ? (
-                  <div className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
-                    Moved to Risk Register: #{question.linked_risk_id}
-                    <Link className="underline" href={`/erm/risks/${question.linked_risk_id}`}>Open Risk</Link>
-                  </div>
-                ) : (
-                  <button
-                    className="cw-btn-primary rounded-lg px-3 py-2 text-sm disabled:opacity-50"
-                    disabled={!question.is_risk_accepted || moveToRiskRegisterMutation.isPending}
-                    onClick={() => {
-                      setMovingQuestionId(question.id);
-                      moveToRiskRegisterMutation.mutate({ questionId: question.id });
-                    }}
-                  >
-                    {movingQuestionId === question.id ? (
-                      <span className="inline-flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Moving...</span>
-                    ) : (
-                      'Move to Risk Register'
-                    )}
-                  </button>
-                )}
-                {!question.is_risk_accepted && !question.linked_risk_id && (
-                  <span className="text-xs text-[var(--color-muted)]">Accept risk to enable move.</span>
-                )}
-              </div>
-              {movingQuestionId === question.id && moveToRiskRegisterMutation.isError && (
-                <div className="text-xs text-rose-600">
-                  {(moveToRiskRegisterMutation.error as any)?.response?.data?.detail || 'Failed to move question to risk register.'}
-                </div>
-              )}
-            </div>
-
-            <div className="border-t border-[var(--color-border)] pt-3">
-              <div className="flex items-center gap-2 text-xs font-medium text-[var(--color-muted)]">
-                <CheckCircle2 size={12} /> Evidence ({question.evidence?.length || 0})
-              </div>
-              {(question.evidence || []).length === 0 ? (
-                <div className="text-xs text-[var(--color-muted)] mt-2">No evidence uploaded yet.</div>
-              ) : (
-                <div className="mt-2 space-y-2">
-                  {(question.evidence || []).map((evidence) => (
-                    <div key={evidence.id} className="flex items-center justify-between rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2">
-                      <div>
-                        <div className="text-xs font-medium text-[var(--color-text)]">{evidence.file_name}</div>
-                        <div className="text-[10px] text-[var(--color-muted)]">
-                          {evidence.uploader_name || 'User'} · {evidence.uploaded_at ? new Date(evidence.uploaded_at).toLocaleString() : ''}
-                        </div>
-                      </div>
-                      <button
-                        className="cw-btn-danger text-xs"
-                        onClick={() => deleteEvidenceMutation.mutate(evidence.id)}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* ---------------------------------------------------------------------------
- * Helper components — methodology-aware scale select & per-question card.
- * ------------------------------------------------------------------------- */
-
-function ScaleSelect({
-  label,
-  scale,
-  value,
-  onChange,
-}: {
-  label: string;
-  scale: FrameworkMethodology['likelihood_scale'] | undefined;
-  value?: number | null;
-  onChange: (v: number | null) => void;
-}) {
-  const fallback = [1, 2, 3, 4, 5];
-  return (
-    <div>
-      <label className="block text-xs font-medium text-[var(--color-muted)] mb-1">{label}</label>
-      <select
-        className="cw-field w-full rounded-lg px-2 py-2 text-sm"
-        value={value || ''}
-        onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
-      >
-        <option value="">-</option>
-        {scale && scale.length > 0
-          ? scale.map((p) => (
-              <option key={p.value} value={p.value} title={p.description}>
-                {p.value} · {p.label}
-              </option>
-            ))
-          : fallback.map((v) => (
-              <option key={v} value={v}>
-                {v}
-              </option>
-            ))}
-      </select>
-    </div>
-  );
-}
-
-interface AISuggestResult {
-  suggestions: Record<string, string>;
-  recommendations: string;
-  rationale: string;
-  recommended_scores: {
-    inherent_likelihood: number | null;
-    inherent_impact: number | null;
-    residual_likelihood: number | null;
-    residual_impact: number | null;
-  };
-}
-
-function MethodologyQuestionCard({
-  assessmentId,
-  question,
-  methodology,
-  onSave,
-  onApplyScores,
-  isSaving,
-}: {
-  assessmentId: number;
-  question: QuestionItem;
-  methodology: FrameworkMethodology | undefined;
-  onSave: (fields: Record<string, string>) => void;
-  onApplyScores: (scores: Partial<{
-    inherent_likelihood: number;
-    inherent_impact: number;
-    residual_likelihood: number;
-    residual_impact: number;
-  }>) => void;
-  isSaving: boolean;
-}) {
-  // IMPORTANT: All hooks must be declared *before* any early return so the
-  // hook order stays identical across renders (Rules of Hooks). The previous
-  // version returned early when methodology was undefined on the first
-  // render and then declared hooks on the second — silently corrupting the
-  // useState slot that backed `draft`, which is why "Apply" never landed.
-  const initial = question.methodology_fields || {};
-  const [draft, setDraft] = useState<Record<string, string>>({ ...initial });
-
-  // AI suggest state
-  const [aiOpen, setAiOpen] = useState(false);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiError, setAiError] = useState<string | null>(null);
-  const [aiResult, setAiResult] = useState<AISuggestResult | null>(null);
-  const [contextHint, setContextHint] = useState('');
-
-  // Sync draft → server value when the user navigates between questions or
-  // a save round-trips fresh data. Only `question.id` is the dep so a local
-  // edit (Apply, typing) is never clobbered by an in-flight refetch.
-  useEffect(() => {
-    setDraft({ ...(question.methodology_fields || {}) });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [question.id]);
-
-  // Don't render the card unless this question is methodology-driven and
-  // the registry has loaded. All hooks above remain consistent regardless.
-  if (!question.methodology_code || !methodology) return null;
-
-  const phase = methodology.phases.find((p) => p.code === question.phase_code);
-  const fields = methodology.fields;
-  const dirty = fields.some((f) => (draft[f.key] || '') !== (initial[f.key] || ''));
-
-  const runAISuggest = async () => {
-    setAiLoading(true);
-    setAiError(null);
+  // ── saving ──
+  const putQuestion = useCallback((updated: Question) => {
+    qc.setQueryData<FrameworkAssessment>([...key], (old) => (old ? { ...old, questions: old.questions.map((x) => (x.id === updated.id ? { ...x, ...updated } : x)) } : old));
+  }, [qc, key]);
+  const saveQuestion = useCallback(async (qn: Question, data: Record<string, unknown>): Promise<boolean> => {
     try {
-      const res = await ermApi.frameworkRiskAssessments.aiSuggestQuestion(
-        assessmentId,
-        question.id,
-        contextHint.trim() || undefined,
-      );
-      setAiResult(res.data);
-      setAiOpen(true);
-    } catch (e: any) {
-      setAiError(e?.response?.data?.detail || e?.message || 'AI suggest failed.');
-    } finally {
-      setAiLoading(false);
+      const res = await ermApi.frameworkRiskAssessments.updateQuestion(id, qn.id, data);
+      putQuestion(res.data as Question);
+      void qc.invalidateQueries({ queryKey: ['erm-assessment-register'] });
+      return true;
+    } catch (e) {
+      notify.error(errorMessage(e), { title: 'The change was not saved', retry: canRetry(e) ? () => { void saveQuestion(qn, data); } : undefined });
+      return false;
     }
+  }, [id, putQuestion, qc, notify]);
+
+  const updateAssessment = useReportedMutation({
+    mutationFn: (body: Record<string, unknown>) => ermApi.frameworkRiskAssessments.update(id, body),
+    success: { title: 'Saved', message: 'The assessment is updated.' },
+    failure: "Couldn't save the assessment",
+    invalidate: [[...key], ...ASSESSMENT_REFRESH],
+    onSuccess: () => setEditing(false),
+  });
+  const removeAssessment = useReportedMutation({
+    mutationFn: () => ermApi.frameworkRiskAssessments.delete(id),
+    success: { title: 'Assessment deleted', message: 'Its questions, answers and files went with it.' },
+    failure: "Couldn't delete the assessment",
+    invalidate: ASSESSMENT_REFRESH,
+    onSuccess: () => router.push('/erm/risk-assessments'),
+  });
+  const addQuestion = useReportedMutation({
+    mutationFn: (text: string) => ermApi.frameworkRiskAssessments.addQuestion(id, { question_text: text }),
+    success: { title: 'Question added', message: 'It is at the end of the list.' },
+    failure: "Couldn't add the question",
+    invalidate: [[...key], ...ASSESSMENT_REFRESH],
+    onSuccess: () => setAdding(false),
+  });
+  const removeQuestion = useReportedMutation({
+    mutationFn: (qn: Question) => ermApi.frameworkRiskAssessments.deleteQuestion(id, qn.id),
+    success: { title: 'Question deleted', message: 'Its files went with it.' },
+    failure: "Couldn't delete the question",
+    invalidate: [[...key], ...ASSESSMENT_REFRESH],
+    onSuccess: (_d, qn) => { if (openId === qn.id) setAddress({ question: '' }); },
+  });
+  const regenerate = useReportedMutation({
+    mutationFn: (o: { scope?: 'full' | 'sample'; count: number }) => ermApi.frameworkRiskAssessments.generateQuestions(id, { count: o.count, replace_existing: true, scope: o.scope, methodology_code: methodology?.code }),
+    success: { title: 'Questions written', message: 'The old questions and their files are gone.' },
+    failure: "Couldn't write the questions",
+    invalidate: [[...key], ...ASSESSMENT_REFRESH],
+    onSuccess: (res) => {
+      const src = (res.data as { generation_source?: string }).generation_source ?? '';
+      setMade(src.startsWith('methodology') ? 'methodology' : src === 'fallback' ? 'template' : 'ai');
+      setRegenerating(false); setTicked(new Set()); setAddress({ question: '' });
+    },
+  });
+  const upload = useReportedMutation({
+    mutationFn: ({ qn, file }: { qn: Question; file: File }) => { const fd = new FormData(); fd.append('file', file); return ermApi.frameworkRiskAssessments.uploadEvidence(id, qn.id, fd); },
+    success: { title: 'File attached', message: '' },
+    failure: "Couldn't upload the file",
+    invalidate: [[...key], ...ASSESSMENT_REFRESH],
+  });
+  const removeFile = useReportedMutation({
+    mutationFn: (f: { id: number }) => ermApi.frameworkRiskAssessments.deleteEvidence(id, f.id),
+    success: { title: 'File removed', message: '' },
+    failure: "Couldn't remove the file",
+    invalidate: [[...key], ...ASSESSMENT_REFRESH],
+  });
+  const moveToRegister = useReportedMutation({
+    mutationFn: ({ qn, body }: { qn: Question; body: Record<string, unknown> }) => ermApi.frameworkRiskAssessments.moveQuestionToRiskRegister(id, qn.id, body),
+    success: { title: 'Added to the Risk Register', message: 'It is there as an accepted risk. Open it from the question.' },
+    failure: "Couldn't add it to the Risk Register",
+    invalidate: [[...key], ['erm-risks-lean'], ['erm-risks-dashboard'], ...ASSESSMENT_REFRESH],
+    onSuccess: () => setMoving(null),
+  });
+
+  const [editing, setEditing] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+  const [moving, setMoving] = useState<Question | null>(null);
+
+  const batch = async (what: string, ids: number[], data: Record<string, unknown>) => {
+    let done = 0; let failed = 0;
+    for (const qid of ids) {
+      try { putQuestion((await ermApi.frameworkRiskAssessments.updateQuestion(id, qid, data)).data as Question); done += 1; } catch { failed += 1; }
+    }
+    const w = batchWords(done, failed, what);
+    if (w.ok) notify.success(w.message, { title: w.title }); else notify.warning(w.message, { title: w.title });
+    void qc.invalidateQueries({ queryKey: ['erm-assessment-register'] });
+    setTicked(new Set(failed ? ids.slice(ids.length - failed) : []));
+  };
+  const bulkAssign = async (user: string | null) => {
+    if (!user) return;
+    const person = (people.data ?? []).find((p) => String(p.id) === user)?.display_name ?? 'this person';
+    if (await confirm({ title: `Assign ${tickedHere.length} ${tickedHere.length === 1 ? 'question' : 'questions'} to ${person}?`, message: 'Whoever was assigned before is replaced.', confirmLabel: 'Assign' })) await batch('Assign', tickedHere, { assigned_user_id: Number(user) });
+  };
+  const bulkStatus = async (status: string) => {
+    if (await confirm({ title: `Set ${tickedHere.length} ${tickedHere.length === 1 ? 'question' : 'questions'} to ${STATUS_WORDS[status].toLowerCase()}?`, confirmLabel: 'Set status' })) await batch('Set status', tickedHere, { status });
+  };
+  const askDeleteQuestion = async (qn: Question) => {
+    const files = qn.evidence?.length ?? 0;
+    if (await confirm({ title: 'Delete this question?', message: `“${truncate(qn.question_text, 120).text}” is deleted${files ? ` with its ${files} ${files === 1 ? 'file' : 'files'}` : ''}. It cannot be undone.`, confirmLabel: 'Delete question', tone: 'danger' })) removeQuestion.mutate(qn);
+  };
+  const askRemoveFile = async (qn: Question, f: { id: number; file_name: string }) => {
+    if (await confirm({ title: 'Remove this file?', message: `“${truncate(f.file_name, 80).text}” is deleted from the question. It cannot be undone.`, confirmLabel: 'Remove file', tone: 'danger' })) removeFile.mutate(f);
+  };
+  const askDeleteAssessment = async () => {
+    if (!a) return;
+    const f = regenerateFacts(questions);
+    if (await confirm({
+      title: `Delete “${truncate(a.name, 80).text}”?`,
+      message: `${f.total ? `Its ${formatCount(f.total)} ${f.total === 1 ? 'question' : 'questions'}${f.evidenceFiles ? `, ${formatCount(f.evidenceFiles)} uploaded ${f.evidenceFiles === 1 ? 'file' : 'files'}` : ''} and every answer go with it. ` : ''}Risks already added to the Risk Register stay there. It cannot be undone.`,
+      confirmLabel: 'Delete assessment', tone: 'danger',
+    })) removeAssessment.mutate();
   };
 
-  const applySuggestion = (key: string) => {
-    if (!aiResult) return;
-    const value = aiResult.suggestions[key] || '';
-    setDraft((d) => ({ ...d, [key]: value }));
-  };
+  // ── the page's states ──
+  if (q.isPending) return <div aria-busy="true" className="rounded-ds-card border border-ds-border bg-ds-surface p-[12px]"><SkeletonRows rows={8} columns={5} label="Loading the assessment" /></div>;
+  if (q.isError || !a) return <ErrorState {...failureWords(q.error, 'this assessment')} onRetry={canRetry(q.error) ? () => { void q.refetch(); } : undefined} />;
 
-  const applyAllSuggestions = () => {
-    if (!aiResult) return;
-    setDraft((d) => ({ ...d, ...aiResult.suggestions }));
-  };
-
-  const applyRecommendedScores = () => {
-    if (!aiResult) return;
-    const out: Partial<{
-      inherent_likelihood: number;
-      inherent_impact: number;
-      residual_likelihood: number;
-      residual_impact: number;
-    }> = {};
-    const s = aiResult.recommended_scores;
-    if (s.inherent_likelihood) out.inherent_likelihood = s.inherent_likelihood;
-    if (s.inherent_impact) out.inherent_impact = s.inherent_impact;
-    if (s.residual_likelihood) out.residual_likelihood = s.residual_likelihood;
-    if (s.residual_impact) out.residual_impact = s.residual_impact;
-    if (Object.keys(out).length > 0) onApplyScores(out);
-  };
-
-  const hasRecommendedScores =
-    !!aiResult &&
-    Object.values(aiResult.recommended_scores).some((v) => v !== null && v !== undefined);
+  const write = ready && canWrite;
+  const setFilters = (f: typeof NO_QFILTERS) => setAddress({ ...filtersPatch(f), page: '' });
+  const quickChips: FilterChip[] = QUICK_IDS.map((qid) => ({
+    key: qid, label: QUICK_LABEL[qid], active: filters.quick === qid,
+    count: qid === 'all' ? counts.total : qid === 'mine' ? counts.mine : qid === 'blocked' ? counts.byStatus.blocked : qid === 'unassigned' ? counts.unassigned : counts.total - counts.byStatus.completed,
+  }));
+  const moreItems: MenuItem[] = [
+    { key: 'edit', label: 'Edit details', icon: FileEdit, hidden: !write, onSelect: () => setEditing(true) },
+    { key: 'regen', label: 'Write the questions again', icon: RefreshCw, hidden: !write, onSelect: () => setRegenerating(true) },
+    ...STAGES.map(([v, l], i): MenuItem => ({ key: `stage:${v}`, label: l, icon: v === 'archived' ? Archive : undefined, checked: a.status === v, radio: true, hidden: !write, section: i === 0 ? 'Stage' : undefined, onSelect: () => { if (a.status !== v) updateAssessment.mutate({ status: v }); } })),
+    { key: 'delete', label: 'Delete assessment', icon: Trash2, danger: true, hidden: !write, onSelect: () => { void askDeleteAssessment(); } },
+  ];
+  const notice = made ? madeNotice(made, methodology?.display_name) : null;
+  const phaseOptions = phases.filter((p) => p.code !== 'none' || phases.length > 1);
+  const insightPeople = assigneeRows(questions);
+  const levels = (['critical', 'high', 'medium', 'low'] as const).map((b) => ({ b, n: questions.filter((x) => rating(x) === b).length }));
 
   return (
-    <div className="rounded-lg border border-primary-200 bg-primary-50/50 p-4 space-y-3">
-      <div className="flex flex-wrap items-center gap-2 text-xs">
-        <span className="inline-flex items-center gap-1 rounded-full bg-primary-100 px-2 py-0.5 font-semibold text-primary-800">
-          <BookOpen size={11} /> {methodology.display_name}
-        </span>
-        {phase && (
-          <span className="rounded-full bg-white px-2 py-0.5 font-medium text-primary-700 border border-primary-200">
-            Phase {phase.order}: {phase.name}
-          </span>
+    <div ref={box} className="flex min-w-0 flex-col gap-[16px]">
+      <PageHeader
+        variant="page"
+        title={a.name}
+        back={{ href: '/erm/risk-assessments?kind=framework', label: 'Back to assessments' }}
+        chips={(
+          <>
+            <StatusPill {...statusPill(frameworkAssessmentStatus, a.status)} />
+            {a.framework_name && <span className="text-ds-body text-ds-fg-muted">{a.framework_name}</span>}
+            {methodology && <span className="text-ds-body text-ds-fg-muted">Method: {methodology.display_name}</span>}
+            <span className="text-ds-body text-ds-fg-muted">{formatCount(counts.total)} {counts.total === 1 ? 'question' : 'questions'}</span>
+          </>
         )}
-        {question.clause_reference && (
-          <span className="rounded-full bg-white px-2 py-0.5 font-mono text-primary-700 border border-primary-200">
-            {question.clause_reference}
-          </span>
-        )}
-        <div className="ml-auto flex items-center gap-2">
-          <button
-            className="inline-flex items-center gap-1.5 rounded-md bg-primary-600 px-2.5 py-1 text-xs font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50"
-            onClick={runAISuggest}
-            disabled={aiLoading}
-            title="Ask AI to suggest values for the fields below"
-          >
-            {aiLoading ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />}
-            AI assist
-          </button>
-        </div>
-      </div>
+        actions={write ? (
+          <>
+            <Button variant="primary" leftIcon={<Plus aria-hidden />} onClick={() => setAdding(true)}>Add a question</Button>
+            <Menu label="More actions" iconOnly items={moreItems} />
+          </>
+        ) : undefined}
+      />
 
-      {aiError && (
-        <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
-          {aiError}
-        </div>
+      {notice && (
+        <Notice tone={notice.tone} title={notice.title} action={<Button variant="ghost" leftIcon={<X aria-hidden />} onClick={() => setMade(null)}>Dismiss</Button>}>{notice.text}</Notice>
       )}
 
-      {aiOpen && aiResult && (
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-900">
-              <Wand2 size={12} /> AI suggestions
-            </div>
-            <div className="flex items-center gap-1">
-              <button
-                className="inline-flex items-center gap-1 rounded-md bg-primary-600 px-2 py-1 text-[11px] font-medium text-[#0a0a0a] hover:bg-primary-700"
-                onClick={applyAllSuggestions}
-              >
-                <Check size={10} /> Apply all to fields
-              </button>
-              {hasRecommendedScores && (
-                <button
-                  className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-100"
-                  onClick={applyRecommendedScores}
-                  title="Apply the suggested likelihood / impact ratings to the risk-rating section below"
-                >
-                  Apply suggested scores
-                </button>
+      <section aria-label="Counters" className="flex flex-col gap-[8px]">
+        <FilterChips label="Questions" chips={quickChips} onToggle={(k) => { setFilters({ ...filters, quick: filters.quick === k || k === 'all' ? 'all' : (k as typeof filters.quick) }); setTab('questions'); }} />
+        <ProgressBar value={counts.pct} label="Questions completed" valueText={`${formatCount(counts.byStatus.completed)} of ${formatCount(counts.total)} completed`} className="max-w-[420px]" />
+      </section>
+
+      <Tabs<Tab> ariaLabel="Assessment sections" countFormat="exact" tabs={[{ key: 'questions', label: 'Questions', count: counts.total }, { key: 'insights', label: 'Insights' }, { key: 'details', label: 'Details' }]} value={tab} onChange={setTab}>
+        <TabPanel tabKey="questions">
+          <div className="flex flex-col gap-[12px] pt-[12px]">
+            <div className="flex flex-wrap items-center gap-[8px]">
+              <TextInput type="search" value={filters.search} onChange={(e) => setFilters({ ...filters, search: e.target.value })} aria-label="Search the questions" placeholder="Search questions" autoComplete="off" className="min-w-[160px] max-w-[320px] flex-1" leftAdornment={<Search aria-hidden className="h-[14px] w-[14px]" />} />
+              {narrow && <Button aria-expanded={moreFilters} onClick={() => setMoreFilters((v) => !v)}>{filterCount(filters) > 0 ? `Filters (${filterCount(filters)})` : 'Filters'}</Button>}
+              {(!narrow || moreFilters) && phaseOptions.length > 1 && (
+                <Select aria-label="Phase" placeholder="All phases" className="w-[170px]" value={filters.phase[0] ?? ''} onChange={(e) => setFilters({ ...filters, phase: e.target.value ? [e.target.value] : [] })}>
+                  {phaseOptions.map((p) => <option key={p.code} value={p.code}>{p.name}</option>)}
+                </Select>
               )}
-              <button
-                className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-100"
-                onClick={() => setAiOpen(false)}
-              >
-                <X size={10} /> Hide
-              </button>
+              {(!narrow || moreFilters) && <Select aria-label="Status" placeholder="Any status" className="w-[150px]" value={filters.status[0] ?? ''} onChange={(e) => setFilters({ ...filters, status: e.target.value ? [e.target.value] : [] })}>
+                {QUESTION_STATUSES.map((s) => <option key={s} value={s}>{STATUS_WORDS[s]}</option>)}
+              </Select>}
+              {(!narrow || moreFilters) && <Select aria-label="Answered by" placeholder="Anyone" className="w-[170px]" value={filters.assignee[0] ?? ''} onChange={(e) => setFilters({ ...filters, assignee: e.target.value ? [e.target.value] : [] })}>
+                {insightPeople.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </Select>}
+              {filterCount(filters) > 0 && <Button variant="link" onClick={() => setFilters(NO_QFILTERS)}>Clear filters</Button>}
+              <span className="ml-auto text-ds-body text-ds-fg-muted">{formatCount(shown.length)} of {formatCount(counts.total)}</span>
             </div>
-          </div>
 
-          {aiResult.recommendations && (
-            <div className="rounded-md bg-white px-3 py-2 text-xs text-slate-900">
-              <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-slate-700">
-                Assessor guidance
+            {tickedHere.length > 0 && write && (
+              <div role="region" aria-label="Selected questions" className="flex flex-wrap items-center gap-[8px] rounded-ds-card border border-ds-primary bg-ds-primary-soft px-[12px] py-[8px]">
+                <span className="text-ds-body font-[600] text-ds-primary-text">{formatCount(tickedHere.length)} selected</span>
+                <Combobox label="Assign to" value={null} onChange={(v) => { void bulkAssign(v); }} placeholder="Assign to…" searchPlaceholder="Search people" className="w-[200px]" options={(people.data ?? []).map((p) => ({ value: String(p.id), label: p.display_name, description: p.email ?? undefined }))} />
+                <Menu label="Set status" items={QUESTION_STATUSES.map((s) => ({ key: s, label: STATUS_WORDS[s], onSelect: () => { void bulkStatus(s); } }))} />
+                <Button variant="link" onClick={() => setTicked(new Set())}>Clear selection</Button>
               </div>
-              <div>{aiResult.recommendations}</div>
-            </div>
-          )}
-
-          <div className="space-y-2">
-            {fields.map((f) => {
-              const suggested = aiResult.suggestions[f.key];
-              if (suggested === undefined) return null;
-              const trimmed = (suggested || '').trim();
-              return (
-                <div
-                  key={f.key}
-                  className="rounded-md border border-slate-200 bg-white px-3 py-2"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1">
-                      <div className="text-[11px] font-semibold text-slate-900">{f.label}</div>
-                      <div className="mt-0.5 text-xs text-slate-700 whitespace-pre-wrap">
-                        {trimmed || <span className="italic text-slate-400">No suggestion</span>}
-                      </div>
-                    </div>
-                    {trimmed && (
-                      <button
-                        className="inline-flex shrink-0 items-center gap-1 rounded-md bg-primary-600 px-2 py-1 text-[11px] font-medium text-[#0a0a0a] hover:bg-primary-700"
-                        onClick={() => applySuggestion(f.key)}
-                      >
-                        <Check size={10} /> Apply
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {hasRecommendedScores && (
-            <div className="rounded-md bg-white px-3 py-2 text-xs text-slate-900">
-              <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-slate-700">
-                Suggested ratings (1–5)
-              </div>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
-                <div>
-                  Inherent L:{' '}
-                  <strong>{aiResult.recommended_scores.inherent_likelihood ?? '–'}</strong>
-                </div>
-                <div>
-                  Inherent I:{' '}
-                  <strong>{aiResult.recommended_scores.inherent_impact ?? '–'}</strong>
-                </div>
-                <div>
-                  Residual L:{' '}
-                  <strong>{aiResult.recommended_scores.residual_likelihood ?? '–'}</strong>
-                </div>
-                <div>
-                  Residual I:{' '}
-                  <strong>{aiResult.recommended_scores.residual_impact ?? '–'}</strong>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {aiResult.rationale && (
-            <div className="text-[11px] italic text-slate-600">{aiResult.rationale}</div>
-          )}
-
-          <div>
-            <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-700">
-              Re-run with extra context (optional)
-            </label>
-            <div className="flex items-center gap-2">
-              <input
-                className="cw-field flex-1 rounded-md px-2 py-1 text-xs"
-                placeholder="e.g. We host on AWS, ~200 employees, no PII processing"
-                value={contextHint}
-                onChange={(e) => setContextHint(e.target.value)}
-              />
-              <button
-                className="inline-flex items-center gap-1 rounded-md bg-primary-600 px-2 py-1 text-[11px] font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50"
-                onClick={runAISuggest}
-                disabled={aiLoading}
-              >
-                {aiLoading ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10} />}
-                Re-run
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="grid gap-3 md:grid-cols-2">
-        {fields.map((f) => (
-          <div key={f.key} className={f.field_type === 'textarea' ? 'md:col-span-2' : ''}>
-            <label className="mb-1 block text-xs font-medium text-slate-900">
-              {f.label}
-              {f.required && <span className="ml-0.5 text-rose-500">*</span>}
-            </label>
-            {f.field_type === 'textarea' ? (
-              <textarea
-                className="cw-field w-full rounded-lg px-3 py-2 text-sm"
-                rows={2}
-                placeholder={f.placeholder || ''}
-                value={draft[f.key] || ''}
-                onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
-              />
-            ) : f.field_type === 'select' ? (
-              <select
-                className="cw-field w-full rounded-lg px-3 py-2 text-sm"
-                value={draft[f.key] || ''}
-                onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
-              >
-                <option value="">-</option>
-                {(f.options || []).map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                className="cw-field w-full rounded-lg px-3 py-2 text-sm"
-                placeholder={f.placeholder || ''}
-                value={draft[f.key] || ''}
-                onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
-              />
             )}
-            {f.help_text && <div className="mt-1 text-[10px] text-slate-500">{f.help_text}</div>}
+
+            {counts.total === 0 ? (
+              <div className="rounded-ds-card border border-ds-border bg-ds-surface"><EmptyState kind="firstUse" bare title="No questions yet" description={write ? 'Write them from the framework, or add your own.' : 'Nothing was written for this assessment.'} action={write ? <span className="flex flex-wrap justify-center gap-[8px]"><Button variant="primary" leftIcon={<RefreshCw aria-hidden />} onClick={() => setRegenerating(true)}>Write the questions</Button><Button leftIcon={<Plus aria-hidden />} onClick={() => setAdding(true)}>Add a question</Button></span> : undefined} /></div>
+            ) : shown.length === 0 ? (
+              <div className="rounded-ds-card border border-ds-border bg-ds-surface"><EmptyState kind="noMatches" bare title="No questions match" description="Loosen a filter, or search for other words." onClearFilters={() => setFilters(NO_QFILTERS)} /></div>
+            ) : (
+              <>
+                <QuestionsTable
+                  rows={pageRows}
+                  offset={(pageClamped - 1) * pageSize}
+                  phaseName={phaseName}
+                  ticked={ticked}
+                  onTick={(qid) => setTicked((cur) => { const n = new Set(cur); if (n.has(qid)) n.delete(qid); else n.add(qid); return n; })}
+                  onTickAll={(on) => setTicked((cur) => { const n = new Set(cur); pageRows.forEach((r) => (on ? n.add(r.id) : n.delete(r.id))); return n; })}
+                  canWrite={write}
+                  narrow={cards}
+                  roomy={roomy}
+                  activeId={openQ?.id ?? null}
+                  onOpen={(qn) => setAddress({ question: String(qn.id) })}
+                  onStatus={(qn, status) => { void saveQuestion(qn, { status }); }}
+                />
+                <Pager page={pageClamped} pageSize={pageSize} total={shown.length} onPage={setPageNo} onPageSize={setPageSize} pageSizes={PAGE_SIZES} noun={{ one: 'question', other: 'questions' }} />
+              </>
+            )}
           </div>
-        ))}
-      </div>
-      <div className="flex items-center justify-end gap-2">
-        <button
-          className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs disabled:opacity-50"
-          onClick={() => onSave(draft)}
-          disabled={!dirty || isSaving}
-        >
-          {isSaving ? <Loader2 size={12} className="animate-spin" /> : null}
-          Save methodology fields
-        </button>
-      </div>
+        </TabPanel>
+
+        <TabPanel tabKey="insights" lazy>
+          <div className="grid gap-[16px] pt-[12px] lg:grid-cols-2">
+            <SectionCard id="status" title="Status" info="Press a status to see its questions." meta={`${formatCount(counts.total)} questions`}>
+              <div className="flex flex-col">
+                {QUESTION_STATUSES.map((s) => <BarRow key={s} label={STATUS_WORDS[s]} value={counts.byStatus[s]} total={counts.total} color={TONE[s === 'completed' ? 'success' : s === 'blocked' ? 'danger' : s === 'in_progress' ? 'progress' : 'neutral'].dot} hint={`Show the ${STATUS_WORDS[s].toLowerCase()} questions`} onPress={counts.byStatus[s] > 0 ? () => { setFilters({ ...NO_QFILTERS, status: [s] }); setTab('questions'); } : undefined} />)}
+              </div>
+              <p className="mb-0 mt-[12px] text-ds-body text-ds-fg-body">{formatCount(counts.evidence)} {counts.evidence === 1 ? 'file' : 'files'} attached · {formatCount(counts.accepted)} {counts.accepted === 1 ? 'risk' : 'risks'} accepted · {formatCount(counts.moved)} in the Risk Register</p>
+            </SectionCard>
+            <SectionCard id="phases" title={methodology ? 'Phases' : 'Progress by phase'} info="How many questions of each phase of the method are completed." meta={`${phases.length} ${phases.length === 1 ? 'phase' : 'phases'}`}>
+              {phases.length === 0 ? <p className="m-0 text-ds-body text-ds-fg-muted">No questions yet.</p> : (
+                <div className="flex flex-col">
+                  {phases.map((p) => <BarRow key={p.code} label={p.name} value={p.done} total={p.total} color={TONE.success.dot} hint={`Show the ${p.name} questions`} onPress={() => { setFilters({ ...NO_QFILTERS, phase: [p.code] }); setTab('questions'); }} />)}
+                </div>
+              )}
+            </SectionCard>
+            <SectionCard id="people" title="Who answers" info="Open and completed questions for each person. Press a name to see their questions." meta={`${insightPeople.length} ${insightPeople.length === 1 ? 'person' : 'people'}`}>
+              <div className="flex flex-col">
+                {insightPeople.map((p) => <BarRow key={p.id} label={p.name} value={p.done} total={p.total} color={TONE.progress.dot} hint={`Show the questions of ${p.name}`} onPress={() => { setFilters({ ...NO_QFILTERS, assignee: [p.id] }); setTab('questions'); }} />)}
+              </div>
+            </SectionCard>
+            <SectionCard id="levels" title="Level of the scored questions" info="By the residual score, else the inherent score: critical 20 and over, high 12, medium 6, low below." meta={`${formatCount(levels.reduce((n, l) => n + l.n, 0))} scored`}>
+              <div className="flex flex-col">
+                {levels.map((l) => <BarRow key={l.b} label={riskLevel.label(l.b)} value={l.n} total={Math.max(1, levels.reduce((n, x) => n + x.n, 0))} color={TONE[({ critical: 'danger', high: 'warning', medium: 'progress', low: 'success' } as const)[l.b]].dot} />)}
+              </div>
+            </SectionCard>
+          </div>
+        </TabPanel>
+
+        <TabPanel tabKey="details" lazy>
+          <div className="pt-[12px]">
+            <SectionCard id="about" title="About this assessment" actions={write ? <Button leftIcon={<FileEdit aria-hidden />} onClick={() => setEditing(true)}>Edit details</Button> : undefined}>
+              <dl className="m-0 grid gap-x-[24px] gap-y-[8px] sm:grid-cols-2">
+                {[['Framework', a.framework_name], ['Method', methodology?.display_name], ['Created by', a.creator_name], ['Created', a.created_at ? formatDate(a.created_at) : null], ['Last changed', a.updated_at ? formatDate(a.updated_at) : null]].map(([k, v]) => (
+                  <div key={k as string}><dt className="text-ds-label text-ds-fg-muted">{k}</dt><dd className="m-0 text-ds-body text-ds-fg">{v || '—'}</dd></div>
+                ))}
+              </dl>
+              {a.description && <p className="mb-0 mt-[12px] whitespace-pre-wrap break-words text-ds-body text-ds-fg-body">{a.description}</p>}
+            </SectionCard>
+          </div>
+        </TabPanel>
+      </Tabs>
+
+      <QuestionDrawer
+        assessmentId={id}
+        q={openQ}
+        index={openAt}
+        total={shown.length}
+        methodology={methodology}
+        phaseName={phaseName}
+        people={people.data ?? []}
+        canWrite={write}
+        onClose={() => setAddress({ question: '' })}
+        onStep={(dir) => { const next = shown[openAt + dir]; if (next) setAddress({ question: String(next.id) }); }}
+        canNextToAnswer={!!nextToAnswer(shown, openQ?.id ?? null)}
+        onNextToAnswer={() => { const next = nextToAnswer(shown, openQ?.id ?? null); if (next) setAddress({ question: String(next.id) }); }}
+        onSave={saveQuestion}
+        onDelete={(qn) => { void askDeleteQuestion(qn); }}
+        onUpload={(qn, file) => upload.mutate({ qn, file })}
+        uploading={upload.isPending}
+        onRemoveFile={(qn, f) => { void askRemoveFile(qn, f); }}
+        onMove={(qn) => setMoving(qn)}
+      />
+      <RegenerateSheet open={regenerating} onClose={() => setRegenerating(false)} questions={questions} methodology={methodology} busy={regenerate.isPending} onRun={(o) => regenerate.mutate(o)} />
+      <AddQuestionSheet open={adding} onClose={() => setAdding(false)} busy={addQuestion.isPending} onAdd={(text) => addQuestion.mutate(text)} />
+      <MoveSheet question={moving} open={!!moving} onClose={() => setMoving(null)} people={people.data ?? []} busy={moveToRegister.isPending} onMove={(body) => moving && moveToRegister.mutate({ qn: moving, body })} />
+      <EditDetailsSheet a={a} open={editing} onClose={() => setEditing(false)} busy={updateAssessment.isPending} onSave={(body) => updateAssessment.mutate(body)} />
+      {confirmDialog}
     </div>
   );
 }

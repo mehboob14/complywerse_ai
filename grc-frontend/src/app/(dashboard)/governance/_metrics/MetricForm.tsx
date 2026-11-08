@@ -5,7 +5,7 @@
 // FormField with TextInput / Textarea / Select; Button. The words of what each field means are the (i) beside its label.
 // It sends nothing itself: `onSubmit` gets the payload (metricModel.toPayload, what the report has always sent) and the page runs the request, reports its
 // outcome and closes the drawer once the server has said yes. The rules (what a template or a platform metric fills in, what is dirty) are in metricModel.ts.
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { RightSlidePanel } from '@/components/ui';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { Button, ErrorState, FormField, SegmentedControl, Select, Textarea, TextInput } from '@/components/ui/ds';
@@ -40,7 +40,7 @@ function thresholdNotes(direction: string): { green: string; amber: string } {
     : { green: 'On track when the value is at or above this.', amber: 'Watch when the value is below Green but at or above this; anything lower is Off target. Both thresholds are needed to rate a value.' };
 }
 
-export function MetricForm({ kind, metric, options, templates, saving, onSubmit, onClose }: {
+export function MetricForm({ kind, metric, options, templates, saving, onSubmit, onClose, lead, leadDirty = false }: {
   kind: Kind;
   /** the metric being edited; null: a new one */
   metric: Metric | null;
@@ -49,6 +49,10 @@ export function MetricForm({ kind, metric, options, templates, saving, onSubmit,
   saving: boolean;
   onSubmit: (payload: ReturnType<typeof toPayload>) => void;
   onClose: () => void;
+  /** extra fields the caller owns (the KRI register's linked risk and owner), drawn under the name; the caller sends their values itself */
+  lead?: ReactNode;
+  /** the caller's extra fields hold typed input: closing asks first */
+  leadDirty?: boolean;
 }) {
   const noun = KIND_META[kind].noun;
   const [opened] = useState(() => ({ form: metric ? formFromMetric(metric, kind) : blankForm(kind), source: sourceOf(metric) }));
@@ -58,7 +62,7 @@ export function MetricForm({ kind, metric, options, templates, saving, onSubmit,
   const [showErrors, setShowErrors] = useState(false);
   const nameField = useRef<HTMLInputElement>(null);
   const set = (key: keyof MetricFormState, value: string) => setForm((f) => ({ ...f, [key]: value }));
-  const dirty = formDirty(opened, { form, source });
+  const dirty = formDirty(opened, { form, source }) || leadDirty;
 
   const groupedOptions = useMemo(() => groupBy(options.items, (o) => o.module_label), [options.items]);
   const groupedTemplates = useMemo(() => groupBy(templates.items, (t) => t.category), [templates.items]);
@@ -112,6 +116,7 @@ export function MetricForm({ kind, metric, options, templates, saving, onSubmit,
           <TextInput ref={nameField} value={form.name} maxLength={LIMITS.name} onChange={(e) => set('name', e.target.value)}
             placeholder={kind === 'kpi' ? 'e.g. % vulns remediated within SLA' : 'e.g. Open KEV vulnerabilities'} />
         </FormField>
+        {lead}
         <FormField label="Definition / methodology" optional>
           <Textarea rows={3} value={form.formula} onChange={(e) => set('formula', e.target.value)} placeholder="numerator ÷ denominator" />
         </FormField>
