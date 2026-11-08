@@ -100,7 +100,7 @@ export default function ScopeTab({ journeyId, appFwId, records, loading, error, 
         <ErrorState title="Couldn't load the scope decisions" message={safeDetail(apiErrorText(error, 'Please try again.'))} onRetry={onRetry} />
       ) : (
         <div className="space-y-[12px]">
-          {!canEdit && <ReadOnlyNote>You can read the decisions. Deciding them needs the right to edit frameworks.</ReadOnlyNote>}
+          {!canEdit && <div><ReadOnlyNote>You can read the decisions. Deciding them needs the right to edit frameworks.</ReadOnlyNote></div>}
           <SegmentedControl
             label="Show decisions"
             name="scope-filter"

@@ -394,10 +394,9 @@ function JourneyBody({ journey, journeyId }: { journey: CertificationJourney; jo
   })();
 
   // ── the numbers the requirement spine and the header read (one model: lib/journeyModel.ts; "implemented" already holds the verified ones) ──
-  const totalControlsProgress = numbers?.total ?? 0;
+  const totalControlsProgress = numbers?.applicable ?? 0;          // the requirements in scope: every share on this page is of these
   const implementedCount = numbers?.implemented ?? 0;
   const inProgressCount = numbers?.inProgress ?? 0;
-  const notApplicableCount = numbers?.notApplicable ?? 0;
   const completionPercentage = numbers?.implementedPct ?? 0;
 
   const isPciDssFramework = (((journey as any)?.framework_name || journey?.framework?.name || '') as string).toLowerCase().includes('pci');
@@ -1310,7 +1309,7 @@ function JourneyBody({ journey, journeyId }: { journey: CertificationJourney; jo
       : (totalControlsProgress || filteredControls.length || 0);
     const naForBar = isCustom
       ? allSlice.filter((c) => c.status === 'not_applicable').length
-      : notApplicableCount;
+      : 0;                                                            // out of scope is not part of the bar (the key figures say how many)
     const toStart = Math.max(0, totalForBar - compliant - inReview - naForBar);
 
     const compliantPct = totalForBar > 0 ? (compliant / totalForBar) * 100 : 0;
@@ -1682,7 +1681,7 @@ function JourneyBody({ journey, journeyId }: { journey: CertificationJourney; jo
       {waitingForTemplates ? (
         <SkeletonRows rows={4} />
       ) : (
-        <Tabs tabs={tabItems} value={tab} onChange={setTab} ariaLabel="Framework journey sections">
+        <Tabs tabs={tabItems} value={tab} onChange={setTab} ariaLabel="Framework journey sections" countFormat="exact">
           {hasFlow && (
             <TabPanel tabKey="journey" lazy className="pt-[16px]">
               <JourneyHome
