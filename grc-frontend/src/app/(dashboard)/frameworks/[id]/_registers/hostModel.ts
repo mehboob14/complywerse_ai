@@ -29,4 +29,5 @@ export const LEAVE_QUESTION = {
   message: 'Your changes to this document are not saved yet. If you open another item they are lost.',
   confirmLabel: 'Leave without saving',
   cancelLabel: 'Keep editing',
+  tone: 'danger',
 } as const;

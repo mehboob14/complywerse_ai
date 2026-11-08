@@ -1,4 +1,4 @@
-// Shared types + column configs for the ISO 27001 framework template registers.
+// Shared types + column configs for the ISO 27001 framework template registers (Gap Analysis, Internal Audit, Risk Treatment).
 
 export interface RegisterEntry {
   id: number;
@@ -45,13 +45,14 @@ export interface TenantUserOption {
   name: string;
 }
 
-export type Tone = 'slate' | 'emerald' | 'amber' | 'orange' | 'rose' | 'sky' | 'teal';
+/** The colour word a register definition gives a select option; the platform's tone for it is registerTone (lib/statuses/frameworkRegisters.ts). */
+export type ToneWord = 'slate' | 'emerald' | 'amber' | 'orange' | 'rose' | 'sky' | 'teal';
 export type CellType = 'text' | 'textarea' | 'select' | 'owner' | 'date';
 
 export interface SelectOption {
   value: string;
   label: string;
-  tone?: Tone;
+  tone?: ToneWord;
 }
 
 export interface RegisterColumn {
@@ -83,16 +84,6 @@ export interface RegisterConfig {
   /** Grouped sections for the Add/Edit form. Falls back to a flat grid if unset. */
   formSections?: FormSection[];
 }
-
-export const TONE_CLASSES: Record<Tone, string> = {
-  slate: 'bg-slate-100 text-slate-600 border-slate-200',
-  emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  amber: 'bg-amber-50 text-amber-700 border-amber-200',
-  orange: 'bg-orange-50 text-orange-700 border-orange-200',
-  rose: 'bg-rose-50 text-rose-700 border-rose-200',
-  sky: 'bg-sky-50 text-sky-700 border-sky-200',
-  teal: 'bg-primary-50 text-primary-700 border-primary-200',
-};
 
 const GAP_STATUS: SelectOption[] = [
   { value: 'not_started', label: 'Not started', tone: 'slate' },

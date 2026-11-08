@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  NEW_SECTION, addTableRow, bulletLines, canSendForReview, clampIndex, countsLine, downloadName, govDocType, hasPlaceholder, mergeDraft, nextStep,
+  NEW_SECTION, plainHeading, addTableRow, bulletLines, canSendForReview, clampIndex, countsLine, downloadName, govDocType, hasPlaceholder, mergeDraft, nextStep,
   openAfterRemove, patchSection, publishBody, removeTableRow, saveBody, sectionCounts, sectionHasContent, sectionState, setTableCell, toMarkdown, wordCount,
   wrapSelection, type DocSection, type FrameworkDoc,
 } from './documentModel.ts';
@@ -142,4 +142,13 @@ test('the download is named by the title, and the published document carries the
   assert.equal(body.effective_date, undefined);
   assert.deepEqual(publishBody(d, 'ISO', null).framework_ids, []);
   assert.equal(publishBody(doc({ classification: null }), 'ISO', 1).classification, 'internal');
+});
+
+test('a heading loses the number the template wrote into it, unless that leaves nothing', () => {
+  assert.equal(plainHeading('1. Purpose'), 'Purpose');
+  assert.equal(plainHeading('4.2 Interested parties'), 'Interested parties');
+  assert.equal(plainHeading('10) Exclusions'), 'Exclusions');
+  assert.equal(plainHeading('Purpose'), 'Purpose');
+  assert.equal(plainHeading('3.'), '3.');
+  assert.equal(plainHeading(''), '');
 });

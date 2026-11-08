@@ -50,6 +50,13 @@ export function countsLine(sections: DocSection[]): string {
   return `${c.ready} ready · ${c.draft} draft · ${c.to_start} to start`;
 }
 
+/** A heading without the number the template wrote into it ("3. Scope" -> "Scope"): the list and the menu number the sections themselves. */
+export const plainHeading = (heading: string): string => {
+  const h = (heading || '').trim();
+  const stripped = h.replace(/^\d+(?:\.\d+)*[.)]?\s+/, '').trim();
+  return stripped || h;
+};
+
 export const wordCount = (body: string): number => ((body || '').trim() ? (body || '').trim().split(/\s+/).length : 0);
 
 /** A [bracketed placeholder] still in the text: the template's blanks to fill before review. */
