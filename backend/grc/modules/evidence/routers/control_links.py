@@ -62,6 +62,54 @@ def list_common_control_options(
     return {"controls": [{"id": r.id, "scf_id": r.scf_id, "code": r.code, "name": r.name} for r in rows]}
 
 
+@router.get("/by-control")
+def evidence_for_control(
+    ref: str = Query(..., min_length=1, max_length=100, description="the control: a number for a framework or parsed control, an SCF id (\"IAC-01\") or a number for a common one"),
+    kind: str = Query("framework", pattern="^(framework|parsed|common)$"),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Which files are linked to one control (UX revamp, Stage 4): what "evidence for this control" links open the Library on.
+
+    ``framework`` = a library framework control (``framework_control_id``), ``parsed`` = a control of an uploaded framework (``parsed_control_id``), ``common`` =
+    a common (SCF) control (``normalized_control_id``). The ids of the three tables overlap, so the caller says which it means. A control that does not exist (or
+    that the caller's organisation cannot see) answers ``control: null`` and no files; it is not an error. Files of the caller's tenants only.
+    """
+    user_tenants = get_user_tenants(current_user, db)
+    ref = ref.strip()
+    control = None
+    column = None
+    if kind == "common":
+        match = or_(NormalizedControl.scf_id == ref, NormalizedControl.id == int(ref)) if ref.isdigit() else NormalizedControl.scf_id == ref
+        row = (db.query(NormalizedControl)
+               .filter(or_(NormalizedControl.tenant_id.is_(None), NormalizedControl.tenant_id.in_(user_tenants)), match)
+               .order_by(NormalizedControl.id.asc()).first())
+        if row:
+            control = {"kind": kind, "id": row.id, "code": row.scf_id or row.code, "title": row.name, "framework": None}
+            column = EvidenceControlMapping.normalized_control_id == row.id
+    elif ref.isdigit() and kind == "parsed":
+        pc = (db.query(ParsedFrameworkControl).options(joinedload(ParsedFrameworkControl.uploaded_framework))
+              .filter(ParsedFrameworkControl.id == int(ref)).first())
+        fw = pc.uploaded_framework if pc else None
+        # the frameworks a tenant can see: its own, the shared ones and the platform's (the rule the clause suggestions use)
+        if fw and (fw.tenant_id in user_tenants or fw.tenant_id is None or fw.is_shared):
+            control = {"kind": kind, "id": pc.id, "code": pc.control_id, "title": pc.title, "framework": fw.name}
+            column = EvidenceControlMapping.parsed_control_id == pc.id
+    elif ref.isdigit():
+        fc = (db.query(FrameworkControl)
+              .options(joinedload(FrameworkControl.objective).joinedload(ControlObjective.domain).joinedload(FrameworkDomain.framework))
+              .filter(FrameworkControl.id == int(ref)).first())
+        if fc:
+            fw = fc.objective.domain.framework if fc.objective and fc.objective.domain else None
+            control = {"kind": kind, "id": fc.id, "code": fc.code, "title": fc.name, "framework": fw.name if fw else None}
+            column = EvidenceControlMapping.framework_control_id == fc.id
+    if control is None:
+        return {"control": None, "evidence_ids": []}
+    ids = (db.query(EvidenceControlMapping.evidence_id).join(Evidence, Evidence.id == EvidenceControlMapping.evidence_id)
+           .filter(column, Evidence.tenant_id.in_(user_tenants)).distinct().all())
+    return {"control": control, "evidence_ids": sorted(int(i[0]) for i in ids)}
+
+
 @router.get("/available-controls")
 def list_available_controls(
     q: Optional[str] = Query(None, description="Search term for framework or control titles"),

@@ -2,14 +2,14 @@
 // Source-text pins for the Evidence Management pages (the shell /evidence with its Library, Insights and Settings, the audit packages, the coverage forward, the upload drawer and the
 // details panel): they are on the kit and stay there (no named utilities the shell repaints, no text under 12px, no bare <p>/<td>/<th>/<h2>/<h3>, no native dialogs, no hover-only
 // actions, no legacy scope, no browser-locale date), and the behaviours that were contracts are still in the code: the endpoints, the query keys, the rights, the address, the reported
-// actions, the shared exports the record page imports. The record page ([id]) and _review.tsx are not this group's and are not scanned. A source-text test only says what it validates in its title.
+// actions, the shared exports the record page imports. The record page ([id], pinned in its own test: [id]/_record/recordPage.test.ts) is scanned with the rest; _review.tsx (shared with six other modules, legacy chrome, frozen) is not. A source-text test only says what it validates in its title.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { bareText, kitViolations, legacyLeftovers, read, tsxFiles } from './_kitScan.ts';
 
 const DIR = 'src/app/(dashboard)/evidence';
-const OTHERS = ['[id]', '_review.tsx'];                    // the record page's group, and the AI-review pieces shared with the Auditor Portal and ERM
+const OTHERS = ['_review.tsx'];                              // the AI-review pieces shared with the Auditor Portal, ERM, Frameworks, IS projects and Vendor Risk
 const files = tsxFiles(DIR, OTHERS);
 const page = read(`${DIR}/page.tsx`);
 const explorer = read(`${DIR}/_library/LibraryExplorer.tsx`);
@@ -25,8 +25,9 @@ const packageActions = read(`${DIR}/audit-packages/packagesActions.tsx`);
 const insights = read(`${DIR}/_insights/InsightsView.tsx`);
 
 test('every file of the Evidence pages follows the kit rules: no named utility the shell repaints, no text under 12px, no bare outline', () => {
-  assert.ok(files.length >= 14, `the pages' pieces are found (${files.length})`);
-  assert.ok(!files.some((f) => OTHERS.some((o) => f.includes(`/${o}`))), 'none of the record page\'s files is scanned');
+  assert.ok(files.length >= 24, `the pages' pieces are found (${files.length})`);
+  assert.ok(files.some((f) => f.includes('/[id]/_record/')), 'the record page files are scanned');
+  assert.ok(!files.some((f) => OTHERS.some((o) => f.includes(`/${o}`))), 'the shared AI-review file is not scanned');
   assert.deepEqual(kitViolations(files), []);
 });
 
