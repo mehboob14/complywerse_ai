@@ -175,6 +175,11 @@ export function toggleId(ids: readonly number[], id: number): number[] {
 /** The part of `GET /admin/password-policy` that applies to a new password (services/password_policy.validate_password). */
 export interface PasswordRules { min_length: number; require_uppercase: boolean; require_lowercase: boolean; require_digit: boolean; require_special: boolean }
 
+// the server's isupper / islower / isdigit are Unicode-aware; the regular expressions are built (not written as literals) because the project targets ES5
+const UPPER = new RegExp('\\p{Lu}', 'u');
+const LOWER = new RegExp('\\p{Ll}', 'u');
+const DIGIT = new RegExp('\\p{Nd}', 'u');
+
 export interface PasswordCheck { key: string; label: string; met: boolean }
 
 /** One line per rule the policy asks for, met or not. The server's check is the same in spirit (a special character is anything that is not a letter or digit of
@@ -182,9 +187,9 @@ export interface PasswordCheck { key: string; label: string; met: boolean }
 export function passwordChecks(rules: PasswordRules | null | undefined, password: string): PasswordCheck[] {
   if (!rules) return [];
   const checks: PasswordCheck[] = [{ key: 'length', label: `at least ${rules.min_length} characters`, met: Array.from(password).length >= (rules.min_length || 0) }];
-  if (rules.require_uppercase) checks.push({ key: 'upper', label: 'an uppercase letter', met: /\p{Lu}/u.test(password) });
-  if (rules.require_lowercase) checks.push({ key: 'lower', label: 'a lowercase letter', met: /\p{Ll}/u.test(password) });
-  if (rules.require_digit) checks.push({ key: 'digit', label: 'a digit', met: /\p{Nd}/u.test(password) });
+  if (rules.require_uppercase) checks.push({ key: 'upper', label: 'an uppercase letter', met: UPPER.test(password) });
+  if (rules.require_lowercase) checks.push({ key: 'lower', label: 'a lowercase letter', met: LOWER.test(password) });
+  if (rules.require_digit) checks.push({ key: 'digit', label: 'a digit', met: DIGIT.test(password) });
   if (rules.require_special) checks.push({ key: 'special', label: 'a special character (like ! or @)', met: /[^a-zA-Z0-9]/.test(password) });
   return checks;
 }
