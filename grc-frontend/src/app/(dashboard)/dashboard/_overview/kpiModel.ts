@@ -1,145 +1,125 @@
-// The Cyber Security KPIs panel's rules, without React, so `node --test` checks them (kpiModel.test.ts): which of its states it is in (a failed request is
-// said, and a panel with no workbook is simply not there, as before), the counts of its three tiles (the old expressions), how a card's trend is drawn
-// (the old auto-zoom of the y axis, moved here), and the words that stand in for the trend and for the colour of a card. The KPI list, their live values and
+// The Cyber Security KPI strip of the Performance Overview, without React, so `node --test` checks it (kpiModel.test.ts): which of its states it is in (a
+// failed request is said; no KPI report and a report with no KPIs are said too, in one quiet line each), the counts, the KPIs furthest from their target, where
+// "Open KPI Report" goes, and the rule that keeps today's value of every live KPI (`POST /kpi-live/snapshot`, once per read). The KPI list, their live values and
 // how a workbook row becomes a KPI (buildKpis) are components/dashboard/kpiShared.tsx's, shared with the KPI Report page and left alone.
-import type { Kpi, Point } from '../../../../components/dashboard/kpiShared';
-import { formatDate, formatPercent } from '../../../../lib/format.ts';
+import type { Kpi } from '../../../../components/dashboard/kpiShared';
+import { formatCount, formatPercent } from '../../../../lib/format.ts';
+import { statusPill, type Tone } from '../../../../lib/status.ts';
+import { kpiTarget } from '../../../../lib/statuses/dashboard.ts';
 import type { Load } from './overviewModel.ts';
 
-export const KPI_REPORT_HREF = '/assessments/cs_kpi';
+// ── where the strip's links go ───────────────────────────────────────────────
+/** Where a KPI report is uploaded (Assessments > Types, on the KPI report type): the way on when the tenant has none. */
+export const UPLOAD_HREF = '/assessments/types?type=kpi_report';
 
-// ── the panel's states ───────────────────────────────────────────────────────
-/** What the panel's one query answers: the workbook's rows and the live values; `liveFailed` when only the live values could not be had (the rows still
- *  show, as KPIs that are not measured yet, and the panel says why, instead of "no live feeds matched"). */
-export interface KpiData { items: unknown[]; metrics: Record<string, unknown>; liveFailed: boolean }
+/** The KPI report the strip reads: the newest one (`id`), out of `total` (the server's true count). */
+export interface KpiWorkbook { id: number; total: number }
 
-export type PanelState = { state: 'loading' } | { state: 'error' } | { state: 'absent' } | { state: 'ready'; liveFailed: boolean };
+/** "Open KPI Report" opens the report the strip shows, straight (it used to go through a forward that looked the report up again); with none, where one is uploaded. */
+export const reportHref = (workbook: KpiWorkbook | null | undefined): string => (workbook ? `/assessments/a/${workbook.id}` : UPLOAD_HREF);
 
-/** loading: a skeleton; error: said, with Retry; absent: the tenant has no KPI workbook, so there is no panel (as before: it returned nothing); else the panel. */
+/** Said in the heading when there are several reports (only the newest is read): never silently. '' with one. */
+export const newestNote = (workbook: KpiWorkbook | null | undefined): string => (workbook && workbook.total > 1 ? `Newest of ${formatCount(workbook.total)} KPI reports` : '');
+
+// ── the strip's states ───────────────────────────────────────────────────────
+/** What the strip's one query answers: the report's rows and the live values; `liveFailed` when only the live values could not be had (the rows still count,
+ *  and the strip says why nothing is measured); `workbook` is null when the tenant has no KPI report (an answer, not a failure: never a stored null). */
+export interface KpiData { items: unknown[]; metrics: Record<string, unknown>; liveFailed: boolean; workbook: KpiWorkbook | null }
+
+export type PanelState =
+  | { state: 'loading' }
+  | { state: 'error' }
+  | { state: 'absent' }
+  | { state: 'empty'; workbook: KpiWorkbook }
+  | { state: 'ready'; liveFailed: boolean; workbook: KpiWorkbook };
+
+/** loading: a skeleton; error: said, with Retry; absent: there is no KPI report yet; empty: there is one with no KPIs in it; else the strip. */
 export function panelState(load: Load, data: KpiData | null | undefined): PanelState {
   if (load === 'loading') return { state: 'loading' };
   if (load === 'error') return { state: 'error' };
-  if (!data || !Array.isArray(data.items) || data.items.length === 0) return { state: 'absent' };
-  return { state: 'ready', liveFailed: !!data.liveFailed };
+  const workbook = data?.workbook;
+  if (!data || !workbook) return { state: 'absent' };
+  if (!Array.isArray(data.items) || data.items.length === 0) return { state: 'empty', workbook };
+  return { state: 'ready', liveFailed: !!data.liveFailed, workbook };
 }
 
-// ── the three tiles and the grid ─────────────────────────────────────────────
-export interface KpiCounts { live: number; onTarget: number; below: number; domains: number }
+// ── the counts ───────────────────────────────────────────────────────────────
+export interface KpiCounts { live: number; onTarget: number; below: number; notMeasured: number }
 
-/** The old tiles: how many live KPIs, how many are on target, how many are below it (a KPI with nothing measured is neither), and across how many domains. */
+/** The old tiles: how many live KPIs, how many are on target, how many are below it (a KPI with nothing measured is neither), and the rest, so the parts add up. */
 export function kpiCounts(live: readonly Kpi[]): KpiCounts {
-  return {
-    live: live.length,
-    onTarget: live.filter((k) => k.onTarget).length,
-    below: live.filter((k) => k.onTarget === false).length,
-    domains: new Set(live.map((k) => k.domain)).size,
+  const onTarget = live.filter((k) => k.onTarget).length;
+  const below = live.filter((k) => k.onTarget === false).length;
+  return { live: live.length, onTarget, below, notMeasured: live.length - onTarget - below };
+}
+
+export interface CountChip { key: 'live' | 'on_target' | 'below_target' | 'not_measured'; label: string; count: number; tone: Tone }
+
+/** The one line of counts. The words are the registry's (lib/statuses/dashboard.ts kpiTarget); "Not measured" appears only when there is one. */
+export function countChips(counts: KpiCounts): CountChip[] {
+  const word = (w: string) => statusPill(kpiTarget, w);
+  const chips: CountChip[] = [
+    { key: 'live', label: counts.live === 1 ? 'Live KPI' : 'Live KPIs', count: counts.live, tone: 'neutral' },
+    { key: 'on_target', label: word('on_target').label, count: counts.onTarget, tone: word('on_target').tone },
+    { key: 'below_target', label: word('below_target').label, count: counts.below, tone: word('below_target').tone },
+  ];
+  if (counts.notMeasured > 0) chips.push({ key: 'not_measured', label: word('not_measured').label, count: counts.notMeasured, tone: word('not_measured').tone });
+  return chips;
+}
+
+// ── the KPIs furthest from their target ──────────────────────────────────────
+export interface Furthest { key: string; topic: string; domain: string; actual: number; target: number; gap: number; lowerBetter: boolean; href?: string }
+
+/** The `count` live KPIs furthest below their target (above it, when lower is better), the furthest first, ties by name. A KPI with nothing measured has no distance
+ *  and is not ranked. Two rows of the report can map to the same live measure: it is named once (the counts above still count the rows, as the KPI report does). */
+export function furthestFromTarget(live: readonly Kpi[], count = 3): Furthest[] {
+  const ranked: Furthest[] = [];
+  for (const k of live) {
+    if (k.onTarget !== false || k.actual == null || k.target == null) continue;
+    ranked.push({ key: `${k.domain}|${k.topic}`, topic: k.topic, domain: k.domain, actual: k.actual, target: k.target, gap: k.lowerBetter ? k.actual - k.target : k.target - k.actual, lowerBetter: k.lowerBetter, href: k.href || undefined });
+  }
+  ranked.sort((a, b) => b.gap - a.gap || a.topic.localeCompare(b.topic) || a.domain.localeCompare(b.domain));
+  const named = new Set<string>();
+  return ranked.filter((f) => { const id = f.topic.trim().toLowerCase(); if (named.has(id)) return false; named.add(id); return true; }).slice(0, count);
+}
+
+/** How far a KPI is from its target, in words ("42 points below"); under half a point it is "Just below", never "0 points". Lower-is-better KPIs miss by being above. */
+export function gapWords(f: Pick<Furthest, 'gap' | 'lowerBetter'>): string {
+  const side = f.lowerBetter ? 'above' : 'below';
+  const points = Math.round(f.gap);
+  return points < 1 ? `Just ${side}` : `${formatCount(points)} ${points === 1 ? 'point' : 'points'} ${side}`;
+}
+
+/** The words of a row: the value, the target and how far. */
+export const rowFacts = (f: Furthest): { value: string; target: string; gap: string } => ({ value: formatPercent(f.actual), target: `Target ${formatPercent(f.target)}`, gap: gapWords(f) });
+
+export type StripBody = 'rows' | 'all_on_target' | 'no_live_feed' | 'quiet';
+
+/** What sits under the counts: the rows; "every live KPI is on target"; "none is measured by the platform"; or nothing (some are not measured and none is below: the counts say it). */
+export function stripBody(counts: KpiCounts, rows: readonly unknown[]): StripBody {
+  if (counts.live === 0) return 'no_live_feed';
+  if (rows.length > 0) return 'rows';
+  return counts.onTarget === counts.live ? 'all_on_target' : 'quiet';
+}
+
+// ── keeping today's value ────────────────────────────────────────────────────
+/** `GET /kpi-live` writes nothing; this keeps today's value of each live KPI (one row per KPI and day, asking again the same day replaces it), which is what makes the trend grow. */
+export const SNAPSHOT_PATH = '/compliance/assessments/kpi-live/snapshot';
+
+/** The value was read (a report exists and the live values loaded): the condition under which the GET used to write. Without a report nothing was asked of `kpi-live`; with the live values failed there is nothing to keep. */
+export const shouldKeepSnapshot = (data: KpiData | null | undefined): boolean => !!data && !!data.workbook && !data.liveFailed;
+
+export interface SnapshotRead { ok: boolean; /** one id per successful read: React Query's `dataUpdatedAt` */ at: number }
+
+/** Asks `post` to keep the values ONCE per read: not when the read is not `ok`; not again for a read it has already kept (a re-render, a strict-mode second effect, a remount
+ *  that finds the same cached read); again for the next read. The read is marked kept BEFORE the post, so a failed post is not tried again in a loop. It never waits for the
+ *  post and a failure (a rejection, or a throw) is nobody's business: no message, no state, no crash. Returns whether it asked. */
+export function snapshotKeeper(post: () => Promise<unknown>): (read: SnapshotRead) => boolean {
+  let kept = 0;
+  return ({ ok, at }) => {
+    if (!ok || !(at > 0) || at === kept) return false;
+    kept = at;
+    try { Promise.resolve(post()).catch(() => undefined); } catch { /* a synchronous failure of the call is as silent as a rejected one */ }
+    return true;
   };
-}
-
-/** The old rule that kept the last row of a three-column grid full: the last card takes the columns the cards before it leave over. */
-export function lastCardSpan(index: number, count: number): 1 | 2 | 3 {
-  const rem = count % 3;
-  return index === count - 1 ? (rem === 1 ? 3 : rem === 2 ? 2 : 1) : 1;
-}
-
-export type TargetState = 'on_target' | 'below_target' | 'not_measured';
-
-/** On target, below it, or not measured. The old card said "Below target" for a KPI with nothing measured. */
-export const targetState = (k: Pick<Kpi, 'onTarget'>): TargetState => (k.onTarget === true ? 'on_target' : k.onTarget === false ? 'below_target' : 'not_measured');
-
-// ── the trend ────────────────────────────────────────────────────────────────
-export interface Reading { date: string; value: number }
-
-/** The readings of a history that have a value, oldest first (a reading is a day written YYYY-MM-DD, which sorts as text; the order the server sends them in is not relied on). */
-export const readings = (history: readonly Point[] | null | undefined): Reading[] => (history || [])
-  .filter((h): h is Reading => h.value != null)
-  .slice()
-  .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-
-const clamp = (v: number | null) => Math.max(0, Math.min(100, v ?? 0));
-
-/** The y scale of a trend: auto-zoomed to the data and the target, so a flat line is not drawn on the floor of the chart (kpiShared's `makeY`, moved: it is not exported there). */
-export function scaleY(pts: readonly Reading[], target: number | null, height: number, padTop: number, padBottom: number): (v: number) => number {
-  const vals = pts.map((p) => p.value);
-  const refs = target != null ? vals.concat(target) : vals;
-  let lo = Math.min(...refs);
-  let hi = Math.max(...refs);
-  const span = hi - lo;
-  const pad = Math.max(4, span * 0.18);
-  lo = Math.max(0, lo - pad);
-  hi = Math.min(100, hi + pad);
-  if (hi - lo < 1) hi = lo + 1;
-  return (v) => height - padBottom - ((clamp(v) - lo) / (hi - lo)) * (height - padTop - padBottom);
-}
-
-export interface Spark {
-  /** the polyline's points in a `width` x `height` box */
-  points: string;
-  /** the y of the target line, null with no target */
-  targetY: number | null;
-  /** the last reading as a share of the box, for a marker drawn in HTML (an SVG circle in a stretched box is an ellipse) */
-  last: { left: number; top: number };
-  width: number;
-  height: number;
-}
-
-/** The trend line of a history (null with fewer than two readings: there is no line to draw, only a point). */
-export function spark(history: readonly Point[] | null | undefined, target: number | null, width = 200, height = 48, pad = 4): Spark | null {
-  const pts = readings(history);
-  const n = pts.length;
-  if (n < 2) return null;
-  const x = (i: number) => pad + ((width - 2 * pad) * i) / (n - 1);
-  const y = scaleY(pts, target, height, pad, pad);
-  const lastY = y(pts[n - 1].value);
-  return {
-    points: pts.map((h, i) => `${x(i).toFixed(1)},${y(h.value).toFixed(1)}`).join(' '),
-    targetY: target != null ? y(target) : null,
-    last: { left: (x(n - 1) / width) * 100, top: (lastY / height) * 100 },
-    width,
-    height,
-  };
-}
-
-/** A day of a reading as the platform writes it ("12 Oct 2026"): a reading is a day, so it never moves with the viewer's time zone. */
-export const readingDay = (date: string): string => formatDate(date, { calendar: true });
-
-/** The trend in words, for a screen reader and for the line under the picture. */
-export function trendSummary(history: readonly Point[] | null | undefined, target: number | null): string {
-  const pts = readings(history);
-  const goal = target != null ? ` Target ${formatPercent(target)}.` : '';
-  if (pts.length === 0) return 'No readings recorded yet.';
-  const last = pts[pts.length - 1];
-  if (pts.length === 1) return `One reading: ${formatPercent(last.value)} on ${readingDay(last.date)}.${goal}`;
-  const first = pts[0];
-  return `${pts.length} readings, from ${formatPercent(first.value)} on ${readingDay(first.date)} to ${formatPercent(last.value)} on ${readingDay(last.date)}.${goal}`;
-}
-
-export interface Period { date: string; day: string; value: number; target: number | null; /** actual minus target, in percentage points */ variance: number | null }
-
-/** The latest readings with how far each is from the target (the old "period cards": the last five). */
-export function recentPeriods(history: readonly Point[] | null | undefined, target: number | null, count = 5): Period[] {
-  return readings(history).slice(-count).map((p) => ({
-    date: p.date,
-    day: readingDay(p.date),
-    value: Math.round(p.value),
-    target: target != null ? Math.round(target) : null,
-    variance: target != null ? Math.round(p.value - target) : null,
-  }));
-}
-
-// ── words ────────────────────────────────────────────────────────────────────
-/** What "on target" asks of a KPI: actual at or above the target, or at or below it when lower is better. */
-export const targetRule = (k: Pick<Kpi, 'lowerBetter'>): string => (k.lowerBetter ? 'Actual at or below the target' : 'Actual at or above the target');
-
-export const directionText = (k: Pick<Kpi, 'lowerBetter'>): string => (k.lowerBetter ? 'Lower is better' : 'Higher is better');
-
-/** A KPI card's accessible name: what it measures, where it stands against its target, and that it opens the detail. */
-export function cardLabel(k: Pick<Kpi, 'topic' | 'domain' | 'actual' | 'target' | 'onTarget'>, word: string): string {
-  const against = k.target != null ? ` against a target of ${formatPercent(k.target)}` : '';
-  return `${k.topic}, ${k.domain}: ${formatPercent(k.actual)}${against}. ${word}. Opens the details.`;
-}
-
-/** "54 of 66" for a KPI that has its counts, else ''. */
-export function ofText(k: Pick<Kpi, 'numerator' | 'denominator'>): string {
-  return k.numerator != null && k.denominator != null ? `${k.numerator} of ${k.denominator}` : '';
 }
