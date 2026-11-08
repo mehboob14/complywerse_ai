@@ -9,15 +9,15 @@ import logging
 import traceback
 from typing import Dict, List, Literal, Optional, Tuple
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, status, UploadFile, File, Form, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func, or_
+from sqlalchemy import String, cast, func, or_
 from sqlalchemy.orm.attributes import flag_modified
 import openpyxl
 from openpyxl.utils import get_column_letter
 import pandas as pd
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 from openai import OpenAI
 
 logger = logging.getLogger(__name__)
@@ -3733,16 +3733,51 @@ def _parse_assessment_file(file_content: bytes, filename: str):
     return items_data, "standard", None
 
 
+# The columns a refreshed workbook may overwrite on a control it already knows.
+_REUPLOAD_FIELDS = [
+    "area_domain", "subdomain_name", "control_description", "compliance_status", "gaps_identified",
+    "proposed_solution", "responsible_party", "timeline", "priority",
+    "evidence_reference", "remarks", "maturity_score", "risk_rating",
+]
+
+
+def _same_value(old, new) -> bool:
+    if old is None:
+        return False
+    try:
+        return float(old) == float(new)
+    except (TypeError, ValueError):
+        return str(old).strip() == str(new).strip()
+
+
+def _reupload_plan(items_data, by_number: dict) -> list:
+    """What a refreshed workbook does, row by row: (item number, the control it matches or None, the values the workbook really
+    carries, the row). A blank cell is no value: it leaves what a person typed in the app untouched."""
+    plan = []
+    for idx, item_data in enumerate(items_data):
+        number = (item_data.get("item_number") or str(idx + 1)).strip()
+        carried = {}
+        for fld in _REUPLOAD_FIELDS:
+            val = item_data.get(fld) if fld in item_data else None
+            if val is None or (isinstance(val, str) and val.strip() == ""):
+                continue
+            carried[fld] = val
+        plan.append((number, by_number.get(number), carried, item_data))
+    return plan
+
+
 @router.post("/{assessment_id}/reupload")
 async def reupload_assessment(
     assessment_id: int,
     file: UploadFile = File(...),
+    dry_run: bool = Query(False, description="Only say what the file would change: nothing is saved and the file is not kept"),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
     """Refresh an EXISTING assessment from an updated workbook with the same
     structure. Items are matched by item_number and updated in place (new rows
-    added) so linked evidence on unchanged controls is preserved."""
+    added) so linked evidence on unchanged controls is preserved.
+    With dry_run=1 the answer is the preview (how many controls change, which, how many are added) and nothing is written."""
     user_tenants = get_user_tenants(current_user, db)
     assessment = db.query(ComplianceAssessmentDocument).filter(
         ComplianceAssessmentDocument.id == assessment_id,
@@ -3758,11 +3793,12 @@ async def reupload_assessment(
     file_path = None
     try:
         file_content = await file.read()
-        file_ext = os.path.splitext(file.filename)[1]
-        file_id = str(uuid.uuid4())
-        file_path = os.path.join(UPLOAD_DIR, f"{file_id}{file_ext}")
-        with open(file_path, "wb") as f:
-            f.write(file_content)
+        if not dry_run:
+            file_ext = os.path.splitext(file.filename)[1]
+            file_id = str(uuid.uuid4())
+            file_path = os.path.join(UPLOAD_DIR, f"{file_id}{file_ext}")
+            with open(file_path, "wb") as f:
+                f.write(file_content)
 
         items_data, detected_format, xlsx_data = _parse_assessment_file(file_content, file.filename)
         if not items_data:
@@ -3791,34 +3827,36 @@ async def reupload_assessment(
             ComplianceAssessmentDocumentItem.assessment_id == assessment.id
         ).all()
         by_number = {(it.item_number or "").strip(): it for it in existing}
-        FIELDS = [
-            "area_domain", "subdomain_name", "control_description", "compliance_status", "gaps_identified",
-            "proposed_solution", "responsible_party", "timeline", "priority",
-            "evidence_reference", "remarks", "maturity_score", "risk_rating",
-        ]
-        updated = 0
-        added = 0
-        for idx, item_data in enumerate(items_data):
-            number = (item_data.get("item_number") or str(idx + 1)).strip()
-            target = by_number.get(number)
+        plan = _reupload_plan(items_data, by_number)
+        changed_controls = [{"item_number": number, "fields": [f for f, v in carried.items() if not _same_value(getattr(target, f, None), v)]}
+                            for number, target, carried, _ in plan if target is not None]
+        changed_controls = [c for c in changed_controls if c["fields"]]
+        updated = sum(1 for _, target, _, _ in plan if target is not None)
+        added = len(plan) - updated
+        if dry_run:
+            return {
+                "dry_run": True,
+                "id": assessment.id,
+                "name": assessment.name,
+                "assessment_format": assessment.assessment_format or "standard",
+                "file_name": file.filename,
+                "updated_count": updated,                    # controls the file matches
+                "changed_count": len(changed_controls),      # of those, the ones whose values the file would change
+                "unchanged_count": updated - len(changed_controls),
+                "added_count": added,
+                "changed_controls": changed_controls[:200],
+                "added_controls": [number for number, target, _, _ in plan if target is None][:200],
+                "message": f"{len(changed_controls)} controls would change and {added} would be added; {updated - len(changed_controls)} stay as they are.",
+            }
+        for number, target, carried, item_data in plan:
             if target is None:
                 target = ComplianceAssessmentDocumentItem(
                     assessment_id=assessment.id, tenant_id=assessment.tenant_id, item_number=number,
                 )
                 db.add(target)
-                added += 1
-            else:
-                updated += 1
-            for fld in FIELDS:
-                if fld not in item_data:
-                    continue
-                val = item_data.get(fld)
-                # Only overwrite when the workbook actually carries a value for this
-                # field. A blank cell leaves the existing (possibly hand-entered)
-                # value untouched — so re-uploading updated data overrides what the
-                # file changed and preserves everything the file left blank.
-                if val is None or (isinstance(val, str) and val.strip() == ""):
-                    continue
+            # Only values the workbook really carries are written (see _reupload_plan): re-uploading updated data overrides what
+            # the file changed and preserves everything the file left blank.
+            for fld, val in carried.items():
                 setattr(target, fld, val)
             if not getattr(target, "compliance_status", None):
                 target.compliance_status = item_data.get("compliance_status", "in_progress")
@@ -3849,6 +3887,7 @@ async def reupload_assessment(
             "total_items": assessment.total_items,
             "overall_score": assessment.overall_score,
             "updated_count": updated,
+            "changed_count": len(changed_controls),
             "added_count": added,
             "message": f"Refreshed assessment from {file.filename}: {updated} updated, {added} added",
         }
@@ -3876,6 +3915,22 @@ async def reupload_assessment(
 # compliance_status values that represent an open gap needing remediation.
 _REMEDIATION_GAP_STATUSES = ["not_complied", "partially_complied"]
 _REMEDIATION_STATUSES = {"open", "in_progress", "closed"}
+
+
+def _norm_remediation(value) -> Optional[str]:
+    """open | in_progress | closed, the words the server counts. The older screens wrote "Open", "In Progress" and "Closed", which
+    scoring.py and the closure maths never saw; a blank clears the status."""
+    return re.sub(r"[\s\-]+", "_", str(value or "").strip().lower()) or None
+
+
+def _sync_closed_at(item) -> None:
+    """Stamp or clear closed_at from the effective closed state, so the closure and aging maths always have a real date, even for a
+    point whose workbook never carried one. A point is closed when its remediation is closed or its compliance is fully complied."""
+    closed = (item.remediation_status or "").strip().lower() == "closed" or item.compliance_status == "complied"
+    if closed and not item.closed_at:
+        item.closed_at = datetime.utcnow()
+    elif not closed and item.closed_at:
+        item.closed_at = None
 
 
 def _parse_remarks_kv(remarks: Optional[str]) -> dict:
@@ -3982,16 +4037,18 @@ def update_remediation_item(
     ).first()
     if not item:
         raise HTTPException(status_code=404, detail="Remediation item not found")
-    new_status = (body.remediation_status or "").strip().lower()
+    new_status = _norm_remediation(body.remediation_status)
     if new_status not in _REMEDIATION_STATUSES:
         raise HTTPException(
             status_code=400,
             detail="Invalid status. Use open, in_progress, or closed.",
         )
     item.remediation_status = new_status
+    _sync_closed_at(item)         # a closed gap has a close date, so the SLA score sees it closed
     db.commit()
     db.refresh(item)
-    return {"id": item.id, "remediation_status": item.remediation_status}
+    return {"id": item.id, "remediation_status": item.remediation_status,
+            "closed_at": item.closed_at.isoformat() if item.closed_at else None}
 
 
 @router.get("/evidence/{evidence_id}/controls")
@@ -4048,6 +4105,9 @@ def list_assessments(
     phase: Optional[str] = Query(None, description="scoping or in_progress"),
     owner_id: Optional[int] = None,
     asset_id: Optional[int] = Query(None, description="the assessments whose primary application is this asset"),
+    q: Optional[str] = Query(None, description="text search: the name, file, assessor, owner or application of the assessment"),
+    summary: bool = Query(True, description="0 leaves out the tenant-wide summary (it reads every matching assessment)"),
+    all_formats: bool = Query(False, description="1 also lists the PDPL toolkit uploads the default list hides (the NCA container is never listed)"),
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
@@ -4069,8 +4129,9 @@ def list_assessments(
         # Default list hides formats that have their own top-level tab: the NCA
         # singleton container and PDPL toolkit uploads. They are surfaced only
         # on their dedicated tabs, never in the generic Assessment list.
+        hidden = ["nca_container"] if all_formats else ["nca_container", "pdpl_assessment_toolkit"]
         query = query.filter(
-            (ComplianceAssessmentDocument.assessment_format.notin_(["nca_container", "pdpl_assessment_toolkit"]))
+            (ComplianceAssessmentDocument.assessment_format.notin_(hidden))
             | (ComplianceAssessmentDocument.assessment_format.is_(None))
         )
 
@@ -4094,10 +4155,18 @@ def list_assessments(
         query = query.filter(ComplianceAssessmentDocument.owner_id == owner_id)
     if asset_id:
         query = query.filter(ComplianceAssessmentDocument.primary_asset_id == asset_id)
+    if q and q.strip():
+        needle = q.strip().lower()
+        has = lambda col: func.lower(col).contains(needle, autoescape=True)      # noqa: E731 - a literal match, not a pattern
+        query = query.filter(or_(
+            has(ComplianceAssessmentDocument.name), has(ComplianceAssessmentDocument.file_name), has(ComplianceAssessmentDocument.assessor),
+            ComplianceAssessmentDocument.owner_id.in_(db.query(GRCUser.id).filter(or_(has(GRCUser.display_name), has(GRCUser.username)))),
+            ComplianceAssessmentDocument.primary_asset_id.in_(db.query(ITAsset.id).filter(has(ITAsset.name))),
+        ))
 
     total = query.count()
-    summary_assessments = query.all()
-    assessments = query.order_by(ComplianceAssessmentDocument.created_at.desc()).offset(skip).limit(limit).all()
+    summary_assessments = query.all() if summary else []
+    assessments = query.order_by(ComplianceAssessmentDocument.created_at.desc(), ComplianceAssessmentDocument.id.desc()).offset(skip).limit(limit).all()
 
     total_items = sum(a.total_items or 0 for a in summary_assessments)
     total_complied = sum(a.complied_count or 0 for a in summary_assessments)
@@ -4109,6 +4178,7 @@ def list_assessments(
     by_type: dict = {}
     by_status: dict = {}
     by_format: dict = {}
+    by_phase: dict = {}
     scored = [float(a.overall_score) for a in summary_assessments if a.overall_score is not None]
     average_overall_score = round(sum(scored) / len(scored), 2) if scored else None
 
@@ -4122,6 +4192,7 @@ def list_assessments(
         by_type[t] = by_type.get(t, 0) + 1
         by_status[s] = by_status.get(s, 0) + 1
         by_format[fmt] = by_format.get(fmt, 0) + 1
+        by_phase[a.phase or "none"] = by_phase.get(a.phase or "none", 0) + 1       # none = an uploaded workbook, not made per application or function
         if a.due_date:
             try:
                 diff_days = (a.due_date - now).days
@@ -4144,6 +4215,7 @@ def list_assessments(
                 "name": a.name,
                 "assessment_type": a.assessment_type,
                 "assessment_format": getattr(a, "assessment_format", "standard") or "standard",
+                "category": board_category(getattr(a, "assessment_format", "standard") or "standard"),
                 "source": a.source,
                 "file_name": a.file_name,
                 "status": a.status,
@@ -4184,7 +4256,8 @@ def list_assessments(
             "by_type": by_type,
             "by_status": by_status,
             "by_format": by_format,
-        }
+            "by_phase": by_phase,
+        } if summary else {}
     }
 
 
@@ -4435,13 +4508,24 @@ def _is_tier_approver(db, user, workflow, current_tier, my_role_ids=None) -> boo
     return False
 
 
-@router.get("/pending-approvals")
-def get_pending_approvals(
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
-):
+def _history_row(h) -> dict:
+    return {
+        "id": h.id,
+        "action": h.action,
+        "tier_number": h.tier_number,
+        "tier_name": h.tier.tier_name if h.tier else None,
+        "performed_by": h.performer.display_name or h.performer.username if h.performer else None,
+        "performed_by_id": h.performed_by,
+        "comments": h.comments,
+        "delegated_to": h.delegated_to,
+        "performed_at": h.performed_at.isoformat() if h.performed_at else None
+    }
+
+
+def _pending_approval_rows(db: Session, current_user: GRCUser) -> list:
+    """The evidence waiting for a decision that this person may see, as the approvals page and the work list show it."""
     user_tenants = get_user_tenants(current_user, db)
-    
+
     pending_items = db.query(AssessmentItemEvidence).options(
         joinedload(AssessmentItemEvidence.evidence),
         joinedload(AssessmentItemEvidence.assessment_item).joinedload(ComplianceAssessmentDocumentItem.assessment),
@@ -4450,8 +4534,8 @@ def get_pending_approvals(
     ).filter(
         AssessmentItemEvidence.tenant_id.in_(user_tenants),
         AssessmentItemEvidence.status.in_(["pending_review", "pending_tier_1", "pending_tier_2", "pending_tier_3"])
-    ).all()
-    
+    ).order_by(AssessmentItemEvidence.id).all()
+
     # Who sees everything on the approvals page: administrators and the role that
     # runs it (compliance:assessments:edit). Everyone else sees only the items they
     # are the current-tier approver for — the header lists this endpoint to all.
@@ -4474,6 +4558,8 @@ def get_pending_approvals(
             "evidence_file_name": item.evidence.file_name if item.evidence else None,
             "assessment_id": item.assessment_item.assessment_id if item.assessment_item else None,
             "assessment_name": item.assessment_item.assessment.name if item.assessment_item and item.assessment_item.assessment else None,
+            "assessment_format": (item.assessment_item.assessment.assessment_format or "standard") if item.assessment_item and item.assessment_item.assessment else None,
+            "item_id": item.assessment_item_id,
             "item_number": item.assessment_item.item_number if item.assessment_item else None,
             "control_description": item.assessment_item.control_description if item.assessment_item else None,
             "current_tier": item.current_tier,
@@ -4484,7 +4570,28 @@ def get_pending_approvals(
             "submitted_by_name": (item.submitter.display_name or item.submitter.username) if item.submitter else None,
             "submitted_at": item.submitted_at.isoformat() if item.submitted_at else None
         })
-    
+    return result
+
+
+@router.get("/pending-approvals")
+def get_pending_approvals(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    result = _pending_approval_rows(db, current_user)
+    # What was done with each one so far (newest first), so the page can show the trail without a request per row.
+    trail: Dict[int, list] = {}
+    if result:
+        for h in db.query(AssessmentEvidenceApprovalHistory).options(
+            joinedload(AssessmentEvidenceApprovalHistory.performer),
+            joinedload(AssessmentEvidenceApprovalHistory.tier),
+        ).filter(
+            AssessmentEvidenceApprovalHistory.assessment_item_evidence_id.in_([r["id"] for r in result])
+        ).order_by(AssessmentEvidenceApprovalHistory.performed_at.desc(), AssessmentEvidenceApprovalHistory.id.desc()):
+            trail.setdefault(h.assessment_item_evidence_id, []).append(_history_row(h))
+    for row in result:
+        row["approval_history"] = trail.get(row["id"], [])
+
     return {
         "pending_approvals": result,
         "total": len(result)
@@ -4682,20 +4789,7 @@ def get_approval_history(
         "evidence_link_id": evidence_link_id,
         "current_status": evidence_link.status,
         "current_tier": evidence_link.current_tier,
-        "history": [
-            {
-                "id": h.id,
-                "action": h.action,
-                "tier_number": h.tier_number,
-                "tier_name": h.tier.tier_name if h.tier else None,
-                "performed_by": h.performer.display_name or h.performer.username if h.performer else None,
-                "performed_by_id": h.performed_by,
-                "comments": h.comments,
-                "delegated_to": h.delegated_to,
-                "performed_at": h.performed_at.isoformat() if h.performed_at else None
-            }
-            for h in history
-        ]
+        "history": [_history_row(h) for h in history]
     }
 
 
@@ -4734,9 +4828,7 @@ def get_assessment_xlsx_data(
         try:
             with open(assessment.file_path, "rb") as fh:
                 reparsed = parse_xlsx_maturity_tool(fh.read())
-            data = reparsed
-            assessment.xlsx_data = reparsed
-            db.commit()
+            data = reparsed         # served, not stored: a read never writes (an older upload is read again from its file each time)
         except Exception:
             # Keep serving stored data if re-parse fails.
             pass
@@ -4993,31 +5085,52 @@ def update_sla_policy(
     return _sla_policy_dict(p)
 
 
+def board_category(fmt: str) -> str:
+    """The group of the board an assessment of this format belongs to (the overview's own), Audit for the Internal Audit tracker."""
+    from grc.modules.assessments.scoring import CATEGORY
+    return CATEGORY.get(fmt) or ("Audit" if fmt == "ubl_audit_master_tracking" else "Other")
+
+
+def _board_docs(db: Session, tenant_ids: List[int]) -> list:
+    """The assessments the board counts, in id order: the one rule /overview and /points both go by, so the SLA panel, the board and
+    the portfolio figures speak of the same assessments. Not counted: the formats that are no part of the module (Internal Audit,
+    the NCA container, plain uploads, the KPI report), a draft still being scoped (it has no questions yet), and a questionnaire
+    nobody answered once an assessment has been started from its type (it would count every question as open for ever); an
+    answered questionnaire is an assessment of its own, as it was before assessments were made per application."""
+    from grc.modules.assessments.scoring import EXCLUDED_FORMATS
+    docs = (db.query(ComplianceAssessmentDocument).filter(ComplianceAssessmentDocument.tenant_id.in_(tenant_ids))
+            .order_by(ComplianceAssessmentDocument.id).all())
+    started_from = {d.assessment_format for d in docs if d.scope_model and d.phase != "scoping"}
+    kept = []
+    for d in docs:
+        fmt = getattr(d, "assessment_format", "standard") or "standard"
+        if fmt in EXCLUDED_FORMATS or d.phase == "scoping":
+            continue
+        if not d.scope_model and fmt in started_from and not (d.complied_count or d.partially_complied_count or d.not_complied_count or d.na_count):
+            continue
+        kept.append(d)
+    return kept
+
+
 @router.get("/points")
 def list_all_points(
+    assessment_id: Optional[int] = Query(None, description="Only the points of this assessment (when the board counts it)"),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
     """Flat list of every assessment point across the tenant, with the fields
-    the dynamic-SLA closure board needs. One query (join), no per-assessment
-    round-trips. Each point keeps its own dates — the board never blends them."""
-    from grc.modules.assessments.scoring import EXCLUDED_FORMATS
-    user_tenants = get_user_tenants(current_user, db)
-    rows = (
-        db.query(ComplianceAssessmentDocumentItem, ComplianceAssessmentDocument)
-        .join(
-            ComplianceAssessmentDocument,
-            ComplianceAssessmentDocumentItem.assessment_id == ComplianceAssessmentDocument.id,
-        )
-        .filter(ComplianceAssessmentDocument.tenant_id.in_(user_tenants))
-        .all()
-    )
+    the dynamic-SLA closure board needs. Two queries, no per-assessment
+    round-trips. Each point keeps its own dates — the board never blends them.
+    Only the assessments the board counts (_board_docs), so "open" here is the board's "open"."""
+    docs = _board_docs(db, get_user_tenants(current_user, db))
+    if assessment_id is not None:
+        docs = [d for d in docs if d.id == assessment_id]
+    by_id = {d.id: d for d in docs}
+    rows = (db.query(ComplianceAssessmentDocumentItem).filter(ComplianceAssessmentDocumentItem.assessment_id.in_(list(by_id)))
+            .order_by(ComplianceAssessmentDocumentItem.assessment_id, ComplianceAssessmentDocumentItem.id).all()) if by_id else []
     points = []
-    for item, a in rows:
-        # Internal Audit (UBL) + KPI Report + container/standard are not part of
-        # the Assessments module — keep them out of the SLA / open-by-assessment feed.
-        if (getattr(a, "assessment_format", "standard") or "standard") in EXCLUDED_FORMATS:
-            continue
+    for item in rows:
+        a = by_id[item.assessment_id]
         points.append({
             "id": item.id,
             "assessment_id": a.id,
@@ -5036,7 +5149,83 @@ def list_all_points(
             "created_at": item.created_at.isoformat() if item.created_at else None,
             "updated_at": item.updated_at.isoformat() if item.updated_at else None,
         })
-    return {"points": points}
+    return {"points": points, "total": len(points)}
+
+
+@router.get("/my-work")
+def get_my_assessment_work(
+    limit: int = Query(25, ge=1, le=100, description="most rows per list; the counts are always the whole"),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """What the signed-in person has to do in Assessments (declared before /{assessment_id}, which would take the path):
+    - assigned_items: open controls assigned to them or to a department they belong to, overdue first (the assessments the board counts);
+    - scoping: the drafts they own that are still being scoped;
+    - approvals: evidence waiting at a tier they are the approver of (can_decide counts everything they may decide, an administrator or editor may decide more).
+    The lists are cut at `limit`, the counts are not."""
+    from datetime import datetime as _dt
+    from grc.modules.assessments.scoring import _target_date
+    from ..services import org_departments
+
+    now = _dt.utcnow()
+    tids = get_user_tenants(current_user, db)
+    docs = _board_docs(db, tids) if tids else []
+    by_id = {d.id: d for d in docs}
+    team_ids = set(db.scalars(org_departments.teams_of(db, current_user)))
+    policy = db.query(ComplianceSlaPolicy).filter(ComplianceSlaPolicy.tenant_id.in_(tids or [-1])).first()
+
+    # Only items that name somebody can be anybody's: the cast keeps the table scan off the rest.
+    named = (db.query(ComplianceAssessmentDocumentItem).filter(
+        ComplianceAssessmentDocumentItem.assessment_id.in_(list(by_id)),
+        cast(ComplianceAssessmentDocumentItem.assignees, String).like('%"id"%'),
+    ).order_by(ComplianceAssessmentDocumentItem.id).all()) if by_id else []
+    assigned = []
+    for it in named:
+        via = None
+        for a in clean_assignees(it.assignees):
+            if a["type"] == "user" and a["id"] == current_user.id:
+                via = "user"
+                break
+            if a["type"] == "team" and a["id"] in team_ids:
+                via = "team"
+        if via is None or it.compliance_status in ("complied", "na") or it.closed_at:
+            continue            # not theirs, or done
+        due = _target_date(it, policy, now)
+        doc = by_id[it.assessment_id]
+        fmt = getattr(doc, "assessment_format", "standard") or "standard"
+        assigned.append({
+            "item_id": it.id, "item_number": it.item_number, "domain": it.area_domain,
+            "description": (it.control_description or "")[:240],
+            "compliance_status": it.compliance_status, "priority": it.priority, "remediation_status": it.remediation_status,
+            "due": due.isoformat() if due else None, "overdue": bool(due and due < now), "via": via,
+            "assessment_id": doc.id, "assessment_name": doc.name, "assessment_format": fmt, "category": board_category(fmt),
+        })
+    assigned.sort(key=lambda r: (not r["overdue"], r["due"] is None, r["due"] or "", r["item_id"]))
+
+    drafts = (db.query(ComplianceAssessmentDocument).filter(
+        ComplianceAssessmentDocument.tenant_id.in_(tids or [-1]), ComplianceAssessmentDocument.owner_id == current_user.id,
+        ComplianceAssessmentDocument.phase == "scoping",
+    ).order_by(ComplianceAssessmentDocument.updated_at.desc(), ComplianceAssessmentDocument.id.desc()).all())
+    subjects = {aid: name for aid, name in db.query(ITAsset.id, ITAsset.name).filter(
+        ITAsset.id.in_({d.primary_asset_id for d in drafts if d.primary_asset_id} or {0}))}
+    scoping = [{
+        "id": d.id, "name": d.name, "assessment_format": getattr(d, "assessment_format", "standard") or "standard",
+        "category": board_category(getattr(d, "assessment_format", "standard") or "standard"),
+        "primary_asset_id": d.primary_asset_id, "primary_asset_name": subjects.get(d.primary_asset_id),
+        "created_at": d.created_at.isoformat() if d.created_at else None, "updated_at": d.updated_at.isoformat() if d.updated_at else None,
+    } for d in drafts]
+
+    waiting = _pending_approval_rows(db, current_user)
+    approvals = [r for r in waiting if r["addressed_to_me"]]
+
+    return {
+        "as_of": now.isoformat(),
+        "counts": {"assigned": len(assigned), "overdue": sum(1 for r in assigned if r["overdue"]), "to_scope": len(scoping),
+                   "to_approve": len(approvals), "can_decide": sum(1 for r in waiting if r["can_approve"])},
+        "assigned_items": assigned[:limit],
+        "scoping": scoping[:limit],
+        "approvals": approvals[:limit],
+    }
 
 
 @router.get("/by-asset/{asset_id}")
@@ -5083,6 +5272,7 @@ def assessments_for_asset(
 
 @router.get("/overview")
 def get_assessments_overview(
+    assessment_id: Optional[int] = Query(None, description="Only this assessment (when the board counts it): its score, SLA and gap counts without scoring the others"),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -5091,9 +5281,8 @@ def get_assessments_overview(
     redesigned graphical Assessments overview. (Registered before /{assessment_id}
     so the literal path wins.)"""
     from datetime import datetime as _dt
-    from grc.modules.assessments.scoring import score_assessment, EXCLUDED_FORMATS
+    from grc.modules.assessments.scoring import score_assessment
     from grc.models import (
-        ComplianceAssessmentDocument as _Doc,
         ComplianceAssessmentDocumentItem as _Item,
         ComplianceSlaPolicy as _Policy,
         AssessmentItemEvidence as _Ev,
@@ -5106,26 +5295,31 @@ def get_assessments_overview(
                 "sla": {}, "attention": {}}
 
     policy = db.query(_Policy).filter(_Policy.tenant_id.in_(tids)).first()
-    docs = db.query(_Doc).filter(_Doc.tenant_id.in_(tids)).all()
+    docs = _board_docs(db, tids)
+    if assessment_id is not None:
+        docs = [d for d in docs if d.id == assessment_id]
     EV_FORMATS = {"asvs_checklist", "mobile_app_security", "owasp_v4_testing_checklist", "nca_dcc_tool", "nist_800_53a", "nist_csf2"}
+
+    # Every counted assessment's items in one query, and the evidence count of each item of the evidence-scored formats in another
+    # (it used to be one query per assessment and one per item).
+    items_of: Dict[int, list] = {}
+    if docs:
+        for it in db.query(_Item).filter(_Item.assessment_id.in_([d.id for d in docs])).order_by(_Item.id):
+            items_of.setdefault(it.assessment_id, []).append(it)
+    ev_docs = [d.id for d in docs if (getattr(d, "assessment_format", "standard") or "standard") in EV_FORMATS]
+    ev_of: Dict[int, int] = {}
+    if ev_docs:
+        ev_of = dict(db.query(_Ev.assessment_item_id, func.count(_Ev.id))
+                     .join(_Item, _Item.id == _Ev.assessment_item_id).filter(_Item.assessment_id.in_(ev_docs))
+                     .group_by(_Ev.assessment_item_id).all())
 
     cats: dict = {}
     sla_tot = {"gaps": 0, "closed": 0, "open": 0, "overdue": 0}
     unmapped = 0  # recognized (non-excluded) assessments with no family scorer
-    # A questionnaire nobody answered is the template of its type, not an assessment: once one made from it has started it is no row of the board (it would
-    # count every question as open for ever). An answered one is an assessment of its own, as it was before assessments were made per application.
-    started_from = {d.assessment_format for d in docs if d.scope_model and d.phase != "scoping"}
     for d in docs:
         fmt = getattr(d, "assessment_format", "standard") or "standard"
-        if fmt in EXCLUDED_FORMATS or d.phase == "scoping":      # a draft being scoped has no questions yet: it is not on the board
-            continue
-        if not d.scope_model and fmt in started_from and not (d.complied_count or d.partially_complied_count or d.not_complied_count or d.na_count):
-            continue
-        items = db.query(_Item).filter(_Item.assessment_id == d.id).all()
-        ev = {}
-        if fmt in EV_FORMATS:
-            for it in items:
-                ev[it.id] = db.query(_Ev).filter(_Ev.assessment_item_id == it.id).count()
+        items = items_of.get(d.id, [])
+        ev = {it.id: ev_of.get(it.id, 0) for it in items} if fmt in EV_FORMATS else {}
         res = score_assessment(d, items, ev, policy, now)
         if res is None:
             # A non-excluded format we don't yet score — surface it instead of
@@ -5200,6 +5394,12 @@ def get_assessments_overview(
     }
 
 
+def _kpi_metrics_for(db: Session, current_user: GRCUser, now):
+    from grc.modules.assessments.kpi_live import compute_kpi_metrics
+    tids = get_user_tenants(current_user, db) or []
+    return tids, compute_kpi_metrics(db, now, tenant_ids=tids or None)
+
+
 @router.get("/kpi-live")
 def kpi_live_metrics(
     db: Session = Depends(get_db),
@@ -5210,32 +5410,51 @@ def kpi_live_metrics(
     Only KPIs that genuinely map to data this platform owns are computed here —
     each with a real numerator/denominator/formula. Everything else the caller
     flags as 'external source' (no fabricated number). Nothing static.
+
+    A read never writes: each KPI's `history` is the snapshots kept so far (POST /kpi-live/snapshot keeps them) plus today's value
+    in memory, so the line ends at the number on the screen.
     """
     from datetime import datetime
-    from grc.modules.assessments.kpi_live import compute_kpi_metrics
     now = datetime.utcnow()
-    tids = get_user_tenants(current_user, db) or []
-    metrics = compute_kpi_metrics(db, now, tenant_ids=tids or None)
+    tids, metrics = _kpi_metrics_for(db, current_user, now)
 
-    # Snapshot today's value per KPI, then read the trend history so the dashboard
-    # can draw a real line over time (grc_metric_snapshot; idempotent daily upsert).
     if tids:
         try:
             from grc.services import metric_snapshots as ms
-            ms.ensure_table(db)
-            today = now.date()
+            today = now.date().isoformat()
             for key, m in metrics.items():
-                if m.get("actual") is not None:
-                    ms.upsert(db, tids[0], f"kpi_{key}", today, m["actual"])
-            db.commit()
-            for key, m in metrics.items():
-                m["history"] = ms.read_trend(db, tids, f"kpi_{key}", days=400)
+                history = ms.read_trend(db, tids, f"kpi_{key}", days=400)
+                if m.get("actual") is not None and not any(h["date"] == today for h in history):
+                    history.append({"date": today, "value": m["actual"]})
+                m["history"] = history
         except Exception:
-            db.rollback()
+            db.rollback()       # e.g. the snapshot table does not exist yet in this tenant: no history, not an error
             for m in metrics.values():
-                m.setdefault("history", [])
+                m["history"] = []
 
     return {"as_of": now.isoformat(), "metrics": metrics}
+
+
+@router.post("/kpi-live/snapshot")
+def snapshot_kpi_live(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Keep today's value of each live KPI (one row per KPI and day, asking again the same day replaces it), so the trend lines have
+    a history. This is what GET /kpi-live used to do on every read."""
+    from datetime import datetime
+    now = datetime.utcnow()
+    tids, metrics = _kpi_metrics_for(db, current_user, now)
+    written = 0
+    if tids:
+        from grc.services import metric_snapshots as ms
+        ms.ensure_table(db)
+        for key, m in metrics.items():
+            if m.get("actual") is not None:
+                ms.upsert(db, tids[0], f"kpi_{key}", now.date(), m["actual"])
+                written += 1
+        db.commit()
+    return {"as_of": now.isoformat(), "written": written}
 
 
 @router.get("/nist-library")
@@ -5257,6 +5476,7 @@ def get_nist_library(current_user: GRCUser = Depends(require_auth)):
 @router.get("/{assessment_id}")
 def get_assessment(
     assessment_id: int,
+    grouped: bool = Query(True, description="0 leaves out items_by_domain, the same controls again grouped by domain (items has them all)"),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -5294,7 +5514,7 @@ def get_assessment(
     assignees = assignee_lists(db, assessment.items)
 
     items_by_domain = {}
-    for item in assessment.items:
+    for item in (assessment.items if grouped else []):
         domain = item.area_domain or "Uncategorized"
         if domain not in items_by_domain:
             items_by_domain[domain] = []
@@ -5443,6 +5663,19 @@ def set_assessment_assets(
     return {"linked_asset_ids": assessment.linked_asset_ids}
 
 
+class _AssessmentUpdate(BaseModel):
+    """The JSON body of PUT /{id}: what the query parameters have always carried, and only what is sent changes (a name that is not
+    one of these is a 422). due_date: null or "" clears it; for every other field null means "not sent"."""
+    model_config = ConfigDict(extra="forbid")
+    name: Optional[str] = Field(None, min_length=1, max_length=500)
+    assessment_type: Optional[str] = Field(None, max_length=100)
+    source: Optional[str] = Field(None, max_length=255)
+    status: Optional[str] = Field(None, max_length=50)
+    due_date: Optional[str] = None
+    assessor: Optional[str] = Field(None, max_length=255)
+    notes: Optional[str] = None
+
+
 @router.put("/{assessment_id}")
 def update_assessment(
     assessment_id: int,
@@ -5453,22 +5686,36 @@ def update_assessment(
     due_date: Optional[str] = None,
     assessor: Optional[str] = None,
     notes: Optional[str] = None,
+    body: Optional[_AssessmentUpdate] = Body(None),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
     user_tenants = get_user_tenants(current_user, db)
-    
+
     assessment = db.query(ComplianceAssessmentDocument).filter(
         ComplianceAssessmentDocument.id == assessment_id,
         ComplianceAssessmentDocument.tenant_id.in_(user_tenants)
     ).first()
-    
+
     if not assessment:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=404,        # `status` is the query parameter here, not fastapi.status
             detail="Assessment not found"
         )
-    
+
+    if body is not None:
+        # The JSON body wins over the same field in the query. A date that cannot be read is refused here (the query form ignores it, as it always did).
+        sent = body.model_dump(exclude_unset=True)
+        name, assessment_type, source = sent.get("name", name), sent.get("assessment_type", assessment_type), sent.get("source", source)
+        status, assessor, notes = sent.get("status", status), sent.get("assessor", assessor), sent.get("notes", notes)
+        if "due_date" in sent:
+            due_date = None
+            text = (sent["due_date"] or "").strip()
+            try:
+                assessment.due_date = datetime.fromisoformat(text.replace('Z', '+00:00')) if text else None
+            except ValueError:
+                raise HTTPException(status_code=400, detail="The due date must be a date such as 2026-12-31.")
+
     if name is not None:
         assessment.name = name
     if assessment_type is not None:
@@ -5504,6 +5751,28 @@ def update_assessment(
     }
 
 
+class _ItemUpdate(BaseModel):
+    """The JSON body of PUT /items/{id}: the fields the query parameters have always carried, and only the ones that are sent change.
+    A name that is not one of these is a 422 (it would be ignored without a word). null clears remediation_status, risk_rating,
+    target_date and maturity_score; for any other field null means "not sent". Lengths are the columns' own."""
+    model_config = ConfigDict(extra="forbid")
+    compliance_status: Optional[str] = Field(None, max_length=50)
+    control_description: Optional[str] = None
+    area_domain: Optional[str] = Field(None, max_length=500)
+    gaps_identified: Optional[str] = None
+    proposed_solution: Optional[str] = None
+    responsible_party: Optional[str] = Field(None, max_length=255)
+    timeline: Optional[str] = Field(None, max_length=255)
+    priority: Optional[str] = Field(None, max_length=50)
+    evidence_reference: Optional[str] = None
+    remarks: Optional[str] = None
+    maturity_score: Optional[int] = None
+    risk_rating: Optional[str] = Field(None, max_length=50)
+    remediation_status: Optional[str] = Field(None, max_length=30)
+    target_date: Optional[str] = None
+    asset_id: Optional[int] = None
+
+
 @router.put("/items/{item_id}")
 def update_assessment_item(
     item_id: int,
@@ -5522,98 +5791,93 @@ def update_assessment_item(
     remediation_status: Optional[str] = None,
     target_date: Optional[str] = None,
     asset_id: Optional[int] = None,
+    body: Optional[_ItemUpdate] = Body(None),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    """Edit one control. The fields travel as a JSON body (what the screens send) or, as they always did, as query parameters; a
+    field in the body wins over the same one in the query. Long text belongs in the body: a URL is logged and has a length limit."""
     user_tenants = get_user_tenants(current_user, db)
 
     item = db.query(ComplianceAssessmentDocumentItem).filter(
         ComplianceAssessmentDocumentItem.id == item_id,
         ComplianceAssessmentDocumentItem.tenant_id.in_(user_tenants)
     ).first()
-    
+
     if not item:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Assessment item not found"
         )
-    
-    if compliance_status is not None:
-        if asset_id is not None:
+
+    sent = {k: v for k, v in (
+        ("compliance_status", compliance_status), ("control_description", control_description), ("area_domain", area_domain),
+        ("gaps_identified", gaps_identified), ("proposed_solution", proposed_solution), ("responsible_party", responsible_party),
+        ("timeline", timeline), ("priority", priority), ("evidence_reference", evidence_reference), ("remarks", remarks),
+        ("maturity_score", maturity_score), ("risk_rating", risk_rating), ("remediation_status", remediation_status),
+        ("target_date", target_date), ("asset_id", asset_id),
+    ) if v is not None}
+    if body is not None:
+        sent.update(body.model_dump(exclude_unset=True))
+
+    if sent.get("compliance_status") is not None:
+        if sent.get("asset_id") is not None:
             # Per-asset verification: write into asset_status[asset_id], leave the
             # global compliance_status untouched. Reassign the dict so SQLAlchemy
             # sees the JSON mutation.
             statuses = dict(getattr(item, "asset_status", None) or {})
-            statuses[str(asset_id)] = normalize_status(compliance_status)
+            statuses[str(sent["asset_id"])] = normalize_status(sent["compliance_status"])
             item.asset_status = statuses
         else:
-            item.compliance_status = normalize_status(compliance_status)
-    if control_description is not None:
-        item.control_description = control_description
-    if remediation_status is not None:
-        item.remediation_status = remediation_status or None
-    if area_domain is not None:
-        item.area_domain = area_domain
-    if gaps_identified is not None:
-        item.gaps_identified = gaps_identified
-    if proposed_solution is not None:
-        item.proposed_solution = proposed_solution
-    if responsible_party is not None:
-        item.responsible_party = responsible_party
-    if timeline is not None:
-        item.timeline = timeline
-    if priority is not None:
-        item.priority = priority
-    if evidence_reference is not None:
-        item.evidence_reference = evidence_reference
-    if remarks is not None:
-        item.remarks = remarks
-    if risk_rating is not None:
-        item.risk_rating = risk_rating or None
+            item.compliance_status = normalize_status(sent["compliance_status"])
+    if sent.get("control_description") is not None:
+        item.control_description = sent["control_description"]
+    if "remediation_status" in sent:
+        item.remediation_status = _norm_remediation(sent["remediation_status"])
+    for field in ("area_domain", "gaps_identified", "proposed_solution", "responsible_party", "timeline", "priority",
+                  "evidence_reference", "remarks"):
+        if sent.get(field) is not None:
+            setattr(item, field, sent[field])
+    if "risk_rating" in sent:
+        item.risk_rating = sent["risk_rating"] or None
     # Maturity (0-5) is the PDPL assessment driver: setting it auto-derives the
-    # compliance status (3-5 compliant). A negative value clears the score back
+    # compliance status (3-5 compliant). A negative value (or null in the body) clears the score back
     # to "Not Assessed" (in_progress). Applied last so it wins over any
     # explicit compliance_status passed in the same call.
-    if maturity_score is not None:
-        if maturity_score < 0:
+    if "maturity_score" in sent:
+        if sent["maturity_score"] is None or sent["maturity_score"] < 0:
             item.maturity_score = None
             item.compliance_status = "in_progress"
         else:
-            item.maturity_score = maturity_score
-            item.compliance_status = _status_from_pdpl(maturity_score, None)
+            item.maturity_score = sent["maturity_score"]
+            item.compliance_status = _status_from_pdpl(sent["maturity_score"], None)
 
-    # Per-point SLA deadline. Empty string clears it (back to policy-derived).
-    if target_date is not None:
-        if not target_date.strip():
+    # Per-point SLA deadline. Empty string (or null in the body) clears it (back to policy-derived).
+    if "target_date" in sent:
+        if sent["target_date"] is None or not str(sent["target_date"]).strip():
             item.target_date = None
         else:
             try:
-                item.target_date = datetime.fromisoformat(target_date.replace("Z", "+00:00"))
+                item.target_date = datetime.fromisoformat(str(sent["target_date"]).replace("Z", "+00:00"))
             except Exception:
-                pass
-    # Stamp / clear closed_at from the effective closed state so the closure /
-    # aging math always has a real close date, even for points whose workbook
-    # never carried one. A point is "closed" when its remediation is closed or
-    # its compliance is fully complied.
-    _is_closed = (item.remediation_status == "closed") or (item.compliance_status == "complied")
-    if _is_closed and not item.closed_at:
-        item.closed_at = datetime.utcnow()
-    elif not _is_closed and item.closed_at:
-        item.closed_at = None
+                if body is not None and "target_date" in body.model_fields_set:
+                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The due date must be a date such as 2026-12-31.")
+    _sync_closed_at(item)
 
     item.updated_at = datetime.utcnow()
     db.commit()
-    
+
     assessment = db.query(ComplianceAssessmentDocument).filter(
         ComplianceAssessmentDocument.id == item.assessment_id
     ).first()
-    
+
+    totals = None
     if assessment:
         items = db.query(ComplianceAssessmentDocumentItem).filter(
             ComplianceAssessmentDocumentItem.assessment_id == assessment.id
         ).all()
         stats = calculate_assessment_stats(items)
-        
+
         assessment.complied_count = stats["complied"]
         assessment.partially_complied_count = stats["partially_complied"]
         assessment.not_complied_count = stats["not_complied"]
@@ -5622,7 +5886,11 @@ def update_assessment_item(
         assessment.overall_score = stats["overall_score"]
         assessment.updated_at = datetime.utcnow()
         db.commit()
-    
+        totals = {"id": assessment.id, "total_items": assessment.total_items, "complied_count": assessment.complied_count,
+                  "partially_complied_count": assessment.partially_complied_count, "not_complied_count": assessment.not_complied_count,
+                  "in_progress_count": assessment.in_progress_count, "na_count": assessment.na_count,
+                  "overall_score": assessment.overall_score}
+
     db.refresh(item)
 
     return {
@@ -5638,9 +5906,14 @@ def update_assessment_item(
         "priority": item.priority,
         "evidence_reference": item.evidence_reference,
         "remarks": item.remarks,
+        "maturity_score": item.maturity_score,
+        "risk_rating": item.risk_rating,
+        "remediation_status": item.remediation_status,
+        "asset_status": getattr(item, "asset_status", None) or {},
         "target_date": item.target_date.isoformat() if item.target_date else None,
         "closed_at": item.closed_at.isoformat() if item.closed_at else None,
-        "updated_at": item.updated_at.isoformat()
+        "updated_at": item.updated_at.isoformat(),
+        "assessment": totals,
     }
 
 
