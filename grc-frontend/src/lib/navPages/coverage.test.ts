@@ -247,8 +247,9 @@ test('rights: a leaf has the sidebar\'s, a page navAccess lists has those, a pag
 // ---- the heading each entry says its page draws ----
 
 test('ownHeading is on exactly the pages that draw the kit head (PageHeader variant="page"), except the pages whose head is drawn by a component, and the Documents area where the tab strip is the top bar', () => {
-  // MetricReport.tsx and _Standalone.tsx draw it; so do Controls Automation's _explorer/ControlsExplorer, review/_review/MappingReview and assurance/_periods/AuditPeriods, and ComplianceOverview.tsx and StatementsRegister.tsx (thin-shell pages), and the control workspace (soc2-controls/[code]/_workspace/ControlHeader)
-  const HEAD_FROM_A_COMPONENT = ['/governance/kpi-report', '/governance/mappings', '/automation/soc2-controls', '/automation/soc2-controls/review', '/automation/assurance', '/compliance', '/compliance/statements', '/automation/soc2-controls/:code'];
+  // MetricReport.tsx and _Standalone.tsx draw it; so do Controls Automation's _explorer/ControlsExplorer, review/_review/MappingReview and assurance/_periods/AuditPeriods, and ComplianceOverview.tsx and StatementsRegister.tsx (thin-shell pages), and the control workspace (soc2-controls/[code]/_workspace/ControlHeader); the Frameworks hub (_hub/FrameworksHub), the journey (_workspace/JourneyHeader), a framework's onboarding (the workspace) and the Organisation Profile draw theirs from a component too
+  const HEAD_FROM_A_COMPONENT = ['/governance/kpi-report', '/governance/mappings', '/automation/soc2-controls', '/automation/soc2-controls/review', '/automation/assurance', '/compliance', '/compliance/statements', '/automation/soc2-controls/:code',
+    '/frameworks', '/frameworks/:id', '/frameworks/onboarding/:id', '/compliance/organisation'];
   const DOCUMENTS_AREA_STRIP = ['/governance/documents/attestation', '/governance/documents/studio', '/governance/documents/overview', '/governance/exceptions', '/governance/reviews', '/governance/settings'];
   const drawing = pages.filter((p) => /<PageHeader[\s\S]{0,60}variant="page"/.test(read(p.file))).map((p) => p.route).sort();
   const flagged = routes.filter((e) => e.ownHeading).map((e) => e.path).sort();

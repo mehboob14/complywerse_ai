@@ -118,8 +118,7 @@ export default function OnboardingRegister() {
         </Notice>
       )}
       <SectionCard
-        id="onboarding" title="Onboarding"
-        info="Each framework needs its onboarding finished and approved before its journey can start. A framework that is already running can be marked underway, with a reason."
+        id="onboarding" title="Frameworks"
         meta={rowCountText({ shown: rows.length, total: all.length, noun: 'framework', loading: register.isLoading, failed: register.isError })}
         actions={(
           <>
@@ -146,7 +145,7 @@ export default function OnboardingRegister() {
           empty={filtered ? (
             <EmptyState kind="noMatches" bare title="No framework matches" onClearFilters={clear} />
           ) : (
-            <EmptyState kind="firstUse" bare title="No frameworks yet" description="Add a framework to the library first." action={<Button variant="primary" href="/frameworks/manage">Open the library</Button>} />
+            <EmptyState kind="firstUse" bare title="No frameworks yet" description="Add a framework to the library first." action={<Button variant="primary" href="/frameworks?tab=library">Open the library</Button>} />
           )}
         />
       </SectionCard>
