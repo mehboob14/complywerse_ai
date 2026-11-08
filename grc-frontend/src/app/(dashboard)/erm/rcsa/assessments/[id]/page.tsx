@@ -264,7 +264,7 @@ function UnitBody({ data, starting, startFailed, onRetryStart, reload }: { data:
 
       {decisions(facts, reviewer).length > 0 && (
         <div role="region" aria-label="Your decision" className="sticky bottom-0 z-10 -mx-[4px] flex flex-wrap items-center justify-between gap-[12px] rounded-ds-card border border-ds-border-strong bg-ds-surface px-[16px] py-[12px] shadow-ds-pop">
-          <span className="min-w-0 text-ds-body text-ds-fg">{`Waiting for your decision${data.total_tiers > 1 ? ` · step ${Math.max(data.current_approval_tier, 1)} of ${data.total_tiers}` : ''}`}</span>
+          <span className="min-w-0 text-ds-body text-ds-fg">{`Your decision${data.total_tiers > 1 ? ` · step ${Math.max(data.current_approval_tier, 1)} of ${data.total_tiers}` : ''}`}</span>
           <div className="flex flex-wrap items-center gap-[8px]">
             <Button variant="dangerOutline" leftIcon={<XCircle aria-hidden />} onClick={() => setDecision('reject')}>Reject</Button>
             <Button leftIcon={<RotateCw aria-hidden />} onClick={() => setDecision('return')}>Send back</Button>
@@ -274,7 +274,7 @@ function UnitBody({ data, starting, startFailed, onRetryStart, reload }: { data:
       )}
 
       <DecisionSheet decision={decision} unit={unitName} pending={decide.isPending} error={decide.error} onClose={() => { setDecision(null); decide.reset(); }} onDecide={(comments) => decision && decide.mutate({ d: decision, comments })} />
-      <FindingSheet open={finding !== null} assessmentId={data.id} unit={unitName} suggestion={finding?.suggestion} onClose={() => setFinding(null)} />
+      <FindingSheet key={finding ? `open:${finding.suggestion ?? ''}` : 'closed'} open={finding !== null} assessmentId={data.id} unit={unitName} suggestion={finding?.suggestion} onClose={() => setFinding(null)} />
       {confirmDialog}
     </div>
   );

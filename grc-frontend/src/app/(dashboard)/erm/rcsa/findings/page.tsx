@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 import { Suspense, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { PageHeader } from '@/components/ui';
-import { EmptyState, Notice, Button, StatusPill, TitleLink } from '@/components/ui/ds';
+import { EmptyState, Notice, Button, StatusPill } from '@/components/ui/ds';
 import type { RecordColumn, RecordRow } from '@/components/records/RecordTable';
 import { errorMessage } from '@/components/ui/ds/reportOutcome';
 import { formatCount, formatDate } from '@/lib/format';
@@ -53,14 +53,14 @@ const SORTS: ExplorerSort<FindingRow>[] = [
   { key: 'raised', value: (f) => f.created_at, firstDir: 'desc' },
 ];
 const DEFAULT_SORT = { key: 'severity', dir: 'desc' as const };
-const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
 
 const COLUMNS: RecordColumn<FindingRow>[] = [
   {
     key: 'title', header: 'Finding', sortKey: 'title',
     cell: (row) => (
-      <div className="flex min-w-0 flex-col gap-[2px]" onClick={stop}>
-        <TitleLink href={`/erm/rcsa/findings?open=${row.record.id}`} title={row.record.title} prefetch={false} />
+      <div className="flex min-w-0 flex-col gap-[2px]">
+        {/* the row is the control (it opens the details panel and keeps the filters in the address); a link to ?open= would drop them */}
+        <span dir="auto" className="line-clamp-2 text-ds-body font-[600] text-ds-fg [overflow-wrap:anywhere]">{row.record.title}</span>
         <span className="line-clamp-1 text-ds-label text-ds-fg-muted [overflow-wrap:anywhere]">{[unitOf(row.record), campaignOf(row.record)].join(' · ')}</span>
       </div>
     ),

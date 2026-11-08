@@ -121,11 +121,12 @@ export function completion(questions: readonly Question[], answers: Readonly<Rec
   };
 }
 
-/** The form's order: by section as the template lists them (first appearance), then by the question's own order. */
+/** The form's order: sections in the order their first question comes in the template (the server lists them by NAME, which is not the author's order), then each section's questions by
+ *  their own order. */
 export function sortedQuestions(questions: readonly Question[]): Question[] {
   const order = (q: Question) => q.question_order ?? q.sequence ?? 0;
   const first = new Map<string, number>();
-  questions.forEach((q, i) => { const s = q.section ?? ''; if (!first.has(s)) first.set(s, i); });
+  questions.forEach((q) => { const s = q.section ?? ''; first.set(s, Math.min(first.get(s) ?? Infinity, order(q))); });
   return questions.slice().sort((a, b) => (first.get(a.section ?? '') ?? 0) - (first.get(b.section ?? '') ?? 0) || order(a) - order(b) || a.id - b.id);
 }
 

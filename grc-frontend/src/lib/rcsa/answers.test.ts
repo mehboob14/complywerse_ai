@@ -65,9 +65,12 @@ test('completion counts the required questions, names what is missing in the for
   assert.equal(completion([q(1, 'text', { is_required: false })], {}).percent, 0);
 });
 
-test('the form is in the template\'s order: sections as they first appear, questions by their own order', () => {
-  const questions = [q(5, 'text', { section: 'People', question_order: 1 }), q(2, 'text', { section: 'Controls', question_order: 2 }), q(1, 'text', { section: 'Controls', question_order: 1 })];
+test('the form is in the template\'s order: sections by their first question (the server lists them by name), questions by their own order', () => {
+  const questions = [q(5, 'text', { section: 'People', question_order: 0 }), q(2, 'text', { section: 'Controls', question_order: 2 }), q(1, 'text', { section: 'Controls', question_order: 1 })];
   assert.deepEqual(sortedQuestions(questions).map((x) => x.id), [5, 1, 2]);
+  // the server hands them over by section NAME (Controls before People): the author's order is by the first question's number
+  const byName = [q(2, 'text', { section: 'Controls', question_order: 8 }), q(1, 'text', { section: 'Controls', question_order: 7 }), q(5, 'text', { section: 'People', question_order: 1 })];
+  assert.deepEqual(sortedQuestions(byName).map((x) => x.id), [5, 1, 2]);
   const parts = sections(questions, { 1: { text: 'a' } });
   assert.deepEqual(parts.map((s) => [s.name, s.questions.length, s.answered, s.required]), [['People', 1, 0, 1], ['Controls', 2, 1, 2]]);
 });
