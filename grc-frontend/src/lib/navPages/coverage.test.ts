@@ -250,7 +250,7 @@ test('ownHeading is on exactly the pages that draw the kit head (PageHeader vari
   // MetricReport.tsx and _Standalone.tsx draw it; the Risk Management monitoring pages (G9) draw it in their register / board / Analytics frame (erm/_monitoring, erm/analytics/_frame)
   const HEAD_FROM_A_COMPONENT = [
     '/governance/kpi-report', '/governance/mappings', '/erm/incidents', '/erm/mitigation-actions', '/erm/appetite', '/erm/analytics', '/erm/analytics/aggregation', '/erm/analytics/bowtie',
-    '/erm/analytics/dependencies', '/erm/analytics/kri-triggers', '/erm/analytics/scenario', '/erm/risks',
+    '/erm/analytics/dependencies', '/erm/analytics/kri-triggers', '/erm/analytics/scenario', '/erm/risks', '/erm/risk-assessments', '/erm/risk-assessments/ai-risk-assessment',
   ];
   const DOCUMENTS_AREA_STRIP = ['/governance/documents/attestation', '/governance/documents/studio', '/governance/documents/overview', '/governance/exceptions', '/governance/reviews', '/governance/settings'];
   const drawing = pages.filter((p) => /<PageHeader[\s\S]{0,60}variant="page"/.test(read(p.file))).map((p) => p.route).sort();

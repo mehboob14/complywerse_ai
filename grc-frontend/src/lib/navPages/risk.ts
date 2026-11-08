@@ -13,7 +13,7 @@ const STRIP = 'opens from the Risk Management tab strip';
 export const LEAVES: Record<string, RouteExtra> = {
   '/erm': { title: 'Risk Management Overview', keywords: ['Enterprise Risk Management', 'ERM'], ownHeading: true },
   '/erm/risks': { keywords: ['Risks', 'Risk dashboard', 'Risk insights', 'Risk matrix', 'Heat map'], ownHeading: true },
-  '/erm/risk-assessments': { keywords: ['Risk assessment dashboard'] },
+  '/erm/risk-assessments': { keywords: ['Risk assessment dashboard', 'Framework risk assessments', 'Manual risk assessments', 'Risk assessment insights'], ownHeading: true },
   '/erm/rcsa': { keywords: ['RCSA Dashboard', 'Risk and control self-assessment', 'RCSA Worklist'], ownHeading: true },
   // Advanced Analytics is ONE page with a strip of tools (G9 monitoring): each tool keeps its address and draws the shared frame, whose head is the kit's page head.
   '/erm/analytics': { keywords: ['Advanced Risk Analytics', 'Heat map', 'Heatmap'], ownHeading: true },
@@ -34,7 +34,7 @@ export const PAGES: PageSpec[] = [
   // The Internal Controls pages were merged into the Control Catalog: both forward to it (its Internal view).
   { path: '/erm/internal-controls', label: 'Control Catalog', area: AREA, aliasOf: '/controls' },
   { path: '/erm/internal-controls/:id', label: 'Control Catalog', area: AREA, aliasOf: '/controls' },
-  { path: '/erm/ai-risk-assessment', label: 'AI Risk Assessment', area: AREA, aliasOf: `${ASSESSMENTS}/ai-risk-assessment` },
+  { path: '/erm/ai-risk-assessment', label: 'AI System Risks', area: AREA, aliasOf: `${ASSESSMENTS}/ai-risk-assessment` },
 
   // ---- Risk Register ----
   { path: '/erm/risks/dashboard', label: 'Risk Register', area: AREA, aliasOf: '/erm/risks' },
@@ -44,13 +44,15 @@ export const PAGES: PageSpec[] = [
   { path: '/erm/risks/nca/:id', label: 'NCA risk entry', area: AREA, parent: '/erm/risks', hidden: 'no link opens it: reached by a typed or saved address' },
 
   // ---- Risk Assessments ----
+  // The home (/erm/risk-assessments) lists both kinds of assessment and has Insights; the old dashboard, list and framework pages and an assessment's analytics page forward to it (to the
+  // assessment's Insights tab), keeping the parameters that still mean something.
   { path: `${ASSESSMENTS}/dashboard`, label: 'Risk Assessments', area: AREA, aliasOf: ASSESSMENTS },
-  { path: `${ASSESSMENTS}/list`, label: 'Risk Assessments List', area: AREA, parent: ASSESSMENTS, hidden: 'opens from the Risk Assessments dashboard', keywords: ['Manual risk assessments'] },
-  { path: `${ASSESSMENTS}/:id`, label: 'Risk assessment', area: AREA, parent: ASSESSMENTS, hidden: 'opens from a Risk Assessments List row (a manual assessment) and from its analytics page' },
-  { path: `${ASSESSMENTS}/:id/analytics`, label: 'Risk assessment analytics', area: AREA, parent: ASSESSMENTS, hidden: 'opens from a risk assessment (its Analytics button)' },
-  { path: `${ASSESSMENTS}/ai-risk-assessment`, label: 'AI Risk Assessment', area: AREA, parent: ASSESSMENTS, hidden: 'opens from the Risk Assessments tab beside it and from the Overdue AI reviews tile of the Overview' },
-  { path: `${ASSESSMENTS}/framework`, label: 'Framework Risk Assessments', area: AREA, parent: ASSESSMENTS, hidden: 'opens from the Risk Assessments dashboard and from the Blocked framework questions tile of the Overview' },
-  { path: `${ASSESSMENTS}/framework/:id`, label: 'Framework risk assessment', area: AREA, parent: `${ASSESSMENTS}/framework`, hidden: 'opens from the Framework Risk Assessments list, from a Risk Assessments List row and from the Auditor Portal risk tab of a framework' },
+  { path: `${ASSESSMENTS}/list`, label: 'Manual Risk Assessments', area: AREA, parent: ASSESSMENTS, hidden: 'forwards to the Risk Assessments home: the old Manual assessments list is that page with the Kind filter', keywords: ['Manual risk assessments'] },
+  { path: `${ASSESSMENTS}/:id`, label: 'Risk assessment', area: AREA, parent: ASSESSMENTS, hidden: 'opens from a Risk Assessments row (a manual assessment), from its drawer and from the Overview', ownHeading: true },
+  { path: `${ASSESSMENTS}/:id/analytics`, label: 'Risk assessment analytics', area: AREA, parent: ASSESSMENTS, hidden: 'forwards to the Insights tab of the assessment' },
+  { path: `${ASSESSMENTS}/ai-risk-assessment`, label: 'AI System Risks', area: AREA, parent: ASSESSMENTS, hidden: 'opens from the AI System Risks tab of Risk Assessments and from the Overdue AI reviews tile of the Overview', keywords: ['AI risk assessment', 'AI risks'], ownHeading: true },
+  { path: `${ASSESSMENTS}/framework`, label: 'Framework Risk Assessments', area: AREA, parent: ASSESSMENTS, hidden: 'forwards to the Risk Assessments home filtered to the framework assessments (?tab=assigned: the questions assigned to you)' },
+  { path: `${ASSESSMENTS}/framework/:id`, label: 'Framework risk assessment', area: AREA, parent: ASSESSMENTS, hidden: 'opens from a Risk Assessments row (a framework assessment), from its drawer, from the Blocked framework questions tile of the Overview and from the Auditor Portal risk tab of a framework', ownHeading: true },
 
   // ---- RCSA: the Worklist (the sidebar leaf) with Campaigns, Templates and Findings as links in its page head; the other old addresses forward ----
   { path: `${RCSA}/campaigns`, label: 'RCSA Campaigns', area: AREA, parent: RCSA, hidden: 'a section of RCSA (the links under its title)', ownHeading: true },
