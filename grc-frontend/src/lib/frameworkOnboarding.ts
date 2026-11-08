@@ -69,7 +69,7 @@ export interface Readiness {
   ready: boolean;
   /** this framework's own checks: its unfilled required/advised fields, then its gate checks */
   checks: Check[];
-  /** what the organisation profile must hold: one per stage with open required items, the profile's own checks, what this family asks of it */
+  /** always empty: the organisation profile gates nothing (kept so nothing that read it breaks) */
   org_checks: Check[];
   steps: StepProgress[];
   /** `step.field` of the fields that are not asked now because of an earlier answer */
@@ -137,7 +137,6 @@ export interface RegisterRow {
 export interface Register {
   frameworks: RegisterRow[];
   counts: Record<OnboardingState, number>;
-  org: { complete: boolean; groups: Record<string, OrgGroupState> };
   meta: { underway_kinds: UnderwayKind[]; min_underway_reason: number; min_reopen_reason: number };
 }
 
@@ -159,10 +158,10 @@ export interface OnboardingView {
   reopened_count: number;
   updated_at: string | null;
   steps: Step[];
+  /** always empty (kept in the answer) */
   requires_org: Array<{ field: string; reason: string }>;
   answers: Record<string, Record<string, unknown>>;
   readiness: Readiness;
-  org_summary: { complete: boolean; groups: Record<string, OrgGroupState> };
   refs: Refs;
   org_rows: OrgRows;
   journey: { id: number; status: string; name: string } | null;

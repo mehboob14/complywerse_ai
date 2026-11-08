@@ -13,7 +13,7 @@ export const LEAVES: Record<string, RouteExtra> = {};
 
 export const PAGES: PageSpec[] = [
   { path: ADMIN, label: 'Administration', area: AREA, adminOnly: true, hidden: 'opens from the Administration menu pinned at the foot of the sidebar (administrators only)',
-    keywords: ['Company', 'Company Profile', 'User Management', 'Role Management', 'Roles', 'Departments', 'Teams', 'Password Policy', 'Integrations', 'Cloud Connectors', 'Connectors', 'Connections', 'Identity Providers', 'SSO', 'Workflow Engine', 'Audit Logs', 'Settings'] },
+    keywords: ['Company', 'Company Profile', 'Organisation Profile', 'Organization Profile', 'User Management', 'Role Management', 'Roles', 'Departments', 'Teams', 'Password Policy', 'Integrations', 'Cloud Connectors', 'Connectors', 'Connections', 'Identity Providers', 'SSO', 'Workflow Engine', 'Audit Logs', 'Settings'] },
   // the tabs that are also pages
   { path: `${ADMIN}/organization`, label: 'Company Profile', area: AREA, parent: ADMIN, hidden: TAB('Company') },
   { path: `${ADMIN}/users`, label: 'User Management', area: AREA, parent: ADMIN, hidden: 'opens from the user menu in the top bar (Admin Users); the Administration page shows the same view as its User Management tab', keywords: ['Admin Users'] },

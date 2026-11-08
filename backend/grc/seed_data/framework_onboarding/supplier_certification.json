@@ -7,12 +7,6 @@
     {"slug": "aramco_ccc", "label": "Saudi Aramco CCC", "flow_id": "aramco"},
     {"slug": "sabic_cybertrust", "label": "SABIC CyberTrust", "flow_id": "sabic"}
   ],
-  "requires_org": [
-    {"field": "regulators_obligations.external_requirements", "reason": "The client's certificate requirement is recorded there with its deadline."},
-    {"field": "data_systems.key_systems", "reason": "Systems connected to the client or holding its data are inside the certificate scope."},
-    {"field": "data_systems.data_types", "reason": "Client data held by the supplier is part of what the classification covers."},
-    {"field": "data_systems.third_parties", "reason": "Subcontractors that touch client data or systems must be known."}
-  ],
   "steps": [
     {
       "key": "classification", "label": "Classification",

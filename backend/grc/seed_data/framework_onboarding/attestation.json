@@ -9,11 +9,6 @@
     {"slug": "hitrust_csf", "label": "HITRUST CSF", "flow_id": "hitrust"},
     {"slug": "csa_ccm_v4", "label": "CSA CCM and STAR", "flow_id": "csaccm"}
   ],
-  "requires_org": [
-    {"field": "data_systems.key_systems", "reason": "The system description and the assessed platforms are drawn from the key systems."},
-    {"field": "data_systems.third_parties", "reason": "Subservice and service organisations must be listed with their report method."},
-    {"field": "risk_people.sponsor", "reason": "Management signs the assertion or representation letter."}
-  ],
   "steps": [
     {
       "key": "engagement", "label": "Engagement",

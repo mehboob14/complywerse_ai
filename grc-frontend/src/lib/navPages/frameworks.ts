@@ -11,8 +11,6 @@ const HUB = '/frameworks';
 export const LEAVES: Record<string, RouteExtra> = {
   // the sidebar's entry and the hub it opens: the page draws the kit's head ("Frameworks", the sidebar's name)
   [HUB]: { ownHeading: true, keywords: ['Manage Frameworks', 'Framework library', 'Certification journeys', 'Compliance Frameworks', 'Dashboard', 'Frameworks dashboard', 'Compliance posture', 'Journeys', 'Start a journey'] },
-  // Compliance Management > Organisation Profile: its page draws the kit's head ("Organisation Profile", the sidebar's name)
-  '/compliance/organisation': { keywords: ['Organization profile', 'Organisation profile', 'Company profile'], ownHeading: true },
 };
 
 export const PAGES: PageSpec[] = [

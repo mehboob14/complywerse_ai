@@ -7,12 +7,6 @@
   "frameworks": [
     {"slug": "gcrf", "label": "Global Cyber Resilience Framework", "flow_id": "gcrf"}
   ],
-  "requires_org": [
-    {"field": "entities_sites.legal_entities", "reason": "The scope names the legal entities it covers, picked from the profile."},
-    {"field": "entities_sites.sites", "reason": "Sites inside the scope are picked from the profile."},
-    {"field": "data_systems.key_systems", "reason": "Systems inside the scope are picked from the key systems list."},
-    {"field": "risk_people.sponsor", "reason": "Every framework needs an executive who backs the work and approves the scope."}
-  ],
   "steps": [
     {
       "key": "why", "label": "Reason",

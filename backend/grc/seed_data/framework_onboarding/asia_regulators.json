@@ -11,12 +11,6 @@
     {"slug": "sl_csf", "label": "Sri Lanka CBSL standard", "flow_id": "cbslbss"},
     {"slug": "mas_trm", "label": "MAS TRM Guidelines", "flow_id": "mastrm"}
   ],
-  "requires_org": [
-    {"field": "regulators_obligations.regulators", "reason": "The regulators (SBP, the national CERT, CBSL, MAS) and their reference numbers decide which of these frameworks apply."},
-    {"field": "data_systems.key_systems", "reason": "Critical systems, internet banking systems and critical infrastructure are picked from the key systems list."},
-    {"field": "data_systems.third_parties", "reason": "Cloud providers and outsourced services feed the SBP cloud workload list and the MAS outsourcing register."},
-    {"field": "risk_people.cyber_reporting_line", "reason": "Several of these regimes expect the security lead to be separate from IT; the profile records who the function reports to."}
-  ],
   "steps": [
     {
       "key": "applicability", "label": "Applicability",

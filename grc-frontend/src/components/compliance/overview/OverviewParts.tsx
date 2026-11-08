@@ -267,7 +267,7 @@ export function OnboardingBody({ q, view }: { q: QueryView; view: OnboardingView
       <CountRow label="Being onboarded" href="/frameworks/onboarding" count={view.inProgress} />
       <CountRow label="Ready to start a journey" href="/frameworks/onboarding" count={view.ready} tone={view.ready > 0 ? 'success' : 'neutral'} />
       <li className="border-b border-ds-border last:border-b-0">
-        <Link href="/compliance/organisation" className={`flex min-h-ds-control items-center gap-[8px] rounded-ds-control px-[8px] py-[4px] text-ds-body text-ds-fg hover:bg-ds-surface-hover ${FOCUS}`}>
+        <Link href="/admin?tab=profile" className={`flex min-h-ds-control items-center gap-[8px] rounded-ds-control px-[8px] py-[4px] text-ds-body text-ds-fg hover:bg-ds-surface-hover ${FOCUS}`}>
           <span className="min-w-0 flex-1">Organisation profile</span>
           {view.profileComplete === null ? <span className="text-ds-fg-muted">—</span> : view.profileComplete ? (
             <span className="inline-flex items-center gap-[4px]"><CheckCircle2 aria-hidden className="h-[14px] w-[14px] text-ds-success" strokeWidth={1.75} /><StatusPill size="sm" tone="success" label="Complete" /></span>

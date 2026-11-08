@@ -17,7 +17,7 @@ export default function FrameworkOnboardingPage() {
           variant="page"
           title={titleFor('/frameworks/onboarding') ?? 'Onboarding'}
           info="What a framework needs before its journey can start: its scope, owners and dates, settled once and approved. A framework that is already running can be marked underway, with a reason."
-          actions={<Button href="/compliance/organisation">Organisation Profile</Button>}
+          actions={<Button href="/admin?tab=profile">Organisation Profile</Button>}
         />
         <FrameworksStrip current="onboarding" />
       </div>

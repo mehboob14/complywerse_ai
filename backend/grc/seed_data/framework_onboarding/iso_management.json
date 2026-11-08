@@ -9,11 +9,6 @@
     {"slug": "iso_42001", "label": "ISO/IEC 42001:2023", "flow_id": "iso42001"},
     {"slug": "iso_45001", "label": "ISO 45001:2018", "flow_id": "iso45001"}
   ],
-  "requires_org": [
-    {"field": "entities_sites.sites", "reason": "Sites are the unit of audit planning and multi-site sampling."},
-    {"field": "data_systems.key_systems", "reason": "The scope names the systems and interfaces inside the boundary."},
-    {"field": "risk_people.sponsor", "reason": "Top management must own the scope and the policy."}
-  ],
   "steps": [
     {
       "key": "route", "label": "Certification route",
@@ -34,7 +29,7 @@
       "fields": [
         {"key": "issues", "label": "Issues", "type": "longtext", "level": "advised", "note": "Internal and external issues that affect the management system (market, regulation, technology, ownership). The auditor checks they were thought about, not their length."},
         {"key": "interested_parties", "label": "Interested parties", "type": "table", "level": "required", "min_rows": 1, "note": "Who has requirements of the system and what they are. Listing parties without their requirements is the commonest gap.", "columns": [{"key": "party", "label": "Party", "type": "text", "required": true}, {"key": "kind", "label": "Kind", "type": "choice", "options": ["Customer", "Regulator", "Employee", "Supplier", "Owner or board", "Partner", "Public"], "required": true}, {"key": "requirement", "label": "Requirement", "type": "text", "required": true}, {"key": "how_addressed", "label": "Addressed by", "type": "text"}]},
-        {"key": "obligations_reviewed", "label": "Obligations reviewed", "type": "bool", "level": "required", "note": "Confirms the legal, regulatory and contractual requirements in the organisation profile were reviewed for this system."},
+        {"key": "obligations_reviewed", "label": "Obligations reviewed", "type": "bool", "level": "advised", "note": "Confirms the legal, regulatory and contractual requirements were reviewed for this system."},
         {"key": "climate", "label": "Climate change", "type": "choice", "level": "advised", "options": ["Relevant", "Not relevant", "Not decided yet"], "source": {"ref": "ISO Amendment 1:2024 adds a climate-change question to clause 4.1 (reported by certification bodies; not read in the standard text)", "asked_by": "auditor", "confidence": "unverified"}, "note": "Since the 2024 amendment, auditors ask whether climate change is a relevant issue and expect the decision recorded."}
       ]
     },
@@ -44,7 +39,7 @@
       "fields": [
         {"key": "statement", "label": "Scope statement", "type": "longtext", "level": "required", "note": "The sentence printed on the certificate. Say what is covered, where, and for whom. Too narrow a scope drawn for one customer is the commonest reason to redraw it later."},
         {"key": "kind", "label": "Scope kind", "type": "choice", "level": "required", "options": ["Whole organisation", "Business unit or department", "Service line", "Product or application", "Site or sites"], "note": "Whole organisation, a unit, a service line, a product or application, or particular sites."},
-        {"key": "entities", "label": "Entities", "type": "org_pick", "of": "entities", "level": "required", "min_rows": 1, "note": "Legal entities inside the scope, picked from the organisation profile."},
+        {"key": "entities", "label": "Entities", "type": "org_pick", "of": "entities", "level": "advised", "min_rows": 1, "note": "Legal entities inside the scope, picked from the organisation profile."},
         {"key": "sites", "label": "Sites", "type": "org_pick", "of": "sites", "level": "required", "min_rows": 1, "note": "Sites inside the scope. The body spreads audit days across sites by relevance and risk; multi-site sampling needs a central function."},
         {"key": "units", "label": "Units", "type": "org_pick", "of": "departments", "level": "advised", "note": "Departments inside the scope."},
         {"key": "systems", "label": "Systems", "type": "org_pick", "of": "systems", "level": "required", "min_rows": 1, "applies_to": ["iso_27001", "iso_42001", "iso_22301"], "note": "Systems and services inside the boundary. Include the interfaces to systems outside it."},

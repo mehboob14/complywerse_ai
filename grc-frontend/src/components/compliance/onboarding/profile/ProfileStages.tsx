@@ -72,7 +72,7 @@ export default function ProfileStages({ base, groups, states, current, onPick }:
           >
             {progress.reviewed && <Check aria-hidden className="h-[14px] w-[14px] shrink-0 text-ds-success" strokeWidth={2} />}
             {g.label}
-            {progress.text && <span className={clsx(BADGE, open ? 'bg-ds-primary-soft text-ds-primary-text' : 'bg-ds-border text-ds-fg-muted')}>{progress.text}<span className="sr-only"> required filled</span></span>}
+            {progress.text && <span className={clsx(BADGE, open ? 'bg-ds-primary-soft text-ds-primary-text' : 'bg-ds-border text-ds-fg-muted')}>{progress.text}<span className="sr-only"> filled</span></span>}
             {progress.reviewed && <span className="sr-only">, reviewed</span>}
           </button>
         );

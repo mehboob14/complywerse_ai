@@ -10,12 +10,6 @@
     {"slug": "ksa_pdp_transfer", "label": "KSA personal data transfer rules", "flow_id": "sdaia"},
     {"slug": "ksa_pdpl", "label": "KSA Personal Data Protection Law", "not_in_library": true}
   ],
-  "requires_org": [
-    {"field": "regulators_obligations.jurisdictions", "reason": "Where the organisation operates and where its data subjects live decides which privacy law reaches it."},
-    {"field": "data_systems.data_types", "reason": "Records of processing and the HIPAA ePHI scope start from the data types and where they are stored."},
-    {"field": "data_systems.third_parties", "reason": "Processors, business associates and recipients are picked from the third-party list."},
-    {"field": "data_systems.data_flows", "reason": "Recipients and transfers cannot be mapped until the data flows are known."}
-  ],
   "steps": [
     {
       "key": "role_scope", "label": "Role and scope",

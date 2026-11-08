@@ -36,19 +36,17 @@ const HEAD_IN: Record<string, string> = {
   '/frameworks/:id': '(dashboard)/frameworks/[id]/_workspace/JourneyHeader.tsx',
   '/frameworks/onboarding': '(dashboard)/frameworks/onboarding/page.tsx',
   '/frameworks/onboarding/:id': '../components/compliance/onboarding/workspace/OnboardingWorkspace.tsx',
-  '/compliance/organisation': '../components/compliance/onboarding/profile/OrganisationProfile.tsx',
 };
 
 test('every page of the frameworks folder is exactly one entry of the registry, and every entry of this group is a page (or the sidebar leaf it forwards from)', () => {
   assert.deepEqual(pages.slice().sort(), Object.keys(FILE).sort(), 'the six pages of the folder');
   for (const page of pages) assert.equal(routes.filter((e) => e.path === page).length, 1, page);
-  assert.equal(routes.filter((e) => e.path === '/compliance/organisation').length, 1);
   for (const spec of PAGES) assert.ok(pages.includes(spec.path), `${spec.path} has no page.tsx`);
-  assert.deepEqual(Object.keys(LEAVES).sort(), ['/compliance/organisation', '/frameworks'], 'the sidebar leaves this group adds to');
+  assert.deepEqual(Object.keys(LEAVES).sort(), ['/frameworks'], 'the sidebar leaf this group adds to');
 });
 
 test('the heading flags: the hub, a journey, the Onboarding page, a framework\'s onboarding and the Organisation Profile draw the kit head; the forward draws nothing and carries none', () => {
-  const flagged = ['/frameworks', '/frameworks/:id', '/frameworks/onboarding', '/frameworks/onboarding/:id', '/compliance/organisation'];
+  const flagged = ['/frameworks', '/frameworks/:id', '/frameworks/onboarding', '/frameworks/onboarding/:id'];
   for (const path of flagged) {
     assert.equal(routes.find((e) => e.path === path)?.ownHeading, true, `${path} is flagged`);
     const source = read(HEAD_IN[path]);
@@ -60,14 +58,12 @@ test('the heading flags: the hub, a journey, the Onboarding page, a framework\'s
 test('the heading of the hub and of the Onboarding page is the registry\'s name, and the Organisation Profile says the sidebar\'s', () => {
   assert.equal(titleFor('/frameworks'), 'Frameworks');
   assert.equal(titleFor('/frameworks/onboarding'), 'Onboarding');
-  assert.equal(titleFor('/compliance/organisation'), 'Organisation Profile');
   assert.match(read(HEAD_IN['/frameworks']), /titleFor\('\/frameworks'\)/, 'the hub reads its heading from the registry');
   assert.match(read(HEAD_IN['/frameworks/onboarding']), /titleFor\('\/frameworks\/onboarding'\)/);
-  assert.match(read(HEAD_IN['/compliance/organisation']), /title="Organisation Profile"/);
 });
 
 test('the top bar names only the section on the pages that draw their own head', () => {
-  for (const url of ['/frameworks', '/frameworks/7', '/frameworks/onboarding', '/frameworks/onboarding/3', '/compliance/organisation']) {
+  for (const url of ['/frameworks', '/frameworks/7', '/frameworks/onboarding', '/frameworks/onboarding/3']) {
     assert.equal(ownHeadingSection(url), 'Compliance Management', url);
     assert.equal(registryNamesPage(url), true, url);
   }

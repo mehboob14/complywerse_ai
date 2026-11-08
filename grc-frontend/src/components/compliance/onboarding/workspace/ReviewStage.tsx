@@ -11,7 +11,7 @@ import { Button, Notice, SectionCard } from '@/components/ui/ds';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { formatRelative } from '@/lib/format';
 import type { Check as ReadinessCheck, OnboardingView, Problem } from '@/lib/frameworkOnboarding';
-import { actionRefusal, eventSentence, jumpOf, openCount, splitChecks, splitOrgChecks, type Actions, type Stage } from './workspaceModel';
+import { actionRefusal, eventSentence, jumpOf, openCount, splitChecks, type Actions, type Stage } from './workspaceModel';
 import type { Decision } from './DecisionDialog';
 
 const HEAD = 'text-ds-label font-[600] text-ds-fg';
@@ -31,7 +31,6 @@ function CheckRow({ check, stages, onJump }: { check: ReadinessCheck; stages: re
     <li className="flex items-start gap-[4px]">
       {jump.kind === 'field' && <button type="button" onClick={() => onJump(jump.stage, jump.field)} className={`${ROW} ${tone}`}>{body}</button>}
       {jump.kind === 'stage' && <button type="button" onClick={() => onJump(jump.stage, '')} className={`${ROW} ${tone}`}>{body}</button>}
-      {jump.kind === 'org' && <Link href={jump.href} className={`${ROW} ${tone}`}>{body}</Link>}
       {jump.kind === 'none' && <div className={`${ROW} ${tone}`}>{body}</div>}
       {check.kind === 'field' && check.hint && <InfoTip text={check.hint} label={`About ${check.label.toLowerCase()}`} />}
     </li>
@@ -93,7 +92,6 @@ export default function ReviewStage({ view, stages, actions, submitting, submitP
 }) {
   const r = view.readiness;
   const open = openCount(r);
-  const org = splitOrgChecks(r.org_checks);
   const buttons = (['submit', 'approve', 'reopen', 'underway'] as const).filter((k) => actions[k].shown);
   return (
     <div className="grid min-w-0 gap-[16px] xl:grid-cols-[minmax(0,1fr)_22rem]">
@@ -103,7 +101,6 @@ export default function ReviewStage({ view, stages, actions, submitting, submitP
       >
         <div className="flex flex-col gap-[16px]">
           <CheckGroup title="This framework" checks={r.checks} stages={stages} onJump={onJump} />
-          <CheckGroup title="Organisation profile" checks={[...org.needed, ...org.profile]} stages={stages} onJump={onJump} />
         </div>
       </SectionCard>
 
