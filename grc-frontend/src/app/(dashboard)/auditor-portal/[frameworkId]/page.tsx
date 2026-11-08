@@ -1,215 +1,150 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { certificationsApi } from '@/lib/api';
+// Auditor Portal > one journey: the REVIEW QUEUE. An auditor's job on a journey is to decide what is put in front of them, so the page is that: Queue (files to
+// review, scope requests waiting, requirements nobody has asked about), Decisions (what was decided, by whom, when) and Summary (where the journey stands). The
+// requirements, the scope decisions in full, the documents and the activity are the Frameworks workspace: this page links into it and copies none of its tabs.
+// The state of the page lives in its address (?tab= ?kind= ?q= ?result= ?page= ?open=), so a link, a reload and Back land where the person was; the three old tab
+// names (overview, controls, evidence) still arrive and are forwarded. One request feeds the head, the chips and the list (GET /auditor-portal/{id}/review-queue);
+// a failure to load is said with Retry, and a journey the person may not open is said as that.
+import { useEffect } from 'react';
+import { useParams, usePathname, useRouter } from 'next/navigation';
+import { RefreshCw } from 'lucide-react';
+import { PageHeader } from '@/components/ui';
+import { Button, ErrorState, IconButton, Notice, Skeleton, SkeletonRows, StatusPill, TabPanel, Tabs, useAddressState } from '@/components/ui/ds';
+import { canRetry, errorMessage, statusOf } from '@/components/ui/ds/reportOutcome';
+import { statusPill } from '@/lib/status';
+import { journeyStatus } from '@/lib/statuses/frameworkJourney';
+import { clockOf } from '@/lib/inbox/inboxView';
 import {
-  ArrowLeft,
-  Shield,
-  LayoutDashboard,
-  ListChecks,
-  FileBadge,
-  Share2,
-  Check,
-} from 'lucide-react';
+  ADDRESS, frameworksHref, parseOpen, skipFor, upgradeLegacyAddress, waitingTotal, type FileItem, type PortalTab, type ScopeItem,
+} from '@/lib/auditorPortal/portalModel';
+import { useJourney, useQueue, type QueueQuery } from '../_front/portalData';
+import { DecisionHost } from './_queue/DecisionHost';
+import { DecisionsTab } from './_queue/DecisionsTab';
+import { QueueTab } from './_queue/QueueTab';
+import { SummaryTab } from './_queue/SummaryTab';
 
-import OverviewTab from './_tabs/OverviewTab';
-import ControlsTab from './_tabs/ControlsTab';
-import EvidenceTab from './_tabs/EvidenceTab';
-// Other tab component files (Documents, Risks, RiskAssessment, Assets,
-// Vulnerabilities, Vendors, Exceptions, AuditTrail) are kept on disk for
-// future restoration but are not wired to the tab bar.
+const PAGE_SIZE = 25;
 
-type TabKey =
-  | 'overview'
-  | 'controls'
-  | 'evidence';
-
-const TABS: Array<{ key: TabKey; label: string; icon: React.ComponentType<{ className?: string }> }> = [
-  { key: 'overview', label: 'Overview', icon: LayoutDashboard },
-  { key: 'controls', label: 'Controls', icon: ListChecks },
-  { key: 'evidence', label: 'Evidence', icon: FileBadge },
-];
-
-export default function AuditorPortalDetailPage() {
+export default function AuditorJourneyPage() {
   const params = useParams();
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const frameworkId = params.frameworkId as string;
+  const pathname = usePathname() ?? '';
+  const journeyId = Number(params.frameworkId);
+  const [address, set] = useAddressState(ADDRESS);
 
-  // Initial tab seeded from ?tab=... so URLs are shareable per-section.
-  // Validate against the trimmed TabKey set so legacy bookmarks (?tab=risks
-  // / ?tab=audit-trail / etc.) gracefully fall back to overview instead of
-  // rendering a blank panel.
-  const validKeys: TabKey[] = ['overview', 'controls', 'evidence'];
-  const rawTab = searchParams.get('tab');
-  const initialTab: TabKey = (rawTab && (validKeys as string[]).includes(rawTab)) ? (rawTab as TabKey) : 'overview';
-  const [activeTab, setActiveTab] = useState<TabKey>(initialTab);
-  const [shareCopied, setShareCopied] = useState(false);
+  // an address from before the revamp (?tab=overview|controls|evidence) is forwarded once
+  useEffect(() => {
+    const next = upgradeLegacyAddress(window.location.search);
+    if (next !== null) router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
+  }, [router, pathname]);
 
-  // Journey/framework picker — same approach as the previous page.
-  const { data: journeysList } = useQuery({
-    queryKey: ['auditor-frameworks'],
-    queryFn: async () => {
-      const response = await certificationsApi.getAll();
-      return response.data as Array<{
-        id: number;
-        name?: string;
-        framework?: { name?: string; short_code?: string };
-        framework_name?: string;
-        uploaded_framework_id?: number;
-        framework_id?: number;
-        status?: string;
-      }>;
-    },
-  });
+  const { tab, kind, q, result, page } = address;
+  const query: QueueQuery = tab === 'decisions'
+    ? { kind: 'decided', status: result === 'all' ? undefined : result, q, skip: skipFor(page, PAGE_SIZE), limit: PAGE_SIZE }
+    : tab === 'summary'
+      ? { kind: 'files', skip: 0, limit: 1 }
+      : { kind, q, skip: skipFor(page, PAGE_SIZE), limit: PAGE_SIZE };
+  const queue = useQueue(journeyId, query, Number.isFinite(journeyId));
+  const journey = useJourney(journeyId, tab === 'summary');
 
-  const currentJourney = useMemo(() => {
-    const list = journeysList || [];
-    return list.find((j) => String(j.id) === String(frameworkId));
-  }, [journeysList, frameworkId]);
+  const data = queue.data;
+  const open = parseOpen(address.open);
+  const items = (data?.items ?? []) as Array<FileItem | ScopeItem | { type: 'untouched'; id: number }>;
+  const openItem = open && !queue.isPlaceholderData ? (items.find((i) => i.type === open.type && i.id === open.id) as FileItem | ScopeItem | undefined) ?? null : null;
+  const missing = !!open && !openItem && !!data && !queue.isFetching && !queue.isPlaceholderData && data.kind !== 'untouched';
 
-  const frameworkLabel =
-    currentJourney?.framework?.name ||
-    currentJourney?.framework_name ||
-    currentJourney?.name ||
-    'Framework';
+  if (!Number.isFinite(journeyId)) {
+    return <ErrorState title="This journey does not exist" message="The address is not a journey. Open the Auditor Portal and pick one." />;
+  }
+  if (queue.isError && !data) {
+    const status = statusOf(queue.error);
+    return (
+      <div className="flex flex-col gap-[16px]">
+        <PageHeader variant="page" title="Journey" back={{ href: '/auditor-portal', label: 'Back to the Auditor Portal' }} />
+        <ErrorState
+          title={status === 404 ? 'This journey was not found' : status === 403 ? 'You cannot open this journey' : "Couldn't load this journey"}
+          message={errorMessage(queue.error)}
+          onRetry={canRetry(queue.error) ? () => { void queue.refetch(); } : undefined}
+        />
+      </div>
+    );
+  }
+  if (!data) {
+    return (
+      <div className="flex flex-col gap-[16px]" aria-busy="true">
+        <Skeleton className="h-[32px] w-1/3" />
+        <SkeletonRows rows={6} columns={4} label="Loading the journey" />
+      </div>
+    );
+  }
 
-  const handleTabClick = (tab: TabKey) => {
-    setActiveTab(tab);
-    // Keep the URL in sync so an auditor can copy/share the exact view
-    // they're looking at without losing their tab selection.
-    const url = new URL(window.location.href);
-    url.searchParams.set('tab', tab);
-    window.history.replaceState({}, '', url);
-  };
-
-  const handleShare = async () => {
-    try {
-      const url = new URL(window.location.href);
-      url.searchParams.set('tab', activeTab);
-      await navigator.clipboard.writeText(url.toString());
-      setShareCopied(true);
-      setTimeout(() => setShareCopied(false), 1500);
-    } catch {
-      // Clipboard unavailable; silently no-op rather than alarming the user.
-    }
-  };
-
-  const renderTab = () => {
-    switch (activeTab) {
-      case 'overview':
-        return (
-          <OverviewTab
-            frameworkId={frameworkId}
-            onJumpTab={(t) => {
-              // The Overview tab may emit jumps to legacy keys (risks, documents,
-              // assets, ...) that we no longer expose. Re route those to Controls
-              // or Evidence which still surface the relevant data.
-              const next = t === 'evidence' ? 'evidence'
-                : t === 'controls' ? 'controls'
-                : 'overview';
-              handleTabClick(next as TabKey);
-            }}
-          />
-        );
-      case 'controls': return <ControlsTab frameworkId={frameworkId} />;
-      case 'evidence': return <EvidenceTab frameworkId={frameworkId} />;
-      default: return <OverviewTab frameworkId={frameworkId} />;
-    }
-  };
+  const name = data.journey?.name ?? data.framework.name;
+  const waiting = waitingTotal(data.counts);
+  const hasJourney = !!data.journey;
+  const select = (next: PortalTab) => set({ tab: next, page: 1, open: '' });
+  const updated = queue.dataUpdatedAt > 0 ? `Updated ${clockOf(queue.dataUpdatedAt)}` : undefined;
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => router.push('/auditor-portal')}
-            className="rounded-lg bg-white border border-slate-300 p-2 hover:bg-slate-50 transition-colors"
-            title="Back to portal index"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </button>
-          <div className="flex items-center gap-2">
-            <Shield className="h-5 w-5 text-primary-600" strokeWidth={1.75} />
-            <div>
-              <h1 className="text-lg font-semibold text-slate-900 leading-tight">{frameworkLabel}</h1>
-              <p className="text-xs text-slate-500">
-                Auditor portal
-                {currentJourney?.status && (
-                  <span> • {currentJourney.status.replace(/_/g, ' ')}</span>
-                )}
-              </p>
-            </div>
+    <div className="flex flex-col gap-[16px]">
+      <PageHeader
+        variant="page"
+        title={name}
+        back={{ href: '/auditor-portal', label: 'Back to the Auditor Portal' }}
+        info="Decide the files and scope requests waiting on this journey. The requirements, documents and activity are in Frameworks."
+        meta={<span className="inline-flex items-center gap-[2px]">{updated}<IconButton label="Refresh the queue" onClick={() => { void queue.refetch(); }}><RefreshCw aria-hidden /></IconButton></span>}
+        chips={(
+          <>
+            {data.journey && <StatusPill {...statusPill(journeyStatus, data.journey.status)} />}
+            {data.framework.name !== name && <StatusPill tone="neutral" label={[data.framework.name, data.framework.version].filter(Boolean).join(' ')} />}
+          </>
+        )}
+        actions={hasJourney ? <Button href={frameworksHref(journeyId)}>Open in Frameworks</Button> : undefined}
+      />
+
+      <Tabs
+        tabs={[
+          { key: 'queue', label: 'Queue', count: waiting },
+          { key: 'decisions', label: 'Decisions', count: data.counts.decided },
+          { key: 'summary', label: 'Summary' },
+        ]}
+        value={tab}
+        onChange={select}
+        ariaLabel="Journey review"
+        countFormat="exact"
+      >
+        {missing && (
+          <Notice tone="info" title="That item is not in this list any more" className="mt-[12px]" action={<Button onClick={() => set({ open: '' })}>Dismiss</Button>}>
+            It may have been decided by someone else, or the link is old. Decided items are under Decisions.
+          </Notice>
+        )}
+        <TabPanel tabKey="queue" lazy>
+          <div className="pt-[12px]">
+            <QueueTab
+              journeyId={journeyId}
+              queue={queue}
+              kind={kind}
+              q={q}
+              page={page}
+              pageSize={PAGE_SIZE}
+              set={set}
+              onShowDecisions={() => select('decisions')}
+            />
           </div>
-        </div>
+        </TabPanel>
+        <TabPanel tabKey="decisions" lazy>
+          <div className="pt-[12px]">
+            <DecisionsTab queue={queue} result={result} q={q} page={page} pageSize={PAGE_SIZE} set={set} />
+          </div>
+        </TabPanel>
+        <TabPanel tabKey="summary" lazy>
+          <div className="pt-[12px]">
+            <SummaryTab journeyId={journeyId} queue={queue} journey={journey} />
+          </div>
+        </TabPanel>
+      </Tabs>
 
-        {/* Framework / journey switcher + share */}
-        <div className="flex items-center gap-2">
-          <select
-            value={frameworkId}
-            onChange={(e) => {
-              const newId = e.target.value;
-              const url = new URL(window.location.href);
-              url.pathname = `/auditor-portal/${newId}`;
-              router.push(`${url.pathname}${url.search}`);
-            }}
-            className="rounded border border-slate-300 bg-white px-3 py-2 text-sm"
-          >
-            {(journeysList || []).map((j) => (
-              <option key={j.id} value={j.id}>
-                {j.framework?.name || j.framework_name || j.name || `Framework ${j.id}`}
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={handleShare}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            title="Copy a shareable link to this view"
-          >
-            {shareCopied ? (
-              <>
-                <Check className="h-4 w-4 text-emerald-600" />
-                Copied
-              </>
-            ) : (
-              <>
-                <Share2 className="h-4 w-4" />
-                Share
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* Tab nav */}
-      <div className="overflow-x-auto border-b border-slate-200">
-        <nav className="flex gap-1 min-w-max">
-          {TABS.map((t) => {
-            const Icon = t.icon;
-            const isActive = activeTab === t.key;
-            return (
-              <button
-                key={t.key}
-                onClick={() => handleTabClick(t.key)}
-                className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                  isActive
-                    ? 'border-primary-600 text-primary-700'
-                    : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                {t.label}
-              </button>
-            );
-          })}
-        </nav>
-      </div>
-
-      {/* Active tab content */}
-      <div>{renderTab()}</div>
+      <DecisionHost journeyId={journeyId} item={openItem} onClose={() => set({ open: '' })} />
     </div>
   );
 }

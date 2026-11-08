@@ -21,7 +21,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from ....models import (
     GRCUser,
@@ -38,6 +38,24 @@ from ..helpers import resolve_framework_context
 
 
 router = APIRouter()
+
+
+def scope_decision(appl: Optional[ClauseApplicability]) -> str:
+    """Where a requirement stands for scope, told apart: untouched | pending | rejected | in_scope | out_of_scope.
+    The older `state` key calls a turned-down request "pending"; this one does not."""
+    if appl is None:
+        return "untouched"
+    if appl.status == "rejected":
+        return "rejected"
+    if appl.status != "approved":
+        return "pending"
+    return "in_scope" if appl.is_applicable else "out_of_scope"
+
+
+def _decider(appl: Optional[ClauseApplicability]) -> Optional[str]:
+    """Who decided, by name (never the e-mail address)."""
+    user = appl.reviewer if appl is not None else None
+    return (getattr(user, "display_name", None) or getattr(user, "username", None)) if user is not None else None
 
 
 @router.get("/{framework_id}/controls")
@@ -67,7 +85,7 @@ def list_controls(
 
     applicability_rows = []
     if control_ids:
-        applicability_rows = db.query(ClauseApplicability).filter(
+        applicability_rows = db.query(ClauseApplicability).options(joinedload(ClauseApplicability.reviewer)).filter(
             ClauseApplicability.tenant_id.in_(user_tenants),
             ClauseApplicability.control_id.in_(control_ids),
         ).all()
@@ -135,11 +153,13 @@ def list_controls(
             "is_critical": control.is_critical,
             "applicability": {
                 "state": applicability_state,
+                "decision": scope_decision(appl),
                 "is_applicable": appl.is_applicable if appl else None,
                 "status": appl.status if appl else None,
                 "justification": appl.justification if appl else None,
                 "review_comment": appl.review_comment if appl else None,
                 "reviewed_at": appl.reviewed_at if appl else None,
+                "reviewed_by_name": _decider(appl),
                 "applicability_id": appl.id if appl else None,
             },
             "implementation": {
@@ -275,11 +295,13 @@ def get_control_detail(
         "criticality_reason": control.criticality_reason,
         "evidence_requirements": control.evidence_requirements or [],
         "applicability": {
+            "decision": scope_decision(appl),
             "is_applicable": appl.is_applicable if appl else None,
             "status": appl.status if appl else None,
             "justification": appl.justification if appl else None,
             "review_comment": appl.review_comment if appl else None,
             "reviewed_at": appl.reviewed_at if appl else None,
+            "reviewed_by_name": _decider(appl),
             "applicability_id": appl.id if appl else None,
         },
         "implementation": impl_summary,
