@@ -124,16 +124,12 @@ export default function IssueRegister({ label }: { label: string }) {
         </div>
       ),
     },
-    { key: 'severity', header: 'Severity', sortKey: 'severity', fit: { px: 112 }, cell: (row) => <SeverityPill i={row.record} /> },
-    { key: 'state', header: 'State', sortKey: 'state', fit: { px: 136 }, cell: (row) => <StatePill i={row.record} /> },
+    { key: 'severity', header: 'Severity', sortKey: 'severity', fit: { px: 128 }, cell: (row) => <SeverityPill i={row.record} /> },
+    // being late is part of the state: it stays visible when the room is too narrow for the Target column
+    { key: 'state', header: 'State', sortKey: 'state', fit: { px: 152 }, cell: (row) => <div className="flex flex-col items-start gap-[2px]"><StatePill i={row.record} /><LatePill i={row.record} now={now} /></div> },
     {
-      key: 'due', header: 'Target', sortKey: 'due', fit: { px: 132, dropRank: 2 },
-      cell: (row) => (
-        <div className="flex flex-col items-start gap-[2px]">
-          <span className={`whitespace-nowrap text-ds-body ${row.record.target_closure_date ? 'text-ds-fg-body' : MUTED}`}>{formatDate(row.record.target_closure_date)}</span>
-          <LatePill i={row.record} now={now} />
-        </div>
-      ),
+      key: 'due', header: 'Target', sortKey: 'due', fit: { px: 120, dropRank: 2 },
+      cell: (row) => <span className={`whitespace-nowrap text-ds-body ${row.record.target_closure_date ? 'text-ds-fg-body' : MUTED}`}>{formatDate(row.record.target_closure_date)}</span>,
     },
     { key: 'assignee', header: 'Assigned to', sortKey: 'assignee', fit: { px: 96, dropRank: 3, wide: { px: 168, titleMin: 420 } }, cell: (row, look) => <OwnerCell name={personName(row.record.assignee)} wide={look.wide} /> },
     {

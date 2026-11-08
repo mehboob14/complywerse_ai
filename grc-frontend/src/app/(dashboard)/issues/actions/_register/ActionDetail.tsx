@@ -37,9 +37,9 @@ export function ActionDetail({ a, now }: { a: ActionRow; now: Date }) {
         <Fact label="Type">{a.action_type ? actionType.label(a.action_type) : null}</Fact>
         <Fact label="Due">{a.due_date ? formatDate(a.due_date, { calendar: true }) : null}</Fact>
         <Fact label="Assigned to"><PersonChip name={a.assignee_name} /></Fact>
-        <Fact label="Completed">{a.completed_at ? formatDate(a.completed_at) : null}</Fact>
-        <Fact label="Verified by">{a.verified_by_name ? <span>{a.verified_by_name}{a.verified_at ? ` · ${formatDate(a.verified_at)}` : ''}</span> : null}</Fact>
-        <Fact label="Effectiveness review">{a.effectiveness_review_at ? formatDate(a.effectiveness_review_at) : null}</Fact>
+        {a.completed_at && <Fact label="Completed">{formatDate(a.completed_at)}</Fact>}
+        {a.verified_by_name && <Fact label="Verified by"><span>{a.verified_by_name}{a.verified_at ? ` · ${formatDate(a.verified_at)}` : ''}</span></Fact>}
+        {a.effectiveness_review_at && <Fact label="Effectiveness review">{formatDate(a.effectiveness_review_at)}</Fact>}
         <Fact label="Added">{a.created_at ? formatDate(a.created_at) : null}</Fact>
       </FactList>
       {a.description ? <div><p className={`mb-[4px] text-ds-label ${MUTED}`}>Notes</p><ClampedText text={a.description} lines={6} /></div> : null}

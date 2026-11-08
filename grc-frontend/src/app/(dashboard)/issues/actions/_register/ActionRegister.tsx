@@ -91,15 +91,11 @@ export default function ActionRegister({ label }: { label: string }) {
       ),
     },
     { key: 'type', header: 'Type', sortKey: 'type', fit: { px: 112, dropRank: 1 }, cell: (row) => <span className="whitespace-nowrap text-ds-body text-ds-fg-body">{row.record.action_type ? actionType.label(row.record.action_type) : '—'}</span> },
-    { key: 'status', header: 'Status', sortKey: 'status', fit: { px: 124 }, cell: (row) => <ActionStatusPill a={row.record} /> },
+    // being late is part of the status: it stays visible when the room is too narrow for the Due column
+    { key: 'status', header: 'Status', sortKey: 'status', fit: { px: 124 }, cell: (row) => <div className="flex flex-col items-start gap-[2px]"><ActionStatusPill a={row.record} /><ActionLatePill a={row.record} now={now} /></div> },
     {
-      key: 'due', header: 'Due', sortKey: 'due', fit: { px: 132, dropRank: 2 },
-      cell: (row) => (
-        <div className="flex flex-col items-start gap-[2px]">
-          <span className={`whitespace-nowrap text-ds-body ${row.record.due_date ? 'text-ds-fg-body' : MUTED}`}>{formatDate(row.record.due_date, { calendar: true })}</span>
-          <ActionLatePill a={row.record} now={now} />
-        </div>
-      ),
+      key: 'due', header: 'Due', sortKey: 'due', fit: { px: 120, dropRank: 2 },
+      cell: (row) => <span className={`whitespace-nowrap text-ds-body ${row.record.due_date ? 'text-ds-fg-body' : MUTED}`}>{formatDate(row.record.due_date, { calendar: true })}</span>,
     },
     { key: 'assignee', header: 'Assigned to', sortKey: 'assignee', fit: { px: 96, dropRank: 3, wide: { px: 168, titleMin: 420 } }, cell: (row, look) => <OwnerCell name={row.record.assignee_name} wide={look.wide} /> },
   ];
