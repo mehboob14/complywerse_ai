@@ -1,675 +1,152 @@
 'use client';
 
-// Automation → Overview. The state of the common control library on one screen.
-//
-// Six panels, each fed by the system that actually holds the answer: what the
-// library contains (SCF), what a check can assert (the plugin engine), which
-// frameworks it discharges (the crosswalk), what evidence it asks for (the
-// consolidated sets), who owns it and whether it was tested (the control
-// workbench), and which way that moved (the assurance snapshots).
-//
-// Where a system holds nothing yet the panel says so and names the system. "0
-// implemented" and "implementation is not tracked here yet" are different
-// claims, and only the second one is true today — a dashboard that renders the
-// first is worse than no dashboard.
-
-import { useState } from 'react';
-import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
-import {
-  Activity, AlertTriangle, BarChart3, CheckCircle2, ClipboardList, Crosshair, FileText,
-  Layers, Loader2, Plug, ShieldCheck, Users,
-} from 'lucide-react';
-import { automationApi } from '@/lib/api';
-import { CONTROL_STATUS, FrameworkBadge, frameworkColor } from '@/components/soc2/ui';
+// Controls Automation > Overview, a worklist-first cockpit (option A of the Controls Automation audit, the same frame as the Governance and Risk Overviews: components/overview): what needs attention
+// across the controls as a band of counters (each opens the explorer on exactly what it counts), the person's own prioritised work beside one posture card, and the breakdowns below (domain, frameworks,
+// sources, evidence, implementation, crosswalk, the trend). With nothing connected, the setup journey is its empty state. No number is redefined; every request loads, fails and has nothing on its
+// own, and a number whose request failed is never drawn as 0. The seven panels of the old page are the breakdowns; Coverage and Mapping review are on the Controls strip.
+import { useMemo, useState } from 'react';
+import { Crosshair, RefreshCw } from 'lucide-react';
+import { PageHeader } from '@/components/ui';
+import { Button, ErrorState, IconButton, SkeletonRows } from '@/components/ui/ds';
+import { canRetry, errorMessage, statusOf } from '@/components/ui/ds/reportOutcome';
+import { Cockpit, SkipToWork, type Breakdown } from '@/components/overview/Cockpit';
+import { CounterBand, type BandCounter } from '@/components/overview/CounterBand';
+import { layoutOf, workRowLimit } from '@/components/overview/cockpitModel';
+import { useNarrow } from '@/components/overview/useNarrow';
 import { ScopeDialog } from '@/components/soc2/ScopeDialog';
+import { usePermissions } from '@/hooks/usePermissions';
+import { formatCount } from '@/lib/format';
+import { clockOf } from '@/lib/inbox/inboxView';
+import { titleFor } from '@/lib/navRegistry';
+import { useControls, useMeId } from '../soc2-controls/_explorer/controlsData';
+import {
+  CrosswalkFacts, DomainTable, EvidenceFacts, FrameworkList, ImplementationFacts, Orphans, PostureCard, SetupCard, SourcesList, TrendTable, WorkCard,
+} from './_overview/OverviewParts';
+import { useMyWork, useOverview, useReviewQueueCount } from './_overview/overviewData';
+import { COUNTERS, buildWork, listCounter, plainCounter, setupSteps, showSetup } from './_overview/overviewModel';
 
-interface DomainRow {
-  domain: string; identifier: string | null; controls: number; material: number;
-  with_checks: number; with_evidence: number; frameworks: number;
-  tracked: number; implemented: number; objectives: number;
-}
-interface FrameworkRow {
-  key: string; label: string; controls: number; requirements: number;
-  requirement_total: number | null;
-  counts: Record<string, number>;
-  inferred: number; inferred_pct: number;
-}
-interface Overview {
-  release: string;
-  scope?: { frameworks?: { key: string; label: string }[]; applicable_count?: number; total_count?: number };
-  library: {
-    controls: number; domains: number; material: number; orphans: number;
-    objectives: number; pptdf: Record<string, number>;
-    cadence: Record<string, number>; by_domain: DomainRow[];
-    /** How many of those controls the tenant wrote themselves. */
-    custom?: number;
-  };
-  automation: {
-    controls_with_checks: number; checks_bound: number; plugins_enabled: number;
-    plugins_run: number; last_run_at: string | null; posture: Record<string, number>;
-  };
-  connector_categories: {
-    category: string;
-    connected: boolean;
-    connected_providers: { provider: string; label: string }[];
-    providers: { provider: string; label: string; connected: boolean; bindings: number }[];
-    controls_reachable: number;
-    controls_waiting: number;
-  }[];
-  collection: {
-    connectors: {
-      plugin_key: string; title: string | null; provider: string | null;
-      state: 'healthy' | 'stale' | 'failing' | 'never_run';
-      last_success_at: string | null; days_since_success: number | null;
-      last_attempt_at: string | null; error: string | null; controls_affected: number;
-    }[];
-    counts: Record<string, number>;
-    stale_after_days: number;
-  };
-  frameworks: FrameworkRow[];
-  crosswalk: { rows: number; by_match_mode: Record<string, number>; reviewed: number };
-  evidence: {
-    controls_with_set: number; artifacts: number;
-    by_method: Record<string, number>;
-    top_owners: { owner: string; artifacts: number }[];
-  };
-  assurance: Record<string, number | string | Record<string, number>> & {
-    tracked: number; assigned: number; implemented: number; tested: number;
-    effective: number; partially_effective: number; ineffective: number;
-    overdue: number; evidence_pending: number; source: string;
-    by_implementation_status: Record<string, number>;
-  };
-  trend: { date: string; tested: number; effective: number; assigned: number; overdue: number }[];
-}
-
-const n = (v: number) => v.toLocaleString();
-const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0);
-
-function Stat({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
-      <div className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{label}</div>
-      <div className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">{value}</div>
-      {sub && <div className="mt-0.5 text-[11px] text-slate-500">{sub}</div>}
-    </div>
-  );
-}
-
-function Panel({ icon: Icon, title, hint, children, action }: {
-  icon: React.ComponentType<{ className?: string }>; title: string; hint?: string;
-  children: React.ReactNode; action?: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-lg border border-slate-200 bg-white">
-      <header className="flex items-center gap-2 border-b border-slate-100 px-4 py-2.5">
-        <Icon className="h-4 w-4 text-slate-400" />
-        <h2 className="text-sm font-semibold text-slate-800">{title}</h2>
-        {hint && <span className="text-[11px] text-slate-400">{hint}</span>}
-        {action && <div className="ml-auto">{action}</div>}
-      </header>
-      <div className="p-4">{children}</div>
-    </section>
-  );
-}
-
-/** A proportional bar. Segments carry their own colour so one read shows the mix. */
-function Bar({ parts, total }: { parts: { key: string; value: number; cls: string }[]; total: number }) {
-  if (!total) return <div className="h-2 rounded bg-slate-100" />;
-  return (
-    <div className="flex h-2 overflow-hidden rounded bg-slate-100">
-      {parts.filter((p) => p.value > 0).map((p) => (
-        <div key={p.key} className={p.cls} style={{ width: `${(p.value / total) * 100}%` }} title={`${p.key}: ${n(p.value)}`} />
-      ))}
-    </div>
-  );
-}
-
-/** Says which system a number came from, and that an empty one is untracked
- *  rather than zero. */
-function NotTracked({ system, cta }: { system: string; cta?: { href: string; label: string } }) {
-  return (
-    <div className="rounded border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center">
-      <p className="text-sm text-slate-600">Nothing tracked in the {system} yet.</p>
-      <p className="mt-1 text-[12px] text-slate-400">
-        These counts are zero because no control has been taken up there — not because none is implemented.
-      </p>
-      {cta && (
-        <Link href={cta.href} className="mt-3 inline-block rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
-          {cta.label}
-        </Link>
-      )}
-    </div>
-  );
-}
-
-const POSTURE_CLS: Record<string, string> = {
-  passed: 'bg-emerald-500', failed: 'bg-rose-500', partial: 'bg-amber-500',
-  error: 'bg-amber-400', expired: 'bg-orange-500', collection_failed: 'bg-purple-500',
-  connect_one: 'bg-indigo-500', unbound: 'bg-cyan-500',
-  not_run: 'bg-slate-300', manual: 'bg-slate-200',
-};
-const CATEGORY_LABEL: Record<string, string> = {
-  scm: 'Source control', identity: 'Identity provider', cloud: 'Cloud',
-  observability: 'Observability', security: 'Security tooling', productivity: 'Work management',
-  comms: 'Communications', email: 'Email', incident: 'Incident response', hr: 'HR system',
-  mdm: 'Device management', itsm: 'IT service management', crm: 'CRM', data: 'Data platform',
-  payments: 'Payments', ai: 'AI platform', other: 'Other',
-};
-
-/** Which connector category to connect next, and what it would unlock.
- *
- *  A tenant needs any one source per category, not every source. So the
- *  question worth answering at library level is not "which connectors exist"
- *  but "which category is holding the most controls back", ranked by the
- *  controls currently waiting on it.
- */
-function ConnectorCategoriesPanel({ cats }: { cats: Overview['connector_categories'] }) {
-  const [open, setOpen] = useState<string | null>(null);
-  if (!cats.length) return null;
-  const connected = cats.filter((c) => c.connected).length;
-  const waiting = cats.filter((c) => !c.connected).reduce((n, c) => n + c.controls_waiting, 0);
-  const maxReach = Math.max(1, ...cats.map((c) => c.controls_reachable));
-  return (
-    <Panel
-      icon={Plug}
-      title="Connector categories"
-      hint={`${connected} of ${cats.length} connected`}
-      action={
-        <Link href="/admin/evidence-collectors" className="text-xs font-medium text-blue-700 hover:underline">
-          Connect a source →
-        </Link>
-      }
-    >
-      <p className="mb-3 text-[12px] leading-relaxed text-slate-500">
-        Connect <span className="font-semibold text-slate-700">any one</span> source in a category; you do not need
-        them all. Categories are ranked by how many controls are waiting on them: automatable, with nothing connected
-        that proves them.
-        {waiting > 0 && <> Connecting the unconnected categories would reach up to <span className="font-semibold text-slate-700">{waiting.toLocaleString()}</span> waiting controls.</>}
-      </p>
-      <ul className="divide-y divide-slate-100 rounded border border-slate-200">
-        {cats.map((c) => {
-          const isOpen = open === c.category;
-          return (
-            <li key={c.category}>
-              <button
-                type="button"
-                onClick={() => setOpen(isOpen ? null : c.category)}
-                aria-expanded={isOpen}
-                className="grid w-full grid-cols-[10rem_1fr_auto] items-center gap-3 px-3 py-2 text-left hover:bg-slate-50"
-              >
-                <span className="flex items-center gap-2">
-                  <span className={`h-2 w-2 shrink-0 rounded-full ${c.connected ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                  <span className="truncate text-sm font-medium text-slate-800">{CATEGORY_LABEL[c.category] || c.category}</span>
-                </span>
-                <span className="flex items-center gap-2">
-                  <span className="h-1.5 w-full max-w-[12rem] overflow-hidden rounded bg-slate-100">
-                    <span className={`block h-full ${c.connected ? 'bg-emerald-400' : 'bg-indigo-400'}`}
-                      style={{ width: `${(c.controls_reachable / maxReach) * 100}%` }} />
-                  </span>
-                  <span className="whitespace-nowrap text-[11px] tabular-nums text-slate-500">{c.controls_reachable} controls</span>
-                </span>
-                <span className="whitespace-nowrap text-[11px]">
-                  {c.connected
-                    ? <span className="font-medium text-emerald-700">via {c.connected_providers.map((p) => p.label).join(', ')}</span>
-                    : c.controls_waiting > 0
-                      ? <span className="font-medium text-indigo-700">{c.controls_waiting} waiting</span>
-                      : <span className="text-slate-400">nothing waiting</span>}
-                </span>
-              </button>
-              {isOpen && (
-                <div className="border-t border-slate-100 bg-slate-50/50 px-3 py-2.5">
-                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                    {c.connected ? 'Connected, plus other sources in this category' : 'Connect any one of these'}
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {c.providers.map((p) => (
-                      <span key={p.provider}
-                        className={`rounded-md border px-2 py-1 text-[12px] ${p.connected
-                          ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                          : 'border-slate-200 bg-white text-slate-700'}`}>
-                        {p.label}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </Panel>
-  );
-}
-
-const COLLECTION_CLS: Record<string, string> = {
-  healthy: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  stale: 'bg-amber-50 text-amber-700 border-amber-200',
-  failing: 'bg-purple-50 text-purple-700 border-purple-200',
-  never_run: 'bg-slate-50 text-slate-500 border-slate-200',
-};
-
-export default function AutomationOverviewPage() {
+export default function ControlsAutomationOverviewPage() {
+  const narrow = useNarrow();
+  const { hasPermission, isLoading: rightsLoading } = usePermissions();
+  const canScope = !rightsLoading && hasPermission('compliance:frameworks:*');
+  const canConnect = !rightsLoading && hasPermission('compliance:scan:execute');
+  const me = useMeId();
   const [scopeOpen, setScopeOpen] = useState(false);
-  const { data, isLoading, error } = useQuery<Overview & {
-    scope_status?: string;
-  }>({
-    queryKey: ['common-overview', 'in_scope'],
-    queryFn: async () => (await automationApi.getCommonOverview({ scope: 'in_scope' })).data,
-  });
 
-  if (isLoading) {
+  const overview = useOverview();
+  const list = useControls('in_scope');
+  const myWork = useMyWork(me);
+  const queue = useReviewQueueCount();
+  const data = overview.data;
+  const rows = list.data?.controls;
+  const listFailed = list.isError && !list.data;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const now = useMemo(() => new Date(), [list.data]);
+  const title = titleFor('/automation/overview') ?? 'Controls Automation Overview';
+  const unconfigured = data?.scope_status === 'unconfigured';
+  const refreshAll = () => { [overview, list, myWork, queue].forEach((q) => { void q.refetch(); }); };
+
+  const head = (
+    <PageHeader
+      variant="page"
+      title={title}
+      info="Where your controls stand, and what needs you."
+      meta={data && overview.dataUpdatedAt > 0 ? (
+        <span className="inline-flex items-center gap-[2px]">{`${formatCount(data.library.controls)} controls · SCF ${data.release} · updated ${clockOf(overview.dataUpdatedAt)}`}<IconButton label="Refresh the overview" onClick={refreshAll}><RefreshCw aria-hidden /></IconButton></span>
+      ) : undefined}
+      actions={(
+        <>
+          <Button leftIcon={<Crosshair aria-hidden />} onClick={() => setScopeOpen(true)} disabled={!canScope} title={canScope ? 'Choose the frameworks and answers that decide which controls apply' : 'You need the right to manage frameworks.'}>Configure scope</Button>
+          <Button variant="primary" href="/automation/soc2-controls">Open the controls</Button>
+        </>
+      )}
+    />
+  );
+
+  // the overview itself could not be read: said once, with what to do
+  if (overview.isError && !data) {
+    const code = statusOf(overview.error);
+    const notLoaded = code === 409 || code === 503;
     return (
-      <div className="flex items-center gap-2 p-6 text-sm text-slate-500">
-        <Loader2 className="h-4 w-4 animate-spin" /> Loading overview…
+      <div className="flex flex-col gap-[16px]">
+        {head}
+        <ErrorState
+          title={notLoaded ? 'The control library has not been loaded' : 'Couldn’t load the overview'}
+          message={notLoaded ? 'The Secure Controls Framework has not been loaded for your organisation yet. Ask an administrator to load it.' : errorMessage(overview.error)}
+          onRetry={canRetry(overview.error) ? () => { void overview.refetch(); } : undefined}
+        />
+        <ScopeDialog open={scopeOpen} onClose={() => setScopeOpen(false)} />
       </div>
     );
   }
-  if (error || !data) {
-    return (
-      <div className="m-6 rounded border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
-        Could not load the overview. If no SCF release has been imported for this tenant, import one first.
-      </div>
-    );
+  if (overview.isPending) {
+    return <div className="flex flex-col gap-[16px]">{head}<SkeletonRows rows={8} columns={4} label="Loading the overview" /></div>;
   }
 
-  const unconfigured = data.scope_status === 'unconfigured';
+  const o = data!;
+  const connectedSources = (o.connector_categories ?? []).reduce((n, c) => n + c.connected_providers.length, 0);
+  const owned = rows ? rows.filter((r) => r.owner_user_id != null).length : null;
+  const steps = setupSteps({ frameworksChosen: !unconfigured && (o.scope?.frameworks ?? []).length > 0, owned, sourcesConnected: connectedSources, checksRun: o.automation?.plugins_run ?? 0 });
 
   if (unconfigured) {
     return (
-      <div className="space-y-5 p-6">
-        <div>
-          <h1 className="text-lg font-semibold text-slate-900">Common controls overview</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Scope is not configured — aggregates stay empty until frameworks are selected.
-          </p>
-        </div>
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-6 text-center">
-          <p className="text-sm text-amber-900">
-            Configure scope to see in-scope control counts, posture, and framework coverage.
-          </p>
-          <button
-            type="button"
-            onClick={() => setScopeOpen(true)}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-xs font-semibold text-white hover:bg-primary-700"
-          >
-            <Crosshair className="h-3.5 w-3.5" />Configure scope
-          </button>
-        </div>
+      <div className="flex flex-col gap-[16px]">
+        {head}
+        <SetupCard id="setup" steps={steps} canScope={canScope} />
         <ScopeDialog open={scopeOpen} onClose={() => setScopeOpen(false)} />
       </div>
     );
   }
 
-  const { library: lib, automation: au, evidence: ev, assurance: asr, crosswalk: xw } = data;
-  const covered = au.controls_with_checks;
-  const inferredFw = data.frameworks.filter((f) => f.inferred > 0).sort((a, b) => b.inferred_pct - a.inferred_pct);
-  const maxDomain = Math.max(1, ...lib.by_domain.map((d) => d.controls));
-  const scopeFws = data.scope?.frameworks ?? [];
-  const scoped = scopeFws.length > 0;
+  const work = buildWork({ me, now, rows: rows ?? [], myWork: myWork.data });
+  const feeds = [
+    { label: 'Your controls', feed: { isPending: list.isPending, isError: listFailed, error: list.error, refetch: list.refetch } },
+    { label: 'What is waiting on you', feed: { isPending: myWork.isPending && me != null, isError: myWork.isError, error: myWork.error, refetch: myWork.refetch } },
+  ];
+  const mode = layoutOf({ refused: false, workCount: feeds.some((f) => f.feed.isPending) ? null : work.length });
+  const limit = workRowLimit(mode, narrow);
+
+  const counters: BandCounter[] = COUNTERS.map((def) => {
+    const c = def.key === 'reviews' ? plainCounter(queue.data, queue.isPending, queue.isError)
+      : def.key === 'sources' ? plainCounter(o.collection?.counts ? o.collection.counts.failing ?? 0 : undefined, false, false)
+        : listCounter(rows, list.isPending, listFailed, now, def.key);
+    const retry = def.key === 'reviews' ? queue.refetch : def.key === 'sources' ? overview.refetch : list.refetch;
+    return { key: def.key, label: def.label, href: def.href, tone: def.tone, state: c.state, value: c.value, onRetry: c.state === 'error' ? () => { void retry(); } : undefined };
+  });
+  const scoped = (o.scope?.frameworks ?? []).length > 0;
+  const breakdowns: Breakdown[] = [
+    { id: 'by-domain', title: 'By domain', size: 'wide', info: 'The controls in scope by domain. A domain opens the controls list filtered to it.', meta: `${formatCount(o.library.domains)} domains`, children: <DomainTable data={o} /> },
+    { id: 'frameworks', title: 'Frameworks', info: 'How many of each framework’s requirements a control discharges. A framework opens the controls list filtered to it.', meta: `${formatCount(o.frameworks.length)} in scope`, children: <FrameworkList data={o} /> },
+    { id: 'sources', title: 'Sources', info: 'A control needs any one source that proves it, not all of them. Categories are ranked by how many controls wait on them.', children: <SourcesList data={o} canConnect={canConnect} /> },
+    { id: 'evidence', title: scoped ? 'Required evidence' : 'Evidence', info: 'The artifacts your frameworks ask each control to hold, by how they are collected.', children: <EvidenceFacts data={o} /> },
+    { id: 'implementation', title: 'Implementation and testing', info: 'Counts the controls someone has taken up for testing or assignment; a control nobody has started is not in these figures.', children: <ImplementationFacts data={o} /> },
+    { id: 'crosswalk', title: 'Crosswalk quality', info: 'How framework requirements were matched to controls, and how many mappings a reviewer has decided.', children: <CrosswalkFacts data={o} /> },
+    { id: 'over-time', title: 'Over time', size: 'wide', info: 'One snapshot a day, written by the control library.', children: <TrendTable data={o} scoped={scoped} /> },
+  ];
 
   return (
-    <div className="space-y-5 p-6">
-      <div className="flex flex-wrap items-center gap-3">
-        <div>
-          <h1 className="text-lg font-semibold text-slate-900">Common controls overview</h1>
-          <p className="flex flex-wrap items-center gap-1.5 text-sm text-slate-500">
-            <span>
-              {n(lib.controls)} {scoped ? 'in-scope ' : ''}controls across {lib.domains} domains · SCF {data.release}
-              {!!lib.custom && <> · <Link href="/automation/soc2-controls?source=custom" className="font-medium text-slate-600 underline decoration-slate-300 underline-offset-2 hover:text-slate-900">{n(lib.custom)} authored here</Link></>}
-            </span>
-            {scoped && (
-              <>
-                <span className="text-slate-300">·</span>
-                <span>Scoped to</span>
-                {scopeFws.map((f) => (
-                  <span key={f.key} className="inline-flex items-center gap-1 rounded-md bg-white px-1.5 py-0.5 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
-                    <span className="size-1.5 rounded-full" style={{ backgroundColor: frameworkColor(f.key) }} />
-                    {f.label}
-                  </span>
-                ))}
-              </>
-            )}
-          </p>
-        </div>
-        <div className="ml-auto flex gap-2">
-          <button type="button" onClick={() => setScopeOpen(true)} className="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
-            <Crosshair className="h-3.5 w-3.5" />Configure scope
-          </button>
-          <Link href="/automation/soc2-controls" className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
-            Control library
-          </Link>
-          <Link href="/automation/soc2-controls/coverage" className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
-            Coverage
-          </Link>
-          <Link href="/automation/soc2-controls/review" className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
-            Review
-          </Link>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <Stat label="Controls" value={n(lib.controls)}
-          sub={`${n(lib.material)} material · ${n(lib.objectives)} objectives${lib.custom ? ` · ${n(lib.custom)} custom` : ''}`} />
-        <Stat label="Automated" value={n(covered)} sub={`${pct(covered, lib.controls)}% of the library · ${n(au.checks_bound)} checks bound`} />
-        <Stat label="Frameworks" value={data.frameworks.length} sub={`${n(xw.rows)} crosswalk rows`} />
-        <Stat label={scoped ? 'Required evidence' : 'Evidence sets'} value={n(ev.controls_with_set)}
-          sub={scoped ? `controls · ${n(ev.artifacts)} asks from your frameworks` : `${n(ev.artifacts)} artifacts`} />
-        <Stat label="Owned" value={n(asr.assigned)} sub={asr.tracked ? `${n(asr.tracked)} tracked` : 'not tracked yet'} />
-      </div>
-
-      <ConnectorCategoriesPanel cats={data.connector_categories ?? []} />
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Panel icon={Activity} title="Automation posture" hint={au.last_run_at ? `last run ${new Date(au.last_run_at).toLocaleDateString()}` : 'never run'}>
-          <Bar total={lib.controls} parts={Object.entries(au.posture).map(([k, v]) => ({ key: k, value: v, cls: POSTURE_CLS[k] || 'bg-slate-300' }))} />
-          <ul className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
-            {Object.entries(au.posture).sort((a, b) => b[1] - a[1]).map(([k, v]) => (
-              <li key={k} className="flex items-center gap-2">
-                <span className={`h-2 w-2 rounded-full ${POSTURE_CLS[k] || 'bg-slate-300'}`} />
-                <span className="text-slate-600">{CONTROL_STATUS[k]?.label ?? k.replace('_', ' ')}</span>
-                <span className="ml-auto font-medium tabular-nums text-slate-800">{n(v)}</span>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-3 border-t border-slate-100 pt-3 text-[12px] leading-relaxed text-slate-500">
-            {n(au.plugins_enabled)} checks enabled, {n(au.plugins_run)} have ever run. A check reaches a control
-            through the SOC&nbsp;2 criteria it names, so only the {pct(covered, lib.controls)}% of the library
-            that maps to SOC&nbsp;2 can be asserted automatically today.
-            {(au.posture.connect_one || 0) > 0 && (
-              <>
-                {' '}<span className="font-medium text-indigo-700">{n(au.posture.connect_one)}</span> of those
-                could be evidenced now — they map to connectors you have not configured. A control needs
-                <em> any one</em> source that proves it, not all of them.
-              </>
-            )}
-          </p>
-        </Panel>
-
-        <Panel icon={ShieldCheck} title="Crosswalk quality" action={
-          <Link href="/automation/soc2-controls/review" className="text-xs font-medium text-blue-700 hover:underline">
-            Review queue →
-          </Link>
-        }>
-          <div className="grid grid-cols-3 gap-3 text-center">
-            {(['exact', 'parent', 'child'] as const).map((m) => (
-              <div key={m} className="rounded border border-slate-200 px-2 py-2">
-                <div className="text-lg font-semibold tabular-nums text-slate-900">{n(xw.by_match_mode[m] || 0)}</div>
-                <div className="text-[11px] capitalize text-slate-500">{m}</div>
-              </div>
-            ))}
-          </div>
-          <p className="mt-3 text-[12px] text-slate-500">
-            {n(xw.reviewed)} of {n(xw.rows)} mappings have a standing reviewer decision.
-          </p>
-          {inferredFw.length > 0 && (
-            <>
-              <div className="mt-3 border-t border-slate-100 pt-3 text-[11px] font-medium uppercase tracking-wide text-slate-400">
-                Inferred rather than matched
-              </div>
-              <ul className="mt-2 space-y-1.5">
-                {inferredFw.map((f) => (
-                  <li key={f.key} className="flex items-center gap-2 text-sm">
-                    <FrameworkBadge fw={f.key} label={f.label} />
-                    <div className="h-1.5 flex-1 overflow-hidden rounded bg-slate-100">
-                      <div className="h-full bg-violet-400" style={{ width: `${f.inferred_pct}%` }} />
-                    </div>
-                    <span className="w-24 text-right text-[11px] tabular-nums text-slate-500">
-                      {f.inferred}/{f.requirements} · {f.inferred_pct}%
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-2 text-[12px] leading-relaxed text-slate-500">
-                These frameworks reach their coverage partly by rolling a requirement up to a broader code, or
-                down to a narrower one. The percentage is sound; the claim behind it is weaker than an exact match.
-              </p>
-            </>
-          )}
-        </Panel>
-      </div>
-
-      <Panel
-        icon={Plug}
-        title="Collection health"
-        hint={`stale after ${data.collection.stale_after_days} days`}
-        action={
-          <Link href="/admin/evidence-collectors" className="text-xs font-medium text-blue-700 hover:underline">
-            Connections →
-          </Link>
-        }
-      >
-        <div className="flex flex-wrap gap-2">
-          {(['healthy', 'stale', 'failing', 'never_run'] as const).map((s) => (
-            <span key={s} className={`rounded border px-2 py-0.5 text-xs font-medium ${COLLECTION_CLS[s]}`}>
-              {n(data.collection.counts[s] || 0)} {s.replace('_', ' ')}
-            </span>
-          ))}
-        </div>
-        {data.collection.connectors.length === 0 ? (
-          <p className="mt-3 text-[12px] text-slate-500">No connector has run yet.</p>
-        ) : (
-          <ul className="mt-3 divide-y divide-slate-100 rounded border border-slate-200">
-            {data.collection.connectors.map((c) => (
-              <li key={c.plugin_key} className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
-                <span className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${COLLECTION_CLS[c.state]}`}>
-                  {c.state.replace('_', ' ')}
-                </span>
-                <span className="font-medium text-slate-800">{c.provider || c.title || c.plugin_key}</span>
-                <span className="text-[11px] text-slate-400">
-                  {c.days_since_success != null
-                    ? `collected ${c.days_since_success}d ago`
-                    : 'never collected successfully'}
-                </span>
-                {c.error && <span className="text-[11px] text-purple-700">{c.error}</span>}
-                <span className="ml-auto text-[11px] tabular-nums text-slate-500">
-                  {n(c.controls_affected)} control{c.controls_affected === 1 ? '' : 's'}
-                </span>
-              </li>
-            ))}
-          </ul>
+    <div className="flex flex-col gap-[16px]">
+      <SkipToWork />
+      {head}
+      {showSetup(steps) && <SetupCard id="setup" steps={steps} canScope={canScope} />}
+      <Cockpit
+        mode={mode}
+        narrow={narrow}
+        band={(
+          <CounterBand
+            id="attention"
+            title="Needs attention"
+            info="Each count opens the controls it counts, or the page that lists them."
+            counters={counters}
+            narrow={narrow}
+            failure={listFailed && queue.isError && overview.isError ? { title: 'Couldn’t load the counters', message: errorMessage(list.error), onRetry: refreshAll } : undefined}
+          />
         )}
-        <p className="mt-3 border-t border-slate-100 pt-3 text-[12px] leading-relaxed text-slate-500">
-          A connector that cannot authenticate says nothing about the control it feeds, so it is counted here
-          rather than as a failure above. Controls it touches read <em>Not collected</em>, never <em>Failing</em>.
-        </p>
-      </Panel>
-
-      <Panel icon={Layers} title="By domain" hint={`${lib.domains} SCF domains`}>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wide text-slate-400">
-                <th className="py-2 pr-3 font-medium">Domain</th>
-                <th className="py-2 pr-3 font-medium">Controls</th>
-                <th className="py-2 pr-3 font-medium">Material</th>
-                <th className="py-2 pr-3 font-medium">Automated</th>
-                <th className="py-2 pr-3 font-medium">Evidence set</th>
-                <th className="py-2 pr-3 font-medium">Frameworks</th>
-                <th className="py-2 font-medium">Owned</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {lib.by_domain.map((d) => (
-                <tr key={d.domain} className="hover:bg-slate-50">
-                  <td className="py-1.5 pr-3">
-                    <div className="flex items-center gap-2">
-                      {d.identifier && (
-                        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">{d.identifier}</span>
-                      )}
-                      <span className="text-slate-800">{d.domain}</span>
-                    </div>
-                  </td>
-                  <td className="py-1.5 pr-3">
-                    <div className="flex items-center gap-2">
-                      <div className="h-1.5 w-20 overflow-hidden rounded bg-slate-100">
-                        <div className="h-full bg-slate-400" style={{ width: `${(d.controls / maxDomain) * 100}%` }} />
-                      </div>
-                      <span className="tabular-nums text-slate-700">{d.controls}</span>
-                    </div>
-                  </td>
-                  <td className="py-1.5 pr-3 tabular-nums text-slate-600">{d.material || <span className="text-slate-300">—</span>}</td>
-                  <td className="py-1.5 pr-3 tabular-nums text-slate-600">
-                    {d.with_checks ? `${d.with_checks} · ${pct(d.with_checks, d.controls)}%` : <span className="text-slate-300">—</span>}
-                  </td>
-                  <td className="py-1.5 pr-3 tabular-nums text-slate-600">
-                    {d.with_evidence ? `${d.with_evidence} · ${pct(d.with_evidence, d.controls)}%` : <span className="text-slate-300">—</span>}
-                  </td>
-                  <td className="py-1.5 pr-3 tabular-nums text-slate-600">{d.frameworks || <span className="text-slate-300">—</span>}</td>
-                  <td className="py-1.5 tabular-nums text-slate-600">{d.tracked ? `${d.implemented}/${d.tracked}` : <span className="text-slate-300">—</span>}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Panel>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Panel icon={BarChart3} title="Frameworks" hint="requirements discharged" action={
-          <Link href="/automation/soc2-controls/coverage" className="text-xs font-medium text-blue-700 hover:underline">
-            Coverage →
-          </Link>
-        }>
-          <ul className="space-y-1.5">
-            {data.frameworks.map((f) => {
-              const total = f.requirement_total || f.requirements;
-              return (
-                <li key={f.key} className="flex items-center gap-2 text-sm">
-                  <div className="w-32 shrink-0"><FrameworkBadge fw={f.key} label={f.label} /></div>
-                  <div className="flex h-2 flex-1 overflow-hidden rounded bg-slate-100">
-                    <div className="bg-emerald-500" style={{ width: `${pct(f.requirements, total)}%` }} title={`${f.requirements} mapped`} />
-                    <div className="bg-slate-300" style={{ width: `${pct((f.counts.other_party || 0) + (f.counts.out_of_scope || 0), total)}%` }} title="accounted for, not mappable" />
-                  </div>
-                  <span className="w-24 shrink-0 text-right text-[11px] tabular-nums text-slate-500">
-                    {n(f.requirements)}/{n(total)}
-                  </span>
-                  <span className="w-14 shrink-0 text-right text-[11px] tabular-nums text-slate-400">
-                    {f.controls} ctl
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-          <p className="mt-3 border-t border-slate-100 pt-3 text-[12px] leading-relaxed text-slate-500">
-            Green is mapped to a control. Grey is accounted for but not mappable — it binds the regulator or
-            falls outside the catalogue. The gap is what is genuinely still open.
-          </p>
-        </Panel>
-
-        <Panel icon={FileText} title={scoped ? 'Required evidence' : 'Evidence'}
-          hint={scoped
-            ? `${pct(ev.controls_with_set, lib.controls)}% of in-scope controls have asks from your frameworks`
-            : `${pct(ev.controls_with_set, lib.controls)}% of controls have a set`}>
-          <Bar total={ev.artifacts} parts={[
-            { key: 'manual', value: ev.by_method.manual || 0, cls: 'bg-slate-400' },
-            { key: 'hybrid', value: ev.by_method.hybrid || 0, cls: 'bg-sky-500' },
-            { key: 'automated', value: ev.by_method.automated || 0, cls: 'bg-emerald-500' },
-          ]} />
-          <ul className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm">
-            {Object.entries(ev.by_method).map(([k, v]) => (
-              <li key={k} className="text-slate-600">
-                <span className="capitalize">{k}</span>{' '}
-                <span className="font-medium tabular-nums text-slate-800">{n(v)}</span>
-              </li>
-            ))}
-          </ul>
-          {ev.top_owners.length > 0 && (
-            <>
-              <div className="mt-4 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-400">
-                <Users className="h-3.5 w-3.5" /> Who the frameworks name as owner
-              </div>
-              <ul className="mt-2 space-y-1">
-                {ev.top_owners.map((o) => (
-                  <li key={o.owner} className="flex items-center gap-2 text-sm">
-                    <span className="text-slate-700">{o.owner}</span>
-                    <span className="ml-auto tabular-nums text-slate-500">{n(o.artifacts)}</span>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </Panel>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Panel icon={ClipboardList} title="Implementation & assignment" hint={`from the ${asr.source}`}>
-          {asr.tracked === 0 ? (
-            <NotTracked system={asr.source} cta={{ href: '/control-library', label: 'Open the control library' }} />
-          ) : (
-            <>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <Stat label="Tracked" value={n(asr.tracked)} />
-                <Stat label="Assigned" value={n(asr.assigned)} sub={`${pct(asr.assigned, asr.tracked)}%`} />
-                <Stat label="Implemented" value={n(asr.implemented)} sub={`${pct(asr.implemented, asr.tracked)}%`} />
-                <Stat label="Tested" value={n(asr.tested)} sub={`${pct(asr.tested, asr.tracked)}%`} />
-              </div>
-              <div className="mt-4">
-                <Bar total={asr.tested} parts={[
-                  { key: 'effective', value: asr.effective, cls: 'bg-emerald-500' },
-                  { key: 'partially effective', value: asr.partially_effective, cls: 'bg-amber-500' },
-                  { key: 'ineffective', value: asr.ineffective, cls: 'bg-rose-500' },
-                ]} />
-              </div>
-              {(asr.overdue > 0 || asr.evidence_pending > 0) && (
-                <ul className="mt-3 flex flex-wrap gap-4 text-sm">
-                  {asr.overdue > 0 && (
-                    <li className="flex items-center gap-1.5 text-amber-700">
-                      <AlertTriangle className="h-3.5 w-3.5" /> {n(asr.overdue)} overdue for test
-                    </li>
-                  )}
-                  {asr.evidence_pending > 0 && (
-                    <li className="flex items-center gap-1.5 text-sky-700">
-                      <CheckCircle2 className="h-3.5 w-3.5" /> {n(asr.evidence_pending)} evidence items awaiting review
-                    </li>
-                  )}
-                </ul>
-              )}
-            </>
-          )}
-        </Panel>
-
-        <Panel icon={BarChart3} title="Over time"
-          hint={`${data.trend.length} snapshot${data.trend.length === 1 ? '' : 's'}${scoped ? ' · every tracked control, not only in-scope' : ''}`}>
-          {data.trend.length < 2 ? (
-            <NotTracked system="assurance snapshot history" />
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wide text-slate-400">
-                  <th className="py-2 font-medium">Date</th>
-                  <th className="py-2 font-medium">Assigned</th>
-                  <th className="py-2 font-medium">Tested</th>
-                  <th className="py-2 font-medium">Effective</th>
-                  <th className="py-2 font-medium">Overdue</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {data.trend.map((t) => (
-                  <tr key={t.date}>
-                    <td className="py-1.5 text-slate-700">{t.date}</td>
-                    <td className="py-1.5 tabular-nums text-slate-600">{n(t.assigned)}</td>
-                    <td className="py-1.5 tabular-nums text-slate-600">{n(t.tested)}</td>
-                    <td className="py-1.5 tabular-nums text-slate-600">{n(t.effective)}</td>
-                    <td className="py-1.5 tabular-nums text-slate-600">{n(t.overdue)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-          <p className="mt-3 border-t border-slate-100 pt-3 text-[12px] leading-relaxed text-slate-500">
-            One snapshot per day, written by the control library. It tracks the same work items as the panel
-            beside it, so both move together — and neither moves until controls are taken up there.
-          </p>
-        </Panel>
-      </div>
-
-      {lib.orphans > 0 && (
-        <p className="text-[12px] text-slate-500">
-          {scoped
-            ? `${n(lib.orphans)} of ${n(lib.controls)} in-scope controls map to none of your selected frameworks. They apply through your profile answers (ESP level, facilities, personal data).`
-            : `${n(lib.orphans)} of ${n(lib.controls)} controls map to none of the frameworks in this crosswalk. They are part of SCF, not part of any obligation you are currently assessed against.`}
-        </p>
-      )}
+        work={<WorkCard id="work" items={work} sources={feeds} limit={limit} />}
+        posture={<PostureCard id="posture" data={o} feed={{ isPending: false, isError: overview.isError, error: overview.error, refetch: overview.refetch }} />}
+        breakdowns={breakdowns}
+      />
+      <Orphans data={o} />
       <ScopeDialog open={scopeOpen} onClose={() => setScopeOpen(false)} />
     </div>
   );
