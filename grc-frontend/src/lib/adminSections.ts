@@ -60,10 +60,10 @@ const S = (section: Omit<AdminSection, 'paths' | 'tabs' | 'keywords' | 'layout'>
 export const ADMIN_SECTIONS: readonly AdminSection[] = [
   // ---- Organisation ----
   S({
-    id: 'organization', label: 'Organisation', group: 'organisation', url: '/admin/organization', ownHeading: false,
+    id: 'organization', label: 'Company & profile', group: 'organisation', url: '/admin/organization', ownHeading: true,
     rights: ['admin:organization:view', 'admin:organization:edit', 'compliance:org_profile:*'],
     tabs: [{ tab: 'company' }, { tab: 'profile', query: { stage: 'profile' } }],
-    keywords: ['Company', 'Company Profile', 'Organisation Profile', 'Organization Profile', 'Primary contact'],
+    keywords: ['Organisation', 'Organization', 'Company', 'Company Profile', 'Organisation Profile', 'Organization Profile', 'Primary contact'],
   }),
   S({
     id: 'departments', label: 'Departments', group: 'organisation', url: '/admin/departments', ownHeading: false,

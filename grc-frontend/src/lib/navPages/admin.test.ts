@@ -39,7 +39,7 @@ test('the trails: Administration, then the section, then the page', () => {
   const labels = (url: string) => breadcrumbFor(url).map((c) => c.label);
   assert.deepEqual(labels('/admin/users'), ['Administration', 'Users']);
   assert.deepEqual(labels('/admin/users/9/usage'), ['Administration', 'Users', 'User usage']);
-  assert.deepEqual(labels('/admin/organization'), ['Administration', 'Organisation']);
+  assert.deepEqual(labels('/admin/organization'), ['Administration', 'Company & profile']);
   assert.deepEqual(labels('/admin/connectors'), ['Administration', 'Connected systems', 'Connectors']);
   assert.deepEqual(labels('/admin/cloud-connectors'), ['Administration', 'Connected systems', 'Cloud Connectors']);
   assert.deepEqual(labels('/admin/usage'), ['Administration', 'AI usage', 'Usage Monitoring']);
