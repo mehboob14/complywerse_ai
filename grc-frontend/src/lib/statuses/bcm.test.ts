@@ -8,10 +8,10 @@ import { existsSync, readFileSync } from 'node:fs';
 
 import { priority, statusPill, TONE, type Statuses, type Tone } from '../status.ts';
 import {
-  dependencyType, drillStatus, drillType, externalBcp, findingStatus, frequency, optionsOf, planStatus, severity, sourceType, strategyStatus, strategyType,
+  dayWindow, dependencyType, drillStatus, drillType, externalBcp, findingStatus, frequency, optionsOf, planStatus, severity, sourceType, strategyStatus, strategyType, testedState,
 } from './bcm.ts';
 
-const ALL: Statuses[] = [planStatus, drillStatus, severity, strategyStatus, findingStatus, drillType, sourceType, strategyType, dependencyType, externalBcp, frequency];
+const ALL: Statuses[] = [planStatus, drillStatus, severity, strategyStatus, findingStatus, drillType, sourceType, strategyType, dependencyType, externalBcp, frequency, dayWindow, testedState];
 const FAMILIES = Object.keys(TONE);
 
 // ── the old label maps (bcm/_bcm-ui.tsx at 4722ba67): "every word keeps its current label" ──
@@ -103,4 +103,14 @@ test('the tones are plain family names (no stray tone can slip in as a typo: def
   const tones = new Set<Tone>();
   for (const registry of ALL) for (const word of registry.words) tones.add(registry.tone(word));
   Array.from(tones).forEach((tone) => assert.ok(FAMILIES.includes(tone)));
+});
+
+test('the readings of a day and of the testing of a plan have a tone and a label each, and say what they mean without colour', () => {
+  assert.deepEqual(dayWindow.words, ['overdue', 'soon', 'later', 'none']);
+  assert.deepEqual(dayWindow.words.map((w) => dayWindow.label(w)), ['Overdue', 'Next 30 days', 'Later', 'No date']);
+  assert.deepEqual(dayWindow.words.map((w) => dayWindow.tone(w)), ['danger', 'warning', 'neutral', 'neutral']);
+  assert.deepEqual(testedState.words, ['recent', 'lapsed', 'never']);
+  assert.deepEqual(testedState.words.map((w) => testedState.label(w)), ['Tested in the last 12 months', 'Not tested in 12 months', 'Never tested']);
+  assert.deepEqual(testedState.words.map((w) => testedState.tone(w)), ['success', 'warning', 'danger']);
+  assert.deepEqual(statusPill(dayWindow, 'next_quarter'), { tone: 'neutral', label: 'Next quarter' });
 });

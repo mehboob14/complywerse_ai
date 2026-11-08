@@ -14,6 +14,7 @@ import { RightSlidePanel } from '@/components/ui';
 import { Button, Combobox, FormField, Select, Textarea, TextInput, useReportedMutation } from '@/components/ui/ds';
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { EntityCombobox, FormProblem } from '../_bcm-ui';
+import { REFRESH_ALL } from '../bcmData';
 import {
   NAME_MAX, asPage, blankDrillForm, drillCreatePayload, drillDirty, drillErrors, drillFormFrom, drillSchedulePayload, drillUpdatePayload, retryRead,
   type Drill, type DrillForm as Form, type Plan,
@@ -56,15 +57,15 @@ export function DrillForm({ mode, onClose }: { mode: DrillFormMode; onClose: () 
   const common = { toast: 'success' as const, onSuccess: () => onClose(), onError: (error: unknown) => setProblem(errorMessage(error)) };
   const create = useReportedMutation({
     mutationFn: async (payload: ReturnType<typeof drillCreatePayload>) => (await bcmApi.drills.create(payload)).data,
-    success: 'Drill created', failure: "Couldn't create the drill", retryable: false, invalidate: [['bcm-drills']], ...common,
+    success: 'Drill created', failure: "Couldn't create the drill", retryable: false, invalidate: [...REFRESH_ALL], ...common,
   });
   const schedule = useReportedMutation({
     mutationFn: async (payload: ReturnType<typeof drillSchedulePayload>) => (await bcmApi.drills.create(payload)).data,
-    success: 'Drill scheduled', failure: "Couldn't schedule the drill", retryable: false, invalidate: [['bcm-plan', mode.kind === 'schedule' ? mode.planId : 0]], ...common,
+    success: 'Drill scheduled', failure: "Couldn't schedule the drill", retryable: false, invalidate: [['bcm-plan', mode.kind === 'schedule' ? mode.planId : 0], ...REFRESH_ALL], ...common,
   });
   const update = useReportedMutation({
     mutationFn: async (payload: ReturnType<typeof drillUpdatePayload>) => (await bcmApi.drills.update(edit?.id ?? 0, payload)).data,
-    success: 'Drill updated', failure: "Couldn't save the drill", invalidate: [['bcm-drill', edit?.id ?? 0]], ...common,
+    success: 'Drill updated', failure: "Couldn't save the drill", invalidate: [['bcm-drill', edit?.id ?? 0], ...REFRESH_ALL], ...common,
   });
   const saving = create.isPending || schedule.isPending || update.isPending;
 

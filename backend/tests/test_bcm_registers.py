@@ -180,7 +180,7 @@ def test_a_finding_takes_an_owner_and_a_due_day_and_both_come_back(w):
 
 def test_attention_counts_the_tenant_and_leaves_out_retired_plans(w):
     d = dash.dashboard(db=w, current_user=user(w, ADMIN), _p=True)
-    assert d["attention"] == {"reviews_due": 1, "bia_without_strategy": 1, "findings_without_issue": 3}
+    assert d["attention"] == {"reviews_due": 1, "bia_without_strategy": 1, "plans_without_strategy": 1, "findings_without_issue": 3}
     assert d["totals"]["overdue_drills"] == 1 and d["totals"]["open_findings"] == 4          # the existing figures are untouched
 
 

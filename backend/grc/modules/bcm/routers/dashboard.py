@@ -146,7 +146,7 @@ def dashboard(
 
 def _work_blocks(db, user, plans, active_plans, drills, overdue_all, no_issue_findings, tenant_ids):
     """The Overview's two additive blocks. `attention` counts across the tenant: plans whose review day has come or comes within 30 days, BIA processes of a plan in use that
-    still have no recovery strategy, findings with no issue yet. `mine` is the same kinds of work that belongs to the signed-in person: a plan they own, a drill they own, a
+    still have no recovery strategy (and how many plans those belong to, the number the Plans list opens with), findings with no issue yet. `mine` is the same kinds of work that belongs to the signed-in person: a plan they own, a drill they own, a
     finding they own (or, with no owner, on a drill they own). A list is included only when the person may read that kind of record, so the Overview shows nothing its own
     page would refuse; its count is the full count, the list is cut at ten."""
     now = datetime.utcnow()
@@ -158,6 +158,7 @@ def _work_blocks(db, user, plans, active_plans, drills, overdue_all, no_issue_fi
     attention = {
         "reviews_due": len(reviews_due),
         "bia_without_strategy": len(bia_open),
+        "plans_without_strategy": len({b.plan_id for b in bia_open}),
         "findings_without_issue": len(no_issue_findings),
     }
 

@@ -103,5 +103,21 @@ export const frequency = defineStatuses('testing frequency', {
   quarterly: 'neutral',
 });
 
+// ── where a day stands, for the registers' "when" facets (a plan's review day, a drill's scheduled day, a finding's due day) ─────────────────
+/** A day against today: before it (overdue), within the next 30 days (soon), further off (later), or none was set. These are readings of a date, not stored words. */
+export const dayWindow = defineStatuses('day window', {
+  overdue: 'danger',
+  soon: { tone: 'warning', label: 'Next 30 days' },
+  later: 'neutral',
+  none: { tone: 'neutral', label: 'No date' },
+});
+
+/** Whether a plan has been tested lately: a drill scheduled or made within the last 12 months (the Overview's coverage rule), or none in that time, or none ever. */
+export const testedState = defineStatuses('plan testing', {
+  recent: { tone: 'success', label: 'Tested in the last 12 months' },
+  lapsed: { tone: 'warning', label: 'Not tested in 12 months' },
+  never: { tone: 'danger', label: 'Never tested' },
+});
+
 /** What a select offers for a registry: its words in order, each with its label (what the form stores is the word). */
 export const optionsOf = (registry: Statuses): Array<{ value: string; label: string }> => registry.words.map((value) => ({ value, label: registry.label(value) }));
