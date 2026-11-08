@@ -136,7 +136,7 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
   }),
   // ---- Audit ----
   S({
-    id: 'audit-logs', label: 'Audit log', group: 'audit', url: '/admin/audit-logs', ownHeading: false,
+    id: 'audit-logs', label: 'Audit log', group: 'audit', url: '/admin/audit-logs', ownHeading: true,
     rights: ['admin:audit_logs:view'],
     tabs: [{ tab: 'audit' }],
     keywords: ['Audit Logs', 'Activity', 'Who changed'],
