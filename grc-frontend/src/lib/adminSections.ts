@@ -112,7 +112,7 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
   }),
   // ---- AI ----
   S({
-    id: 'ai-governance', label: 'AI governance', group: 'ai', url: '/admin/ai-governance', ownHeading: false,
+    id: 'ai-governance', label: 'AI governance', group: 'ai', url: '/admin/ai-governance', ownHeading: true,
     rights: ['admin:ai_governance:view', 'admin:ai_governance:payloads'],
     keywords: ['AI Governance', 'AI inventory'],
   }),
@@ -130,7 +130,7 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
     keywords: ['Workflow Engine', 'Workflows', 'Automation rules', 'Triggers'],
   }),
   S({
-    id: 'scheduler', label: 'Scheduled jobs', group: 'automation', url: '/admin/scheduler', ownHeading: false,
+    id: 'scheduler', label: 'Scheduled jobs', group: 'automation', url: '/admin/scheduler', ownHeading: true,
     rights: ['admin:settings:view', 'admin:settings:edit'],
     keywords: ['Scheduler', 'Jobs', 'Run now'],
   }),

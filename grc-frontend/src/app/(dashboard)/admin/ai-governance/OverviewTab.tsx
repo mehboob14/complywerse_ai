@@ -1,187 +1,118 @@
 'use client';
 
-import { Activity, Ban, Coins, ShieldCheck, TriangleAlert } from 'lucide-react';
-import type { Stats } from './types';
-import { StatCard } from '@/components/ui';
+// AI governance > Overview: the protection statement, the headline figures, where the tokens go (read from the ledger, nothing estimated), the most used features and
+// modules, and what was refused lately. The kit's tiles, cards and registers; the figures and their meaning are the server's and unchanged.
+import { ShieldCheck } from 'lucide-react';
+import { EmptyState, Notice, RegisterTable, SectionCard, StatTile, type RegisterColumn } from '@/components/ui/ds';
 import { REASONS, fmtNumber, fmtTokens, fmtUsd, fmtWhen } from './format';
-import type { Overview } from './types';
+import type { Overview, Stats } from './types';
 
+const pct = (part: number, whole: number) => (whole > 0 ? `${Math.round((part / whole) * 100)}%` : '–');
 
-const pct = (part: number, whole: number) => (whole > 0 ? Math.round((part / whole) * 100) + '%' : '–');
+type Feature = Overview['use_cases'][number];
+type Mod = Overview['modules'][number];
 
-/** Where the tokens go: the figures that say which cost levers apply, read from the ledger (nothing is estimated). */
-function Drivers({ t, features }: { t: Stats; features: Array<Stats & { id: string; label: string }> }) {
+function Drivers({ t, features }: { t: Stats; features: Feature[] }) {
   if (t.calls === 0) return null;
   const fresh = Math.max(0, t.input_tokens - t.cached_tokens);
+  const columns: RegisterColumn<Feature>[] = [
+    { key: 'feature', header: 'Feature', isRowHeader: true, cell: (f) => f.label },
+    { key: 'calls', header: 'Calls', align: 'right', card: 'meta', cell: (f) => fmtNumber(f.calls) },
+    { key: 'in', header: 'Sent per call', align: 'right', priority: 2, card: 'meta', cell: (f) => fmtTokens(Math.round(f.input_tokens / Math.max(1, f.calls))) },
+    { key: 'out', header: 'Returned per call', align: 'right', priority: 2, card: 'meta', cell: (f) => fmtTokens(Math.round(f.output_tokens / Math.max(1, f.calls))) },
+    { key: 'reasoning', header: 'Hidden reasoning', align: 'right', priority: 3, cell: (f) => pct(f.reasoning_tokens, f.output_tokens) },
+    { key: 'provider', header: 'Read from the provider cache', align: 'right', priority: 3, cell: (f) => pct(f.cached_tokens, f.input_tokens) },
+    { key: 'ours', header: 'Answered from our cache', align: 'right', priority: 3, cell: (f) => fmtNumber(f.cache_hits) },
+    { key: 'again', header: 'Asked again unchanged', align: 'right', priority: 3, cell: (f) => fmtNumber(f.repeat_calls) },
+  ];
   return (
-    <section aria-label="Where the tokens go">
-      <h3 className="mb-2 text-sm font-semibold text-slate-900">Where the tokens go</h3>
-      <ul className="mb-3 grid gap-x-8 gap-y-1 text-sm text-slate-700 sm:grid-cols-2">
-        <li><span className="font-medium text-slate-900">{pct(t.input_tokens, t.tokens)}</span> of tokens are what is sent ({fmtTokens(t.input_tokens)}); {pct(t.output_tokens, t.tokens)} is what comes back ({fmtTokens(t.output_tokens)}).</li>
-        <li>Hidden reasoning is <span className="font-medium text-slate-900">{pct(t.reasoning_tokens, t.output_tokens)}</span> of the output ({fmtTokens(t.reasoning_tokens)}).</li>
-        <li><span className="font-medium text-slate-900">{pct(t.cached_tokens, t.input_tokens)}</span> of the input was read from the provider&apos;s prompt cache at a reduced rate ({fmtTokens(fresh)} was full price).</li>
-        <li>Answered from our own cache: <span className="font-medium text-slate-900">{fmtNumber(t.cache_hits)}</span> calls, saving {fmtTokens(t.saved_tokens)} tokens.</li>
+    <SectionCard id="drivers" title="Where the tokens go" info="Read from the record of every call. Nothing here is estimated.">
+      <ul className="m-0 mb-[12px] grid list-none gap-x-[24px] gap-y-[4px] p-0 text-ds-body text-ds-fg-body sm:grid-cols-2">
+        <li><b className="font-[600] text-ds-fg">{pct(t.input_tokens, t.tokens)}</b> of tokens are what is sent ({fmtTokens(t.input_tokens)}); {pct(t.output_tokens, t.tokens)} is what comes back ({fmtTokens(t.output_tokens)}).</li>
+        <li>Hidden reasoning is <b className="font-[600] text-ds-fg">{pct(t.reasoning_tokens, t.output_tokens)}</b> of the output ({fmtTokens(t.reasoning_tokens)}).</li>
+        <li><b className="font-[600] text-ds-fg">{pct(t.cached_tokens, t.input_tokens)}</b> of the input was read from the provider&apos;s saved prompts at a reduced rate ({fmtTokens(fresh)} was full price).</li>
+        <li>Answered from our own saved results: <b className="font-[600] text-ds-fg">{fmtNumber(t.cache_hits)}</b> calls, saving {fmtTokens(t.saved_tokens)} tokens.</li>
         <li>
-          Asked again exactly as before and not cached: <span className="font-medium text-slate-900">{fmtNumber(t.repeat_calls)}</span> calls ({fmtTokens(t.repeat_tokens)} tokens)
-          {t.with_hash < t.calls ? <span className="text-slate-700"> · measured on {fmtNumber(t.with_hash)} of {fmtNumber(t.calls)} calls so far</span> : null}.
+          Asked again exactly as before and not saved: <b className="font-[600] text-ds-fg">{fmtNumber(t.repeat_calls)}</b> calls ({fmtTokens(t.repeat_tokens)} tokens)
+          {t.with_hash < t.calls ? <span> · measured on {fmtNumber(t.with_hash)} of {fmtNumber(t.calls)} calls so far</span> : null}.
         </li>
-        <li>Retried calls: <span className="font-medium text-slate-900">{fmtNumber(t.retries)}</span>.</li>
+        <li>Retried calls: <b className="font-[600] text-ds-fg">{fmtNumber(t.retries)}</b>.</li>
       </ul>
-      <div className="overflow-x-auto rounded-lg border border-slate-200">
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr className="border-b border-slate-200 text-left text-xs text-slate-700">
-              <th className="px-3 py-2 font-medium">Feature</th>
-              <th className="px-3 py-2 text-right font-medium">Calls</th>
-              <th className="px-3 py-2 text-right font-medium">In per call</th>
-              <th className="px-3 py-2 text-right font-medium">Out per call</th>
-              <th className="px-3 py-2 text-right font-medium">Reasoning</th>
-              <th className="px-3 py-2 text-right font-medium">Provider cache</th>
-              <th className="px-3 py-2 text-right font-medium">Our cache</th>
-              <th className="px-3 py-2 text-right font-medium">Repeated</th>
-            </tr>
-          </thead>
-          <tbody>
-            {features.map((f) => (
-              <tr key={f.id} className="border-b border-slate-100 last:border-0">
-                <td className="px-3 py-2">{f.label}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{fmtNumber(f.calls)}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{fmtTokens(Math.round(f.input_tokens / Math.max(1, f.calls)))}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{fmtTokens(Math.round(f.output_tokens / Math.max(1, f.calls)))}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{pct(f.reasoning_tokens, f.output_tokens)}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{pct(f.cached_tokens, f.input_tokens)}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{fmtNumber(f.cache_hits)}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{fmtNumber(f.repeat_calls)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
+      <RegisterTable caption="Token use per feature" columns={columns} rows={features} getRowId={(f) => f.id} cardTitle={(f) => f.label} />
+    </SectionCard>
   );
 }
 
 export default function OverviewTab({ data, days, onOpenUseCase }: { data: Overview; days: number; onOpenUseCase: (id: string) => void }) {
   const t = data.totals;
+  const features: RegisterColumn<Feature>[] = [
+    {
+      key: 'feature', header: 'Feature', isRowHeader: true,
+      cell: (u) => (u.id === 'unclassified' ? <span className="text-ds-fg-muted">{u.label}</span> : (
+        <button type="button" onClick={() => onOpenUseCase(u.id)} className="min-h-ds-control-sm text-left font-[600] text-ds-primary-text hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring">{u.label}</button>
+      )),
+    },
+    { key: 'calls', header: 'Calls', align: 'right', card: 'meta', cell: (u) => fmtNumber(u.calls) },
+    { key: 'protected', header: 'Protected', align: 'right', priority: 2, card: 'meta', cell: (u) => fmtNumber(u.protected) },
+    { key: 'tokens', header: 'Tokens', align: 'right', card: 'meta', cell: (u) => fmtTokens(u.tokens) },
+  ];
+  const modules: RegisterColumn<Mod>[] = [
+    { key: 'module', header: 'Module', isRowHeader: true, cell: (m) => m.label },
+    { key: 'calls', header: 'Calls', align: 'right', card: 'meta', cell: (m) => fmtNumber(m.calls) },
+    { key: 'blocked', header: 'Blocked', align: 'right', priority: 2, card: 'meta', cell: (m) => fmtNumber(m.blocked) },
+    { key: 'tokens', header: 'Tokens', align: 'right', card: 'meta', cell: (m) => fmtTokens(m.tokens) },
+  ];
   return (
-    <div className="space-y-6">
-      <section className="rounded-lg border border-primary-200 bg-primary-50 p-4" aria-label="How your data is protected">
-        <div className="flex items-start gap-3">
-          <ShieldCheck className="mt-0.5 shrink-0 text-primary-700" size={20} aria-hidden />
-          <div>
-            <h2 className="text-sm font-semibold text-slate-900">AI requests are checked on this server before they leave</h2>
-            <p className="mt-1 text-sm text-slate-700">
-              Secrets, card numbers, bank accounts and national ids are removed. Names, organisations, hosts, addresses, e-mails and phone
-              numbers are replaced by placeholders, and put back in the answer you read. Pictures and scanned pages are not sent, and
-              raw records are never sent. This is always on and cannot be switched off here. A few paths are not covered yet; they are
-              marked “Not yet checked” under Features.
-            </p>
-          </div>
-        </div>
-      </section>
+    <div className="flex flex-col gap-[16px]">
+      <Notice tone="info" title="AI requests are checked on this server before they leave" icon={ShieldCheck}>
+        Secrets, card numbers, bank accounts and national ids are removed. Names, organisations, hosts, addresses, e-mails and phone numbers are replaced by placeholders and put back in
+        the answer you read. Pictures and scanned pages are not sent, and raw records are never sent. This is always on and cannot be switched off here. A few paths are not covered yet;
+        they are marked “Not yet checked” under Features.
+      </Notice>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <StatCard title="AI calls" value={fmtNumber(t.calls)} subtitle={`last ${days} days`} icon={Activity} />
-        <StatCard title="Protected calls" value={fmtNumber(t.protected)} subtitle={`${fmtNumber(t.entities)} items replaced or removed`} icon={ShieldCheck} variant="success" />
-        <StatCard title="Blocked" value={fmtNumber(t.blocked)} subtitle="refused before sending" icon={Ban} variant={t.blocked ? 'danger' : 'default'} />
-        <StatCard title="Failed" value={fmtNumber(t.failed)} subtitle="the AI did not answer" icon={TriangleAlert} variant={t.failed ? 'warning' : 'default'} />
-        <StatCard title="Estimated cost" value={t.cost_configured ? fmtUsd(t.cost_usd) : 'Price not set'} subtitle={`${fmtTokens(t.tokens)} tokens`} icon={Coins} />
+      <div className="grid grid-cols-2 gap-[12px] lg:grid-cols-5">
+        <StatTile label="AI calls" value={fmtNumber(t.calls)} note={`last ${days} days`} />
+        <StatTile label="Protected calls" value={fmtNumber(t.protected)} note={`${fmtNumber(t.entities)} items replaced or removed`} tone="success" />
+        <StatTile label="Blocked" value={fmtNumber(t.blocked)} note="refused before sending" tone={t.blocked ? 'danger' : 'default'} />
+        <StatTile label="Failed" value={fmtNumber(t.failed)} note="the AI did not answer" tone={t.failed ? 'warning' : 'default'} />
+        <StatTile label="Estimated cost" value={t.cost_configured ? fmtUsd(t.cost_usd) : null} info={t.cost_configured ? undefined : 'No price is set for the AI yet, so no cost is shown. Token counts are exact.'} note={`${fmtTokens(t.tokens)} tokens`} />
       </div>
-      {!t.cost_configured && t.calls > 0 && (
-        <p className="text-sm text-slate-700">
-          Costs show once the price of each model is configured on the server (<code className="text-xs">AI_USAGE_PRICE_CATALOG_JSON</code>). Token counts are exact.
-        </p>
-      )}
-      {data.truncated && <p className="text-sm text-amber-900">Only the most recent 5,000 calls of this period are summarised here.</p>}
+      {data.truncated && <Notice tone="warning" title="Only the most recent 5,000 calls of this period are summarised here." />}
 
       <Drivers t={t} features={data.use_cases} />
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section>
-          <h3 className="mb-2 text-sm font-semibold text-slate-900">Most used features</h3>
-          <div className="overflow-x-auto rounded-lg border border-slate-200">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 text-left text-xs text-slate-700">
-                  <th className="px-3 py-2 font-medium">Feature</th>
-                  <th className="px-3 py-2 text-right font-medium">Calls</th>
-                  <th className="px-3 py-2 text-right font-medium">Protected</th>
-                  <th className="px-3 py-2 text-right font-medium">Tokens</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.use_cases.length === 0 && (
-                  <tr><td colSpan={4} className="px-3 py-6 text-center text-slate-700">No AI calls in this period.</td></tr>
-                )}
-                {data.use_cases.map((u) => (
-                  <tr key={u.id} className="border-b border-slate-100 last:border-0">
-                    <td className="px-3 py-2">
-                      {u.id === 'unclassified' ? (
-                        <span className="text-slate-700">{u.label}</span>
-                      ) : (
-                        <button type="button" onClick={() => onOpenUseCase(u.id)} className="text-left font-medium text-primary-700 hover:underline">
-                          {u.label}
-                        </button>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums">{fmtNumber(u.calls)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{fmtNumber(u.protected)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{fmtTokens(u.tokens)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section>
-          <h3 className="mb-2 text-sm font-semibold text-slate-900">By module</h3>
-          <div className="overflow-x-auto rounded-lg border border-slate-200">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 text-left text-xs text-slate-700">
-                  <th className="px-3 py-2 font-medium">Module</th>
-                  <th className="px-3 py-2 text-right font-medium">Calls</th>
-                  <th className="px-3 py-2 text-right font-medium">Blocked</th>
-                  <th className="px-3 py-2 text-right font-medium">Tokens</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.modules.length === 0 && (
-                  <tr><td colSpan={4} className="px-3 py-6 text-center text-slate-700">Nothing yet.</td></tr>
-                )}
-                {data.modules.map((m) => (
-                  <tr key={m.module} className="border-b border-slate-100 last:border-0">
-                    <td className="px-3 py-2">{m.label}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{fmtNumber(m.calls)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{fmtNumber(m.blocked)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{fmtTokens(m.tokens)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+      <div className="grid gap-[16px] lg:grid-cols-2">
+        <SectionCard id="features" title="Most used features">
+          <RegisterTable
+            caption="Most used features" columns={features} rows={data.use_cases} getRowId={(u) => u.id} cardTitle={(u) => u.label}
+            empty={<EmptyState bare kind="firstUse" title="No AI calls in this period" />}
+          />
+        </SectionCard>
+        <SectionCard id="modules" title="By module">
+          <RegisterTable
+            caption="AI calls by module" columns={modules} rows={data.modules} getRowId={(m) => m.module} cardTitle={(m) => m.label}
+            empty={<EmptyState bare kind="firstUse" title="Nothing yet" />}
+          />
+        </SectionCard>
       </div>
 
-      <section>
-        <h3 className="mb-2 text-sm font-semibold text-slate-900">Recently refused</h3>
+      <SectionCard id="refused" title="Recently refused">
         {data.recent_blocked.length === 0 ? (
-          <p className="text-sm text-slate-700">Nothing was refused in this period.</p>
+          <p className="m-0 text-ds-body text-ds-fg-muted">Nothing was refused in this period.</p>
         ) : (
-          <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+          <ul className="m-0 flex list-none flex-col p-0">
             {data.recent_blocked.map((b) => (
-              <li key={b.id} className="px-3 py-2 text-sm">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <span className="font-medium text-slate-900">{b.use_case}</span>
-                  <span className="text-xs text-slate-700">{fmtWhen(b.at)}{b.rule ? ` · rule ${b.rule}` : ''}</span>
+              <li key={b.id} className="border-t border-ds-border py-[8px] first:border-t-0 first:pt-0">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-[12px] gap-y-[2px]">
+                  <span className="text-ds-body font-[600] text-ds-fg">{b.use_case}</span>
+                  <span className="text-ds-label text-ds-fg-muted">{fmtWhen(b.at)}</span>
                 </div>
-                <p className="text-slate-700">{(b.reason && REASONS[b.reason]) || 'The request was refused before it was sent.'}</p>
+                <p className="m-0 text-ds-body text-ds-fg-body">{(b.reason && REASONS[b.reason]) || 'The request was refused before it was sent.'}</p>
               </li>
             ))}
           </ul>
         )}
-      </section>
+      </SectionCard>
     </div>
   );
 }

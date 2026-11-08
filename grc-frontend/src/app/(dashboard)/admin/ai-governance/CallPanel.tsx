@@ -1,38 +1,39 @@
 'use client';
 
-import { detailText } from '@/lib/apiError';
-import { Fragment, useEffect, useState } from 'react';
+// AI governance > one call, in a Sheet: why it was made, what the data-protection check did, what reached the AI (shown only on request, to people who hold the payload
+// right, and recorded in the audit log when opened), the cost, and everything in the same operation. The model that answered and the page request behind the call are
+// not shown: they say nothing a person can act on.
+import { Fragment, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Eye, Lock } from 'lucide-react';
-import { RightSlidePanel } from '@/components/ui';
 import { apiClient } from '@/lib/api';
-import { ENTITY_LABELS, LEVEL_TONE, PLACEHOLDER, REASONS, STATUS_LABEL, STATUS_TONE, fmtDuration, fmtNumber, fmtUsd, fmtWhen } from './format';
+import { detailText } from '@/lib/apiError';
+import { statusPill } from '@/lib/status';
+import { aiCall, protectionLevel } from '@/lib/statuses/adminAuditAi';
+import { Button, ErrorState, Fact, FactList, Notice, Sheet, SkeletonLines, StatusPill } from '@/components/ui/ds';
+import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
+import { ENTITY_LABELS, PLACEHOLDER, REASONS, fmtDuration, fmtNumber, fmtUsd, fmtWhen } from './format';
 import type { CallDetail, Revealed } from './types';
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Block({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="border-b border-slate-100 pb-4 last:border-0">
-      <h3 className="mb-2 text-sm font-semibold text-slate-900">{title}</h3>
+    <section className="border-b border-ds-border pb-[16px] last:border-0 last:pb-0">
+      <h3 className="m-0 mb-[8px] !text-ds-section !text-ds-fg">{title}</h3>
       {children}
     </section>
   );
 }
 
-function Pair({ k, v }: { k: string; v: React.ReactNode }) {
-  return (
-    <div className="flex justify-between gap-4 py-0.5 text-sm">
-      <dt className="text-slate-700">{k}</dt>
-      <dd className="text-right text-slate-900">{v}</dd>
-    </div>
-  );
-}
+const TEXT = 'whitespace-pre-wrap break-words rounded-ds-card border border-ds-border bg-ds-surface-hover p-[8px] text-[12px] leading-relaxed text-ds-fg';
+const CAPTION = 'm-0 mb-[2px] text-ds-label font-[600] uppercase tracking-wide text-ds-fg-muted';
 
-/** Text with the guard's placeholders picked out, so it is plain what the model saw instead of the real value. */
+/** Text with the guard's placeholders picked out, so it is plain what the AI saw instead of the real value. */
 function Marked({ text }: { text: string }) {
   return (
     <>
       {text.split(PLACEHOLDER).map((part, i) =>      // split with a capturing group: the odd parts are the placeholders
         i % 2 === 1
-          ? <mark key={i} className="rounded bg-primary-100 px-0.5 text-primary-900">{part}</mark>
+          ? <mark key={i} className="rounded-[3px] bg-ds-primary-soft px-[2px] text-ds-primary-text">{part}</mark>
           : <Fragment key={i}>{part}</Fragment>
       )}
     </>
@@ -42,14 +43,13 @@ function Marked({ text }: { text: string }) {
 function PromptView({ request }: { request: string }) {
   let parsed: any = null;
   try { parsed = JSON.parse(request); } catch { /* cut off: shown as text */ }
-  const block = 'whitespace-pre-wrap break-words rounded border border-slate-200 p-2 text-xs leading-relaxed text-slate-900';
   if (parsed && Array.isArray(parsed.messages)) {
     return (
-      <div className="space-y-2">
+      <div className="flex flex-col gap-[8px]">
         {parsed.messages.map((m: any, i: number) => (
           <div key={i}>
-            <div className="mb-0.5 text-xs font-medium uppercase tracking-wide text-slate-700">{m.role}</div>
-            <div className={block}><Marked text={typeof m.content === 'string' ? m.content : JSON.stringify(m.content, null, 2)} /></div>
+            <p className={CAPTION}>{m.role}</p>
+            <div className={TEXT}><Marked text={typeof m.content === 'string' ? m.content : JSON.stringify(m.content, null, 2)} /></div>
           </div>
         ))}
       </div>
@@ -57,40 +57,35 @@ function PromptView({ request }: { request: string }) {
   }
   if (parsed && (parsed.instructions || parsed.input)) {
     return (
-      <div className="space-y-2">
-        {parsed.instructions && <><div className="text-xs font-medium uppercase tracking-wide text-slate-700">Instructions</div><div className={block}><Marked text={String(parsed.instructions)} /></div></>}
-        {parsed.input && <><div className="text-xs font-medium uppercase tracking-wide text-slate-700">Input</div><div className={block}><Marked text={typeof parsed.input === 'string' ? parsed.input : JSON.stringify(parsed.input, null, 2)} /></div></>}
+      <div className="flex flex-col gap-[8px]">
+        {parsed.instructions && <div><p className={CAPTION}>Instructions</p><div className={TEXT}><Marked text={String(parsed.instructions)} /></div></div>}
+        {parsed.input && <div><p className={CAPTION}>Input</p><div className={TEXT}><Marked text={typeof parsed.input === 'string' ? parsed.input : JSON.stringify(parsed.input, null, 2)} /></div></div>}
       </div>
     );
   }
-  return <div className={block}><Marked text={request} /></div>;
+  return <div className={TEXT}><Marked text={request} /></div>;
 }
 
 export default function CallPanel({ id, onClose, onOpenUseCase }: { id: number | null; onClose: () => void; onOpenUseCase: (id: string) => void }) {
-  const [detail, setDetail] = useState<CallDetail | null>(null);
-  const [error, setError] = useState('');
-  const [shown, setShown] = useState<Revealed | null>(null);
+  const call = useQuery({
+    queryKey: ['ai-governance-call', id],
+    enabled: id != null,
+    queryFn: async () => (await apiClient.get<CallDetail>(`/admin/ai-governance/activity/${id}`)).data,
+  });
+  const [shown, setShown] = useState<{ id: number; value: Revealed } | null>(null);
   const [revealing, setRevealing] = useState(false);
   const [revealError, setRevealError] = useState('');
-
-  useEffect(() => {
-    setDetail(null); setShown(null); setError(''); setRevealError('');
-    if (id == null) return;
-    let live = true;
-    apiClient.get<CallDetail>(`/admin/ai-governance/activity/${id}`)
-      .then((r) => { if (live) setDetail(r.data); })
-      .catch((e) => { if (live) setError(detailText(e?.response?.data?.detail) || 'Could not load this call.'); });
-    return () => { live = false; };
-  }, [id]);
+  const detail = call.data;
+  const revealed = shown && shown.id === id ? shown.value : null;
 
   const reveal = async () => {
     if (id == null) return;
     setRevealing(true); setRevealError('');
     try {
       const r = await apiClient.post<Revealed>(`/admin/ai-governance/activity/${id}/reveal`);
-      setShown(r.data);
+      setShown({ id, value: r.data });
     } catch (e: any) {
-      setRevealError(detailText(e?.response?.data?.detail) || 'Could not show the text.');
+      setRevealError(detailText(e?.response?.data?.detail) || 'The text could not be shown. Try again.');
     } finally {
       setRevealing(false);
     }
@@ -99,125 +94,113 @@ export default function CallPanel({ id, onClose, onOpenUseCase }: { id: number |
   const g = detail?.gateway;
   const entities = Object.entries(g?.entities || {});
   return (
-    <RightSlidePanel
-      isOpen={id != null}
+    <Sheet
+      open={id != null}
       onClose={onClose}
+      width="lg"
       title={detail ? detail.use_case_label : 'AI call'}
       subtitle={detail ? `${detail.module_label} · ${fmtWhen(detail.at)}` : undefined}
-      width="w-full max-w-2xl"
     >
-      {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
-      {!detail && !error && <p className="text-sm text-slate-700">Loading…</p>}
-      {detail && (
-        <div className="space-y-4">
-          <Section title="Why this call was made">
+      {call.isError ? (
+        <ErrorState title="Couldn't open this call" message={errorMessage(call.error)} onRetry={canRetry(call.error) ? () => { void call.refetch(); } : undefined} />
+      ) : !detail ? (
+        <SkeletonLines lines={6} label="Loading this call" />
+      ) : (
+        <div className="flex flex-col gap-[16px]">
+          <Block title="Why this call was made">
             {detail.use_case_detail ? (
               <>
-                <p className="text-sm text-slate-900">{detail.use_case_detail.value}</p>
-                <p className="mt-1 text-xs text-slate-700">{detail.use_case_detail.surface}{detail.trigger ? ` · ${detail.trigger}` : ''}</p>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <span title={detail.use_case_detail.level_meaning} className={`rounded-full border px-2 py-0.5 text-xs font-medium ${LEVEL_TONE[detail.use_case_detail.level]}`}>
-                    {detail.use_case_detail.level} · {detail.use_case_detail.level_meaning}
-                  </span>
-                  {detail.use_case && (
-                    <button type="button" onClick={() => onOpenUseCase(detail.use_case as string)} className="text-xs font-medium text-primary-700 hover:underline">All calls of this feature</button>
-                  )}
+                <p className="m-0 text-ds-body text-ds-fg">{detail.use_case_detail.value}</p>
+                <p className="m-0 mt-[2px] text-ds-label text-ds-fg-muted">{detail.use_case_detail.surface}{detail.trigger ? ` · ${detail.trigger}` : ''}</p>
+                <div className="mt-[8px] flex flex-wrap items-center gap-[8px]">
+                  <span title={detail.use_case_detail.level_meaning}><StatusPill size="sm" {...statusPill(protectionLevel, detail.use_case_detail.level)} label={`${detail.use_case_detail.level} · ${detail.use_case_detail.level_meaning}`} /></span>
+                  {detail.use_case && <Button size="sm" variant="link" onClick={() => onOpenUseCase(detail.use_case as string)}>All calls of this feature</Button>}
                 </div>
               </>
-            ) : <p className="text-sm text-slate-700">This call could not be matched to a feature in the inventory ({detail.module}).</p>}
-            <dl className="mt-3">
-              <Pair k="Asked by" v={detail.user} />
-              {detail.endpoint && <Pair k="Page request" v={<code className="text-xs">{detail.http_method} {detail.endpoint}</code>} />}
-              <Pair k="Outcome" v={<span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_TONE[detail.status] || STATUS_TONE.failed}`}>{STATUS_LABEL[detail.status] || detail.status}</span>} />
-              {detail.error_type && detail.status !== 'blocked' && <Pair k="Error" v={detail.error_type} />}
-            </dl>
-          </Section>
+            ) : <p className="m-0 text-ds-body text-ds-fg-muted">This call could not be matched to a feature in the inventory ({detail.module_label}).</p>}
+            <div className="mt-[12px]">
+              <FactList>
+                <Fact label="Asked by">{detail.user}</Fact>
+                <Fact label="Outcome"><StatusPill size="sm" {...statusPill(aiCall, detail.status)} /></Fact>
+              </FactList>
+            </div>
+          </Block>
 
-          <Section title="What the data-protection check did">
+          <Block title="What the data-protection check did">
             {g?.blocked ? (
-              <p className="rounded border border-rose-200 bg-rose-50 p-2 text-sm text-rose-900">
-                Refused{g.rule ? ` (rule ${g.rule})` : ''}: {REASONS[g.blocked] || 'the request was refused before it was sent.'}
-              </p>
+              <Notice tone="danger" title="Refused">{REASONS[g.blocked] || 'The request was refused before it was sent.'}</Notice>
             ) : entities.length === 0 ? (
-              <p className="text-sm text-slate-700">{g?.decision ? 'The check found nothing that needed replacing in this request.' : 'This call was made before the data-protection check was recorded.'}</p>
+              <p className="m-0 text-ds-body text-ds-fg-muted">{g?.decision ? 'The check found nothing that needed replacing in this request.' : 'This call was made before the data-protection check was recorded.'}</p>
             ) : (
-              <ul className="space-y-0.5 text-sm">
+              <ul className="m-0 flex list-none flex-col gap-[2px] p-0">
                 {entities.map(([type, n]) => {
                   const e = ENTITY_LABELS[type] || { label: type, action: 'replaced' as const };
                   return (
-                    <li key={type} className="flex justify-between gap-4">
-                      <span>{e.label}</span>
-                      <span className="text-slate-700">{fmtNumber(n)} {e.action === 'removed' ? 'removed' : 'replaced by placeholders'}</span>
+                    <li key={type} className="flex justify-between gap-[16px] text-ds-body">
+                      <span className="text-ds-fg">{e.label}</span>
+                      <span className="text-ds-fg-muted">{fmtNumber(n)} {e.action === 'removed' ? 'removed' : 'replaced by placeholders'}</span>
                     </li>
                   );
                 })}
               </ul>
             )}
             {g && (g.restored || g.unknown_tokens || g.invented) ? (
-              <p className="mt-2 text-xs text-slate-700">
+              <p className="m-0 mt-[8px] text-ds-label text-ds-fg-muted">
                 Put back in the answer: {fmtNumber(g.restored)}{g.unknown_tokens ? ` · unknown placeholders removed: ${g.unknown_tokens}` : ''}{g.invented ? ` · made-up secrets removed: ${g.invented}` : ''}
               </p>
             ) : null}
-          </Section>
+          </Block>
 
-          <Section title="What reached the AI">
+          <Block title="What reached the AI">
             {!detail.payload.kept ? (
-              <p className="text-sm text-slate-700">
-                {detail.status === 'blocked' ? 'Nothing was sent: the request was refused.' : 'The text of this call was not kept, or has expired.'}
-              </p>
-            ) : shown ? (
-              <div className="space-y-3">
+              <p className="m-0 text-ds-body text-ds-fg-muted">{detail.status === 'blocked' ? 'Nothing was sent: the request was refused.' : 'The text of this call was not kept, or has expired.'}</p>
+            ) : revealed ? (
+              <div className="flex flex-col gap-[12px]">
                 <div>
-                  <div className="mb-1 text-xs font-medium text-slate-700">The request, exactly as it was sent {shown.truncated ? '(cut: too long to keep in full)' : ''}</div>
-                  {shown.request ? <PromptView request={shown.request} /> : <p className="text-sm text-slate-700">Not kept.</p>}
+                  <p className={CAPTION}>The request, exactly as it was sent{revealed.truncated ? ' (cut: too long to keep in full)' : ''}</p>
+                  {revealed.request ? <PromptView request={revealed.request} /> : <p className="m-0 text-ds-body text-ds-fg-muted">Not kept.</p>}
                 </div>
                 <div>
-                  <div className="mb-1 text-xs font-medium text-slate-700">The answer, as the AI wrote it (before the original values were put back)</div>
-                  <div className="whitespace-pre-wrap break-words rounded border border-slate-200 p-2 text-xs leading-relaxed text-slate-900">
-                    {shown.response ? <Marked text={shown.response} /> : 'No answer was received.'}
-                  </div>
+                  <p className={CAPTION}>The answer, as the AI wrote it (before the original values were put back)</p>
+                  <div className={TEXT}>{revealed.response ? <Marked text={revealed.response} /> : 'No answer was received.'}</div>
                 </div>
-                <p className="text-xs text-slate-700">Kept until {fmtWhen(shown.expires_at)}, encrypted. Showing it is recorded in the audit log.</p>
+                <p className="m-0 text-ds-label text-ds-fg-muted">Kept until {fmtWhen(revealed.expires_at)}, encrypted. Showing it is recorded in the audit log.</p>
               </div>
             ) : detail.payload.can_reveal ? (
               <div>
-                <button type="button" onClick={reveal} disabled={revealing} className="inline-flex items-center gap-2 rounded-md border border-primary-500 bg-primary-50 px-3 py-2 text-sm font-medium text-primary-800 hover:bg-primary-100 disabled:opacity-50">
-                  <Eye size={15} aria-hidden /> {revealing ? 'Opening…' : 'Show the request and the answer'}
-                </button>
-                <p className="mt-2 text-xs text-slate-700">The text is kept encrypted. Opening it is recorded in the audit log.</p>
-                {revealError && <p role="alert" className="mt-2 text-sm text-rose-700">{revealError}</p>}
+                <Button leftIcon={<Eye aria-hidden />} loading={revealing} onClick={() => { void reveal(); }}>Show the request and the answer</Button>
+                <p className="m-0 mt-[8px] text-ds-label text-ds-fg-muted">The text is kept encrypted. Opening it is recorded in the audit log.</p>
+                {revealError && <p role="alert" className="m-0 mt-[8px] text-ds-body text-ds-danger">{revealError}</p>}
               </div>
             ) : (
-              <p className="flex items-center gap-2 text-sm text-slate-700"><Lock size={14} aria-hidden /> Reading the text needs the “AI Governance → payloads” permission.</p>
+              <p className="m-0 flex items-center gap-[8px] text-ds-body text-ds-fg-muted"><Lock size={14} aria-hidden /> Reading the text needs the “AI governance, payloads” right.</p>
             )}
-          </Section>
+          </Block>
 
-          <Section title="Cost">
-            <dl>
-              <Pair k="Model asked for" v={detail.requested_model || '–'} />
-              {detail.response_model && detail.response_model !== detail.requested_model && <Pair k="Model that answered" v={detail.response_model} />}
-              <Pair k="Tokens in / out" v={`${fmtNumber(detail.prompt_tokens)} / ${fmtNumber(detail.completion_tokens)}`} />
-              {detail.cached_tokens > 0 && <Pair k="Cached input tokens" v={fmtNumber(detail.cached_tokens)} />}
-              {detail.reasoning_tokens > 0 && <Pair k="Reasoning tokens" v={fmtNumber(detail.reasoning_tokens)} />}
-              <Pair k="Estimated cost" v={fmtUsd(detail.cost_usd)} />
-              <Pair k="Duration" v={fmtDuration(detail.duration_ms)} />
-            </dl>
-          </Section>
+          <Block title="Cost">
+            <FactList>
+              <Fact label="Tokens sent / returned">{`${fmtNumber(detail.prompt_tokens)} / ${fmtNumber(detail.completion_tokens)}`}</Fact>
+              {detail.cached_tokens > 0 ? <Fact label="Read from saved prompts">{fmtNumber(detail.cached_tokens)}</Fact> : null}
+              {detail.reasoning_tokens > 0 ? <Fact label="Hidden reasoning">{fmtNumber(detail.reasoning_tokens)}</Fact> : null}
+              <Fact label="Estimated cost">{fmtUsd(detail.cost_usd)}</Fact>
+              <Fact label="Took">{fmtDuration(detail.duration_ms)}</Fact>
+            </FactList>
+          </Block>
 
           {detail.trace.length > 1 && (
-            <Section title="Everything in the same operation">
-              <ol className="space-y-1 text-sm">
+            <Block title="Everything in the same operation">
+              <ol className="m-0 flex list-none flex-col gap-[4px] p-0">
                 {detail.trace.map((t) => (
-                  <li key={t.id} className={`flex justify-between gap-3 ${t.id === detail.id ? 'font-semibold text-slate-900' : 'text-slate-700'}`}>
+                  <li key={t.id} className={`flex justify-between gap-[12px] text-ds-body ${t.id === detail.id ? 'font-[600] text-ds-fg' : 'text-ds-fg-muted'}`}>
                     <span>{fmtWhen(t.at)} · {t.use_case_label}{t.attempt > 1 ? ` (attempt ${t.attempt})` : ''}</span>
-                    <span>{STATUS_LABEL[t.status] || t.status}</span>
+                    <span>{aiCall.label(t.status)}</span>
                   </li>
                 ))}
               </ol>
-            </Section>
+            </Block>
           )}
         </div>
       )}
-    </RightSlidePanel>
+    </Sheet>
   );
 }

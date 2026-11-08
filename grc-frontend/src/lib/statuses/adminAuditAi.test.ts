@@ -7,9 +7,9 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { statusPill, TONE, type Statuses } from '../status.ts';
-import { aiCall, auditAction, auditChange, budgetUse, scheduledJob } from './adminAuditAi.ts';
+import { aiCall, auditAction, auditChange, budgetUse, protectionLevel, scheduledJob } from './adminAuditAi.ts';
 
-const ALL: Statuses[] = [auditAction, auditChange, aiCall, budgetUse, scheduledJob];
+const ALL: Statuses[] = [auditAction, auditChange, aiCall, budgetUse, protectionLevel, scheduledJob];
 
 test('every word has one of the six tones and a readable label', () => {
   for (const registry of ALL) for (const word of registry.words) {
@@ -34,6 +34,10 @@ test('the colours keep their meaning: added is green, changed blue, removed red;
   assert.deepEqual(['succeeded', 'failed', 'blocked'].map((w) => aiCall.tone(w)), ['success', 'danger', 'warning']);
   assert.deepEqual(['ok', 'watch', 'over'].map((w) => budgetUse.tone(w)), ['success', 'warning', 'danger']);
   assert.deepEqual(['on_schedule', 'overdue', 'never', 'failing'].map((w) => scheduledJob.tone(w)), ['success', 'warning', 'neutral', 'danger']);
+});
+
+test('the protection levels run from calm to careful: L0 and L1 green, L2 blue, L3 amber, L4 red', () => {
+  assert.deepEqual(['L0', 'L1', 'L2', 'L3', 'L4'].map((w) => protectionLevel.tone(w)), ['success', 'success', 'progress', 'warning', 'danger']);
 });
 
 test('the call words of both AI ledgers fold into one: success / completed / ok read Succeeded, error / failed read Failed', () => {

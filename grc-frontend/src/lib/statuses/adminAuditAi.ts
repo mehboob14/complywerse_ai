@@ -5,6 +5,7 @@
 //    business verbs the modules write: approve, reject, submit, archive, restore, status_changed, settings_updated...). The labels mirror `_HUMAN_VERBS` in audit_logger.py.
 //  - audit change: what a request did to one record (db_changes.records[].op): created, updated, deleted.
 //  - AI call: the state of one recorded AI call (usage ledger + governance log): succeeded, failed, blocked (refused before sending).
+//  - protection level: the AI governance inventory's L0 to L4 (modules/ai_governance), shown with the server's own meaning beside it.
 //  - budget use: where a module stands against its monthly token budget; the cut-offs are the ones the Token usage page always used (70 and 85 percent, the server's alert).
 //  - scheduled job: where one recurring platform job stands (services/platform_clock.py): failing, never run, overdue, on schedule.
 import { defineStatuses } from '../status.ts';
@@ -53,8 +54,17 @@ export const aiCall = defineStatuses('AI call', {
   ok: { tone: 'success', label: 'Succeeded' },
   error: { tone: 'danger', label: 'Failed' },
   failed: { tone: 'danger', label: 'Failed' },
-  blocked: { tone: 'warning', label: 'Refused' },
+  blocked: { tone: 'warning', label: 'Blocked' },
   cache_hit: { tone: 'neutral', label: 'Answered from saved result' },
+});
+
+/** How much of a feature's data may leave for the AI (the inventory's level, L0 to L4): the colour says how careful to be, the words are the server's. */
+export const protectionLevel = defineStatuses('protection level', {
+  L0: { tone: 'success', label: 'L0' },
+  L1: { tone: 'success', label: 'L1' },
+  L2: { tone: 'progress', label: 'L2' },
+  L3: { tone: 'warning', label: 'L3' },
+  L4: { tone: 'danger', label: 'L4' },
 });
 
 /** A module's token use against its monthly budget (Token usage: 70 percent and over watch, 85 percent and over is the alert). */
