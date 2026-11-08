@@ -8,7 +8,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { statusPill, TONE, type Statuses } from '../status.ts';
 import {
   CONTROL_REGISTRIES, CONTROL_STATUS_ORDER, applicabilityRequest, auditPeriod, checkResult, collectionHealth, confidenceTone, connection, controlLifecycle,
-  controlStatus, designation, evidenceFile, evidenceNeed, mappingVerdict, ownership, stepResult, testResult, testRun, workProgress,
+  controlStatus, designation, evidenceFile, evidenceNeed, mappingVerdict, ownership, requirementDisposition, stepResult, testResult, testRun, workProgress,
 } from './controls.ts';
 
 const BACKEND = new URL('../../../../backend/grc/', import.meta.url);
@@ -48,6 +48,7 @@ test('the other words are the ones the server writes', { skip: !have }, () => {
   const scf = read('modules/scf/router.py') as string;
   const model = read('models/_56_scf_catalog_models.py') as string;
   for (const word of collectionHealth.words) assert.ok(router.includes(`"${word}"`), `collection state ${word}`);
+  for (const word of requirementDisposition.words) assert.ok(router.includes(`"${word}"`), `disposition ${word}`);
   for (const word of testRun.words) assert.ok(assurance.includes(`"${word}"`), `test status ${word}`);
   for (const word of ownership.words) assert.ok(owner.includes(`"${word}"`), `ownership ${word}`);
   const lifecycle = /VALID_LIFECYCLE = \{([^}]*)\}/.exec(custom)?.[1] ?? '';
@@ -92,6 +93,7 @@ test('the tones keep the meaning of the old colours', () => {
   assert.deepEqual(['healthy', 'stale', 'failing', 'never_run'].map((w) => collectionHealth.tone(w)), ['success', 'warning', 'danger', 'neutral']);
   assert.deepEqual(['ok', 'overdue', 'unowned'].map((w) => ownership.tone(w)), ['success', 'danger', 'warning']);
   assert.deepEqual(['connected', 'not_connected'].map((w) => connection.tone(w)), ['success', 'neutral']);
+  assert.deepEqual(['mapped', 'other_party', 'out_of_scope', 'pending'].map((w) => requirementDisposition.tone(w)), ['success', 'progress', 'neutral', 'warning']);
 });
 
 test('a pill always has its word, written the way the page says it', () => {

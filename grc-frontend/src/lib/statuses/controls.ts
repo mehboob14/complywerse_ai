@@ -152,6 +152,15 @@ export const connection = defineStatuses('connection', {
   not_connected: { tone: 'neutral', label: 'Not connected' },
 });
 
+/** What accounts for a framework requirement (GET /automation/common/coverage `disposition`): a control discharges it, another party carries it (the regulator, the exchange operator), it falls outside what an
+ *  organisation implements, or it is still to be assessed (the only real to-do). The labels are the server's own (DISPOSITION_LABELS), so a page may show either. */
+export const requirementDisposition = defineStatuses('requirement', {
+  mapped: { tone: 'success', label: 'Mapped to a control' },
+  other_party: { tone: 'progress', label: 'Obligation of another party' },
+  out_of_scope: { tone: 'neutral', label: 'Outside the control catalogue' },
+  pending: { tone: 'warning', label: 'Not yet assessed' },
+});
+
 /** How sure the crosswalk is of a mapping (0 to 1): 0.85 and over green, 0.6 and over amber, else red (the Mapping review page's own bands). */
 export function confidenceTone(score: number | null | undefined): Tone {
   if (score == null || Number.isNaN(score)) return 'neutral';
@@ -163,5 +172,5 @@ export function confidenceTone(score: number | null | undefined): Tone {
 /** Every registry in one place, for the style guide and the tests. */
 export const CONTROL_REGISTRIES = {
   controlStatus, testResult, designation, evidenceNeed, evidenceFile, workProgress, testRun, stepResult, checkResult,
-  collectionHealth, ownership, controlLifecycle, applicabilityRequest, auditPeriod, mappingVerdict, connection,
+  collectionHealth, ownership, controlLifecycle, applicabilityRequest, auditPeriod, mappingVerdict, connection, requirementDisposition,
 } as const;
