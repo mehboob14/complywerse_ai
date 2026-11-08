@@ -2,6 +2,8 @@
 // monitoring, risk 360°). Hex values are for recharts; the *Cls helpers return
 // soft-tone Tailwind classes consistent with the rest of the platform.
 
+import { SHIPPED_BANDS, residualBand, type Bands } from './vendorRules.ts';
+
 export const TIER_ORDER = ['critical', 'high', 'medium', 'low'] as const;
 
 // Severity / tier share one palette so the language is consistent everywhere.
@@ -50,13 +52,11 @@ export function gradeColor(grade?: string | null): string {
   return map[(grade || '').toUpperCase()] || 'text-gray-500';
 }
 
-// Residual score (0..100, lower = better) → colour band.
-export function scoreColor(score?: number | null): string {
-  if (score == null) return '#94a3b8';
-  if (score >= 70) return SEV_HEX.critical;
-  if (score >= 48) return SEV_HEX.high;
-  if (score >= 26) return SEV_HEX.medium;
-  return SEV_HEX.low;
+// Residual score (0..100, lower = better) → colour. The bands are the tenant's (vendorRules.ts: 75 / 50 / 25 unless its Policy says otherwise), the same as its tiers; a page that
+// has read the tenant's thresholds passes them (`bands`).
+export function scoreColor(score?: number | null, bands: Bands = SHIPPED_BANDS): string {
+  const band = residualBand(score, bands);
+  return band === 'none' ? '#94a3b8' : SEV_HEX[band];
 }
 
 export const STATUS_LABELS: Record<string, string> = {

@@ -63,7 +63,7 @@ test('every request uses the key its module page uses, so opening the module aft
   assert.deepEqual(FEEDS.evidence.queryKey, ['ev-ws-summary']);
   assert.match(src('../../components/compliance/overview/overviewData.ts'), /queryKey: \['certifications'\]/);
   assert.deepEqual(FEEDS.journeys.queryKey, ['certifications']);
-  assert.match(src('../../app/(dashboard)/vendor-risk/page.tsx'), /queryKey: \['tprm-dashboard', scope\],\s*queryFn: async \(\) => \(await tpraApi\.dashboard\(scope\)\)\.data as Dashboard/);
+  assert.match(src('../../app/(dashboard)/vendor-risk/_overview/overviewData.ts'), /queryKey: \['tprm-dashboard', scope\],\s*queryFn: async \(\) => \(await tpraApi\.dashboard\(scope\)\)\.data as Dashboard/);
   assert.deepEqual(FEEDS.vendors.queryKey, ['tprm-dashboard', 'portfolio']);
   assert.equal(FEEDS.vendors.path, '/vendor-risk/tpra/dashboard', 'the Vendor Overview\'s endpoint, not /vendors/dashboard');
   assert.match(src('../../app/(dashboard)/automation/overview/_overview/overviewData.ts'), /queryKey: \['common-overview', 'in_scope'\]/);
