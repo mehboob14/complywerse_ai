@@ -19,7 +19,7 @@ import { PageHeader } from '@/components/ui';
 import { Button, EmptyState, Fact, FactList, Menu, SidePanel, StatusPill, useAddressState, useConfirm, useReportedMutation, type MenuItem } from '@/components/ui/ds';
 import { RowLead, type RecordColumn, type RecordRow } from '@/components/records/RecordTable';
 import type { FitColumn } from '@/components/records/explorerFit';
-import { ClampedText, MUTED_LINK } from '../_bcm-ui';
+import { MUTED_LINK } from '../_bcm-ui';
 import { BcmRegister } from '../_register/BcmRegister';
 import { DayCell, OwnerCell, PeekTitle, StepButtons, rowOf } from '../_register/bits';
 import { schemaFor } from '../_register/registerModel';
@@ -34,7 +34,7 @@ const SCHEMA = schemaFor(DRILLS);
 const MUTED = 'text-ds-fg-muted';
 
 const FIT: Record<'status' | 'scheduled' | 'findings' | 'owner', Omit<FitColumn, 'key'>> = {
-  status: { px: 124 },
+  status: { px: 136 },
   scheduled: { px: 150, dropRank: 2 },
   findings: { px: 130, dropRank: 1 },
   owner: { px: 68, dropRank: 3, wide: { px: 176, titleMin: 420 } },
