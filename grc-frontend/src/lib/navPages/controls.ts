@@ -17,7 +17,8 @@ export const LEAVES: Record<string, RouteExtra> = {
 
 export const PAGES: PageSpec[] = [
   // ---- Controls Automation ----
-  { path: `${COMMON}/:code`, label: 'Common control', area: AUTOMATION, parent: COMMON, hidden: 'opens from a Common Controls row and from the records that link a control (evidence, documents, work, reports)' },
+  // the control workspace (soc2-controls/[code]/_workspace/ControlHeader draws the kit head; its title is the control's own name, as a committee's or a project's)
+  { path: `${COMMON}/:code`, label: 'Control', area: AUTOMATION, parent: COMMON, hidden: 'opens from a Controls row and from the records that link a control (evidence, documents, work, reports)', ownHeading: true },
   { path: `${COMMON}/new`, label: 'New custom control', area: AUTOMATION, parent: COMMON, hidden: 'opens from Common Controls (New control)', ownHeading: true },
   // Controls | Coverage | Mapping review: one strip on the three pages (soc2-controls/_explorer/ControlsStrip)
   { path: `${COMMON}/coverage`, label: 'Requirement coverage', area: AUTOMATION, parent: COMMON, hidden: 'opens from the strip of the Controls pages and from the Controls Automation Overview (Frameworks)', ownHeading: true },

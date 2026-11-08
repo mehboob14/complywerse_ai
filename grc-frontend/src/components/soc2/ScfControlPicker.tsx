@@ -83,10 +83,10 @@ export function ScfControlPicker({
                   <li key={hit.scf_id}>
                     <button type="button" onClick={() => toggle(hit.scf_id)}
                       className={`flex w-full items-start gap-2.5 px-3 py-2 text-left hover:bg-slate-50 ${on ? 'bg-primary-50/60' : ''}`}>
-                      <span className="mt-px w-16 shrink-0 font-mono text-[11.5px] font-semibold text-slate-600">{hit.scf_id}</span>
+                      <span className="mt-px w-16 shrink-0 font-mono text-[12px] font-semibold text-slate-600">{hit.scf_id}</span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-[12.5px] text-slate-800">{hit.name}</span>
-                        {hit.domain && <span className="block truncate text-[11px] text-slate-400">{hit.domain}</span>}
+                        {hit.domain && <span className="block truncate text-[12px] text-slate-400">{hit.domain}</span>}
                       </span>
                       {on && <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary-600" />}
                     </button>
@@ -100,13 +100,13 @@ export function ScfControlPicker({
 
       <div className="p-2">
         {value.length === 0 ? (
-          <p className="px-1 py-1 text-[11.5px] leading-relaxed text-slate-400">
+          <p className="px-1 py-1 text-[12px] leading-relaxed text-slate-400">
             None yet. Implementing an SCF control inherits its framework requirements, maturity criteria and deliverables.
           </p>
         ) : (
           <div className="flex flex-wrap gap-1.5">
             {value.map((id) => (
-              <span key={id} className="inline-flex max-w-full items-center gap-1.5 rounded-md bg-slate-100 py-1 pl-2 pr-1 text-[11.5px] text-slate-700">
+              <span key={id} className="inline-flex max-w-full items-center gap-1.5 rounded-md bg-slate-100 py-1 pl-2 pr-1 text-[12px] text-slate-700">
                 <span className="font-mono font-semibold">{id}</span>
                 {names[id]?.name && <span className="truncate text-slate-500">{names[id]?.name}</span>}
                 <button type="button" onClick={() => toggle(id)} aria-label={`Remove ${id}`}

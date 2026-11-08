@@ -115,7 +115,7 @@ function Field({ label, required, hint, children, className = '' }: {
         {required && <span className="text-rose-500" aria-hidden>*</span>}
       </div>
       {children}
-      {hint && <p className="mt-1 text-[11.5px] leading-relaxed text-slate-400">{hint}</p>}
+      {hint && <p className="mt-1 text-[12px] leading-relaxed text-slate-400">{hint}</p>}
     </div>
   );
 }
@@ -177,7 +177,7 @@ function Segmented({ value, onChange, options, ariaLabel }: {
                 : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'}`}>
             {o.dot && <span className={`size-2 rounded-full ${o.dot}`} />}
             {o.label}
-            {o.hint && <span className={`text-[11px] font-normal ${on ? 'text-primary-600' : 'text-slate-400'}`}>· {o.hint}</span>}
+            {o.hint && <span className={`text-[12px] font-normal ${on ? 'text-primary-600' : 'text-slate-400'}`}>· {o.hint}</span>}
           </button>
         );
       })}
@@ -196,7 +196,7 @@ function Switch({ checked, onChange, label, description }: {
       </span>
       <span>
         <span className="block text-[13px] font-medium text-slate-800">{label}</span>
-        {description && <span className="block text-[11.5px] leading-relaxed text-slate-500">{description}</span>}
+        {description && <span className="block text-[12px] leading-relaxed text-slate-500">{description}</span>}
       </span>
     </button>
   );
@@ -289,6 +289,7 @@ export function CustomControlForm({
   formId,
   hideActions = false,
   context,
+  onDirtyChange,
 }: {
   initial?: Partial<CustomControlFormValues>;
   /** Editing an existing control: its ID is shown, not allocated. */
@@ -305,8 +306,13 @@ export function CustomControlForm({
   hideActions?: boolean;
   /** Shown above the first section — e.g. the statement this control comes from. */
   context?: ReactNode;
+  /** Told whenever the form differs from what it opened with, so a dialog around it can ask before it throws typed input away. */
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const [values, setValues] = useState<CustomControlFormValues>({ ...empty, ...initial });
+  const opened = useRef(JSON.stringify({ ...empty, ...initial }));
+  const dirtyNow = JSON.stringify(values) !== opened.current;
+  useEffect(() => { onDirtyChange?.(dirtyNow); }, [dirtyNow]);   // eslint-disable-line react-hooks/exhaustive-deps
   const [error, setError] = useState<string | null>(null);
   const [active, setActive] = useState<SectionId>('basics');
   const contentRef = useRef<HTMLDivElement>(null);
@@ -430,7 +436,7 @@ export function CustomControlForm({
       {/* Section rail */}
       <nav aria-label="Form sections"
         className="sticky top-0 hidden w-56 shrink-0 self-start border-r border-slate-100 bg-slate-50/60 px-3 py-4 lg:block">
-        <p className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+        <p className="px-2 pb-2 text-[12px] font-semibold uppercase tracking-wide text-slate-400">
           {requiredDone} of {sections.length} filled
         </p>
         <ol className="space-y-0.5">
@@ -439,17 +445,17 @@ export function CustomControlForm({
               <button type="button" onClick={() => jump(s.id)}
                 className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left text-[13px] transition-colors ${
                   active === s.id ? 'bg-white font-semibold text-slate-900 shadow-sm ring-1 ring-slate-200' : 'text-slate-600 hover:bg-white/70'}`}>
-                <span className={`flex size-5 shrink-0 items-center justify-center rounded-full text-[10.5px] font-semibold ${
+                <span className={`flex size-5 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold ${
                   s.done ? 'bg-primary-600 text-white' : active === s.id ? 'bg-slate-800 text-white' : 'bg-slate-200 text-slate-500'}`}>
                   {s.done ? <Check className="h-3 w-3" strokeWidth={3} /> : i + 1}
                 </span>
                 <span className="min-w-0 flex-1 truncate">{s.title}</span>
-                {!!s.count && <span className="rounded-full bg-slate-200 px-1.5 text-[10.5px] font-semibold tabular-nums text-slate-600">{s.count}</span>}
+                {!!s.count && <span className="rounded-full bg-slate-200 px-1.5 text-[12px] font-semibold tabular-nums text-slate-600">{s.count}</span>}
               </button>
             </li>
           ))}
         </ol>
-        <p className="mt-4 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[11.5px] leading-relaxed text-slate-500">
+        <p className="mt-4 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[12px] leading-relaxed text-slate-500">
           Only the name is required — the rest can be completed later from the control&apos;s page.
           No field is AI-drafted, and SCF text is never copied in.
         </p>
@@ -472,7 +478,7 @@ export function CustomControlForm({
                 <span className="font-mono text-sm font-semibold text-slate-700">
                   {codeLocked ? (initial?.code || values.code) : (options?.next_code || 'CTL-····')}
                 </span>
-                {!codeLocked && <span className="truncate text-[11px] text-slate-400">auto</span>}
+                {!codeLocked && <span className="truncate text-[12px] text-slate-400">auto</span>}
               </div>
             </Field>
             <Field label="Name" required>
@@ -481,7 +487,7 @@ export function CustomControlForm({
             </Field>
           </div>
           {!codeLocked && (
-            <p className="mt-1.5 text-[11.5px] text-slate-400">IDs are numbered for you in sequence and never reused.</p>
+            <p className="mt-1.5 text-[12px] text-slate-400">IDs are numbered for you in sequence and never reused.</p>
           )}
           <Field label="Control statement" className="mt-4" hint="What the control requires to be true, as your organisation states it.">
             <textarea value={values.statement} onChange={(e) => set('statement', e.target.value)} rows={3}

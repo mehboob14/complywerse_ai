@@ -2341,7 +2341,7 @@ def _custom_control_detail(
     assurance_fields = {
         "exception_id": None, "alternative_scf_id": None, "inheritance_type": None,
         "provider_vendor_id": None, "designation": None, "cmm_actual": None,
-        "cmm_target": None,
+        "cmm_target": None, "applicability": scf_own.applicability_fields(db, None),
     }
     if scf_scope is not None:
         st = (
@@ -2372,6 +2372,7 @@ def _custom_control_detail(
                 "designation": st.designation or "not_assessed",
                 "cmm_actual": st.cmm_actual,
                 "cmm_target": st.cmm_target,
+                "applicability": scf_own.applicability_fields(db, st),
             }
 
     bound_ids = list(nc.bound_check_ids or [])
@@ -4434,6 +4435,7 @@ def get_common_control(
         "designation": None,
         "cmm_actual": None,
         "cmm_target": None,
+        "applicability": scf_own.applicability_fields(db, None),
     }
     if scf_scope is not None:
         st = (
@@ -4464,6 +4466,7 @@ def get_common_control(
                 "designation": st.designation or "not_assessed",
                 "cmm_actual": st.cmm_actual,
                 "cmm_target": st.cmm_target,
+                "applicability": scf_own.applicability_fields(db, st),
             }
 
     return {

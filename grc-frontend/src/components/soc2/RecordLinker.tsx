@@ -102,9 +102,9 @@ export function RecordLinker({
   return (
     <div>
       <div className="mb-1 flex items-baseline justify-between gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</span>
+        <span className="text-[12px] font-semibold uppercase tracking-wide text-slate-400">{label}</span>
         {selected.length > 0 && (
-          <span className="text-[11px] tabular-nums text-slate-400">{selected.length} linked</span>
+          <span className="text-[12px] tabular-nums text-slate-400">{selected.length} linked</span>
         )}
       </div>
 
@@ -163,17 +163,17 @@ export function RecordLinker({
                         <RecordTypeIcon type={row.type} className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-[12.5px] font-medium text-slate-800">
-                            {row.code ? <span className="mr-1.5 font-mono text-[11px] text-slate-500">{row.code}</span> : null}
+                            {row.code ? <span className="mr-1.5 font-mono text-[12px] text-slate-500">{row.code}</span> : null}
                             {row.label}
                           </span>
                           {row.subtitle && (
-                            <span className="block truncate text-[11px] capitalize text-slate-400">{row.subtitle}</span>
+                            <span className="block truncate text-[12px] capitalize text-slate-400">{row.subtitle}</span>
                           )}
                         </span>
                         {busyKey === key(row) ? (
                           <Loader2 className="mt-0.5 h-3.5 w-3.5 animate-spin text-slate-400" />
                         ) : (
-                          <span className="mt-0.5 text-[11px] font-semibold text-primary-600">{already ? 'Linked' : 'Link'}</span>
+                          <span className="mt-0.5 text-[12px] font-semibold text-primary-600">{already ? 'Linked' : 'Link'}</span>
                         )}
                       </button>
                     </li>
@@ -186,18 +186,18 @@ export function RecordLinker({
 
         <div className="p-2">
           {selected.length === 0 ? (
-            <p className="px-1 py-1 text-[11.5px] leading-relaxed text-slate-400">{hint}</p>
+            <p className="px-1 py-1 text-[12px] leading-relaxed text-slate-400">{hint}</p>
           ) : (
             <div className="space-y-2">
               {groups.map(([t, rows]) => (
                 <div key={t}>
-                  <p className="mb-1 px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">
+                  <p className="mb-1 px-1 text-[12px] font-semibold uppercase tracking-wide text-slate-400">
                     {typeLabel(t)} · {rows.length}
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {rows.map((row) => (
                       <span key={key(row)}
-                        className="inline-flex max-w-full items-center gap-1.5 rounded-md bg-slate-100 py-1 pl-2 pr-1 text-[11.5px] text-slate-700">
+                        className="inline-flex max-w-full items-center gap-1.5 rounded-md bg-slate-100 py-1 pl-2 pr-1 text-[12px] text-slate-700">
                         <RecordTypeIcon type={row.type} className="h-3 w-3 shrink-0 text-slate-400" />
                         <span className="truncate">{row.code ? `${row.code} · ` : ''}{row.label}</span>
                         <button type="button" onClick={() => remove(row)} disabled={disabled}
