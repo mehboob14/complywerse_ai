@@ -24,12 +24,12 @@ export function LetterTile({ name, size = 32 }: { name: string; size?: 24 | 32 }
   );
 }
 
-/** The workflow status as a pill, and a second "Stale" pill when the file is past its validity (the flag is separate from the status). */
-export function StatusBadges({ item }: { item: Pick<EvidenceItem, 'status' | 'is_stale'> }) {
+/** The workflow status as a pill, and a second "Lapsed" pill when the file is past its validity (a file can be Approved and Lapsed; the server works the lapse out when it reads). */
+export function StatusBadges({ item }: { item: Pick<EvidenceItem, 'status' | 'is_stale'> & { lapsed?: boolean } }) {
   return (
     <span className="inline-flex flex-wrap items-center gap-[4px]">
       <StatusPill size="sm" {...statusPill(evidenceStatus, item.status)} />
-      {item.is_stale && <StatusPill size="sm" {...statusPill(evidenceStatus, 'stale')} />}
+      {(item.lapsed ?? item.is_stale) && item.status !== 'expired' && <StatusPill size="sm" {...statusPill(evidenceStatus, 'lapsed')} />}
     </span>
   );
 }

@@ -1,43 +1,13 @@
 /**
- * Data layer for the Evidence workspace. Wraps the shared axios `apiClient`.
- * A 404 is an answer ("this file has no assessment yet", "this server has no by-owner route") and reads as nothing; any other failure is thrown, so a page can say
+ * Data layer for the Evidence details panel (the per-file loaders) and the actions on a file. Wraps the shared axios `apiClient`. The lists (the Library's complete load, the summary,
+ * the coverage) are _library/libraryData.ts. A 404 is an answer ("this file has no assessment yet") and reads as nothing; any other failure is thrown, so a page can say
  * it failed and offer Retry: a failed request is never drawn as an empty answer.
  */
 import apiClient from '@/lib/api';
-import type { EvidenceItem, EvidenceSummary, OwnerPerf } from './evidenceModel';
-export type { OwnerPerf };
-
-export interface ItemsParams {
-  status?: string;
-  evidence_type?: string;
-  is_stale?: boolean;
-  search?: string;
-  skip?: number;
-  limit?: number;
-}
-export interface ItemsResponse { items: EvidenceItem[]; total: number; skip?: number; limit?: number; }
 
 const notFound = (error: unknown): boolean => (error as { response?: { status?: number } } | null)?.response?.status === 404;
 
-export async function fetchSummary(): Promise<EvidenceSummary> {
-  return (await apiClient.get('/evidence-mgmt/items/dashboard/summary')).data as EvidenceSummary;
-}
-export async function fetchItems(params?: ItemsParams): Promise<ItemsResponse> {
-  const data = (await apiClient.get('/evidence-mgmt/items', { params })).data as unknown;
-  if (Array.isArray(data)) return { items: data as EvidenceItem[], total: (data as EvidenceItem[]).length };
-  return data as ItemsResponse;
-}
-export async function fetchTypes(): Promise<Array<{ value: string; label: string }>> {
-  const data = (await apiClient.get('/evidence-mgmt/items/types')).data as { types?: Array<{ value: string; label: string }> };
-  return data.types ?? [];
-}
-export async function fetchExpiringSoon(days = 30): Promise<EvidenceItem[]> {
-  const data = (await apiClient.get('/evidence-mgmt/lifecycle/expiring-soon', { params: { days } })).data as unknown;
-  if (Array.isArray(data)) return data as EvidenceItem[];
-  return ((data as { items?: EvidenceItem[] })?.items) ?? [];
-}
-
-// ── per-selected-row detail loaders (used by the Workbench preview and the Register's panel) ──
+// ── per-selected-row detail loaders (the Library's details panel) ──
 export async function fetchDetail(id: number): Promise<Record<string, unknown>> {
   return (await apiClient.get(`/evidence-mgmt/items/${id}`)).data as Record<string, unknown>;
 }
@@ -70,11 +40,3 @@ export const runAssessment = (id: number) => apiClient.post(`/evidence-mgmt/ai/$
 export const submitForReview = (id: number) => apiClient.post(`/evidence-mgmt/lifecycle/${id}/submit`);
 export const reviewEvidence = (id: number, action: 'approve' | 'reject', comments?: string) =>
   apiClient.post(`/evidence-mgmt/lifecycle/${id}/review`, { action, comments });
-
-// ── owner analytics (the Performance view): the route exists on this server; an older one answers 404, which reads as no owners ──
-export async function fetchByOwner(): Promise<OwnerPerf[]> {
-  try {
-    const data = (await apiClient.get('/evidence-mgmt/items/dashboard/by-owner')).data as { owners?: OwnerPerf[] } | OwnerPerf[];
-    return Array.isArray(data) ? data : (data.owners ?? []);
-  } catch (e) { if (notFound(e)) return []; throw e; }
-}

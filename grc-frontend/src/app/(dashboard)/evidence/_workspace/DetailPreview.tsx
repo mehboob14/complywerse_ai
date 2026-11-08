@@ -1,31 +1,30 @@
 'use client';
 
 /**
- * DetailPreview: the open file, without leaving the list. Given an evidence id it loads the record, the AI review, the assessment, the clause suggestions, the
- * cross-module links, the controls and the OCR text (each its own query, keys unchanged) and shows: the name and where it stands, the actions (Approve, Open file,
- * Full record, Delete), three tiles (maturity, OCR, validity), the frameworks it answers and the six counts of what it is linked to.
+ * DetailPreview: what the Library's details panel says about the open file, without leaving the list. Given an evidence id it loads the record, the AI review, the assessment, the
+ * clause suggestions, the cross-module links and the controls (each its own query, keys unchanged; the extracted text only when its popup opens) and shows: a notice when the file is
+ * past its date or was sent back, three tiles (maturity, OCR, validity), the frameworks it answers and the six counts of what it is linked to. The name, the status and the actions
+ * are the panel's (LibraryDrawer).
  *
  * Every part says what became of its request: a record that could not be read is an error with Retry (it used to draw an empty Draft), counts that could not be read
  * are a dash (they used to read 0), and a review that failed, stopped or never got its text read says so and offers to try again. The AI-review hook is shared with
  * the item page (../_review.tsx) and starts a review for a file that never had one, once per visit, exactly as before.
- *
- * `PreviewPanel` is where it is drawn: docked beside the list from 1024px, a full-height sheet (modal: focus in and back, Escape closes it) below that.
  */
 import { useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { CheckCircle2, ExternalLink, FileText, ScanText, Trash2 } from 'lucide-react';
-import { RightSlidePanel } from '@/components/ui';
-import { Button, EmptyState, ErrorState, Menu, ProgressBar, SkeletonLines, StatusPill, useReportedMutation } from '@/components/ui/ds';
+import { ScanText } from 'lucide-react';
+import { Button, ErrorState, Notice, ProgressBar, SkeletonLines, StatusPill, useReportedMutation } from '@/components/ui/ds';
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { safeDetail } from '@/lib/apiError';
-import { EMPTY, UNASSIGNED, formatCount, formatDate } from '@/lib/format';
+import { EMPTY, formatCount, formatDate } from '@/lib/format';
 import { statusPill } from '@/lib/status';
 import { maturityLevel, ocrStatus as ocrWords } from '@/lib/statuses/evidence';
 import QualityBreakdownModal from '../_QualityBreakdownModal';
 import OcrContentModal from '../_OcrContentModal';
 import { useEvidenceReview } from '../_review';
-import { deriveApplicableFrameworks, isActiveReview, maturityOf, normPct, ownerOf, reviewWord, type EvidenceItem } from './evidenceModel';
-import { ExpiryText, LetterTile, ReviewChip, StatusBadges } from './lib';
+import { deriveApplicableFrameworks, expiryReading, isActiveReview, maturityOf, normPct, reviewWord, type EvidenceItem } from './evidenceModel';
+import { returnedNote } from '../_library/libraryModel';
+import { ExpiryText, ReviewChip } from './lib';
 import { fetchAllLinks, fetchAssessment, fetchClauseMappings, fetchControls, fetchDetail, fetchOcr, processOCR } from './api';
 
 // ─── local shapes (defensive; the backend returns loose records) ────────────────────────────────────────────────────────────────────────────
@@ -64,17 +63,13 @@ function Count({ label, value, failed }: { label: string; value: number | null; 
   );
 }
 
-export function DetailPreview({ evidenceId, onApprove, onReassess, onOpenFile, onDelete, canReview, canDelete, busy }: {
+export function DetailPreview({ evidenceId, onReassess, canReview, busy }: {
   evidenceId: number | null;
-  onApprove: (id: number) => void;
   /** start the AI review again (used to retry a review that failed or stopped) */
   onReassess: (id: number) => void;
-  onOpenFile: (id: number) => void;
-  onDelete?: (id: number) => void;
   canReview?: boolean;
-  canDelete?: boolean;
   /** which request is running for this file */
-  busy?: { approve?: boolean; reassess?: boolean; remove?: boolean };
+  busy?: { reassess?: boolean };
 }) {
   const enabled = evidenceId != null;
   const [showAllFrameworks, setShowAllFrameworks] = useState(false);
@@ -113,8 +108,8 @@ export function DetailPreview({ evidenceId, onApprove, onReassess, onOpenFile, o
   const ocrQ = useQuery({
     queryKey: ['evidence-ocr', evidenceId],
     queryFn: () => fetchOcr(evidenceId as number),
-    // Loaded eagerly (like the detail record page) so the popup shows content instantly with no fetch-flash; polls while OCR is still running.
-    enabled,
+    // Loaded when its popup opens, not with every file the person looks at (the extracted text is the heaviest thing a file has); polls while OCR is still running.
+    enabled: enabled && ocrOpen,
     retry: retryRead,
     retryDelay: RETRY_AFTER,
     refetchInterval: (query) => {
@@ -130,9 +125,7 @@ export function DetailPreview({ evidenceId, onApprove, onReassess, onOpenFile, o
     invalidate: [['evidence-ocr', evidenceId], ['evidence-review', evidenceId], ['evidence-detail', evidenceId], ['ev-ws-items']],   // reading it again starts the review
   });
 
-  if (evidenceId == null) {
-    return <EmptyState bare kind="firstUse" icon={FileText} title="Select a file" description="Its details open here." />;
-  }
+  if (evidenceId == null) return null;
   if (detailQ.isLoading) return <div className="p-[16px]"><SkeletonLines lines={8} label="Loading the evidence" /></div>;
   if (detailQ.isError && !detailQ.data) {
     return <ErrorState compact title="Couldn't load this evidence" message={errorMessage(detailQ.error)} onRetry={canRetry(detailQ.error) ? () => { void detailQ.refetch(); } : undefined} />;
@@ -144,13 +137,7 @@ export function DetailPreview({ evidenceId, onApprove, onReassess, onOpenFile, o
   const links = (linksQ.data ?? {}) as AllLinks;
   const controls = (controlsQ.data ?? {}) as ControlsResp;
 
-  const name = str(detail.name) ?? 'Untitled evidence';
   const status = str(detail.status) ?? 'draft';
-  const fileName = str(detail.file_name);
-  const version = num(detail.version);
-  const committee = str(detail.committee_name);
-  const owner = ownerOf({ owner_name: (detail.owner_name as string | null) ?? null, uploader_name: (detail.uploader_name as string | null) ?? null });
-  const metaParts = [fileName, version != null ? `v${version}` : null, committee, owner ?? UNASSIGNED].filter(Boolean) as string[];
 
   const score = normPct(num(detail.quality_score)) ?? normPct(num(assessment?.audit_readiness));
   const ocrState = str(detail.ocr_status);
@@ -176,29 +163,18 @@ export function DetailPreview({ evidenceId, onApprove, onReassess, onOpenFile, o
   const level = maturityOf(score);
   const canTryAgain = !!canReview && (word === 'failed' || word === 'stopped');
 
+  const lapsedNow = status !== 'archived' && (Boolean(detail.lapsed) || Boolean(detail.is_stale) || status === 'expired');
+  const sentBack = returnedNote({ status, review_comments: str(detail.review_comments), reviewed_at: str(detail.reviewed_at), approved_at: str(detail.approved_at) });
+
   return (
     <div className="flex flex-col">
-      <div className="flex items-start gap-[12px] border-b border-ds-border px-[16px] py-[12px]">
-        <LetterTile name={name} />
-        <div className="min-w-0 flex-1">
-          <p className="line-clamp-3 break-words text-ds-section font-[600] text-ds-fg" title={name} dir="auto">{name}</p>
-          <p className={`mt-[2px] break-words text-ds-label ${MUTED}`}>{metaParts.join(' · ')}</p>
-        </div>
-        <StatusBadges item={{ status, is_stale: Boolean(detail.is_stale) }} />
-      </div>
-
-      <div className="flex flex-wrap items-center gap-[8px] border-b border-ds-border px-[16px] py-[8px]">
-        {canReview && status === 'pending_review' && (
-          <Button variant="primary" leftIcon={<CheckCircle2 aria-hidden />} loading={busy?.approve} onClick={() => onApprove(evidenceId)}>Approve</Button>
-        )}
-        <Button leftIcon={<FileText aria-hidden />} onClick={() => onOpenFile(evidenceId)}>Open file</Button>
-        {canDelete && onDelete && (
-          <Menu iconOnly label={`More actions for ${name.length > 60 ? `${name.slice(0, 60)}…` : name}`} items={[{ key: 'delete', label: 'Delete', icon: Trash2, danger: true, disabled: busy?.remove, onSelect: () => onDelete(evidenceId) }]} />
-        )}
-        <Button variant="link" className="ml-auto" href={`/evidence/${evidenceId}`} rightIcon={<ExternalLink aria-hidden />}>Full record</Button>
-      </div>
-
       <div className="flex flex-col gap-[16px] px-[16px] py-[16px]">
+        {lapsedNow && (
+          <Notice tone="warning" title="Past its validity">
+            {expiry ? `${expiryReading(expiry).text}. ` : 'It was marked as lapsed. '}Renew it to put it back in date; it then needs a new review.
+          </Notice>
+        )}
+        {sentBack && <Notice tone="info" title="Sent back for changes">{sentBack}</Notice>}
         <div className="grid grid-cols-1 gap-[12px] sm:grid-cols-3">
           <Tile label="Maturity">
             {rated ? (
@@ -289,22 +265,13 @@ export function DetailPreview({ evidenceId, onApprove, onReassess, onOpenFile, o
       <OcrContentModal
         isOpen={ocrOpen}
         onClose={() => setOcrOpen(false)}
-        ocrStatus={ocrQ.data?.ocr_status || ocrState || 'pending'}
+        ocrStatus={ocrQ.isLoading ? 'processing' : (ocrQ.data?.ocr_status || ocrState || 'pending')}
+        processMessage={ocrQ.isError && !ocrQ.data ? `The text could not be loaded. ${errorMessage(ocrQ.error)}` : null}
         ocrContent={ocrQ.data?.ocr_content ?? null}
         ocrProcessedAt={ocrQ.data?.ocr_processed_at ?? null}
         onReprocess={() => reprocessOcr.mutate()}
         isReprocessing={reprocessOcr.isPending}
       />
     </div>
-  );
-}
-
-/** Where the preview is drawn: docked beside the list (a card), or a sheet over the page (modal). */
-export function PreviewPanel({ mode, open, onClose, children }: { mode: 'docked' | 'sheet'; open: boolean; onClose: () => void; children: ReactNode }) {
-  if (mode === 'docked') return <div className="overflow-hidden rounded-ds-card border border-ds-border bg-ds-surface">{children}</div>;
-  return (
-    <RightSlidePanel isOpen={open} onClose={onClose} title="Evidence" width="w-full max-w-xl">
-      <div className="-mx-[24px] -my-[20px]">{children}</div>
-    </RightSlidePanel>
   );
 }

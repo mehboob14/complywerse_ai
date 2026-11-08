@@ -1,10 +1,10 @@
 'use client';
 
 /**
- * Evidence Management: the shell of /evidence. The kit's page head with the Evidence | Settings choice and Upload, the workspace (views, filters, preview) and the
- * Settings panel (shared custom fields, lists and SLA; unchanged). It owns the upload: the form is a right-hand panel; a failed upload is said inside it in the server's
- * words with the form kept (it used to stop the spinner and say nothing), assets that could not be linked are said, and a file that looks like what some common
- * controls ask for gets its suggestion dialog right after. Section, view, filters and the open file live in the address (_workspace/workspaceAddress.ts).
+ * Evidence Management: the shell of /evidence. The kit's page head with its strip of tabs (Library, Insights, Requirements, Audit packages, Settings) and Upload, and under it the
+ * Library (the facet explorer), the Insights readout or the Settings panel (shared custom fields, lists and SLA; unchanged). It owns the upload: the form is a right-hand panel; a failed
+ * upload is said inside it in the server's words with the form kept, assets that could not be linked are said, and a file that looks like what some common controls ask for gets its
+ * suggestion dialog right after. The view, the filters and the open file live in the address (_library/libraryAddress.ts).
  */
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -13,25 +13,25 @@ import type { AxiosResponse } from 'axios';
 import { usePermissions } from '@/hooks/usePermissions';
 import apiClient, { assetsApi } from '@/lib/api';
 import { PageHeader } from '@/components/ui';
-import { Button, SegmentedControl, useAddressState, useNotify, useReportedMutation } from '@/components/ui/ds';
+import { Button, useAddressState, useNotify, useReportedMutation } from '@/components/ui/ds';
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { truncate } from '@/lib/format';
 import ModuleSettingsPanel from '@/components/settings/ModuleSettingsPanel';
 import CommonControlSuggest, { type CommonControlRec } from './_CommonControlSuggest';
 import { UploadDrawer, type EvidenceType } from './_UploadDrawer';
-import { EvidenceWorkspace } from './_workspace/EvidenceWorkspace';
-import { SCHEMA } from './_workspace/workspaceAddress';
-
-type Section = 'records' | 'settings';
-const SECTIONS: Array<{ value: Section; label: string }> = [{ value: 'records', label: 'Evidence' }, { value: 'settings', label: 'Settings' }];
-const REFRESH = [['evidence-items'], ['evidence-summary'], ['ev-ws-items'], ['ev-ws-summary'], ['ev-ws-expiring']] as const;
+import { InsightsView } from './_insights/InsightsView';
+import { LibraryExplorer } from './_library/LibraryExplorer';
+import { LIBRARY_SCHEMA, pageOf, type LibraryAddress } from './_library/libraryAddress';
+import { LIBRARY_REFRESH } from './_library/libraryData';
+import { EvidenceTabs } from './_tabs/EvidenceTabs';
+import { tabOf } from './_tabs/tabsModel';
 
 export default function EvidencePage() {
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('evidence:evidence_library:create');
-  const canDelete = hasPermission('evidence:evidence_library:delete');
   const notify = useNotify();
-  const [a, set] = useAddressState(SCHEMA);
+  const [a, set] = useAddressState(LIBRARY_SCHEMA);
+  const page = pageOf(a as unknown as LibraryAddress);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   // Common controls the file just uploaded can stand for (offered once, right after the upload).
   const [suggest, setSuggest] = useState<{ id: number; name: string; recs: CommonControlRec[] } | null>(null);
@@ -60,7 +60,7 @@ export default function EvidencePage() {
     failure: "Couldn't upload the file",
     retryable: false,                                   // the drawer has its own Retry; a repeat after a lost answer could make a second file
     toast: 'success',                                   // a failure is said inside the drawer, once
-    invalidate: REFRESH,
+    invalidate: LIBRARY_REFRESH,
     onSuccess: async (done) => {
       setIsUploadOpen(false);
       if (done.linkFailures) notify.warning(`${done.linkFailures} of ${done.linked} ${done.linked === 1 ? 'asset' : 'assets'} could not be linked. Link them from the evidence page.`);
@@ -79,25 +79,38 @@ export default function EvidencePage() {
   });
 
   const openUpload = () => { upload.reset(); setIsUploadOpen(true); };
+  const current = tabOf('/evidence', page.view, page.section) ?? 'library';
 
-  return (
-    <div className="flex flex-col gap-[16px]">
+  // The head: the title, what the area is for (in the (i)), a count where the Library knows one, and Upload; then the tabs.
+  const head = (compact: boolean, meta?: string) => (
+    <div className="flex flex-col gap-[12px]">
       <PageHeader
         variant="page"
         title="Evidence Management"
         info="Upload evidence, let the AI read and rate how mature it is, review it, and see which controls and frameworks it supports."
-        actions={(
-          <>
-            <SegmentedControl label="Show" name="evidence-section" options={SECTIONS} value={a.section} onChange={(section: Section) => set({ section })} />
-            {canCreate && a.section === 'records' && <Button variant="primary" leftIcon={<Plus aria-hidden />} onClick={openUpload}>Upload evidence</Button>}
-          </>
-        )}
+        meta={meta}
+        actions={canCreate && page.section === 'records' ? (
+          <Button variant="primary" leftIcon={<Plus aria-hidden />} onClick={openUpload} title="Upload evidence"><span className={compact ? 'sr-only' : undefined}>Upload evidence</span></Button>
+        ) : undefined}
       />
+      <EvidenceTabs current={current} />
+    </div>
+  );
 
-      {a.section === 'settings' ? (
-        <ModuleSettingsPanel moduleKey="evidence" />
+  return (
+    <div className="flex flex-col gap-[16px]">
+      {page.section === 'settings' ? (
+        <>
+          {head(false)}
+          <ModuleSettingsPanel moduleKey="evidence" />
+        </>
+      ) : page.view === 'insights' ? (
+        <>
+          {head(false)}
+          <InsightsView />
+        </>
       ) : (
-        <EvidenceWorkspace canCreate={canCreate} canDelete={canDelete} onUploadClick={openUpload} address={a} setAddress={set} />
+        <LibraryExplorer address={a} setAddress={set} onUploadClick={openUpload} head={(fit, meta) => head(fit.compact, meta)} />
       )}
 
       {isUploadOpen && (
