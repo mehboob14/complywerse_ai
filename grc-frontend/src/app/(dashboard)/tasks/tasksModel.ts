@@ -1,11 +1,9 @@
-// The rules of the Task Management pages, apart from React so `node --test` can pin them (tasksModel.test.ts): the words and lists the pages offer, what lives in the
-// address, the exact list request, how a form becomes the payload the server has always been sent (moved from the old pages and checked against frozen copies of them),
-// the Kanban grouping, what a bulk write says, the counts of My Tasks and of the Reports, and the limits the table holds (a title is VARCHAR(255)).
-// Nothing here decides who may do what: the rights stay where the pages check them.
-import { flag, integer, oneOf, sortOf, text, type AddressState } from '../../../lib/addressState.ts';
+// The rules of the Task Management pages, apart from React so `node --test` can pin them (tasksModel.test.ts): the words and lists the pages offer, how a form becomes the payload the
+// server has always been sent (moved from the old pages and checked against frozen copies of them), what a bulk write says, the counts of My Tasks and of the Reports, and the limits the
+// table holds (a title is VARCHAR(255)). The register's own rules (facets, address, sort) are _register/taskFacets.ts and taskAddress.ts; the task as a record (kind, due, next step) is
+// taskRecord.ts. Nothing here decides who may do what: the rights stay where the pages check them.
 import { isDocumentTask, withoutLocked, type DocumentRequest } from '../../../lib/documentTasks.ts';
 import { norm } from '../../../lib/status.ts';
-import type { SortState } from '../../../components/ui/ds/tableModel.ts';
 
 // ── what a task row carries (the fields the pages read) ──────────────────────────────────────────────────────────────────────────────────
 export interface TaskUser { id: number; username?: string | null; display_name: string | null; email: string }
@@ -103,62 +101,14 @@ export const TAB_LABELS: Record<TaskTab, string> = { board: 'Task Board', 'my-ta
 export const DETAIL_TABS = ['details', 'subtasks', 'comments', 'evidence', 'history'] as const;
 export type DetailTab = (typeof DETAIL_TABS)[number];
 
-// ── the board in the address ────────────────────────────────────────────────────────────────────────────────────────────────────────────
-/** the columns the server can sort by (critical_tasks_router.SORTABLE_COLUMNS) */
+// ── paging ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+/** the columns the server can sort by (critical_tasks_router.SORTABLE_COLUMNS; the register adds the owner, which it sorts itself) */
 export const SORT_KEYS = ['created_at', 'updated_at', 'title', 'priority', 'status', 'due_date', 'source', 'category'];
-/** what the list was in before anyone sorted it: newest first */
-export const DEFAULT_SORT = { key: 'created_at', dir: 'desc' } as const;
 export const PAGE_SIZES = [25, 50, 100] as const;
 export const DEFAULT_PAGE_SIZE = 50;
-/** the Kanban loads one request of this many: the server's own default, what the board always showed (it does not page) */
-export const KANBAN_LIMIT = 100;
-
-export const BOARD_SCHEMA = {
-  q: text(),
-  source: text(),
-  priority: text(),
-  status: text(),
-  category: text(),
-  owner: text(),
-  sort: sortOf(SORT_KEYS, DEFAULT_SORT),
-  page: integer(1, { min: 1 }),
-  size: integer(DEFAULT_PAGE_SIZE, { min: 1, max: 100 }),
-  view: oneOf(['table', 'kanban'] as const, 'table'),
-  mine: flag(),
-};
-export type BoardState = AddressState<typeof BOARD_SCHEMA>;
 
 /** a page size the pager offers: anything else in the address is the default */
 export const pageSizeOf = (n: number): number => ((PAGE_SIZES as readonly number[]).indexOf(n) >= 0 ? n : DEFAULT_PAGE_SIZE);
-
-/** how many filters are on (the Clear button and the "no match" state read it) */
-export function filterCount(s: Pick<BoardState, 'q' | 'source' | 'priority' | 'status' | 'category' | 'owner'>): number {
-  return [s.q.trim(), s.source, s.priority, s.status, s.category, s.owner].filter(Boolean).length;
-}
-
-/** The request the board sends: what it always sent (sort_by, sort_order, and each filter that is set, named as the server names it), now with the page it shows. */
-export function listParams(s: Pick<BoardState, 'q' | 'source' | 'priority' | 'status' | 'category' | 'owner' | 'sort' | 'view' | 'page' | 'size'>): Record<string, unknown> {
-  const sort = s.sort ?? DEFAULT_SORT;
-  const params: Record<string, unknown> = { sort_by: sort.key, sort_order: sort.dir };
-  if (s.q) params.search = s.q;
-  if (s.source) params.source = s.source;
-  if (s.priority) params.priority = s.priority;
-  if (s.status) params.status = s.status;
-  if (s.category) params.category = s.category;
-  if (s.owner) params.assigned_owner_id = s.owner;
-  if (s.view === 'kanban') {
-    params.skip = 0;
-    params.limit = KANBAN_LIMIT;
-  } else {
-    const size = pageSizeOf(s.size);
-    params.skip = (Math.max(1, s.page) - 1) * size;
-    params.limit = size;
-  }
-  return params;
-}
-
-/** the sort the header asks for becomes the address: clearing a column's sort returns to the default order (newest first) */
-export const sortFromHeader = (next: SortState): { key: string; dir: 'asc' | 'desc' } => next ?? { ...DEFAULT_SORT };
 
 /** The last page there is for `total` rows (never less than 1): a filter that leaves fewer pages than the address says is not an empty page. */
 export function lastPage(total: number, size: number): number {
@@ -171,25 +121,12 @@ export function coverage(loaded: number, total: number | null | undefined): { lo
   return { loaded, total: Math.max(all, loaded), cut: all > loaded };
 }
 
-// ── Kanban ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-/** One column per status of the workflow; a task whose status is none of them (a module wrote its own word) goes in `other`, never nowhere. */
-export function kanbanColumns<T extends { status: string }>(tasks: readonly T[]): { columns: Array<{ status: string; tasks: T[] }>; other: T[] } {
-  const columns = STATUSES.map((status) => ({ status, tasks: [] as T[] }));
-  const other: T[] = [];
-  tasks.forEach((task) => {
-    const column = columns.filter((c) => norm(c.status) === norm(task.status))[0];
-    if (column) column.tasks.push(task);
-    else other.push(task);
-  });
-  return { columns, other };
-}
-
 // ── the people of a task ────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-export const personName = (u: Pick<TaskUser, 'display_name' | 'username' | 'email'> | null | undefined): string | null => u?.display_name || u?.username || u?.email || null;
+export const personName = (u: { display_name?: string | null; username?: string | null; email?: string | null } | null | undefined): string | null => u?.display_name || u?.username || u?.email || null;
 
 /** Everyone on the task, by name, the owner first (what the Owner column has always shown) and then the other assignees the server lists: editing a task's owner changes the
  *  owner but not the assignee list (the server syncs only the other way), so the two can differ and both are on the task. An older answer without `assignees` has the owner alone. */
-export function assigneeNames(task: Pick<TaskRow, 'assignees' | 'assigned_owner'>): string[] {
+export function assigneeNames(task: { assignees?: Array<{ id: number; display_name?: string | null; username?: string | null; email?: string | null }>; assigned_owner?: { id: number; display_name?: string | null; username?: string | null; email?: string | null } | null }): string[] {
   const owner = task.assigned_owner;
   const names: string[] = [];
   const first = personName(owner);

@@ -90,20 +90,24 @@ test('the rights are the ones the pages always checked: New task needs critical_
   const work = code(read('my-work/page.tsx'));
   assert.match(work, /isAdmin \|\| hasAnyPermission\(\['compliance:frameworks:\*', 'controls:control_library:\*', 'evidence:evidence_library:\*'\]\)/, 'My Work is for administrators and people with framework, control or evidence access');
   assert.match(work, /NoAccessState/, 'the one place that already decided "no access" says it with the kit');
-  assert.doesNotMatch(code(read('tasks/_Board.tsx')) + code(read('tasks/_Kanban.tsx')) + code(read('tasks/_MyTasksView.tsx')) + code(read('tasks/_ReportsView.tsx')), /NoAccessState/, 'no other page decides "no access": the server answers and the page says its words');
+  const register = ['tasks/_Board.tsx', 'tasks/_register/TaskRegister.tsx', 'tasks/_register/TaskRows.tsx', 'tasks/_register/TaskBoard.tsx', 'tasks/_register/TaskDrawer.tsx', 'tasks/_register/BulkTasks.tsx'].map((f) => code(read(f))).join(' ');
+  assert.doesNotMatch(register + code(read('tasks/_MyTasksView.tsx')) + code(read('tasks/_ReportsView.tsx')), /NoAccessState/, 'no other page decides "no access": the server answers and the page says its words');
+  assert.doesNotMatch(register, /hasPermission|hasAnyPermission|isAdmin/, 'the register checks no right of its own: New task arrives as a prop from the page head, everything else is for the server to allow (recorded as a gap for the owner)');
 });
 
 test('the requests are the old ones: the same API calls, the same bulk and list bodies, the same query keys', () => {
   const queries = code(read('tasks/_queries.ts'));
-  assert.match(queries, /criticalTasksApi\.list\(params\)/);
-  assert.match(queries, /queryKey: \['critical-tasks', params\]/, 'the list key still starts with critical-tasks, so every invalidation of that name reaches it');
   assert.match(queries, /criticalTasksApi\.getTenantUsers\(\)/);
+  const data = code(read('tasks/_register/taskData.ts'));
+  assert.match(data, /criticalTasksApi\.list\(\{ lean: 1, limit: LOAD_LIMIT \}\)/, 'the register is ONE complete lean load');
+  assert.match(data, /TASKS_KEY = \['critical-tasks', 'lean'\]/, 'the list key still starts with critical-tasks, so every invalidation of that name reaches it');
+  assert.match(data, /LOAD_LIMIT = 10_000/, 'the ceiling of the server');
   assert.match(code(read('tasks/[id]/page.tsx')), /queryKey: \['critical-task', taskId\]/);
   assert.match(code(read('tasks/_MyTasksView.tsx')), /queryKey: \['my-tasks'\]/);
   assert.match(code(read('tasks/_MyTasksView.tsx')), /criticalTasksApi\.myTasks\(\)/);
   assert.match(code(read('tasks/_ReportsView.tsx')), /queryKey: \['task-reports'\]/);
   assert.match(code(read('tasks/_ReportsView.tsx')), /criticalTasksApi\.reportsSummary\(\)/);
-  const bulk = code(read('tasks/_BulkBar.tsx'));
+  const bulk = code(read('tasks/_register/BulkTasks.tsx'));
   assert.match(bulk, /\{ task_ids: v\.ids, action: v\.action, assigned_owner_id: v\.assignee \}/);
   assert.match(bulk, /\{ task_ids: v\.ids, action: v\.action, value: v\.value \}/);
   assert.match(bulk, /criticalTasksApi\.bulkAction\(bodyOf\(v\)\)/);
@@ -119,7 +123,8 @@ test('the requests are the old ones: the same API calls, the same bulk and list 
 
 test('every mutation that changes a task refreshes what shows it: the board list (critical-tasks), the task (critical-task) or the reports', () => {
   assert.match(code(read('tasks/_CreateTask.tsx')), /invalidate: \[\['critical-tasks'\]\]/);
-  assert.match(code(read('tasks/_BulkBar.tsx')), /invalidate: \[\['critical-tasks'\]\]/);
+  assert.match(code(read('tasks/_register/BulkTasks.tsx')), /invalidate: TASK_REFRESH/);
+  assert.match(code(read('tasks/_register/taskData.ts')), /TASK_REFRESH[^=]*= \[\['critical-tasks'\], \['critical-task'\], \['my-tasks'\], \['task-reports'\]\]/, 'a bulk write refreshes the list, the open task, My Tasks and the reports');
   assert.match(code(read('tasks/_AiPriorities.tsx')), /invalidate: \[\['critical-tasks'\]\]/);
   assert.match(code(read('tasks/_ReportsView.tsx')), /invalidate: \[\['task-reports'\], \['critical-tasks'\]\]/);
   for (const f of ['tasks/[id]/_Actions.tsx', 'tasks/[id]/_Panels.tsx', 'tasks/[id]/_EditTask.tsx', 'tasks/[id]/_AiPanels.tsx']) assert.match(code(read(f)), /\['critical-task', task\.id\]/, f);
@@ -128,7 +133,8 @@ test('every mutation that changes a task refreshes what shows it: the board list
 test('the URL contract: /tasks keeps its four tabs in ?tab= (the board has the plain address), the board lives in the address, the task page keeps its tabs in ?tab=, and the pages that were embedded still open on their own', () => {
   const page = code(read('tasks/page.tsx'));
   assert.match(page, /useTabParam\('tab', TASK_TABS, \{ fallback: 'board', aliases: TAB_ALIASES \}\)/);
-  assert.match(code(read('tasks/_Board.tsx')), /useAddressState\(BOARD_SCHEMA\)/);
+  assert.match(code(read('tasks/_register/TaskRegister.tsx')), /useAddressState\(REGISTER_SCHEMA\)/, 'the register lives in the address (the old board links keep working: taskAddress.test.ts)');
+  assert.match(code(read('tasks/_Board.tsx')), /<TaskRegister canCreate=\{canCreate\} onNew=\{onNew\} \/>/, 'the Board tab is the register');
   assert.match(code(read('tasks/[id]/_TaskView.tsx')), /useTabParam\('tab', DETAIL_TABS, \{ fallback: 'details' \}\)/);
   for (const f of ['tasks/my-tasks/page.tsx', 'tasks/reports/page.tsx', 'tasks/sla/page.tsx']) assert.match(code(read(f)), /export default function/, `${f} is still a page of its own`);
 });
@@ -147,5 +153,35 @@ test('the old pages\' own copies are gone: no page-local colour map, no hand-bui
     assert.doesNotMatch(src, /PRIORITY_COLORS|STATUS_COLORS|SLA_COLORS|KANBAN_BORDER_COLORS/, `${file}: a colour map the status registry replaced`);
     assert.doesNotMatch(src, /fixed inset-0/, `${file}: a hand-built overlay (the kit's overlays are used)`);
     assert.doesNotMatch(src, /MultiSelectDropdown|SearchInput\b/, `${file}: a legacy picker`);
+  }
+});
+
+// ── the All tasks register (Stage 4, tasks-register) ──────────────────────────────────────────────────────────────────────────────────────
+
+test('the register is the shared facet explorer on the kit, loads the lean list once and keeps its state in the address', () => {
+  const reg = code(read('tasks/_register/TaskRegister.tsx'));
+  for (const piece of ['RecordExplorer', 'RecordTable', 'BulkBar', 'AppliedFilters', 'useSelection', 'useExplorerKeys', 'evaluate']) assert.match(reg, new RegExp(`\\b${piece}\\b`), piece);
+  assert.match(reg, /useLeanTasks\(\)/);
+  assert.doesNotMatch(reg, /criticalTasksApi\.list\(/, 'the page asks through taskData, once');
+  assert.doesNotMatch(reg, /<PageHeader/, 'the register sits under the page head');
+  for (const { file, text } of ALL.filter((s) => s.file.includes('/tasks/_register/'))) {
+    assert.doesNotMatch(code(text), /localStorage|sessionStorage/, `${file}: state that matters is in the address or on the server`);
+  }
+});
+
+test('the register moves a task through the workflow endpoints, with the bodies the task page sends', () => {
+  const reg = code(read('tasks/_register/TaskRegister.tsx'));
+  assert.match(reg, /criticalTasksApi\.transition\(v\.task\.id, \{ new_status: v\.to \}\)/);
+  assert.match(reg, /criticalTasksApi\.requestApproval\(v\.task\.id, \{ comment: ''/);
+  assert.match(reg, /criticalTasksApi\.approveTask\(v\.task\.id, \{ comment: '' \}\)/);
+  assert.match(reg, /invalidate: TASK_REFRESH\.filter/, 'one step refreshes the open task, My Tasks and the reports; the register row is patched, not loaded again');
+  const rows = code(read('tasks/_register/TaskRows.tsx')) + code(read('tasks/_register/TaskBoard.tsx'));
+  assert.match(rows, /approvalGate\(task, status\)/, 'a step the approval gate holds back says so (and is not pressable)');
+  assert.match(rows, /allowedTransitions\(task\)/, 'only the steps the workflow allows are offered');
+});
+
+test('the register has no drag and no storage of its own', () => {
+  for (const { file, text } of ALL.filter((s) => s.file.includes('/tasks/_register/') && s.file.endsWith('.tsx'))) {
+    assert.doesNotMatch(code(text), /draggable|onDragStart|onDrop/, `${file}: a status changes through the menu, never by dragging`);
   }
 });
