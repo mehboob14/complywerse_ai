@@ -675,6 +675,19 @@ class RoleUpdate(BaseModel):
     permission_names: Optional[List[str]] = None
 
 
+MAX_ROLE_NAME = 100        # grc_roles.name is VARCHAR(100)
+
+
+def _clean_role_name(value: Optional[str]) -> str:
+    """A role needs a real name (the form already asks for one): blank or over-long names used to be stored, or failed in the database."""
+    name = (value or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Role name is required")
+    if len(name) > MAX_ROLE_NAME:
+        raise HTTPException(status_code=400, detail=f"Role name must be {MAX_ROLE_NAME} characters or fewer")
+    return name
+
+
 @router.get("/organization")
 def get_organization_profile(
     user: TenantUser = Depends(require_permission("admin:organization:view")),
@@ -743,11 +756,19 @@ def list_users(
     # the users of this platform: accounts an access review imported are listed in Access Reviews only
     users = tenant_db.query(TenantUser).filter(platform_account()).order_by(TenantUser.id).all()
 
+    # Only platform-given roles: a connector-imported entitlement sent back by the users page would become a manual role.
+    # One query for everyone's roles (not one per person); a person's roles come in role order.
+    held: dict = {}
+    if users:
+        links = (tenant_db.query(UserRole.user_id, Role.id, Role.name)
+                 .join(Role, Role.id == UserRole.role_id)
+                 .filter(UserRole.user_id.in_([u.id for u in users]), PLATFORM_GRANT)
+                 .order_by(UserRole.user_id, Role.id).all())
+        for user_id, role_id, role_name in links:
+            held.setdefault(user_id, []).append({"id": role_id, "name": role_name})
+
     result = []
     for u in users:
-        # Only platform-given roles: a connector-imported entitlement sent back by the users page would become a manual role.
-        roles = tenant_db.query(Role).join(UserRole).filter(UserRole.user_id == u.id, PLATFORM_GRANT).all()
-        
         result.append({
             "id": u.id,
             "username": u.username,
@@ -756,7 +777,7 @@ def list_users(
             "is_active": u.is_active,
             "created_at": u.created_at.isoformat() if u.created_at else None,
             "last_login": u.last_login.isoformat() if u.last_login else None,
-            "roles": [{"id": r.id, "name": r.name} for r in roles]
+            "roles": held.get(u.id, [])
         })
     return result
 
@@ -982,22 +1003,25 @@ def list_roles(
     tenant_db: Session = Depends(get_tenant_db)
 ):
     _ensure_default_roles(tenant_db)
-    roles = tenant_db.query(Role).all()
+    roles = tenant_db.query(Role).order_by(Role.id).all()
+
+    # Two grouped queries for every role's permissions and people (not two per role).
+    names: dict = {}
+    for role_id, perm_name in (tenant_db.query(RolePermission.role_id, Permission.name)
+                               .join(Permission, Permission.id == RolePermission.permission_id)
+                               .order_by(RolePermission.role_id, Permission.id).all()):
+        names.setdefault(role_id, []).append(perm_name)
+    people = dict(tenant_db.query(UserRole.role_id, func.count(UserRole.id)).filter(PLATFORM_GRANT).group_by(UserRole.role_id).all())
 
     result = []
     for role in roles:
-        perms = tenant_db.query(Permission).join(RolePermission).filter(
-            RolePermission.role_id == role.id
-        ).all()
-        user_count = tenant_db.query(UserRole).filter(UserRole.role_id == role.id, PLATFORM_GRANT).count()
-        
         result.append({
             "id": role.id,
             "name": role.name,
             "description": role.description,
             "is_system_role": role.is_system_role,
-            "user_count": user_count,
-            "permissions": [p.name for p in perms],
+            "user_count": people.get(role.id, 0),
+            "permissions": names.get(role.id, []),
             "created_at": role.created_at.isoformat() if role.created_at else None
         })
     return result
@@ -1035,13 +1059,14 @@ def create_role(
 ):
     local_tenant_id = (tenant_db.query(Tenant).first() or Tenant()).id
 
-    existing = tenant_db.query(Role).filter(Role.name == data.name).first()
+    name = _clean_role_name(data.name)
+    existing = tenant_db.query(Role).filter(Role.name == name).first()
     if existing:
         raise HTTPException(status_code=400, detail="Role name already exists")
 
     role = Role(
         tenant_id=local_tenant_id,
-        name=data.name,
+        name=name,
         description=data.description,
         is_system_role=False,
     )
@@ -1079,12 +1104,13 @@ def update_role(
     local_tenant_id = (tenant_db.query(Tenant).first() or Tenant()).id
 
     if data.name is not None:
+        name = _clean_role_name(data.name)
         existing = tenant_db.query(Role).filter(
-            Role.name == data.name, Role.id != role_id
+            Role.name == name, Role.id != role_id
         ).first()
         if existing:
             raise HTTPException(status_code=400, detail="Role name already exists")
-        role.name = data.name
+        role.name = name
 
     if data.description is not None:
         role.description = data.description
