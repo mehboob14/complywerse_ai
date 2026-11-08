@@ -251,6 +251,7 @@ test('ownHeading is on exactly the pages that draw the kit head (PageHeader vari
     '/frameworks', '/frameworks/:id', '/frameworks/onboarding/:id', '/bcm/plans', '/bcm/drills', '/bcm/findings',
     '/controls', '/control-library', '/control-library/:id', '/control-library/review',
     '/assessments/register', '/assessments/types',
+    '/issues/register', '/issues/actions',
     '/erm/incidents', '/erm/mitigation-actions', '/erm/appetite', '/erm/analytics', '/erm/analytics/aggregation', '/erm/analytics/bowtie', '/erm/analytics/dependencies', '/erm/analytics/kri-triggers',
     '/erm/analytics/scenario', '/erm/risks', '/erm/risk-assessments', '/erm/risk-assessments/ai-risk-assessment'];
   const DOCUMENTS_AREA_STRIP = ['/governance/documents/attestation', '/governance/documents/studio', '/governance/documents/overview', '/governance/exceptions', '/governance/reviews', '/governance/settings'];

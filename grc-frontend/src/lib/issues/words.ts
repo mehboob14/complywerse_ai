@@ -2,6 +2,7 @@
 // of the life cycle, ONE definition of "open" (new, triage, in progress, resolution, closure review: the rule by-source, BCM and auto-create already use), the guided next
 // steps (the server's ALLOWED_TRANSITIONS without the unguarded "closed"), what is late, the options of every select and the sentence for each. The tones and labels of the words
 // themselves are lib/statuses/issues.ts. A word nobody listed reads as itself with a readable label, never as a guess.
+import { statusLabel } from '../format.ts';
 import { parseUtc } from '../serverTime.ts';
 import { actionStatus, actionType, issueCategory, issueSeverity, issueSource, issueState, issueType } from '../statuses/issues.ts';
 
@@ -107,6 +108,35 @@ export const isOpenAction = (status?: string | null): boolean => (OPEN_ACTION_ST
 export const awaitsVerification = (status?: string | null): boolean => status === 'completed';
 /** An action is late when it is still open and its due date has passed (the scorecard's "overdue" action). */
 export const isActionLate = (status: string | null | undefined, due: string | null | undefined, now: Date = new Date()): boolean => isOpenAction(status) && !!due && daysLate(due, now) !== null;
+/** One thing a person can do to a corrective action's status. `verify` is POST /verify (it stamps who confirmed it worked); the rest are a PATCH of the status. */
+export interface ActionStep { key: string; to: string; label: string; kind: 'patch' | 'verify'; primary?: boolean; danger?: boolean }
+const ACTION_STEPS: Record<string, ActionStep[]> = {
+  planned: [
+    { key: 'start', to: 'in_progress', label: 'Start work', kind: 'patch', primary: true },
+    { key: 'block', to: 'blocked', label: 'Mark blocked', kind: 'patch' },
+    { key: 'complete', to: 'completed', label: 'Mark completed', kind: 'patch' },
+    { key: 'cancel', to: 'cancelled', label: 'Cancel action', kind: 'patch', danger: true },
+  ],
+  in_progress: [
+    { key: 'complete', to: 'completed', label: 'Mark completed', kind: 'patch', primary: true },
+    { key: 'block', to: 'blocked', label: 'Mark blocked', kind: 'patch' },
+    { key: 'back', to: 'planned', label: 'Back to planned', kind: 'patch' },
+    { key: 'cancel', to: 'cancelled', label: 'Cancel action', kind: 'patch', danger: true },
+  ],
+  blocked: [
+    { key: 'resume', to: 'in_progress', label: 'Resume work', kind: 'patch', primary: true },
+    { key: 'complete', to: 'completed', label: 'Mark completed', kind: 'patch' },
+    { key: 'cancel', to: 'cancelled', label: 'Cancel action', kind: 'patch', danger: true },
+  ],
+  completed: [
+    { key: 'verify', to: 'verified', label: 'Verify it worked', kind: 'verify', primary: true },
+    { key: 'reopen', to: 'in_progress', label: 'Reopen work', kind: 'patch' },
+  ],
+  verified: [{ key: 'reopen', to: 'in_progress', label: 'Reopen work', kind: 'patch' }],
+  cancelled: [{ key: 'restore', to: 'planned', label: 'Restore', kind: 'patch' }],
+};
+/** The steps open to an action in this status (a status nobody listed is a planned one), the expected one first. */
+export const actionStepsFrom = (status?: string | null): ActionStep[] => (ACTION_STEPS[status || 'planned'] ?? []).slice();
 export const ACTION_STATUS_OPTIONS = optionsOf(actionStatus);
 export const ACTION_TYPE_OPTIONS = optionsOf(actionType);
 
@@ -135,3 +165,41 @@ export function parseLinked(value: string | null | undefined): LinkedRecord | nu
   return { type: m[1], id: Number(m[2]) };
 }
 export const linkedValue = (r: LinkedRecord): string => `${r.type}:${r.id}`;
+
+// ── the activity feed, in a line ──
+const EVENT_WORDS: Record<string, string> = {
+  created: 'Raised the issue',
+  auto_created: 'Raised automatically',
+  updated: 'Edited the details',
+  severity_change: 'Changed the severity',
+  status_change: 'Moved the issue',
+  approved: 'Approved the closure',
+  reopened: 'Reopened the issue',
+  cancelled: 'Cancelled the issue',
+  commented: 'Added a comment',
+  action_added: 'Added a corrective action',
+  action_updated: 'Edited a corrective action',
+  action_status_changed: 'Moved a corrective action',
+  action_completed: 'Completed a corrective action',
+  action_verified: 'Verified a corrective action',
+  action_deleted: 'Deleted a corrective action',
+  action_promoted_to_task: 'Sent an action to Task Management',
+  linked: 'Linked a record',
+  linked_on_create: 'Linked records when it was raised',
+  unlinked: 'Unlinked a record',
+  register_created: 'Added to the audit register',
+  register_edit: 'Edited the register columns',
+  register_deleted: 'Deleted from the register',
+  register_restored: 'Restored to the register',
+  validation_submitted: 'Submitted for validation',
+  validation_decision: 'Recorded the validation decision',
+  extension_requested: 'Requested an extension',
+  extension_decided: 'The Audit Committee decided the extension',
+  extension_regulator_notified: 'Recorded that the regulator was told',
+  regulator_status: 'Changed the regulator status',
+};
+/** What an activity row says in one line: "Moved to Closure review", "Approved the closure". A type nobody listed reads as itself, in words. */
+export function eventLine(type: string, payload?: Record<string, unknown> | null): string {
+  if (type === 'status_change' && payload && typeof payload.to === 'string') return `Moved to ${issueState.label(payload.to)}`;
+  return EVENT_WORDS[type] ?? statusLabel(type);
+}

@@ -7,8 +7,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import {
-  ACTION_STATUSES, ACTION_STATUS_OPTIONS, ISSUE_STATES, ISSUE_TYPE_OPTIONS, LEVEL_OPTIONS, OPEN_ACTION_STATUSES, OPEN_STATES, SEVERITY_OPTIONS, awaitsVerification, daysLate, isActionLate,
-  isAwaitingClosure, isIssueLate, isOpenAction, isOpenIssue, isSerious, lateWord, linkedValue, parseLinked, severityRank, sourceWord, stateOf, stepTargets, stepsFrom,
+  ACTION_STATUSES, ACTION_STATUS_OPTIONS, actionStepsFrom, ISSUE_STATES, ISSUE_TYPE_OPTIONS, LEVEL_OPTIONS, OPEN_ACTION_STATUSES, OPEN_STATES, SEVERITY_OPTIONS, awaitsVerification, daysLate, isActionLate,
+  eventLine, isAwaitingClosure, isIssueLate, isOpenAction, isOpenIssue, isSerious, lateWord, linkedValue, parseLinked, severityRank, sourceWord, stateOf, stepTargets, stepsFrom,
 } from './words.ts';
 import { issueState } from '../statuses/issues.ts';
 
@@ -97,4 +97,27 @@ test('the options of the selects carry the registry\'s labels, and a source with
   assert.equal(sourceWord(null), 'Raised by hand');
   assert.equal(sourceWord('vulnerability'), 'Vulnerability');
   assert.equal(sourceWord('some_new_source'), 'Some new source');
+});
+
+test('an activity row reads as one line: a move names the state it went to, an unlisted type reads as words', () => {
+  assert.equal(eventLine('status_change', { from: 'triage', to: 'closure_review' }), 'Moved to Closure review');
+  assert.equal(eventLine('status_change', null), 'Moved the issue');
+  assert.equal(eventLine('approved'), 'Approved the closure');
+  assert.equal(eventLine('some_new_event'), 'Some new event');
+  assert.equal(eventLine('action_promoted_to_task'), 'Sent an action to Task Management');
+});
+
+test('the steps of an action only lead to statuses the server accepts, verifying is the one that goes through /verify, and each status expects at most one next step', () => {
+  const allowed = /allowed = \{([^}]*)\}/.exec(readFileSync(`${BACKEND}actions.py`, 'utf8'))![1];
+  const server = Array.from(allowed.matchAll(/"([a-z_]+)"/g)).map((m) => m[1]).sort();
+  assert.deepEqual(server, ACTION_STATUSES.slice().sort(), "the statuses of the registry are the server's");
+  for (const status of ACTION_STATUSES) {
+    const steps = actionStepsFrom(status);
+    assert.ok(steps.length > 0, status);
+    assert.ok(steps.every((s) => (ACTION_STATUSES as readonly string[]).includes(s.to) && s.to !== status), status);
+    assert.ok(steps.filter((s) => s.primary).length <= 1, status);
+    assert.deepEqual(steps.filter((s) => s.kind === 'verify').map((s) => s.to), status === 'completed' ? ['verified'] : [], `${status}: only a completed action can be verified`);
+  }
+  assert.equal(actionStepsFrom(null)[0].to, 'in_progress', 'an action with no status is a planned one');
+  assert.deepEqual(actionStepsFrom('what').map((s) => s.key), []);
 });
