@@ -20,6 +20,7 @@ function LibraryPicker({ linkedIds, onLink, linking }: { linkedIds: Set<number>;
   const [q, setQ] = useState('');
   const lib = useQuery({
     queryKey: ['wb-evidence-lib', q],
+    retry: (failures, e) => failures < 2 && canRetry(e),
     queryFn: async () => (await apiClient.get(`${WB}/evidence-library?limit=30${q ? `&q=${encodeURIComponent(q)}` : ''}`)).data as { items: LibraryFile[] },
   });
   const items = (lib.data?.items ?? []).filter((e) => !linkedIds.has(e.id));

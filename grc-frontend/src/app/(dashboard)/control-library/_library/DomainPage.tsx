@@ -27,7 +27,7 @@ const SIZES = [12, 24, 48, 96] as const;
 function SetCard({ s, picked, onOpen }: { s: SetT; picked: readonly string[]; onOpen: () => void }) {
   const fws = setFrameworks(s, picked);
   return (
-    <button type="button" onClick={onOpen} className="flex min-h-[44px] w-full flex-col gap-[8px] rounded-ds-card border border-ds-border bg-ds-surface p-[16px] text-left hover:bg-ds-surface-hover focus-visible:outline-none focus-visible:shadow-ds-ring">
+    <button type="button" onClick={onOpen} className="flex h-full min-h-[44px] w-full flex-col gap-[8px] rounded-ds-card border border-ds-border bg-ds-surface p-[16px] text-left hover:bg-ds-surface-hover focus-visible:outline-none focus-visible:shadow-ds-ring">
       <span className="flex items-center justify-between gap-[8px] text-ds-label text-ds-fg-muted">
         <span className="inline-flex items-center gap-[4px] font-[600] text-ds-primary-text"><GitMerge aria-hidden className="h-[12px] w-[12px]" />Normalized</span>
         <span className="tabular-nums">{picked.length ? `${formatCount(membersOfPicked(s, picked))} of ${formatCount(s.member_count)}` : `${formatCount(s.member_count)} frameworks`}</span>
@@ -89,7 +89,7 @@ export function DomainPage() {
   const [stdFw, setStdFw] = useState('');
   const [byFwPick, setByFwPick] = useState('');
 
-  const rich = useQuery({ queryKey: ['control-group-rich', id], enabled: !!id, queryFn: async () => (await apiClient.get(`/control-library/groups/${id}/rich`)).data as Rich });
+  const rich = useQuery({ queryKey: ['control-group-rich', id], enabled: !!id, retry: (failures, e) => failures < 2 && canRetry(e), queryFn: async () => (await apiClient.get(`/control-library/groups/${id}/rich`)).data as Rich });
   const data = rich.data;
   const view = useMemo(() => (data ? viewOf(data, picked) : null), [data, picked]);
   const choices = useMemo(() => (data ? frameworkChoices(data) : { all: [], absent: [] }), [data]);

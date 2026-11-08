@@ -68,6 +68,7 @@ export function PromoteSheet({ open, onClose }: { open: boolean; onClose: () => 
   const list = useQuery({
     queryKey: ['wb-normalized', q],
     enabled: open,
+    retry: (failures, e) => failures < 2 && canRetry(e),
     queryFn: async () => (await apiClient.get(`${WB}/normalized?only_unpromoted=true&limit=100${q ? `&q=${encodeURIComponent(q)}` : ''}`)).data as { total: number; items: Unified[] },
   });
   const promote = useReportedMutation({

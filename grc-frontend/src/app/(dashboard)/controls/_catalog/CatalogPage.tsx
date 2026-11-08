@@ -53,7 +53,7 @@ export function CatalogPage() {
 
   const closePromote = useCallback(() => setAddress({ promote: false }), [setAddress]);
   const nFrameworks = scope?.framework_ids.length ?? 0;
-  const meta = ov ? `${formatCount(ov.totals.controls)} framework ${ov.totals.controls === 1 ? 'control' : 'controls'} · ${formatCount(ov.internal?.controls ?? 0)} internal` : undefined;
+  const meta = ov ? `${formatCount(ov.totals.controls)} ${ov.totals.controls === 1 ? 'control' : 'controls'} · ${formatCount(ov.internal?.controls ?? 0)} internal` : undefined;
 
   const views: Array<{ key: CatalogView; label: string; count?: number }> = [
     { key: 'domain', label: 'By domain' },

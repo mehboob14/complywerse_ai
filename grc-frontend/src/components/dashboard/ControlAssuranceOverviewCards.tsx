@@ -43,6 +43,9 @@ const ATTENTION_META: Array<{ key: string; label: string; href: string; tone: To
 
 const TARGET = 85;
 const bandTone = (label: string): Tone => (label === 'strong' ? 'success' : label === 'fair' ? 'warning' : label === 'weak' ? 'danger' : 'neutral');
+/** The server's grade of the whole score (assurance.py: excellent from 85, good from 70, fair from 50, else poor). */
+const gradeTone = (g: string): Tone => (g === 'excellent' || g === 'good' ? 'success' : g === 'fair' ? 'warning' : g === 'poor' ? 'danger' : 'neutral');
+const capital = (w: string): string => w.charAt(0).toUpperCase() + w.slice(1);
 const bandWords = (label: string): string => (label === 'strong' ? 'Strong' : label === 'fair' ? 'Fair' : label === 'weak' ? 'Weak' : 'No data');
 const TIP = { fontSize: 12, border: '1px solid var(--ds-border)', borderRadius: 8, color: 'var(--ds-fg)' } as const;
 
@@ -140,7 +143,7 @@ export default function ControlAssuranceOverviewCards() {
               <ScoreRing score={score} size={84} />
               <div className="min-w-0">
                 <h2 id="perf-title" className="m-0 !text-ds-body !font-[600] !text-ds-fg">Control testing and assurance</h2>
-                {payload.performance.grade && <div className="mt-[6px]"><StatusPill size="sm" tone={bandTone(band.label)} label={payload.performance.grade} /></div>}
+                {payload.performance.grade && <div className="mt-[6px]"><StatusPill size="sm" tone={gradeTone(payload.performance.grade)} label={capital(payload.performance.grade)} /></div>}
                 <p className="m-0 mt-[6px] text-ds-label text-ds-fg-muted">{`${formatCount(controlsUnderAssurance)} ${controlsUnderAssurance === 1 ? 'control' : 'controls'} under assurance · ${formatCount(sections.length)} weighted areas`}</p>
               </div>
             </div>

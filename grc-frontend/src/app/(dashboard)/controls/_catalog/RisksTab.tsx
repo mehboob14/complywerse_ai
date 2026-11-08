@@ -26,6 +26,7 @@ function RiskPicker({ linkedIds, onLink, linking }: { linkedIds: Set<number>; on
   const [q, setQ] = useState('');
   const risks = useQuery({
     queryKey: ['wb-risks', q],
+    retry: (failures, e) => failures < 2 && canRetry(e),
     queryFn: async () => (await apiClient.get(`${WB}/risks?limit=50${q ? `&q=${encodeURIComponent(q)}` : ''}`)).data as { items: RiskHit[] },
   });
   const items = (risks.data?.items ?? []).filter((r) => !linkedIds.has(r.id));

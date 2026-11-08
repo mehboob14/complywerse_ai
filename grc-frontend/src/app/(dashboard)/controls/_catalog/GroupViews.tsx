@@ -29,7 +29,7 @@ export function DomainDetail({ domain, ov, onBack, onOpenRow }: { domain: string
   const d = ov?.domains.find((x) => x.domain === domain);
   const src = d?.by_source;
   const sources = src
-    ? [src.framework ? `${controlsWord(src.framework)} from ${d?.frameworks} ${d?.frameworks === 1 ? 'framework' : 'frameworks'}` : '', src.internal ? `${formatCount(src.internal)} internal` : '', src.normalized ? `${formatCount(src.normalized)} unified` : ''].filter(Boolean).join(' · ')
+    ? [src.framework ? `${controlsWord(src.framework)} from ${d?.frameworks} ${d?.frameworks === 1 ? 'framework' : 'frameworks'}` : '', src.internal ? `${formatCount(src.internal)} internal` : '', src.normalized ? `${formatCount(src.normalized)} unified ${src.normalized === 1 ? 'control' : 'controls'}` : ''].filter(Boolean).join(' · ')
     : '';
   return (
     <div className="flex flex-col gap-[16px]">
@@ -50,7 +50,7 @@ export function DomainDetail({ domain, ov, onBack, onOpenRow }: { domain: string
           <EmptyState kind="firstUse" bare icon={Layers} title="Nothing in this domain" description="No framework in your catalog has a control here." />
         </div>
       ) : (
-        <div className="flex flex-col gap-[8px]">
+        <div className="divide-y divide-ds-border overflow-clip rounded-ds-card border border-ds-border bg-ds-surface">
           {(q.data?.groups ?? []).map((g) => {
             const k = groupKey(g);
             return (
@@ -99,6 +99,7 @@ export function FrameworkView({ ov, loading, error, onRetry, onOpenRow }: { ov: 
   return (
     <div className="flex flex-col gap-[8px]">
       <p className="m-0 text-ds-label text-ds-fg-muted">The same controls, one framework at a time, for teams that work a single framework.</p>
+      <div className="divide-y divide-ds-border overflow-clip rounded-ds-card border border-ds-border bg-ds-surface">
       {ov.frameworks.map((f) => {
         const k = `fw-${f.id}`;
         return (
@@ -116,6 +117,7 @@ export function FrameworkView({ ov, loading, error, onRetry, onOpenRow }: { ov: 
           </AccordionRow>
         );
       })}
+      </div>
     </div>
   );
 }

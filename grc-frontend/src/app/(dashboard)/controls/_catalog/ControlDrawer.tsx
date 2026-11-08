@@ -34,7 +34,7 @@ export function ControlDrawer({ row, onClose }: { row: CatalogRow; onClose: () =
   const [dirty, setDirty] = useState(false);
   const detailKey = useMemo(() => ['wb-detail', row.source_type, row.source_id] as const, [row.source_type, row.source_id]);
   const keys = useMemo(() => [detailKey, ...REFRESH_KEYS], [detailKey]);
-  const q = useQuery({ queryKey: detailKey, queryFn: async () => (await apiClient.get(`${WB}/controls/${row.source_type}/${row.source_id}`)).data as ControlDetail });
+  const q = useQuery({ queryKey: detailKey, retry: (failures, e) => failures < 2 && canRetry(e), queryFn: async () => (await apiClient.get(`${WB}/controls/${row.source_type}/${row.source_id}`)).data as ControlDetail });
   const people = useTenantPeople();
   const d = q.data;
 

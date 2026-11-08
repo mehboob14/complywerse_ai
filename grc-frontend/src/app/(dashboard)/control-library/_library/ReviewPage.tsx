@@ -30,6 +30,7 @@ export function ReviewPage() {
   const [size, setSize] = useState<number>(25);
   const q = useQuery({
     queryKey: ['review-queue', filter, page, size],
+    retry: (failures, e) => failures < 2 && canRetry(e),
     queryFn: async () => {
       const params: Record<string, string | number> = { limit: size, skip: (page - 1) * size };
       if (filter) params.review_status = filter;
