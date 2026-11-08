@@ -1,6 +1,6 @@
 // node --test "src/lib/navPages/dashboard.test.ts"
 // The Performance Overview in the navigation registry: the folder holds one page and the registry has exactly one entry for it (the sidebar's leaf), that entry
-// says the page draws its own head, the page file really renders the kit's page head with the registry's name, and the top bar therefore names nothing.
+// says the page draws its own head, the component the route file composes really renders the kit's page head with the registry's name, and the top bar therefore names nothing.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -44,10 +44,13 @@ test('the entry says the page draws its own head, so the top bar names only the 
   assert.equal(titleFor('/dashboard'), 'Performance Overview');
 });
 
-test('every entry flagged ownHeading by this group has a page file that renders the kit\'s page head, named by the registry', () => {
-  const page = readFileSync(`${APP}(dashboard)/dashboard/page.tsx`, 'utf8');
+test("every entry flagged ownHeading by this group has a page that renders the kit's page head, named by the registry (the route file composes PerfOverview, which draws it)", () => {
+  const route = readFileSync(`${APP}(dashboard)/dashboard/page.tsx`, 'utf8');
+  assert.match(route, /import PerfOverview from '\.\/_overview\/PerfOverview';/);
+  assert.match(route, /<PerfOverview \/>/);
+  const page = readFileSync(`${APP}(dashboard)/dashboard/_overview/PerfOverview.tsx`, 'utf8');
   assert.match(page, /<PageHeader\s+variant="page"/);
-  assert.match(page, /title=\{titleFor\('\/dashboard'\) \?\? 'Performance Overview'\}/, 'the heading is the registry\'s name for the page');
+  assert.match(page, /title=\{titleFor\('\/dashboard'\) \?\? 'Performance Overview'\}/, "the heading is the registry's name for the page");
   assert.match(page, /import \{ titleFor \} from '@\/lib\/navRegistry';/);
   assert.equal(Object.keys(LEAVES).length, 1);
 });

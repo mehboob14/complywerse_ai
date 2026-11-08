@@ -1,8 +1,7 @@
 // node --test "src/app/(dashboard)/dashboard/_overview/dashboardPage.test.ts"
-// What the Performance Overview keeps and what it no longer does, pinned in the files that carry it (there is no React renderer here; behaviour is checked in a
-// browser): the requests with their keys, endpoints and stale times, no failure swallowed into null, every section with its own loading and error state, the kit's
-// rules in every file of the folder (the platform CSS repaints named utilities and gives a bare <p> 11.5px), one Tab stop per card, no chart that takes focus, the
-// gates of the page, and that the unreachable workspace and the layout it stores are not touched by the live page.
+// What the Performance Overview keeps and what it no longer does, pinned in the files that carry it (there is no React renderer here; behaviour is checked in a browser): the requests
+// with their keys and stale times, no failure swallowed into null, every section with its own loading and error state, the kit's rules in every file of the folder (the platform CSS
+// repaints named utilities and gives a bare <p> 11.5px), one Tab stop per row, the gates of the page, and that the ~10,100 unreachable lines are gone.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -10,25 +9,23 @@ import { findViolations } from '../../../../components/ui/ds/kitRules.ts';
 
 const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), 'utf8');
 const page = read('../page.tsx');
-const files = { parts: read('./parts.tsx'), tiles: read('./Tiles.tsx'), cards: read('./ModuleCards.tsx'), kpis: read('./CyberKpis.tsx') };
-const models = { overview: read('./overviewModel.ts'), kpi: read('./kpiModel.ts') };
-/** The live component of page.tsx: everything above it is the unreachable legacy code (audit section 8). */
-const live = page.slice(page.indexOf('export default function MainDashboard()'));
+const files = {
+  parts: read('./parts.tsx'), perf: read('./PerfOverview.tsx'), posture: read('./Posture.tsx'), actFirst: read('./ActFirst.tsx'), modules: read('./Modules.tsx'),
+  hook: read('./usePerfFeeds.ts'), kpis: read('./CyberKpis.tsx'),
+};
+const models = { overview: read('./overviewModel.ts'), perf: read('./perfModel.ts'), kpi: read('./kpiModel.ts') };
 const strip = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' ')).replace(/(^|\s)\/\/\s.*$/gm, '$1');
 
-test('the nine module requests keep their endpoint, their cache key, their stale time and their gate; a failure is thrown, never swallowed into null', () => {
-  const cards = strip(files.cards);
-  assert.match(cards, /queryKey: m\.queryKey \?\? \['main-dashboard', m\.key\],/);
-  assert.match(cards, /queryFn: async \(\) => \(await apiClient\.get\(m\.path\)\)\.data,/);
-  assert.match(cards, /staleTime: 60_000,\s*enabled: !permsLoading,\s*retry: retryDashboard,/);
-  assert.doesNotMatch(cards, /\bcatch\b/, 'the old queryFn caught every failure into null, which read as "No data yet"');
-  assert.doesNotMatch(cards, /return null; \}\s*\}/);
-  assert.match(cards, /queryKey: RISK_QUERY_KEY,\s*queryFn: async \(\) => \(await apiClient\.get\(RISK_PATH\)\)\.data,\s*staleTime: 60_000,\s*enabled: !permsLoading && canSeeRisk,\s*retry: retryDashboard,/);
-  assert.match(models.overview, /export const RISK_PATH = '\/erm\/dashboard\/sections-overview';/);
-  assert.match(models.overview, /export const RISK_PERMISSIONS = \['erm:risks:\*'\];/);
-  assert.equal((cards.match(/useQuer(y|ies)\(/g) ?? []).length, 2, 'the module requests and the risk score: no request was added');
-  assert.match(cards, /const canSeeRisk = isAdmin \|\| hasAnyPermission\(RISK_PERMISSIONS\);/);
-  assert.match(cards, /visibleModules\(isAdmin, hasAnyPermission\)/, 'the old client gate, per module');
+test('the requests come from lib/perf/moduleFeeds.ts under the module pages\' keys, with the stale time and the retry they had; a failure is thrown, never swallowed into null', () => {
+  const hook = strip(files.hook);
+  assert.match(hook, /queryKey: feed\.queryKey,/);
+  assert.match(hook, /const data = \(await apiClient\.get\(feed\.path, feed\.params \? \{ params: feed\.params \} : undefined\)\)\.data;\s*return key === 'journeys' \? journeyList\(data\) : data;/);
+  assert.match(hook, /staleTime: 60_000,\s*enabled,\s*retry: retryDashboard,/);
+  assert.doesNotMatch(hook, /\bcatch\b/, 'the old queryFn caught every failure into null, which read as "No data yet"');
+  assert.equal((hook.match(/useQuer(y|ies)\(/g) ?? []).length, 1, 'one useQueries for every feed: no request is made anywhere else');
+  const perf = strip(files.perf);
+  assert.match(perf, /const areas = areasFor\(isAdmin, hasAnyPermission\);\s*const feedKeys = feedsFor\(areas\);\s*const feeds = usePerfFeeds\(feedKeys, !permsLoading\);/, 'a request only for a feed an area that is shown reads, after the permissions are known');
+  assert.doesNotMatch(perf, /apiClient|useQuer/, 'the page itself asks for nothing');
 });
 
 test('the KPI panel keeps its three requests, its key and its stale time; only the live values may fail without hiding the rows, and then it says so', () => {
@@ -45,23 +42,27 @@ test('the KPI panel keeps its three requests, its key and its stale time; only t
   assert.doesNotMatch(kpis, /if \(!data \|\| !data\.items\.length\) return null/, 'a failed list used to hide the whole panel');
 });
 
-test('every section loads, fails and has nothing on its own: a skeleton, an error row with Retry where asking again can help, never a 0 that stands for a failure', () => {
+test('every section loads, fails and has nothing on its own: a skeleton, an error with Retry where asking again can help, never a 0 that stands for a failure', () => {
   for (const [name, text] of Object.entries(files)) {
-    if (name === 'parts') continue;
+    if (name === 'parts' || name === 'hook') continue;
     assert.match(text, /Skeleton|loading|Loading/, `${name}: a state while it loads`);
   }
   assert.match(files.parts, /canRetry\(error\) \? onRetry : undefined/, 'Retry only where asking again can help (a refusal cannot be retried)');
   assert.match(files.parts, /Still loading\. This is taking longer than usual\./, 'a slow request says so');
-  assert.match(files.cards, /FailedRow title=\{refused \? `You can't open the \$\{def\.label\} overview` : `Couldn't load \$\{def\.label\}`\}/);
-  assert.match(files.tiles, /Couldn't load readiness/);
-  assert.match(files.tiles, /Couldn't load overdue items/);
-  assert.match(files.tiles, /No access/);
-  assert.match(files.kpis, /Couldn't load the Cyber Security KPIs/);
-  assert.doesNotMatch(files.cards, /\?\? 0\)\}%|isLoading \? .*:.*0/, 'no figure defaults to 0');
+  assert.match(files.modules, /Couldn&apos;t load/, 'a row that failed says so in its Detail cell');
+  assert.match(files.modules, /No access/, 'a refused row says so');
+  assert.match(files.modules, /onClick=\{\(\) => onRetry\(row\.area\.key\)\}/, 'a failed row asks again for its own request');
+  assert.match(files.modules, /Still loading\. This is taking longer than usual\./);
+  assert.match(files.perf, /Couldn't load what needs attention/, 'every area failed is said once, over the band');
+  assert.match(files.actFirst, /Couldn't load the scored areas/);
+  assert.match(files.actFirst, /Every scored area is at or above its target\./, 'nothing below target is said in words, not drawn as an empty box');
+  assert.match(files.posture, /Loading overall readiness/);
+  for (const [name, text] of Object.entries(files)) assert.doesNotMatch(strip(text), /\?\? 0\)\}%|isLoading \? .*:.*\b0\b/, `${name}: no figure defaults to 0`);
+  assert.match(strip(models.perf), /export function rowOf\(area: Area, feed: Feed \| undefined\): AreaRow \{/);
 });
 
 test('every file of the folder follows the kit\'s rules: only the --ds tokens and arbitrary values, 12px floor, no legacy scope, no native dialog, nothing hover-only', () => {
-  const all: Record<string, string> = { ...files, 'overviewModel.ts': models.overview, 'kpiModel.ts': models.kpi };
+  const all: Record<string, string> = { ...files, 'overviewModel.ts': models.overview, 'perfModel.ts': models.perf, 'kpiModel.ts': models.kpi };
   for (const [name, text] of Object.entries(all)) {
     assert.deepEqual(findViolations(text).map((v) => `${name}:${v.line} ${v.rule}: ${v.text}`), []);
     assert.doesNotMatch(strip(text), /governance-light|docUi|DocPageHeader|PageLoader|ScoreBreakdownCard|\bdash-card\b|\bdash-label\b|\bdash-value\b|className="dash /, name);
@@ -69,7 +70,7 @@ test('every file of the folder follows the kit\'s rules: only the --ds tokens an
     assert.doesNotMatch(text, /opacity-0[^"'`]*group-hover|group-hover[^"'`]*opacity-0/, `${name}: no action that appears on hover only`);
     assert.doesNotMatch(strip(text), /toLocaleDateString|\.toLocaleString\(/, `${name}: dates and numbers go through lib/format`);
     assert.doesNotMatch(strip(text), /fontSize: ?(\d(\.\d)?|1[01](\.\d)?)\b/, `${name}: no chart text under 12px`);
-    assert.doesNotMatch(strip(text), /localStorage|sessionStorage/, `${name}: the live page keeps nothing in the browser (the workspace's saved layouts are not read, written or removed)`);
+    assert.doesNotMatch(strip(text), /localStorage|sessionStorage/, `${name}: the page keeps nothing in the browser`);
   }
 });
 
@@ -96,46 +97,61 @@ test('a bare <p>, <td>, <th>, <h2> or <h3> gets 11.5px and dark text from the pl
   assert.ok(scanned >= 10, `the scan found ${scanned} elements: the check reads the files`);
 });
 
-test('one Tab stop per card: the module\'s name is the link and covers the card; nothing inside it is a second stop but Retry, and no chart takes focus', () => {
-  const cards = strip(files.cards);
-  assert.match(cards, /const COVER = 'after:absolute after:inset-0 after:rounded-ds-card/);
-  assert.equal((cards.match(/COVER\}/g) ?? []).length, 1, 'the cover link is drawn once, in the card');
-  assert.match(cards, /<article aria-labelledby=\{headId\} className=\{`\$\{BOX\} relative flex flex-col/, 'the card is the cover\'s positioned box');
-  assert.match(cards, /\{\.\.\.focusOff\}/, 'the chart and its Pie take the props that remove recharts\' keyboard layer');
-  assert.equal((cards.match(/\{\.\.\.focusOff\}/g) ?? []).length, 2, 'the chart and its Pie');
-  assert.match(cards, /<ChartFrame/, 'the donut has a title, a note and its numbers as a table');
-  assert.match(cards, /pointer-events-none/, 'the picture takes no press, so the cover link gets it');
-  assert.doesNotMatch(cards, /<Tooltip|RadarChart|BarChart|accessibilityLayer=\{true\}/, 'no hover tooltip, no chart that needs a hand to be read');
-  assert.match(cards, /relative z-\[1\]/, 'Retry sits above the cover link');
-  assert.match(strip(files.kpis), /<button\s+type="button"\s+onClick=\{onOpen\}\s+aria-haspopup="dialog"\s+aria-label=\{cardLabel\(k, pill\.label\)\}/, 'a KPI card is a named button that says it opens a dialog');
+test('one Tab stop per row: a work row is its title link and its Open; a table row is the area\'s name, its top counter and its toggle; the band\'s chips are one target each', () => {
+  const rows = strip(files.actFirst);
+  assert.match(rows, /<WorkRow[\s\S]*href=\{w\.href\}[\s\S]*action=\{\{ label: 'Open', href: w\.href \}\}/, 'the kit\'s row: the title is the stretched link, the action sits above it');
+  const modules = strip(files.modules);
+  assert.match(modules, /<RegisterTable[\s\S]*expand=\{\{ open, onChange: setOpen, label: \(r\) => `Details of \$\{r\.area\.label\}`/, 'the toggle names its row and says "Details"');
+  assert.match(modules, /<TitleLink href=\{r\.area\.href\} title=\{r\.area\.label\}/);
+  assert.match(modules, /<CountRow key=\{c\.key\} label=\{c\.label\} count=\{c\.value\} href=\{c\.href\} tone=\{c\.tone\} \/>/, 'an opened row\'s counters are the kit\'s: a number, a word and one target');
+  assert.match(strip(files.perf), /<CounterBand\s+id="attention"/);
+  assert.match(strip(files.perf), /href="#work"/, 'a keyboard skips the band to where to act first');
+  assert.match(files.actFirst, /id="work"/);
+  assert.match(files.modules, /id="modules"/);
+  assert.match(files.posture, /href="#modules"/);
+  assert.doesNotMatch(Object.values(files).map(strip).join('\n'), /recharts|<ResponsiveContainer|ChartFrame/, 'no picture to read by hand: every number is in words');
 });
 
-test('the colours of the donut come from the tone table, not from the server or a palette of its own', () => {
-  const cards = strip(files.cards);
-  assert.match(cards, /TONE\[/);
-  assert.doesNotMatch(cards, /#2563eb|#7c3aed|#059669|#d97706|#dc2626|#64748b|\bcolor: s\.color|\.color\b/, 'the old segment colours (the server\'s and the blue/violet palette) are gone');
+test('the page: the kit\'s head named by the registry, "N waiting for you" from the shared inbox in place of My requirements, the areas by the sidebar\'s rights, the KPI strip below', () => {
+  const perf = strip(files.perf);
+  assert.match(perf, /<PageHeader\s+variant="page"/);
+  assert.match(perf, /title=\{titleFor\('\/dashboard'\) \?\? 'Performance Overview'\}/, 'the heading is the registry\'s name for the page');
+  assert.match(perf, /import \{ titleFor \} from '@\/lib\/navRegistry';/);
+  assert.match(perf, /const \{ inbox \} = useInbox\(\);/, 'the top bar\'s own requests (same keys): no source added, no fresh-on-open');
+  assert.match(perf, /<Button href="\/needs-my-action" variant="primary"/);
+  assert.doesNotMatch(perf, /My requirements|\/my-work|canSeeMyWork/, 'My requirements stays in Task Management > My work');
+  assert.match(perf, /const areas = areasFor\(isAdmin, hasAnyPermission\);/);
+  assert.match(strip(page), /<PerfOverview \/>\s*<CyberKpis \/>/);
+  assert.ok(page.split('\n').length < 40, 'the route file is a few lines: the legacy workspace is gone');
+  assert.doesNotMatch(strip(page), /className="dash|-m-4|lg:-m-5|SHOW_LEGACY_TABS|WidgetWorkspace/);
 });
 
-test('the page keeps its gates and its links: My requirements for the same people, the head is the kit\'s, nothing else was added to the live component', () => {
-  assert.match(page, /const canSeeMyWork = isAdmin \|\| hasAnyPermission\(\['compliance:frameworks:\*', 'controls:control_library:\*', 'evidence:evidence_library:\*'\]\);/);
-  assert.match(live, /actions=\{canSeeMyWork \? <Button href="\/my-work" variant="primary" leftIcon=\{<Inbox aria-hidden \/>\}>My requirements<\/Button> : undefined\}/);
-  assert.match(live, /<PageHeader\s+variant="page"/);
-  assert.match(live, /<ModuleOverview \/>\s*<CyberKpis \/>/);
-  assert.match(live, /const SHOW_LEGACY_TABS = false;/, 'the switch is where the owner left it');
-  assert.doesNotMatch(live.slice(0, live.indexOf('{SHOW_LEGACY_TABS')), /className="dash|-m-4|lg:-m-5/, 'the root no longer pulls itself out of the shell\'s padding (main scrolled sideways)');
-  assert.match(page, /import \{ titleFor \} from '@\/lib\/navRegistry';/);
+test('one band vocabulary and the server\'s target: no 85 and no strong / fair / weak in the page\'s files, the grade is the registry\'s, the target comes from the answer', () => {
+  const body = [files.perf, files.posture, files.actFirst, files.modules, models.perf].map(strip).join('\n');
+  assert.doesNotMatch(body, /\b85\b/, 'the target is the server\'s (moduleFeeds reads it), never a literal here');
+  assert.doesNotMatch(body, /scoreBand|score-kit|bandStatus|riskPosture|\bposture\(|Strong|Weak\b/, 'the 80 / 60 words and the Low / Moderate / Elevated words are gone from this page');
+  assert.match(body, /gradeStatus/);
+  const feeds = strip(read('../../../../lib/perf/moduleFeeds.ts'));
+  assert.equal((feeds.match(/\b85\b/g) ?? []).length, 1, 'the only 85 in code: GRADE_LINES, the server\'s cut (the Assessments Overview\'s own target is imported, not typed)');
 });
 
-test('the unreachable workspace is left as it was, and the live page never touches the layouts it stores', () => {
-  const workspace = read('../components/WidgetWorkspace.tsx');
-  assert.match(workspace, /const storageKey = `dashboard_workspace_layout_\$\{tabKey\}_v4`;/, 'the key and its version are the ones saved layouts live under');
-  assert.match(workspace, /window\.localStorage\.getItem\(storageKey\)/);
-  for (const text of Object.values(files)) assert.doesNotMatch(text, /dashboard_workspace_layout/);
-  // nothing in the live folder imports the unreachable files
-  for (const text of Object.values(files)) assert.doesNotMatch(text, /components\/(WidgetWorkspace|ModuleSubWidgets|FrameworkComplianceCards)/);
+test('the ~10,100 lines nothing reached are gone: the workspace, the tab components, the legacy part of page.tsx, the insights panel, the two older tile and card files', () => {
+  const root = new URL('../', import.meta.url);
+  assert.equal(existsSync(new URL('components', root)), false, 'dashboard/components/** (16 files, 7,655 lines)');
+  assert.equal(existsSync(new URL('./Tiles.tsx', import.meta.url)), false);
+  assert.equal(existsSync(new URL('./ModuleCards.tsx', import.meta.url)), false);
+  assert.equal(existsSync(new URL('../../../../components/dashboard/AIInsightsPanel.tsx', import.meta.url)), false);
+  assert.deepEqual(readdirSync(root).sort(), ['_overview', 'page.tsx']);
+  const walk = (dir: URL): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(new URL(`${e.name}/`, dir)) : /\.tsx?$/.test(e.name) ? [new URL(e.name, dir).pathname] : []));
+  const src = new URL('../../../../', import.meta.url);
+  for (const file of walk(src)) {
+    if (/cyber-assurance|\.test\.ts$/.test(file)) continue;
+    const text = readFileSync(decodeURIComponent(file.replace(/^\/(?=[A-Za-z]:)/, '')), 'utf8');
+    assert.doesNotMatch(text, /dashboard_workspace_layout|dashboard\/components\/(WidgetWorkspace|ModuleSubWidgets|FrameworkComplianceCards)|@\/components\/dashboard\/AIInsightsPanel/, file);
+  }
 });
 
-test('the two components this folder replaced are gone and nothing imports them (the copies under cyber-assurance are another module\'s files)', () => {
+test('the two components the first revamp replaced stay gone and nothing imports them (the copies under cyber-assurance are another module\'s files)', () => {
   assert.equal(existsSync(new URL('../../../../components/dashboard/MainModuleCards.tsx', import.meta.url)), false);
   assert.equal(existsSync(new URL('../../../../components/dashboard/CyberKpiPanel.tsx', import.meta.url)), false);
   const walk = (dir: URL): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(new URL(`${e.name}/`, dir)) : /\.tsx?$/.test(e.name) ? [new URL(e.name, dir).pathname] : []));
