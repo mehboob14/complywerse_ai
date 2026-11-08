@@ -10,19 +10,22 @@ const LIBRARY = '/control-library';
 const NO_LINK = 'no link opens it: reached by a typed or saved address';
 
 export const LEAVES: Record<string, RouteExtra> = {
-  '/automation/overview': { title: 'Controls Automation Overview', keywords: ['Common controls overview', 'Controls Automation'] },
-  [COMMON]: { keywords: ['SOC 2 controls', 'SCF controls', 'Secure Controls Framework', 'Control scope'] },
+  // both draw the kit's page head (PageHeader variant="page"): the Overview is the worklist cockpit, Common Controls the facet explorer (soc2-controls/_explorer)
+  '/automation/overview': { title: 'Controls Automation Overview', keywords: ['Common controls overview', 'Controls Automation'], ownHeading: true },
+  [COMMON]: { keywords: ['SOC 2 controls', 'SCF controls', 'Secure Controls Framework', 'Control scope'], ownHeading: true },
 };
 
 export const PAGES: PageSpec[] = [
   // ---- Controls Automation ----
   { path: `${COMMON}/:code`, label: 'Common control', area: AUTOMATION, parent: COMMON, hidden: 'opens from a Common Controls row and from the records that link a control (evidence, documents, work, reports)' },
-  { path: `${COMMON}/new`, label: 'New custom control', area: AUTOMATION, parent: COMMON, hidden: 'opens from Common Controls (New custom control)' },
-  { path: `${COMMON}/coverage`, label: 'Requirement coverage', area: AUTOMATION, parent: COMMON, hidden: 'opens from the Controls Automation Overview (the coverage button and card) and from Common Controls' },
-  { path: `${COMMON}/review`, label: 'Mapping review', area: AUTOMATION, parent: COMMON, hidden: 'opens from the Controls Automation Overview (the mapping review button and card) and from Common Controls' },
-  // Checks and assurance live on each control; their standalone pages still work (navAccess.ts). The scope page forwards to Common Controls, where the scope is configured.
-  { path: '/automation/assurance', label: 'Assurance', area: AUTOMATION, parent: '/automation/overview', hidden: `${NO_LINK} (assurance lives on each control)` },
-  { path: '/automation/checks', label: 'Automated Checks', area: AUTOMATION, parent: '/automation/overview', hidden: `${NO_LINK} (checks live on each control)` },
+  { path: `${COMMON}/new`, label: 'New custom control', area: AUTOMATION, parent: COMMON, hidden: 'opens from Common Controls (New control)', ownHeading: true },
+  // Controls | Coverage | Mapping review: one strip on the three pages (soc2-controls/_explorer/ControlsStrip)
+  { path: `${COMMON}/coverage`, label: 'Requirement coverage', area: AUTOMATION, parent: COMMON, hidden: 'opens from the strip of the Controls pages and from the Controls Automation Overview (Frameworks)', ownHeading: true },
+  { path: `${COMMON}/review`, label: 'Mapping review', area: AUTOMATION, parent: COMMON, hidden: 'opens from the strip of the Controls pages and from the Controls Automation Overview (Mapping reviews)', ownHeading: true },
+  // Audit periods (the page was "Assurance", nothing linked to it): periods, the frozen Statement of Applicability and its download. The Controls Automation menu should link it as a leaf "Audit periods".
+  { path: '/automation/assurance', label: 'Audit periods', area: AUTOMATION, parent: '/automation/overview', hidden: 'no menu entry yet: the Controls Automation menu is to link it as "Audit periods"', ownHeading: true, keywords: ['Assurance', 'Statement of Applicability', 'SoA', 'Audit period'] },
+  // Automated Checks was a developer page nothing linked to; the address forwards to Common Controls (a control's tests are on the control, the connections on the Connections page).
+  { path: '/automation/checks', label: 'Automated Checks', area: AUTOMATION, parent: '/automation/overview', hidden: `${NO_LINK}: it forwards to Common Controls` },
   { path: '/automation/scope', label: 'Common Controls', area: AUTOMATION, aliasOf: COMMON },
 
   // ---- Control Catalog and Normalized Controls: the two (and Assurance) tabs of ControlSurfaceTabs, cards of the Compliance overview ----

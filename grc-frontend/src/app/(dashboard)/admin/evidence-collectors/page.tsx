@@ -1,193 +1,175 @@
 'use client';
 
-// Administration → All Connections. The whole connector universe in one grid:
-// the connectors this platform collects evidence from today (wired to the
-// live_api engine — Save credentials · Test · Collect), plus the full Steampipe
-// plugin catalog as discovery entries ("Available via Steampipe", not yet wired).
-// Data comes from GET /automation/soc2/catalog, so the count always matches the
-// backend PROVIDER_API — no static frontend list to drift out of sync.
-
+// Connections: the systems this platform collects evidence from. A register, not a wall of 124 cards: Active (the connected ones, the useful default), Failing and All, a search and a category, one row a
+// connector with its status, when it last collected and ONE action (Manage, Connect, or Details for one that cannot collect yet). Connecting is a guide in a Sheet (ConnectorSheet). Data is
+// GET /automation/soc2/catalog, so the count always matches what the backend can collect from; nothing is listed from a static frontend list.
+// The same page is the Administration page's "Connections" tab and the Cybersecurity Assurance admin copy: on its own address it draws its page head; embedded, the host page already has one, so it draws only
+// its controls. The old links keep working: ?connector=<id> opens that connector, ?return=<path> says where Back goes, ?show=failing|active|all picks the tab.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Plug, Search } from 'lucide-react';
-import { automationApi } from '@/lib/api';
+import { Plug, Search } from 'lucide-react';
+import { PageHeader } from '@/components/ui';
+import { Button, EmptyState, ErrorState, Pager, SegmentedControl, Select, SkeletonRows, StatusPill, TextInput, useAddressState } from '@/components/ui/ds';
+import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { BrandLogo } from '@/components/integrations/BrandLogo';
-import { ConnectorDialog, type CatalogConnector } from './ConnectorDialog';
+import { automationApi } from '@/lib/api';
+import { formatCount, formatDate } from '@/lib/format';
+import { titleFor } from '@/lib/navRegistry';
+import { statusPill } from '@/lib/status';
+import { collectionHealth, connection } from '@/lib/statuses/controls';
+import { CATEGORY_LABEL } from '../../automation/overview/_overview/overviewModel';
+import { useRights } from '../../automation/soc2-controls/_explorer/controlsRights';
+import {
+  CONNECTIONS_SCHEMA, SHOWS, SHOW_LABEL, categoriesOf, countsOf, defaultShow, lastCollected, readingOf, returnLabel, safeReturn, visibleConnectors, type Connector, type Show,
+} from './connectionsModel';
+import { ConnectorSheet } from './ConnectorSheet';
 
-type Tab = 'active' | 'available';
+const PAGE_SIZES = [25, 50, 100] as const;
+const categoryWord = (c: string): string => CATEGORY_LABEL[c] || c.replace(/_/g, ' ').replace(/^./, (x) => x.toUpperCase());
 
-function StatusDot({ connected }: { connected: boolean }) {
+interface Catalog { connectors: Connector[]; counts: { total: number; supported: number; connected: number; catalog: number } }
+
+function StateCell({ c }: { c: Connector }) {
+  const r = readingOf(c);
+  if (r.kind === 'unavailable') return <StatusPill size="sm" tone="neutral" label="Not available yet" />;
+  if (r.kind === 'not_connected') return <StatusPill size="sm" {...statusPill(connection, 'not_connected')} />;
   return (
-    <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold ${connected ? 'text-emerald-600' : 'text-slate-400'}`}>
-      <span className={`size-1.5 rounded-full ${connected ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-      {connected ? 'Connected' : 'Not connected'}
+    <span className="inline-flex flex-wrap items-center gap-[6px]">
+      <StatusPill size="sm" {...statusPill(connection, 'connected')} />
+      {r.health !== 'healthy' && <StatusPill size="sm" {...statusPill(collectionHealth, r.health)} />}
     </span>
   );
 }
-function CategoryChips({ categories }: { categories: string[] }) {
+
+function ConnectorRow({ c, onOpen }: { c: Connector; onOpen: () => void }) {
+  const r = readingOf(c);
+  const when = lastCollected(c, (iso) => formatDate(iso));
+  const action = r.kind === 'connected' ? 'Manage' : r.kind === 'not_connected' ? 'Connect' : 'Details';
   return (
-    <span className="flex flex-wrap gap-1">
-      {categories.map((c) => (
-        <span key={c} className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">{c}</span>
-      ))}
-    </span>
+    <li className="flex flex-wrap items-center gap-x-[12px] gap-y-[6px] border-t border-ds-border px-[12px] py-[8px] first:border-t-0">
+      <BrandLogo id={c.id} name={c.name} size={36} />
+      <div className="min-w-[160px] flex-[1_1_200px]">
+        <p className="m-0 truncate text-ds-body font-[600] text-ds-fg" title={c.name}>{c.name}</p>
+        <p className="m-0 truncate text-ds-label text-ds-fg-muted">{(c.categories.length ? c.categories : [c.category]).slice(0, 3).map(categoryWord).join(' · ')}</p>
+      </div>
+      <div className="flex min-w-[150px] flex-[1_1_180px] flex-col gap-[2px]">
+        <StateCell c={c} />
+        {when && <span className="text-ds-label text-ds-fg-muted">{when}</span>}
+      </div>
+      <Button variant={r.kind === 'not_connected' ? 'primary' : 'secondary'} onClick={onOpen} aria-label={`${action} ${c.name}`}>{action}</Button>
+    </li>
   );
 }
 
-function ConnectorCard({ connector, onOpen }: { connector: CatalogConnector; onOpen: () => void }) {
-  return (
-    <div className={`flex h-full flex-col rounded-xl border p-5 transition-shadow hover:shadow-sm ${connector.supported ? 'border-slate-200 bg-white hover:border-slate-300' : 'border-slate-200/70 bg-slate-50/50 hover:border-slate-300'}`}>
-      <div className="flex items-start gap-3.5">
-        <BrandLogo id={connector.id} name={connector.name} size={48} />
-        <div className="min-w-0 flex-1 pt-0.5">
-          <p className="truncate font-semibold text-slate-800">{connector.name}</p>
-          <div className="mt-1">
-            {connector.supported
-              ? <StatusDot connected={connector.connected} />
-              : <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-sky-600"><span className="size-1.5 rounded-full bg-sky-400" />Via Steampipe</span>}
-          </div>
-        </div>
-      </div>
-      <div className="mt-3.5"><CategoryChips categories={connector.categories} /></div>
-      <div className="mt-auto pt-5">
-        <button onClick={onOpen} className={`w-full rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${connector.supported ? 'bg-primary-50 text-primary-700 hover:bg-primary-100' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
-          {connector.supported ? 'View and connect' : 'View details'}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-export default function AllConnectionsPage() {
+export default function ConnectionsPage() {
   const qc = useQueryClient();
-  const [tab, setTab] = useState<Tab>('available');
-  const [search, setSearch] = useState('');
-  const [category, setCategory] = useState('all');
-  const [selected, setSelected] = useState<CatalogConnector | null>(null);
+  const pathname = usePathname();
+  const standalone = pathname === '/admin/evidence-collectors';
+  const canConnect = useRights().can('scan');
 
-  // ?connector=aws opens that connector straight away; ?return= is where the
-  // person came from. Only same-site paths are followed back.
-  const searchParams = useSearchParams();
-  const wanted = searchParams.get('connector');
-  const rawReturn = searchParams.get('return');
-  const returnTo = rawReturn && rawReturn.startsWith('/') && !rawReturn.startsWith('//') ? rawReturn : null;
-  const returnLabel = returnTo ? decodeURIComponent(returnTo.split('?')[0].split('/').filter(Boolean).pop() || 'control') : null;
-  const openedFromLink = useRef(false);
+  const [address, setAddress] = useAddressState(CONNECTIONS_SCHEMA);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [pageNo, setPageNo] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(25);
 
-  const { data } = useQuery({
+  const catalogQ = useQuery({
     queryKey: ['soc2-catalog'],
-    queryFn: () => automationApi.listCatalog().then((r) => r.data as { connectors: CatalogConnector[]; counts: { total: number; supported: number; connected: number; catalog: number } }),
+    queryFn: () => automationApi.listCatalog().then((r) => r.data as Catalog),
+    retry: (failures, e) => failures < 3 && canRetry(e),
   });
-  const connectors = useMemo(() => data?.connectors ?? [], [data]);
-  const counts = data?.counts;
-  // the open dialog follows the catalogue, so it sees a connection the moment it is saved
-  const current = selected ? connectors.find((c) => c.id === selected.id) ?? selected : null;
+  const connectors = useMemo(() => catalogQ.data?.connectors ?? [], [catalogQ.data]);
+  const counts = useMemo(() => countsOf(connectors), [connectors]);
+  const categories = useMemo(() => categoriesOf(connectors), [connectors]);
+  const show: Show = address.show === 'auto' ? defaultShow(connectors) : address.show;
+  const visible = useMemo(() => visibleConnectors(connectors, { show, query: address.q, category: address.category }), [connectors, show, address.q, address.category]);
+  const selected = selectedId ? connectors.find((c) => c.id === selectedId) ?? null : null;     // the open sheet follows the catalogue, so it sees a connection the moment it is saved
 
+  // ?connector=aws opens that connector straight away (once); ?return= is where the person came from, followed only when it is a path on this site
+  const returnTo = safeReturn(address.return);
+  const opened = useRef(false);
   useEffect(() => {
-    if (openedFromLink.current || !wanted || !connectors.length) return;
-    const match = connectors.find((c) => c.id === wanted || c.provider === wanted);
+    if (opened.current || !address.connector || connectors.length === 0) return;
+    const match = connectors.find((c) => c.id === address.connector || c.provider === address.connector);
+    opened.current = true;
     if (!match) return;
-    openedFromLink.current = true;
-    setTab('available');
-    setSearch(match.name);
-    setSelected(match);
-  }, [wanted, connectors]);
+    setSelectedId(match.id);
+    setAddress({ connector: '', ...(address.show === 'auto' ? { show: 'all' as const } : {}) });
+  }, [address.connector, address.show, connectors, setAddress]);
 
-  const categories = useMemo(
-    () => Array.from(new Set(connectors.map((c) => c.category))).sort(),
-    [connectors],
-  );
+  const [seen, setSeen] = useState('');
+  const key = `${show}|${address.q}|${address.category}|${pageSize}`;
+  if (seen !== key) { setSeen(key); setPageNo(1); }
+  const pages = Math.max(1, Math.ceil(visible.length / pageSize));
+  const pageClamped = Math.min(pageNo, pages);
+  const rows = visible.slice((pageClamped - 1) * pageSize, pageClamped * pageSize);
 
-  const pool = useMemo(() => {
-    if (tab === 'active') return connectors.filter((c) => c.connected);
-    return connectors; // "Available" now lists the whole catalog
-  }, [connectors, tab]);
-
-  const visible = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return pool.filter(
-      (c) =>
-        (category === 'all' || c.category === category) &&
-        (!q || c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q)),
-    );
-  }, [pool, search, category]);
-
-  const refresh = () => qc.invalidateQueries({ queryKey: ['soc2-catalog'] });
-
-  const tabLabel: Record<Tab, string> = {
-    active: `Active${counts ? ` (${counts.connected})` : ''}`,
-    available: `Available${counts ? ` (${counts.total})` : ''}`,
-  };
+  const refresh = () => { void qc.invalidateQueries({ queryKey: ['soc2-catalog'] }); void qc.invalidateQueries({ queryKey: ['automation-common'] }); void qc.invalidateQueries({ queryKey: ['common-overview'] }); };
+  const title = titleFor('/admin/evidence-collectors') ?? 'Connections';
+  const meta = catalogQ.data ? `${formatCount(counts.wired)} can collect evidence · ${formatCount(counts.active)} connected${counts.failing ? ` · ${formatCount(counts.failing)} failing` : ''}` : undefined;
+  const noData = catalogQ.isError && !catalogQ.data;
 
   return (
-    <div className="mx-auto max-w-[1200px] px-1 py-1">
-      {returnTo && (
-        <Link href={returnTo} className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-primary-700 hover:underline">
-          <ArrowLeft className="h-4 w-4" /> Back to {returnLabel}
-        </Link>
-      )}
-      <h1 className="text-2xl font-bold text-slate-900">All Connections</h1>
-      <p className="mt-1 text-sm text-slate-500">
-        {counts
-          ? `${counts.supported} connectors wired for live evidence collection · ${counts.catalog} more in the Steampipe catalog.`
-          : 'Loading the connector catalog…'}
-      </p>
-
-      <nav className="mb-6 mt-4 flex gap-1 border-b border-slate-200" aria-label="Connections sections">
-        {(['active', 'available'] as Tab[]).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`relative -mb-px px-3 py-2.5 text-sm font-medium transition-colors ${tab === t ? 'text-primary-700' : 'text-slate-500 hover:text-slate-800'}`}
-          >
-            {tabLabel[t]}
-            {tab === t && <span className="absolute inset-x-3 -bottom-px h-0.5 rounded-full bg-primary-600" />}
-          </button>
-        ))}
-      </nav>
-
-      {tab === 'active' && visible.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-200 bg-white px-6 py-16 text-center">
-          <Plug className="mx-auto h-8 w-8 text-slate-300" />
-          <p className="mt-3 text-sm font-medium text-slate-600">No active connections yet</p>
-          <p className="mt-1 text-sm text-slate-400">Connect a provider from Available to start collecting evidence.</p>
-        </div>
+    <div className="mx-auto flex max-w-[1200px] flex-col gap-[12px]">
+      {standalone ? (
+        <PageHeader variant="page" title={title} meta={meta} info="The systems your evidence is collected from. Connect any one source in a category; its checks then run daily and the controls it covers read passing or failing." />
       ) : (
-        <>
-          <div className="mb-4 flex flex-wrap items-center gap-2" role="search">
-            <div className="relative w-full min-w-0 sm:w-64">
-              <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search connectors…"
-                className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-2 text-sm focus:border-primary-500 focus:outline-none" />
-            </div>
-            <select value={category} onChange={(e) => setCategory(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-600">
-              <option value="all">Category: All</option>
-              {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <p aria-live="polite" className="ml-auto text-xs text-slate-400">
-              Showing <span className="tabular-nums">{visible.length}</span> of <span className="tabular-nums">{pool.length}</span> connectors
-            </p>
-          </div>
+        meta && <p className="m-0 text-ds-body text-ds-fg-muted">{meta}</p>
+      )}
 
-          <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {visible.map((c) => (
-              <li key={c.id}>
-                <ConnectorCard connector={c} onOpen={() => setSelected(c)} />
-              </li>
-            ))}
+      <div className="flex flex-wrap items-center gap-[8px]" role="search" aria-label="Find a connection">
+        <SegmentedControl
+          label="Which connections"
+          name="connections-show"
+          options={SHOWS.map((s) => ({ value: s, label: catalogQ.data ? `${SHOW_LABEL[s]} ${formatCount(counts[s])}` : SHOW_LABEL[s] }))}
+          value={show}
+          onChange={(v) => setAddress({ show: v as Show })}
+        />
+        <TextInput
+          type="search" value={address.q} onChange={(e) => setAddress({ q: e.target.value })} aria-label="Search connections" placeholder="Search connections" autoComplete="off"
+          className="min-w-[160px] max-w-[320px] flex-1" leftAdornment={<Search aria-hidden className="h-[14px] w-[14px]" />}
+        />
+        <Select aria-label="Category" value={address.category} onChange={(e) => setAddress({ category: e.target.value })} className="w-[200px] max-w-full">
+          <option value="">All categories</option>
+          {categories.map((c) => <option key={c} value={c}>{categoryWord(c)}</option>)}
+        </Select>
+        {catalogQ.data && <span role="status" className="ml-auto text-ds-label tabular-nums text-ds-fg-muted">{`${formatCount(visible.length)} of ${formatCount(connectors.length)}`}</span>}
+      </div>
+
+      {catalogQ.isPending && <SkeletonRows rows={8} columns={3} label="Loading the connections" />}
+      {noData && <ErrorState title="Couldn’t load the connections" message={errorMessage(catalogQ.error)} onRetry={canRetry(catalogQ.error) ? () => { void catalogQ.refetch(); } : undefined} />}
+      {catalogQ.isError && catalogQ.data && <ErrorState compact title="Couldn’t refresh the connections" message={`${errorMessage(catalogQ.error)} What is shown may be out of date.`} onRetry={canRetry(catalogQ.error) ? () => { void catalogQ.refetch(); } : undefined} className="rounded-ds-card border border-ds-danger-border bg-ds-danger-soft" />}
+
+      {catalogQ.data && visible.length === 0 && (
+        <div className="rounded-ds-card border border-ds-border bg-ds-surface">
+          {show === 'active' && !address.q && !address.category ? (
+            <EmptyState kind="firstUse" bare icon={Plug} title="Nothing is connected yet" description="Connect a source to start collecting evidence." action={<Button variant="primary" onClick={() => setAddress({ show: 'all' })}>Show every connection</Button>} />
+          ) : show === 'failing' && !address.q && !address.category ? (
+            <EmptyState kind="firstUse" bare icon={Plug} title="Nothing is failing" description="Every connection that has collected did so without an error." />
+          ) : (
+            <EmptyState kind="noMatches" bare title="No connections match" description="Loosen the search or the category." onClearFilters={() => setAddress({ q: '', category: '' })} />
+          )}
+        </div>
+      )}
+
+      {rows.length > 0 && (
+        <>
+          <ul aria-label="Connections" className="m-0 list-none overflow-clip rounded-ds-card border border-ds-border bg-ds-surface p-0">
+            {rows.map((c) => <ConnectorRow key={c.id} c={c} onOpen={() => setSelectedId(c.id)} />)}
           </ul>
+          <Pager page={pageClamped} pageSize={pageSize} total={visible.length} onPage={setPageNo} onPageSize={setPageSize} pageSizes={PAGE_SIZES} noun={{ one: 'connection', other: 'connections' }} />
         </>
       )}
 
-      {current && (
-        <ConnectorDialog
-          connector={current}
-          onClose={() => setSelected(null)}
+      {selected && (
+        <ConnectorSheet
+          key={selected.id}
+          connector={selected}
+          onClose={() => setSelectedId(null)}
           onChanged={refresh}
           returnTo={returnTo}
-          returnLabel={returnLabel}
+          returnLabel={returnLabel(returnTo)}
+          canConnect={canConnect}
         />
       )}
     </div>
