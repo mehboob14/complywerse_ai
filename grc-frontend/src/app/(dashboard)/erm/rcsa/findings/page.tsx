@@ -1,486 +1,137 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { rcsaApi } from '@/lib/api';
-import { usePermissions } from '@/hooks/usePermissions';
-import {
-  AlertTriangle,
-  Eye,
-  Plus,
-  Loader2,
-  AlertCircle,
-  Building2,
-  Calendar,
-  Shield,
-  Target,
-} from 'lucide-react';
-import Link from 'next/link';
-import { SearchInput } from '@/components/ui/SearchInput';
-import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
-import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
-import { PageLoader } from '@/components/ui';
+export const dynamic = 'force-dynamic';
 
-interface Finding {
-  id: number;
-  title: string;
-  description?: string;
-  severity: 'critical' | 'high' | 'medium' | 'low';
-  status: 'open' | 'in_progress' | 'remediated' | 'closed';
-  assessment_id: number;
-  assessment_name: string;
-  business_unit: string;
-  created_at: string;
-  due_date?: string;
-  linked_risk_id?: number;
-  linked_control_id?: number;
-}
+// RCSA > Findings: what the self-assessments found, as a register on the facet explorer — severity, status, owner and fix-by day in the row, filters with live counts (status, severity, kind,
+// campaign, unit, owner, whether it is tied to a risk), quick views, search, sort, a CSV of the rows that match, and a details panel that replaces the old finding page. The list is a complete
+// load, and every count is the length of what was loaded (the old one filtered by names the API ignored and threw on a search). `?status=open,in_progress` is where the Worklist's counter lands;
+// `?open=ID` opens a finding (the Worklist, a unit and the old finding addresses use it). Anyone who can open RCSA can change a finding: that is the server's rule.
+import { Suspense, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { PageHeader } from '@/components/ui';
+import { EmptyState, Notice, Button, StatusPill, TitleLink } from '@/components/ui/ds';
+import type { RecordColumn, RecordRow } from '@/components/records/RecordTable';
+import { errorMessage } from '@/components/ui/ds/reportOutcome';
+import { formatCount, formatDate } from '@/lib/format';
+import { statusPill } from '@/lib/status';
+import { findingSeverity, findingStatus, findingType } from '@/lib/statuses/rcsa';
+import { csvName, toCsv } from '@/lib/rcsa/csv';
+import { saveBlob } from '@/lib/rcsa/saveBlob';
+import { csvOf, isLate, isOpen, linksText, severityRank, type FindingRow } from '@/lib/rcsa/findingsModel';
+import { RcsaExplorer, type ExplorerFacet, type ExplorerQuick, type ExplorerSort } from '../_parts/RcsaExplorer';
+import { RcsaNav } from '../_parts/RcsaNav';
+import { KEYS, fetchAll } from '../_parts/rcsaData';
+import { FindingPanel } from './_parts/FindingPanel';
 
-const SEVERITY_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  critical: { bg: 'bg-rose-50', text: 'text-rose-700', label: 'Critical' },
-  high: { bg: 'bg-orange-50', text: 'text-orange-700', label: 'High' },
-  medium: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Medium' },
-  low: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Low' },
-};
+const UNASSIGNED = 'Unassigned';
+const unitOf = (f: FindingRow) => f.business_unit_name || 'Unknown unit';
+const campaignOf = (f: FindingRow) => f.campaign_name || 'Unknown campaign';
+const ownerOf = (f: FindingRow) => f.remediation_owner_name || UNASSIGNED;
+const unique = (rows: readonly FindingRow[], pick: (f: FindingRow) => string, label: (v: string) => string = (v) => v) =>
+  Array.from(new Set(rows.map(pick))).map((value) => ({ value, label: label(value) })).sort((a, b) => a.label.localeCompare(b.label));
 
-const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  open: { bg: 'bg-rose-50', text: 'text-rose-700', label: 'Open' },
-  in_progress: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'In Progress' },
-  remediated: { bg: 'bg-primary-50', text: 'text-primary-700', label: 'Remediated' },
-  closed: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Closed' },
-};
+const FACETS: ExplorerFacet<FindingRow>[] = [
+  { key: 'status', label: 'Status', values: (f) => [f.status], options: (rows) => unique(rows, (f) => f.status, (v) => statusPill(findingStatus, v).label), defaultOpen: true },
+  { key: 'severity', label: 'Severity', values: (f) => [f.severity], options: (rows) => unique(rows, (f) => f.severity, (v) => statusPill(findingSeverity, v).label).sort((a, b) => severityRank(b.value) - severityRank(a.value)), defaultOpen: true },
+  { key: 'kind', label: 'Kind', values: (f) => [f.finding_type], options: (rows) => unique(rows, (f) => f.finding_type, (v) => statusPill(findingType, v).label) },
+  { key: 'campaign', label: 'Campaign', values: (f) => [campaignOf(f)], options: (rows) => unique(rows, campaignOf), searchable: true },
+  { key: 'unit', label: 'Unit', values: (f) => [unitOf(f)], options: (rows) => unique(rows, unitOf), searchable: true },
+  { key: 'owner', label: 'Owner', values: (f) => [ownerOf(f)], options: (rows) => unique(rows, ownerOf), searchable: true },
+  { key: 'risk', label: 'Risk register', values: (f) => [f.linked_risk_id ? 'linked' : 'not'], options: (rows) => (rows.length ? [{ value: 'linked', label: 'Tied to a risk' }, { value: 'not', label: 'Not tied to a risk' }] : []) },
+];
+const QUICK: ExplorerQuick<FindingRow>[] = [
+  { key: 'open', label: 'Open', test: isOpen },
+  { key: 'late', label: 'Late', test: (f) => isLate(f) },
+  { key: 'serious', label: 'Critical or high', test: (f) => isOpen(f) && severityRank(f.severity) >= 3 },
+  { key: 'unowned', label: 'No owner', test: (f) => isOpen(f) && !f.remediation_owner_id },
+];
+const SORTS: ExplorerSort<FindingRow>[] = [
+  { key: 'severity', value: (f) => severityRank(f.severity), firstDir: 'desc' },
+  { key: 'title', value: (f) => f.title },
+  { key: 'status', value: (f) => f.status },
+  { key: 'due', value: (f) => f.remediation_due_date ?? null },
+  { key: 'raised', value: (f) => f.created_at, firstDir: 'desc' },
+];
+const DEFAULT_SORT = { key: 'severity', dir: 'desc' as const };
+const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
 
-function getSeverityStyle(severity: string) {
-  return SEVERITY_STYLES[severity] || SEVERITY_STYLES.low;
-}
+const COLUMNS: RecordColumn<FindingRow>[] = [
+  {
+    key: 'title', header: 'Finding', sortKey: 'title',
+    cell: (row) => (
+      <div className="flex min-w-0 flex-col gap-[2px]" onClick={stop}>
+        <TitleLink href={`/erm/rcsa/findings?open=${row.record.id}`} title={row.record.title} prefetch={false} />
+        <span className="line-clamp-1 text-ds-label text-ds-fg-muted [overflow-wrap:anywhere]">{[unitOf(row.record), campaignOf(row.record)].join(' · ')}</span>
+      </div>
+    ),
+  },
+  { key: 'severity', header: 'Severity', sortKey: 'severity', firstDir: 'desc', fit: { px: 108 }, cell: (row) => <StatusPill size="sm" {...statusPill(findingSeverity, row.record.severity)} /> },
+  { key: 'status', header: 'Status', sortKey: 'status', fit: { px: 120 }, cell: (row) => <StatusPill size="sm" {...statusPill(findingStatus, row.record.status)} /> },
+  { key: 'owner', header: 'Owner', fit: { px: 148, dropRank: 2 }, cell: (row) => <span className={`line-clamp-1 text-ds-body [overflow-wrap:anywhere] ${row.record.remediation_owner_name ? 'text-ds-fg' : 'text-ds-fg-muted'}`}>{ownerOf(row.record)}</span> },
+  {
+    key: 'due', header: 'Fix by', sortKey: 'due', fit: { px: 120, dropRank: 1 },
+    cell: (row) => <span className={`whitespace-nowrap text-ds-body ${isLate(row.record) ? 'font-[600] text-ds-danger' : 'text-ds-fg'}`}>{row.record.remediation_due_date ? formatDate(row.record.remediation_due_date, { calendar: true }) : 'Not set'}</span>,
+  },
+  { key: 'links', header: 'Tied to', fit: { px: 120, dropRank: 3 }, cell: (row) => <span className="text-ds-body text-ds-fg-muted">{linksText(row.record)}</span> },
+];
 
-function getStatusStyle(status: string) {
-  return STATUS_STYLES[status] || STATUS_STYLES.open;
-}
-
-function formatDate(dateString?: string) {
-  if (!dateString) return '-';
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
-}
-
-interface LinkModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onConfirm: (id: number) => void;
-  type: 'risk' | 'control';
-  isLoading: boolean;
-}
-
-function LinkModal({ isOpen, onClose, onConfirm, type, isLoading }: LinkModalProps) {
-  const [entityId, setEntityId] = useState('');
-
-  const handleSubmit = () => {
-    if (!entityId) return;
-    onConfirm(Number(entityId));
-    setEntityId('');
-  };
-
+const card = (row: RecordRow<FindingRow>) => {
+  const f = row.record;
   return (
-    <RightSlidePanel
-      isOpen={isOpen}
-      onClose={onClose}
-      title={`Link to ${type === 'risk' ? 'Risk' : 'Control'}`}
-      footer={
-        <div className="flex justify-end gap-3">
-          <button
-            onClick={onClose}
-            disabled={isLoading}
-            className="rounded-lg border border-slate-300 px-4 py-2 font-medium text-slate-700 hover:bg-slate-100"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={isLoading || !entityId}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-[#0a0a0a] hover:bg-primary-700"
-          >
-            {isLoading && <Loader2 size={16} className="animate-spin" />}
-            Link
-          </button>
-        </div>
-      }
-    >
-      <div className="mb-4">
-        <label className="mb-1 block text-sm font-medium text-slate-700">
-          {type === 'risk' ? 'Risk' : 'Internal Control'} ID <span className="text-rose-500">*</span>
-        </label>
-        <input
-          type="number"
-          value={entityId}
-          onChange={(e) => setEntityId(e.target.value)}
-          placeholder={`Enter ${type} ID...`}
-          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-        />
-      </div>
-    </RightSlidePanel>
-  );
-}
-
-interface CreateActionModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onConfirm: (data: Record<string, unknown>) => void;
-  findingTitle: string;
-  isLoading: boolean;
-}
-
-function CreateActionModal({ isOpen, onClose, onConfirm, findingTitle, isLoading }: CreateActionModalProps) {
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [dueDate, setDueDate] = useState('');
-
-  const handleSubmit = () => {
-    if (!title) return;
-    onConfirm({ title, description, due_date: dueDate || undefined });
-    setTitle('');
-    setDescription('');
-    setDueDate('');
-  };
-
-  return (
-    <RightSlidePanel
-      isOpen={isOpen}
-      onClose={onClose}
-      title="Create Mitigation Action"
-      subtitle={`For finding: ${findingTitle}`}
-      footer={
-        <div className="flex justify-end gap-3">
-          <button onClick={onClose} disabled={isLoading} className="btn-secondary">
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={isLoading || !title}
-            className="flex items-center gap-2 btn-primary"
-          >
-            {isLoading && <Loader2 size={16} className="animate-spin" />}
-            Create Action
-          </button>
-        </div>
-      }
-    >
-      <div className="space-y-4">
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
-            Action Title <span className="text-rose-500">*</span>
-          </label>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Enter action title..."
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">Description</label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Describe the action..."
-            className="h-32 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">Due Date</label>
-          <input
-            type="date"
-            value={dueDate}
-            onChange={(e) => setDueDate(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-          />
-        </div>
-      </div>
-    </RightSlidePanel>
-  );
-}
-
-export default function RCSAFindingsPage() {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [severityFilter, setSeverityFilter] = useState<string>('');
-  const [statusFilter, setStatusFilter] = useState<string>('');
-  const [selectedFinding, setSelectedFinding] = useState<Finding | null>(null);
-  const [modalType, setModalType] = useState<'risk' | 'control' | 'action' | null>(null);
-  const queryClient = useQueryClient();
-  const { hasPermission } = usePermissions();
-  const canCreate = hasPermission('risks:rcsa:create');
-
-  const { data: findings, isLoading, error } = useQuery({
-    queryKey: ['rcsa-findings', severityFilter, statusFilter],
-    queryFn: async () => {
-      try {
-        const params: Record<string, unknown> = {};
-        if (severityFilter) params.severity = severityFilter;
-        if (statusFilter) params.status = statusFilter;
-        const response = await rcsaApi.getFindings(params);
-        return response.data as Finding[];
-      } catch {
-        return [] as Finding[];
-      }
-    },
-  });
-
-  const linkRiskMutation = useMutation({
-    mutationFn: ({ findingId, riskId }: { findingId: number; riskId: number }) => 
-      rcsaApi.linkFindingToRisk(findingId, { risk_id: riskId }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rcsa-findings'] });
-      setModalType(null);
-      setSelectedFinding(null);
-    },
-  });
-
-  const linkControlMutation = useMutation({
-    mutationFn: ({ findingId, controlId }: { findingId: number; controlId: number }) => 
-      rcsaApi.linkFindingToControl(findingId, { control_id: controlId }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rcsa-findings'] });
-      setModalType(null);
-      setSelectedFinding(null);
-    },
-  });
-
-  const createActionMutation = useMutation({
-    mutationFn: ({ findingId, data }: { findingId: number; data: Record<string, unknown> }) => 
-      rcsaApi.createFindingAction(findingId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rcsa-findings'] });
-      setModalType(null);
-      setSelectedFinding(null);
-    },
-  });
-
-  const filteredFindings = useMemo(() => {
-    if (!findings) return [];
-    return findings.filter(finding => {
-      const matchesSearch = !searchTerm || 
-        finding.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        finding.business_unit.toLowerCase().includes(searchTerm.toLowerCase());
-      return matchesSearch;
-    });
-  }, [findings, searchTerm]);
-
-  const handleLinkConfirm = (id: number) => {
-    if (!selectedFinding) return;
-    if (modalType === 'risk') {
-      linkRiskMutation.mutate({ findingId: selectedFinding.id, riskId: id });
-    } else if (modalType === 'control') {
-      linkControlMutation.mutate({ findingId: selectedFinding.id, controlId: id });
-    }
-  };
-
-  const handleCreateAction = (data: Record<string, unknown>) => {
-    if (!selectedFinding) return;
-    createActionMutation.mutate({ findingId: selectedFinding.id, data });
-  };
-
-  if (isLoading) {
-    return (
-      <PageLoader className="h-64" />
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="rounded-xl border border-rose-200 bg-rose-50 p-6 text-center">
-        <AlertCircle className="mx-auto h-8 w-8 text-rose-600" strokeWidth={1.75} />
-        <p className="mt-2 text-rose-700">Failed to load findings</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
-      <div>
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-lg sm:text-xl font-semibold text-slate-900">RCSA Findings</h1>
-            <p className="text-slate-600 mt-1 text-sm">Track and manage findings from risk assessments</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex-1 min-w-[200px] max-w-md">
-          <SearchInput
-            value={searchTerm}
-            onChange={setSearchTerm}
-            placeholder="Search findings..."
-          />
-        </div>
-        <MultiSelectDropdown
-          title="Severity"
-          items={[
-            { value: 'critical', label: 'Critical' },
-            { value: 'high', label: 'High' },
-            { value: 'medium', label: 'Medium' },
-            { value: 'low', label: 'Low' },
-          ]}
-          selectedValues={severityFilter ? [severityFilter] : []}
-          onApply={(vals) => setSeverityFilter(vals[0] || '')}
-          multiSelect={false}
-        />
-        <MultiSelectDropdown
-          title="Status"
-          items={[
-            { value: 'open', label: 'Open' },
-            { value: 'in_progress', label: 'In Progress' },
-            { value: 'remediated', label: 'Remediated' },
-            { value: 'closed', label: 'Closed' },
-          ]}
-          selectedValues={statusFilter ? [statusFilter] : []}
-          onApply={(vals) => setStatusFilter(vals[0] || '')}
-          multiSelect={false}
-        />
-      </div>
-
-      <div className="card overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-slate-200 bg-white/50">
-              <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Title</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Severity</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Status</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Business Unit</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Created</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Due Date</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredFindings.map((finding) => {
-              const severityStyle = getSeverityStyle(finding.severity);
-              const statusStyle = getStatusStyle(finding.status);
-              const isOverdue = finding.due_date && new Date(finding.due_date) < new Date() && finding.status !== 'closed';
-              
-              return (
-                <tr key={finding.id} className="border-b border-slate-200 hover:bg-slate-50">
-                  <td className="py-3 px-4">
-                    <div className="flex items-center gap-2">
-                      <AlertTriangle className={`h-4 w-4 ${severityStyle.text}`} />
-                      <span className="text-slate-900 font-medium">{finding.title}</span>
-                    </div>
-                    {(finding.linked_risk_id || finding.linked_control_id) && (
-                      <div className="flex items-center gap-2 mt-1">
-                        {finding.linked_risk_id && (
-                          <span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 flex items-center gap-1">
-                            <Target className="h-3 w-3" />
-                            Risk #{finding.linked_risk_id}
-                          </span>
-                        )}
-                        {finding.linked_control_id && (
-                          <span className="text-xs px-1.5 py-0.5 rounded bg-primary-50 text-primary-700 flex items-center gap-1">
-                            <Shield className="h-3 w-3" />
-                            Control #{finding.linked_control_id}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${severityStyle.bg} ${severityStyle.text}`}>
-                      {severityStyle.label}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusStyle.bg} ${statusStyle.text}`}>
-                      {statusStyle.label}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4">
-                    <div className="flex items-center gap-2 text-slate-700">
-                      <Building2 className="h-4 w-4 text-slate-500" />
-                      {finding.business_unit}
-                    </div>
-                  </td>
-                  <td className="py-3 px-4 text-slate-700">
-                    {formatDate(finding.created_at)}
-                  </td>
-                  <td className="py-3 px-4">
-                    <div className={`flex items-center gap-2 ${isOverdue ? 'text-rose-600' : 'text-slate-700'}`}>
-                      <Calendar className="h-4 w-4" />
-                      {formatDate(finding.due_date)}
-                    </div>
-                  </td>
-                  <td className="py-3 px-4">
-                    <div className="flex items-center gap-1">
-                      <Link
-                        href={`/erm/rcsa/findings/${finding.id}`}
-                        className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-                        title="View Details"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Link>
-                      <button
-                        onClick={() => { setSelectedFinding(finding); setModalType('risk'); }}
-                        className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-                        title="Link to Risk"
-                      >
-                        <Target className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => { setSelectedFinding(finding); setModalType('control'); }}
-                        className="p-1.5 rounded-lg text-slate-600 hover:text-primary-700 hover:bg-primary-50"
-                        title="Link to Control"
-                      >
-                        <Shield className="h-4 w-4" />
-                      </button>
-                      {canCreate && <button
-                        onClick={() => { setSelectedFinding(finding); setModalType('action'); }}
-                        className="p-1.5 rounded-lg text-slate-600 hover:text-emerald-700 hover:bg-emerald-50"
-                        title="Create Action"
-                      >
-                        <Plus className="h-4 w-4" />
-                      </button>}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-
-        {filteredFindings.length === 0 && (
-          <div className="p-12 text-center">
-            <AlertTriangle className="h-12 w-12 text-slate-500 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-slate-900 mb-2">No Findings Found</h3>
-            <p className="text-slate-600">
-              {searchTerm || severityFilter || statusFilter
-                ? 'No findings match your filters'
-                : 'No findings have been identified yet'}
-            </p>
-          </div>
-        )}
-      </div>
-
-      {modalType && modalType !== 'action' && (
-        <LinkModal
-          isOpen={true}
-          onClose={() => { setModalType(null); setSelectedFinding(null); }}
-          onConfirm={handleLinkConfirm}
-          type={modalType}
-          isLoading={linkRiskMutation.isPending || linkControlMutation.isPending}
-        />
-      )}
-
-      {modalType === 'action' && selectedFinding && (
-        <CreateActionModal
-          isOpen={true}
-          onClose={() => { setModalType(null); setSelectedFinding(null); }}
-          onConfirm={handleCreateAction}
-          findingTitle={selectedFinding.title}
-          isLoading={createActionMutation.isPending}
-        />
-      )}
+    <div className="flex min-w-0 flex-col gap-[4px]">
+      <span dir="auto" title={f.title} className="line-clamp-2 text-ds-body font-[600] text-ds-fg [overflow-wrap:anywhere]">{f.title}</span>
+      <span className="flex flex-wrap items-center gap-x-[10px] gap-y-[4px] text-ds-label text-ds-fg-muted">
+        <StatusPill size="sm" {...statusPill(findingSeverity, f.severity)} />
+        <StatusPill size="sm" {...statusPill(findingStatus, f.status)} />
+        <span>{unitOf(f)}</span>
+        {f.remediation_due_date && <span className={isLate(f) ? 'font-[600] text-ds-danger' : undefined}>{`Fix by ${formatDate(f.remediation_due_date, { calendar: true })}`}</span>}
+      </span>
     </div>
   );
+};
+
+function Findings() {
+  const list = useQuery({ queryKey: [...KEYS.findings, 'all'], queryFn: () => fetchAll<FindingRow>('/erm/rcsa/findings') });
+  const rows = useMemo(() => list.data ?? [], [list.data]);
+  const exportCsv = (shown: FindingRow[]) => {
+    const { header, rows: lines } = csvOf(shown);
+    saveBlob(new Blob([toCsv(header, lines)], { type: 'text/csv;charset=utf-8' }), csvName('findings'));
+  };
+  return (
+    <RcsaExplorer<FindingRow>
+      label="Findings"
+      noun={{ one: 'finding', other: 'findings' }}
+      rows={rows}
+      loading={list.isLoading}
+      error={list.isError ? { message: errorMessage(list.error), onRetry: () => { void list.refetch(); } } : null}
+      facets={FACETS}
+      quick={QUICK}
+      searchText={(f) => `${f.title} ${f.description ?? ''} ${unitOf(f)} ${campaignOf(f)} ${ownerOf(f)} ${f.linked_risk_title ?? ''}`}
+      columns={COLUMNS}
+      card={card}
+      sorts={SORTS}
+      defaultSort={DEFAULT_SORT}
+      head={() => (
+        <div className="flex min-w-0 flex-col gap-[12px]">
+          <PageHeader
+            variant="page"
+            title="RCSA Findings"
+            info="Gaps and weaknesses raised on a unit's self-assessment. Tie a finding to a risk or a control and make a mitigation action from it."
+            meta={list.isLoading || (list.isError && rows.length === 0) ? undefined : `${formatCount(rows.filter(isOpen).length)} open of ${formatCount(rows.length)}`}
+          />
+          <RcsaNav active="findings" counts={list.data ? { findings: rows.filter(isOpen).length } : undefined} />
+        </div>
+      )}
+      notices={list.isError && rows.length > 0 ? (
+        <Notice tone="danger" title="Couldn't refresh the findings" action={<Button size="sm" onClick={() => { void list.refetch(); }}>Retry</Button>}>{`${errorMessage(list.error)} What is shown may be out of date.`}</Notice>
+      ) : undefined}
+      empty={<EmptyState kind="firstUse" title="No findings yet" description="A reviewer or an assessor raises a finding from a unit's page when an answer shows a gap. It then appears here." />}
+      detail={(open, close) => <FindingPanel finding={open} onClose={close} />}
+      onExport={exportCsv}
+    />
+  );
+}
+
+export default function RcsaFindingsPage() {
+  return <Suspense fallback={null}><Findings /></Suspense>;
 }
