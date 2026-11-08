@@ -273,7 +273,7 @@ export function nextSort(scope: Scope, current: Sort, key: SortKey): Sort {
 const STATE_ORDER = ['in_progress', 'on_hold', 'not_started', 'ready', 'onboarding', 'idle', 'completed', 'cancelled', 'unknown'];
 const rankOf = (order: readonly string[], v: string): number => { const at = order.indexOf(v); return at < 0 ? order.length : at; };
 
-/** 0 late, 1 due within 30 days, 2 on hold, 3 other work in progress, 4 finished: the order of "Needs attention first". */
+/** 0 late, 1 due within 30 days, 2 on hold, 3 other work in progress, 4 finished: the order of "Needs attention first" (within a group the nearest date, then the least ready). */
 export function attentionRank(row: Pick<HubRow, 'journey' | 'state' | 'target'>): number {
   if (!row.journey || !isActiveJourney(row.journey.status)) return 4;
   if (row.target.state === 'overdue') return 0;
@@ -298,8 +298,10 @@ export function sortRows(rows: readonly HubRow[], sort: Sort): HubRow[] {
     }
   };
   const byName = (a: HubRow, b: HubRow) => a.name.localeCompare(b.name, undefined, { numeric: true }) || a.id - b.id;
-  // inside "needs attention first", the least ready journey comes first
-  const tieBreak = (a: HubRow, b: HubRow) => (sort.key === 'attention' ? (a.numbers?.readyPct ?? 101) - (b.numbers?.readyPct ?? 101) : 0) || byName(a, b);
+  // inside "needs attention first": the nearest (or most overdue) target date, then the least ready journey
+  const tieBreak = (a: HubRow, b: HubRow) => (sort.key === 'attention'
+    ? ((a.target.days ?? Number.MAX_SAFE_INTEGER) - (b.target.days ?? Number.MAX_SAFE_INTEGER)) || (a.numbers?.readyPct ?? 101) - (b.numbers?.readyPct ?? 101)
+    : 0) || byName(a, b);
   return rows.slice().sort((a, b) => {
     const x = value(a);
     const y = value(b);

@@ -18,7 +18,7 @@ import { frameworkState, targetWords } from '@/lib/statuses/frameworkHub';
 import { readinessBandWords } from '@/lib/statuses/frameworkJourney';
 import type { ProgressTone } from '@/components/ui/ds';
 import { canStartAnother, dueText, journeyHref, kindLabel, nextStep, typeLabel, type HubRow, type Scope } from './hubModel';
-import type { HubActions } from './useHubActions';
+import { ONBOARD_REASON, type HubActions } from './useHubActions';
 import { libraryOpenHref } from './hubAddress';
 import { versionLabel } from './overviewModel';
 
@@ -32,7 +32,7 @@ export const JOURNEY_FIT: Record<'status' | 'ready' | 'implemented' | 'target', 
   status: { px: 120, dropRank: 1 },
   ready: { px: 150, dropRank: 4 },
   implemented: { px: 112, dropRank: 2 },
-  target: { px: 148, dropRank: 3 },
+  target: { px: 172, dropRank: 3 },
 };
 export const LIBRARY_FIT: Record<'state' | 'authority' | 'ready' | 'next', Omit<FitColumn, 'key'>> = {
   state: { px: 176 },
@@ -152,7 +152,14 @@ export function NextButton({ row, env, size = 'sm' }: { row: HubRow; env: RowEnv
   // only starting the journey is the primary button: thirty rows of "Start onboarding" would be thirty of them
   return step.href
     ? <Button size={size} href={step.href} aria-label={label}>{step.label}</Button>
-    : <Button size={size} aria-label={label} loading={env.actions.startingOnboarding === step.frameworkId} onClick={() => env.actions.startOnboarding(row)}>{step.label}</Button>;
+    : (
+      <Button
+        size={size} aria-label={label} loading={env.actions.startingOnboarding === step.frameworkId} disabled={!env.actions.canOnboard}
+        title={env.actions.canOnboard ? undefined : ONBOARD_REASON} onClick={() => env.actions.startOnboarding(row)}
+      >
+        {step.label}
+      </Button>
+    );
 }
 
 export function hubColumns(env: RowEnv): RecordColumn<HubRow>[] {
@@ -217,6 +224,7 @@ export function rowActions(row: HubRow, env: RowEnv): MenuItem[] {
   if (step) {
     items.push({
       key: 'next', label: step.label, icon: step.kind === 'start' ? Play : ListChecks,
+      disabled: step.kind === 'onboarding' && !step.href && !a.canOnboard, reason: step.kind === 'onboarding' && !step.href && !a.canOnboard ? ONBOARD_REASON : undefined,
       onSelect: () => {
         if (step.kind === 'start') a.start(row);
         else if (step.kind === 'open' || step.href) env.go(step.href as string);

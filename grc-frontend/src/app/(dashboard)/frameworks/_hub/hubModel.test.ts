@@ -129,6 +129,8 @@ test('sorting: "needs attention first" is late, due soon, on hold, working, fini
   ];
   const rows = journeyRows(journeys, LIB, TODAY);
   assert.deepEqual(sortRows(rows, DEFAULT_SORT.journeys).map((r) => r.id), [2, 6, 3, 5, 1, 4]);
+  const twoSoon = journeyRows([journey(1, 1, 'in_progress', { target_date: '2026-11-29T00:00:00' }), journey(2, 2, 'in_progress', { target_date: '2026-11-12T00:00:00', progress: progress(100, 90, 90) })], LIB, TODAY);
+  assert.deepEqual(sortRows(twoSoon, DEFAULT_SORT.journeys).map((r) => r.id), [2, 1], 'both due soon: the nearer date first, whatever their readiness');
   const byReady = sortRows(rows, { key: 'ready', dir: 'asc' }).map((r) => r.id);
   assert.equal(byReady[0], 5, 'least ready first');
   assert.deepEqual(byReady.slice(1, 3).sort(), [3, 6], 'equally ready: by name');

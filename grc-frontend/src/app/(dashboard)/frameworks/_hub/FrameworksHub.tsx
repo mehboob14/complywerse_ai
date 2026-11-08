@@ -93,7 +93,7 @@ export function FrameworksHub() {
       />
       <FrameworksStrip current={scope} />
       {scope === 'journeys' && (
-        <PostureTiles journeys={journeys} loading={journeysQ.isPending} error={journeysQ.error} onRetry={retry(journeysQ)} attentionHref="/frameworks?quick=attention" />
+        <PostureTiles journeys={journeys} loading={journeysQ.isPending} error={journeysQ.error} attentionHref="/frameworks?quick=attention" />
       )}
     </div>
   );

@@ -13,6 +13,8 @@ const DIR = fileURLToPath(new URL('./', import.meta.url));
 const SOURCES = readdirSync(DIR).filter((f) => /\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f)).map((file) => ({ file, text: readFileSync(`${DIR}${file}`, 'utf8').replace(/\r\n/g, '\n') }));
 const TSX = SOURCES.filter((s) => s.file.endsWith('.tsx'));
 const src = (file: string) => SOURCES.find((s) => s.file === file)!.text;
+/** An emoji or a dingbat: built from a string, because the source is compiled for ES5, which rejects the `u` flag in a literal. */
+const EMOJI = new RegExp('[\\u{1F300}-\\u{1FAFF}\\u2600-\\u27BF]', 'u');
 const code = (text: string) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/\s.*$/gm, '$1');
 
 test('the folder is what the pins read', () => {
@@ -53,8 +55,7 @@ test('a failed request is an error of its own part: never an empty list, never z
   assert.match(register, /if \(failure\) return <ErrorState/);
   assert.match(register, /canRetry\(error\) \? retry : undefined/, 'Retry only where asking again can help');
   const tiles = code(src('PostureTiles.tsx'));
-  assert.match(tiles, /Couldn't load the journeys/);
-  assert.match(tiles, /error=\{fail\}/);
+  assert.match(tiles, /if \(failed\) return null;/, 'a failed read draws no tiles: the list under them says it once, with Retry');
   const trend = code(src('TrendActivity.tsx'));
   assert.match(trend, /Couldn't load the trend/);
   assert.match(trend, /Couldn't load the recent activity/);
@@ -93,6 +94,8 @@ test('the onboarding gate is the server\'s: a start sends the same call as befor
   assert.match(code(src('HubDrawer.tsx')), /<OnboardingNeeded/);
   for (const { file, text } of SOURCES) assert.doesNotMatch(code(text), /onboardingApi\.(approve|reopen|underway|submit|saveAnswers)/, `${file}: the hub does not decide an onboarding`);
   assert.match(actions, /onboardingApi\.start\(frameworkId\)/, 'it may only make the draft and open it');
+  assert.match(actions, /hasPermission\('compliance:framework_onboarding:edit'\) \|\| hasPermission\('compliance:frameworks:edit'\)/, 'the two rights the server asks to make an onboarding (EDIT_ONBOARDING)');
+  assert.match(code(src('HubRows.tsx')), /disabled=\{!env\.actions\.canOnboard\}/, 'a button the server would refuse does not look usable');
 });
 
 test('deleting follows the right the Manage page asked, and the server\'s refusal of a shared framework is not offered as a button', () => {
@@ -110,7 +113,7 @@ test('invented content is gone: no "(0%)", no emoji, no fixed lifecycle, no defa
   for (const { file, text } of SOURCES) {
     const c = code(text);
     assert.doesNotMatch(c, /\(0%\)/, file);
-    assert.doesNotMatch(c, /[\u{1F300}-\u{1FAFF}☀-➿]/u, `${file}: an emoji`);
+    assert.doesNotMatch(c, EMOJI, `${file}: an emoji`);
     assert.doesNotMatch(c, /Certification Lifecycle|Stage 2 audit|upload · parse|upload - parse/i, file);
     assert.doesNotMatch(c, /confidence/i, `${file}: the classification confidence is not shown (Rule U1)`);
     assert.doesNotMatch(c, /\bcontrols_count\b/, `${file}: the server sends parsed_controls_count (the old cards printed "undefined controls")`);

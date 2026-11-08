@@ -87,7 +87,7 @@ function Body({ row, item, env }: { row: HubRow; item: LibraryItem | null; env: 
   const step = nextStep(row);
   const sections = item ? overviewOf(item) : null;
   const refused = a.refusal && a.refusal.frameworkId === row.frameworkId ? a.refusal : null;
-  const starts = step?.kind === 'start';
+  const starts = step?.kind === 'start' && !refused;                  // once the server has refused, its notice carries the way forward
   const authorityLabel = row.kind === 'certification' ? 'Certification body' : 'Regulator';
 
   return (
@@ -112,7 +112,7 @@ function Body({ row, item, env }: { row: HubRow; item: LibraryItem | null; env: 
         )}
         <div className="flex flex-wrap items-center gap-[8px]">
           {step && step.kind === 'start'
-            ? <Button variant="primary" leftIcon={<Play aria-hidden />} loading={a.starting === step.frameworkId} onClick={() => a.start(row, target || undefined)}>{step.label}</Button>
+            ? refused ? null : <Button variant="primary" leftIcon={<Play aria-hidden />} loading={a.starting === step.frameworkId} onClick={() => a.start(row, target || undefined)}>{step.label}</Button>
             : <NextButton row={row} env={env} size="md" />}
           {row.journey && row.journey.target_date && <span className="text-ds-label text-ds-fg-muted">{`Target ${formatDate(row.journey.target_date, { calendar: true })}`}</span>}
         </div>

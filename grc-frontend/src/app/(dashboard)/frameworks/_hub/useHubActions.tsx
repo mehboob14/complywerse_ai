@@ -21,8 +21,13 @@ import { journeyHref, type HubRow } from './hubModel';
 
 export interface StartRefusal { frameworkId: number; name: string; why: Refusal }
 
+/** What the server answers a start of an onboarding with when the person may not (EDIT_ONBOARDING): said on the button, so it does not look usable. */
+export const ONBOARD_REASON = 'Needs the right to edit frameworks';
+
 export interface HubActions {
   canDelete: boolean;
+  /** the server lets a person make an onboarding with `compliance:framework_onboarding:edit` or `compliance:frameworks:edit`; reading one is open to every signed-in person */
+  canOnboard: boolean;
   /** the framework whose journey is being created, and the one whose onboarding is being started */
   starting: number | null;
   startingOnboarding: number | null;
@@ -47,6 +52,7 @@ export function useHubActions({ onRemovedFramework }: { onRemovedFramework?: (fr
   const { confirm, confirmDialog } = useConfirm();
   const [refusal, setRefusal] = useState<StartRefusal | null>(null);
   const canDelete = hasPermission('frameworks:framework_library:delete');
+  const canOnboard = hasPermission('compliance:framework_onboarding:edit') || hasPermission('compliance:frameworks:edit');
 
   const startM = useReportedMutation({
     mutationFn: async (v: { frameworkId: number; name: string; targetDay?: string }) => {
@@ -107,6 +113,7 @@ export function useHubActions({ onRemovedFramework }: { onRemovedFramework?: (fr
 
   return {
     canDelete,
+    canOnboard,
     starting: startM.isPending ? (startM.variables?.frameworkId ?? null) : null,
     startingOnboarding: onboardM.isPending ? (onboardM.variables ?? null) : null,
     startOnboarding: (row) => { if (row.frameworkId != null) onboardM.mutate(row.frameworkId); },
