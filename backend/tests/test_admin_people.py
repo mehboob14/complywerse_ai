@@ -140,3 +140,18 @@ def test_a_role_keeps_a_permission_name_the_catalogue_does_not_list_when_the_who
     assert sorted(held) == ["governance:documents:view", "legacy:thing:view"]
     assert http.put(f"/admin/roles/{made}", json={"permission_names": held + ["governance:documents:edit"]}).status_code == 200
     assert sorted(http.get(f"/admin/roles/{made}").json()["permissions"]) == ["governance:documents:edit", "governance:documents:view", "legacy:thing:view"]
+
+
+def test_a_persons_ai_usage_names_the_areas_for_the_screen_and_keeps_every_field_it_had(w):
+    w.add_people(1)
+    w.db.add(m.AIUsageEvent(actor_user_id=100, actor_username="p100", module_key="governance", feature_key="studio_draft", prompt_tokens=10,
+                            completion_tokens=5, total_tokens=15, requested_model="some-model"))
+    w.db.commit()
+    body = w.as_(1).get("/admin/ai-usage/users/100").json()
+    row = body["modules"][0]
+    assert {"module_key", "feature_key", "calls", "prompt_tokens", "completion_tokens", "total_tokens", "estimated_cost"} <= set(row), "nothing was removed"
+    assert row["module_label"] == "Governance" and row["feature_label"] == "Studio Draft"
+    event = body["recent"][0]
+    assert {"id", "occurred_at", "module_key", "feature_key", "model", "total_tokens", "status"} <= set(event), "nothing was removed"
+    assert event["module_label"] == "Governance" and event["feature_label"] == "Studio Draft"
+    assert body["summary"]["calls"] == 1

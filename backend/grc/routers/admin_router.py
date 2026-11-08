@@ -492,13 +492,19 @@ def ai_usage_for_user(
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     query = _usage_filters(tenant_db.query(AIUsageEvent), date_from=date_from, date_to=date_to, username=target.username)
+    from ..services.ai_usage_report import module_label, _humanize
     modules = ai_usage_by_module(date_from, date_to, target.username, user, tenant_db)
     recent = query.order_by(AIUsageEvent.occurred_at.desc()).limit(100).all()
+    events = [_serialize_ai_usage_event(event) for event in recent]
+    # the words a screen can show for the internal keys (added to the rows; nothing is renamed or removed)
+    for row in modules + events:
+        row["module_label"] = module_label(row["module_key"] or "")
+        row["feature_label"] = _humanize(row["feature_key"] or "")
     return {
         "user": {"id": target.id, "username": target.username, "display_name": target.display_name, "email": target.email},
         "summary": _usage_totals(query),
         "modules": modules,
-        "recent": [_serialize_ai_usage_event(event) for event in recent],
+        "recent": events,
     }
 
 
