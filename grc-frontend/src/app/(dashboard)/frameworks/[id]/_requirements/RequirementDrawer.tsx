@@ -70,6 +70,7 @@ export function RequirementDrawer(props: RequirementDrawerProps) {
       width="lg"
       padded={false}
       restoreFocus={rowOf(row?.id ?? null)}
+      initialFocus='[role="tab"][aria-selected="true"]'
       closeLabel="Close the details"
       actions={row && (
         <>
@@ -165,7 +166,7 @@ function Overview({ row, users, canEdit, actions }: { row: ReqRow; users: readon
         <Fact label="Evidence">{evidenceLine(row.evidence)}{row.evidence.pending > 0 ? ` · ${formatCount(row.evidence.pending)} waiting for review` : ''}</Fact>
         <Fact label="Owners">{row.owners.length > 0 ? row.owners.join(', ') : null}</Fact>
         <Fact label="Scope"><StatusPill {...statusPill(requirementScope, row.inScope ? 'in_scope' : 'out_of_scope')} /></Fact>
-        <Fact label="Priority">{row.tier ? `${row.tier}${c.priority_level && /^P[1-3]$/.test(c.priority_level) ? ` · Year ${c.priority_level.slice(1)}` : ''}` : null}</Fact>
+        {row.tier && <Fact label="Priority">{`${row.tier}${c.priority_level && /^P[1-3]$/.test(c.priority_level) ? ` · Year ${c.priority_level.slice(1)}` : ''}`}</Fact>}
         {row.critical && <Fact label="Critical clause"><StatusPill tone="danger" label="Critical" /></Fact>}
         {c.applicability && <Fact label="Applies">{c.applicability}</Fact>}
         {c.objective_name && c.objective_name.trim() !== row.section && <Fact label="Objective">{c.objective_name}</Fact>}

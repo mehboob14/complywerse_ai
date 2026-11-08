@@ -48,7 +48,7 @@ export function ScopeAskDialog({ targets, applicable, pending, skipped, onClose,
         </div>
       )}
     >
-      <div className="space-y-[12px]">
+      <div className="space-y-[12px] px-[20px] py-[16px]">
         {critical.length > 0 && (
           <Notice tone="warning" icon={AlertTriangle} title={critical.length === 1 ? 'This is a critical clause' : `${formatCount(critical.length)} are critical clauses`}>
             {critical.length === 1 && critical[0].control.criticality_reason ? `AI flagged it: ${critical[0].control.criticality_reason}` : 'AI flagged them as critical.'} A reviewer has to approve before {critical.length === 1 ? 'it' : 'they'} can leave the scope.
@@ -100,7 +100,7 @@ export function BulkOwnersDialog({ open, rows, users, pending, onClose, onSubmit
         </div>
       )}
     >
-      <div className="space-y-[12px]">
+      <div className="space-y-[12px] px-[20px] py-[16px]">
         <SegmentedControl
           label="What happens to the owners they have now"
           name="bulk-owner-mode"

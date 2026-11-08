@@ -23,7 +23,7 @@ const plainClick = (e: { button: number; metaKey: boolean; ctrlKey: boolean; shi
 export const REQ_FIT: Record<'status' | 'evidence' | 'owner' | 'priority', Omit<FitColumn, 'key'>> = {
   status: { px: 148 },
   evidence: { px: 156, dropRank: 2 },
-  owner: { px: 76, dropRank: 3, wide: { px: 168, titleMin: 460 } },
+  owner: { px: 104, dropRank: 3, wide: { px: 176, titleMin: 460 } },
   priority: { px: 84, dropRank: 1 },
 };
 
@@ -86,8 +86,17 @@ export function EvidenceCell({ row }: { row: ReqRow }) {
   );
 }
 
-export function OwnerCell({ row, wide = false }: { row: ReqRow; wide?: boolean }) {
+/** `plain`: inside a card or a board card, which is one button already: no button of its own for the "+N" (a button in a button is not valid), the names are in the title. */
+export function OwnerCell({ row, wide = false, plain = false }: { row: ReqRow; wide?: boolean; plain?: boolean }) {
   if (row.owners.length === 0) return <span className="text-ds-body text-ds-fg-muted" title="Nobody owns it"><span aria-hidden>{EMPTY}</span><span className="sr-only">Unassigned</span></span>;
+  if (plain) {
+    return (
+      <span className="inline-flex items-center gap-[4px]" title={row.owners.join(', ')}>
+        <PersonChip name={row.owners[0]} className="[&>span:last-child]:sr-only" />
+        {row.owners.length > 1 && <span className="text-ds-label text-ds-fg-muted"><span aria-hidden>{`+${row.owners.length - 1}`}</span><span className="sr-only">{`, and ${row.owners.length - 1} more: ${row.owners.slice(1).join(', ')}`}</span></span>}
+      </span>
+    );
+  }
   if (!wide) return <PersonStack people={row.owners} max={2} size={24} label="Owners" />;
   return (
     <span className="inline-flex min-w-0 items-center gap-[6px]">
@@ -128,7 +137,7 @@ export function ReqCard({ row }: { row: RecordRow<ReqRow> }) {
         {!r.inScope && <StatusPill size="sm" tone="warning" label="Out of scope" />}
         {r.critical && <StatusPill size="sm" tone="danger" label="Critical" />}
         {r.tier && <PriorityCell row={r} />}
-        <span className="ml-auto"><OwnerCell row={r} /></span>
+        <span className="ml-auto"><OwnerCell row={r} plain /></span>
       </span>
       <span className="truncate text-ds-label text-ds-fg-muted">
         {evidenceLine(r.evidence)}{r.evidence.pending > 0 ? `, ${formatCount(r.evidence.pending)} waiting for review` : ''}{words ? ` · ${words}` : ''}
@@ -148,7 +157,7 @@ export function BoardCard({ row }: { row: ReqRow }) {
       <span className="flex min-w-0 flex-wrap items-center gap-x-[8px] gap-y-[4px] text-ds-label text-ds-fg-muted">
         {row.critical && <StatusPill size="sm" tone="danger" label="Critical" />}
         <span className="tabular-nums">{evidenceLine(row.evidence)}</span>
-        <span className="ml-auto"><OwnerCell row={row} /></span>
+        <span className="ml-auto"><OwnerCell row={row} plain /></span>
       </span>
     </>
   );
