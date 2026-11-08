@@ -124,6 +124,18 @@ export function dueBucket(t: Pick<RegisterTask, 'due_date' | 'status'>, now: Dat
   return 'later';
 }
 
+/** The due state in a few words: "3 d overdue" (full days; "Overdue" within the first day), "Due today", "in 4 d"; nothing for a done task or one with no due date. Danger words say it is late. */
+export function dueWords(t: Pick<RegisterTask, 'due_date' | 'status'>, now: Date): { text: string; late: boolean } | null {
+  const bucket = dueBucket(t, now);
+  if (bucket === 'done' || bucket === 'none') return null;
+  const days = dueDays(t, now) as number;
+  if (bucket === 'overdue') {
+    const full = -days - 1;              // dueDays rounds down: -1 is "less than a day late"
+    return { text: full >= 1 ? `${full} d overdue` : 'Overdue', late: true };
+  }
+  return { text: bucket === 'today' ? 'Due today' : `in ${Math.max(1, days)} d`, late: false };
+}
+
 /** Overdue: not done and past due. Equal to the server's `sla_status === 'Breached'` for a task read a moment ago (see the test that holds the two together). */
 export const isOverdue = (t: Pick<RegisterTask, 'due_date' | 'status'>, now: Date): boolean => dueBucket(t, now) === 'overdue';
 
@@ -143,6 +155,9 @@ export const isMine = (t: Pick<RegisterTask, 'assigned_owner_id' | 'assigned_use
 
 /** The task is the person's to DO: they are on it (My Tasks' rule is on it or reviewing it). */
 export const isAssignedTo = (t: Pick<RegisterTask, 'assigned_owner_id' | 'assigned_user_ids' | 'assignees'>, me: number | null): boolean => me != null && peopleOf(t).indexOf(me) >= 0;
+
+/** The task is on the person's list of work: they are on it or review it (the rule My Tasks has always used; `isMine` also holds the tasks they made, as the board's scope does). */
+export const isMyWork = (t: Pick<RegisterTask, 'assigned_owner_id' | 'assigned_user_ids' | 'assignees' | 'reviewer_id'>, me: number | null): boolean => isAssignedTo(t, me) || (me != null && t.reviewer_id === me);
 
 // ── the next step ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 export type StepId = 'start' | 'review' | 'complete' | 'verify' | 'request_approval' | 'approve';

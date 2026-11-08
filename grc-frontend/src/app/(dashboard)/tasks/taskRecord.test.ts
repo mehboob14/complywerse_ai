@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 
 import {
-  DUE_BUCKETS, KINDS, KIND_LABEL, MODULE_KIND, approvalGate, dueBucket, dueDays, isAssignedTo, isDoneStatus, isMine, isOverdue, kindOf, mayDecide, nextStep, peopleOf, sourceLink, waitingFor,
+  DUE_BUCKETS, KINDS, KIND_LABEL, MODULE_KIND, approvalGate, dueBucket, dueDays, dueWords, isAssignedTo, isDoneStatus, isMine, isMyWork, isOverdue, kindOf, mayDecide, nextStep, peopleOf, sourceLink, waitingFor,
   type RegisterTask,
 } from './taskRecord.ts';
 
@@ -104,6 +104,19 @@ test('dueDays counts whole days the way the server does: -1 is less than a day l
   assert.equal(dueDays({ due_date: '2026-11-13T09:30:00' }, NOW), 3);
 });
 
+test('dueWords: days late in full days, today, days to go; nothing for a done task or no date', () => {
+  const w = (due: string | null, status = 'Open') => dueWords({ due_date: due, status }, NOW);
+  assert.deepEqual(w('2026-11-10T09:00:00'), { text: 'Overdue', late: true }, 'less than a day late');
+  assert.deepEqual(w('2026-11-09T09:00:00'), { text: '1 d overdue', late: true }, 'a day and a half late is one full day');
+  assert.deepEqual(w('2026-11-09T10:00:00'), { text: 'Overdue', late: true }, 'twenty-three and a half hours late is not yet a full day');
+  assert.deepEqual(w('2026-11-07T09:30:00'), { text: '2 d overdue', late: true });
+  assert.deepEqual(w('2026-11-10T18:00:00'), { text: 'Due today', late: false });
+  assert.deepEqual(w('2026-11-14T09:30:00'), { text: 'in 4 d', late: false });
+  assert.deepEqual(w('2026-11-11T02:00:00'), { text: 'in 1 d', late: false });
+  assert.equal(w(null), null);
+  assert.equal(w('2026-11-01T00:00:00', 'Completed'), null);
+});
+
 test('a done status is Completed or Verified in any spelling', () => {
   for (const s of ['Completed', 'completed', 'Verified', ' VERIFIED ']) assert.equal(isDoneStatus(s), true, s);
   for (const s of ['Open', 'In Progress', 'Under Review', 'Reopened', '', null, undefined]) assert.equal(isDoneStatus(s), false, String(s));
@@ -126,6 +139,11 @@ test('isMine holds the tasks you are on, review or made; isAssignedTo only the f
   assert.equal(isAssignedTo(t, 6), true);
   assert.equal(isAssignedTo(t, 8), false);
   assert.equal(isAssignedTo(t, 2), false);
+  // the list of work (My Tasks' rule): on it or reviewing it, not having made it
+  assert.equal(isMyWork(t, 6), true);
+  assert.equal(isMyWork(t, 8), true);
+  assert.equal(isMyWork(t, 2), false);
+  assert.equal(isMyWork(t, null), false);
 });
 
 // ── the next step ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
