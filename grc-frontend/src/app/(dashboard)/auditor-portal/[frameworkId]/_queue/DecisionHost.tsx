@@ -6,7 +6,7 @@
 //   a scope request PUT  /governance/applicability/{id}/review  (the review the Frameworks Scope tab uses: waiting requests only, and an approval applies to the journey)
 // Every portal route is open to any signed-in person on the server, so the buttons are shown to everyone who can open the page (listed as a gap, not widened).
 // The note is kept when a save fails, and "Try again" sends the same decision. A decided scope request is read-only here (the platform decides a request once).
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Eye } from 'lucide-react';
 import { Button, ClampedText, useReportedMutation } from '@/components/ui/ds';
 import { errorMessage } from '@/components/ui/ds/reportOutcome';
@@ -37,6 +37,9 @@ export interface DecisionHostProps {
 
 export function DecisionHost({ journeyId, item, onClose }: DecisionHostProps) {
   const [preview, setPreview] = useState<FileItem | null>(null);
+  // the file viewer is an older overlay that closes itself on Escape: while it is up, that same key must not also close the sheet under it
+  const previewing = useRef(false);
+  previewing.current = preview !== null;
 
   const reviewFile = useReportedMutation({
     mutationFn: ({ id, decision, remarks }: { id: number; decision: Decision; remarks: string }) =>
@@ -61,7 +64,7 @@ export function DecisionHost({ journeyId, item, onClose }: DecisionHostProps) {
     onSuccess: onClose,
   });
 
-  const close = () => { reviewFile.reset(); reviewScope.reset(); onClose(); };
+  const close = () => { if (previewing.current) return; reviewFile.reset(); reviewScope.reset(); onClose(); };
   const file = item && item.type === 'file' ? item : null;
   const scope = item && item.type === 'scope' ? item : null;
   const active = file ? reviewFile : reviewScope;

@@ -195,11 +195,6 @@ export function queueChips(counts: QueueCounts | null | undefined): QueueChip[] 
 /** What waits in the queue in total (the Queue tab's badge): files to review plus scope requests waiting. The requirements nobody asked about wait for no one. */
 export const waitingTotal = (counts: QueueCounts | null | undefined): number => (counts ? counts.files.pending + counts.scope.pending : 0);
 
-/** The sentence under a scope request: what it asks. The requirement stays as it is until a reviewer approves. */
-export function scopeAsk(item: Pick<ScopeItem, 'is_applicable'>): string {
-  return item.is_applicable ? 'Asks to put it in scope' : 'Asks to put it out of scope';
-}
-
 /** The requirement as one line: "A.8.2 Privileged access rights"; the title alone, the reference alone, or "A requirement" when neither is recorded. */
 export function controlLine(control: Pick<QueueControl, 'ref' | 'title'> | null | undefined): string {
   const line = [control?.ref, control?.title].filter((x) => x && String(x).trim()).join(' ');

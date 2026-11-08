@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { readAddress, writeAddress } from '../addressState.ts';
 import {
   ADDRESS, controlLine, counterTarget, decidedShare, fileSize, frameworksHref, journeyHref, lastPage, matchJourneys, noun, openKey, orderJourneys, parseOpen, queueChips,
-  openObservations, rowHref, scopeAsk, skipFor, summaryFigures, upgradeLegacyAddress, waitingOf, waitingTotal, type JourneyCard, type QueueCounts,
+  openObservations, rowHref, skipFor, summaryFigures, upgradeLegacyAddress, waitingOf, waitingTotal, type JourneyCard, type QueueCounts,
 } from './portalModel.ts';
 
 const card = (id: number, name: string, filesPending: number, scopePending: number, extra: Partial<JourneyCard> = {}): JourneyCard => ({
@@ -110,9 +110,7 @@ test('the queue links into the Frameworks workspace by the journey id and the jo
   assert.equal(frameworksHref(5, 'artifacts', null), '/frameworks/5?tab=artifacts');
 });
 
-test('small sentences: what a scope request asks, the requirement as one line, a file size, paging arithmetic', () => {
-  assert.equal(scopeAsk({ is_applicable: true }), 'Asks to put it in scope');
-  assert.equal(scopeAsk({ is_applicable: false }), 'Asks to put it out of scope');
+test('small sentences: the requirement as one line, a file size, paging arithmetic', () => {
   assert.equal(controlLine({ ref: 'A.8.2', title: 'Privileged access rights' }), 'A.8.2 Privileged access rights');
   assert.equal(controlLine({ ref: null, title: 'Only a title' }), 'Only a title');
   assert.equal(controlLine(null), 'A requirement');

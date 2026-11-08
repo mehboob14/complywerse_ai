@@ -6,7 +6,7 @@ import { Button, PersonChip, StatusPill, type RegisterColumn } from '@/component
 import { formatDate } from '@/lib/format';
 import { statusPill } from '@/lib/status';
 import { decisionWord, queueKind } from '@/lib/statuses/auditPortal';
-import { controlLine, fileSize, scopeAsk, type FileItem, type QueueItem, type ScopeItem, type UntouchedItem } from '@/lib/auditorPortal/portalModel';
+import { controlLine, fileSize, type FileItem, type QueueItem, type ScopeItem, type UntouchedItem } from '@/lib/auditorPortal/portalModel';
 
 const CLAMP = 'line-clamp-2 break-words text-ds-body text-ds-fg-body [overflow-wrap:anywhere]';
 const Text = ({ children, title }: { children: string; title?: string }) => <span title={title ?? children} className={CLAMP}>{children}</span>;
@@ -34,7 +34,7 @@ export function fileColumns(open: (item: FileItem) => void, decided = false): Re
 export function scopeColumns(open: (item: ScopeItem) => void): RegisterColumn<ScopeItem>[] {
   return [
     { key: 'requirement', header: 'Requirement', isRowHeader: true, cell: (r) => <span title={controlLine(r.control)} className="line-clamp-2 break-words text-ds-body font-[500] text-ds-fg [overflow-wrap:anywhere]">{controlLine(r.control)}</span> },
-    { key: 'ask', header: 'Asks', card: 'meta', cell: (r) => <span className="text-ds-body text-ds-fg-body">{scopeAsk(r)}</span> },
+    { key: 'ask', header: 'Asks for', card: 'meta', width: 'w-[120px]', cell: (r) => <span className="whitespace-nowrap text-ds-body text-ds-fg-body">{r.is_applicable ? 'In scope' : 'Out of scope'}</span> },
     { key: 'reason', header: 'Reason given', priority: 3, cell: (r) => (r.justification ? <Text>{r.justification}</Text> : <Dash />) },
     { key: 'by', header: 'Asked by', priority: 2, card: 'meta', cell: (r) => <PersonChip name={r.requested_by} /> },
     { key: 'on', header: 'Asked', priority: 2, card: 'meta', cell: (r) => when(r.requested_at) },
