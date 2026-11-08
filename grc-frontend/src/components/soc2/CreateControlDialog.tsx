@@ -30,7 +30,7 @@ function SourceCard({ source }: { source: ControlSource }) {
   const long = source.text.length > 280;
   return (
     <div className="rounded-xl border border-primary-200 bg-primary-50/50 px-4 py-3">
-      <div className="flex flex-wrap items-center gap-2 text-[11.5px]">
+      <div className="flex flex-wrap items-center gap-2 text-[12px]">
         <span className="inline-flex items-center gap-1 font-semibold uppercase tracking-wide text-primary-700">
           <FileText className="h-3.5 w-3.5" /> From {source.kind.toLowerCase()}
         </span>
@@ -42,7 +42,7 @@ function SourceCard({ source }: { source: ControlSource }) {
       <p className={`mt-2 whitespace-pre-line text-[13px] leading-relaxed text-slate-800 ${open || !long ? '' : 'line-clamp-3'}`}>
         {source.text}
       </p>
-      <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-slate-500">
+      <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 text-[12px] text-slate-500">
         {source.parent ? <span>In <span className="font-medium text-slate-700">{source.parent}</span></span> : <span />}
         {long && (
           <button type="button" onClick={() => setOpen((v) => !v)} className="inline-flex items-center gap-0.5 font-semibold text-primary-700 hover:underline">

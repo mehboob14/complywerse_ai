@@ -62,7 +62,7 @@ test('the heading of each page is the name the registry gives it, and the top ba
   assert.equal(titleFor('/automation/soc2-controls/review'), 'Mapping review');
   assert.equal(titleFor('/admin/evidence-collectors'), 'Connections');
   for (const url of ['/automation/soc2-controls/coverage', '/automation/soc2-controls/review', '/automation/assurance', '/automation/soc2-controls/new']) assert.equal(ownHeadingSection(url), OWN_SECTION, url);
-  assert.equal(ownHeadingSection('/automation/soc2-controls/IAC-06'), undefined, 'the control page is the next builder\'s: its heading is drawn by the top bar');
+  assert.equal(ownHeadingSection('/automation/soc2-controls/IAC-06'), OWN_SECTION, 'the control workspace draws its own head (the control name), so the top bar names only the section');
 });
 
 test('the old names stay findable', () => {
