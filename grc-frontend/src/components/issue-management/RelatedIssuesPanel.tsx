@@ -12,12 +12,12 @@ import {
 import { errorMessage } from '@/components/ui/ds/reportOutcome';
 import { formatCount } from '@/lib/format';
 import { statusPill } from '@/lib/status';
+import { issueState } from '@/lib/statuses/issues';
 import { severity } from '@/lib/statuses/monitoring';
 import { usePermissions } from '@/hooks/usePermissions';
 import { CreateIssueButton } from './CreateIssueButton';
 import { fetchBySource } from './embedApi';
 import { canCreateFrom, panelView, viewAllHref, type CreatableSource, type PanelRowView, type PanelSource, type Presets } from './embedModel';
-import { issueState } from './embedWords';
 
 export const VIEW_ISSUES = 'issue_management:issues:view';
 

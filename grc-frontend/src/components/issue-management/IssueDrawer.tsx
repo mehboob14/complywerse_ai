@@ -13,14 +13,15 @@ import {
   Button, Combobox, Disclosure, FormError, FormField, Select, Skeleton, StatusPill, Textarea, TextInput, useNotify, useReportedMutation,
 } from '@/components/ui/ds';
 import { assetsApi } from '@/lib/api';
+import { ISSUE_SEVERITIES, LEVELS } from '@/lib/issues/words';
 import { statusPill } from '@/lib/status';
+import { issueCategory, issueType } from '@/lib/statuses/issues';
 import { optionsOf, severity } from '@/lib/statuses/monitoring';
 import { createIssue, fetchSeverityMatrix } from './embedApi';
 import {
   TITLE_MAX, createBody, createdMessage, draftErrors, hoursWords, initialDraft, isDirty, linkCount, severityPreview, sourceNoun,
   type CreatableSource, type Draft, type LinkKey, type Presets,
 } from './embedModel';
-import { LEVELS, SEVERITY_WORDS, issueCategory, issueType } from './embedWords';
 import { LinkPickers } from './LinkPickers';
 
 /** The props of the old IssueForm, unchanged (`sourceLabel` is new and optional: the record's name, drawn under the title). */
@@ -165,7 +166,7 @@ function DrawerBody({ onClose, presetSource, presetFields, onCreated, sourceLabe
                 placeholder="Use the worked-out severity"
                 onChange={(e) => setDraft((d) => ({ ...d, override: e.target.value, overrideReason: e.target.value ? d.overrideReason : '' }))}
               >
-                {SEVERITY_WORDS.map((w) => <option key={w} value={w}>{severity.label(w)}</option>)}
+                {ISSUE_SEVERITIES.map((w) => <option key={w} value={w}>{severity.label(w)}</option>)}
               </Select>
             </FormField>
             {draft.override && (
