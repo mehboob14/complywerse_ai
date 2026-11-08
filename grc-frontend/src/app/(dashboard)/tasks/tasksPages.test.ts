@@ -71,7 +71,7 @@ test('every write goes through useReportedMutation: no bare useMutation in these
 });
 
 test('every page of the group that draws something draws the kit\'s page head (PageHeader variant="page"); the three old pages are forwards and draw nothing', () => {
-  for (const f of ['tasks/page.tsx', 'tasks/[id]/page.tsx', 'tasks/[id]/_TaskView.tsx', 'my-work/page.tsx']) {
+  for (const f of ['tasks/page.tsx', 'tasks/[id]/page.tsx', 'tasks/[id]/_workspace/TaskWorkspace.tsx', 'my-work/page.tsx']) {
     assert.match(code(read(f)), /<PageHeader[\s\S]{0,40}variant="page"/, f);
   }
   // the tabs' views draw none: they sit under their page's head
@@ -83,11 +83,12 @@ test('every page of the group that draws something draws the kit\'s page head (P
 
 test('the rights are the ones the pages always checked: New task needs critical_tasks:tasks:create; Edit and Delete need the literals the task page has always used; a document task is deleted by administrators only', () => {
   assert.match(code(read('tasks/page.tsx')), /hasPermission\('critical_tasks:tasks:create'\)/);
-  const view = code(read('tasks/[id]/_TaskView.tsx'));
-  assert.match(view, /hasPermission\('tasks:task_management:edit'\)/);
+  const view = code(read('tasks/[id]/_workspace/TaskWorkspace.tsx'));
+  assert.match(view, /hasPermission\('tasks:task_management:edit'\)/, 'the in-place editors keep the Edit button\'s literal');
   assert.match(view, /hasPermission\('tasks:task_management:delete'\)/);
-  assert.match(view, /canDeleteTask\(task, \{ isAdmin, hasDeleteRight: canDelete \}\)/);
-  assert.match(code(read('tasks/[id]/_Panels.tsx')), /canDelete/, 'the sub-task delete follows the same right');
+  assert.match(view, /railRights\(task, \{ canEdit: .*, canDelete: .*, isAdmin \}\)/);
+  assert.match(code(read('tasks/[id]/_workspace/taskPageModel.ts')), /canDeleteTask\(task, \{ isAdmin: who\.isAdmin, hasDeleteRight: who\.canDelete \}\)/, 'a document task is deleted by administrators only');
+  assert.match(code(read('tasks/[id]/_workspace/SubTasks.tsx')), /canDelete/, 'the sub-task delete follows the same right');
   const work = code(read('my-work/page.tsx'));
   assert.match(work, /canOpenMyWork\(isAdmin, hasAnyPermission\)/, 'My Work is for administrators and people with framework, control or evidence access (the rule is myWorkAccess.ts, which Task Management\'s link shares)');
   assert.match(code(read('my-work/myWorkAccess.ts')), /\['compliance:frameworks:\*', 'controls:control_library:\*', 'evidence:evidence_library:\*'\]/);
@@ -129,21 +130,21 @@ test('the requests are the old ones: the same API calls, the same bulk and list 
   assert.match(bulk, /criticalTasksApi\.bulkAction\(bodyOf\(v\)\)/);
   assert.match(code(read('tasks/_AiPriorities.tsx')), /criticalTasksApi\.update\(s\.task_id, \{ priority: s\.suggested_priority \}\)/);
   assert.match(code(read('tasks/_ReportsView.tsx')), /criticalTasksApi\.update\(s\.task_id, \{ assigned_owner_id: s\.suggested_owner_id \}\)/);
-  assert.match(code(read('tasks/[id]/_Actions.tsx')), /criticalTasksApi\.transition\(task\.id, \{ new_status: status, comment: comment \|\| undefined \}\)/);
-  assert.match(code(read('tasks/[id]/_Panels.tsx')), /criticalTasksApi\.createSubTask\(task\.id, \{ title: value \}\)/);
-  assert.match(code(read('tasks/[id]/_Panels.tsx')), /criticalTasksApi\.addComment\(task\.id, \{ content \}\)/);
+  assert.match(code(read('tasks/[id]/_workspace/useTaskActions.ts')), /criticalTasksApi\.transition\(taskId, \{ new_status: to \}\)/, 'the task page moves a task with the workflow\'s own transition (the step comment is now a comment in Activity)');
+  assert.match(code(read('tasks/[id]/_workspace/SubTasks.tsx')), /criticalTasksApi\.createSubTask\(task\.id, subCreateBody\(v\)\)/, 'a sub-task is made with its title, and its owner and day when chosen');
+  assert.match(code(read('tasks/[id]/_workspace/Activity.tsx')), /criticalTasksApi\.addComment\(taskId, \{ content \}\)/);
   assert.match(code(read('my-work/page.tsx')), /queryKey: \['my-work', userId\]/);
   assert.match(code(read('my-work/page.tsx')), /queryKey: \['scf-my-work', userId\]/);
   assert.match(code(read('my-work/page.tsx')), /scfApi\.myWork\(\)/);
 });
 
 test('every mutation that changes a task refreshes what shows it: the board list (critical-tasks), the task (critical-task) or the reports', () => {
-  assert.match(code(read('tasks/_CreateTask.tsx')), /invalidate: \[\['critical-tasks'\]\]/);
+  assert.match(code(read('tasks/_create/useCreateTask.ts')), /REFRESH = \[\['critical-tasks'\], \['my-tasks'\], \['task-reports'\]\]/, 'a made task refreshes the lists, My Tasks and the reports');
   assert.match(code(read('tasks/_register/BulkTasks.tsx')), /invalidate: TASK_REFRESH/);
   assert.match(code(read('tasks/_register/taskData.ts')), /TASK_REFRESH[^=]*= \[\['critical-tasks'\], \['critical-task'\], \['my-tasks'\], \['task-reports'\]\]/, 'a bulk write refreshes the list, the open task, My Tasks and the reports');
   assert.match(code(read('tasks/_AiPriorities.tsx')), /invalidate: \[\['critical-tasks'\]\]/);
   assert.match(code(read('tasks/_ReportsView.tsx')), /invalidate: \[\['task-reports'\], \['critical-tasks'\]\]/);
-  for (const f of ['tasks/[id]/_Actions.tsx', 'tasks/[id]/_Panels.tsx', 'tasks/[id]/_EditTask.tsx', 'tasks/[id]/_AiPanels.tsx']) assert.match(code(read(f)), /\['critical-task', task\.id\]/, f);
+  for (const f of ['tasks/[id]/_workspace/useTaskActions.ts', 'tasks/[id]/_workspace/SubTasks.tsx', 'tasks/[id]/_workspace/Activity.tsx', 'tasks/[id]/_workspace/AiSheet.tsx']) assert.match(code(read(f)), /invalidate: TASK_REFRESH/, `${f}: a write on the task page refreshes the task, the lists, My Tasks and the reports`);
 });
 
 test('the URL contract: /tasks keeps its four tabs in ?tab= (My work, the default, has the plain address; an old board link with no tab opens All tasks), the register lives in the address, the task page keeps its tabs in ?tab=, and the pages that were embedded are forwards that keep the query', () => {
@@ -152,13 +153,13 @@ test('the URL contract: /tasks keeps its four tabs in ?tab= (My work, the defaul
   assert.match(page, /<TabPanel tabKey="work" className="pt-\[12px\]">\{tab === 'work' && <MyWork \/>\}/, 'My work is the first tab');
   assert.match(code(read('tasks/_register/TaskRegister.tsx')), /useAddressState\(REGISTER_SCHEMA\)/, 'the register lives in the address (the old board links keep working: taskAddress.test.ts)');
   assert.match(code(read('tasks/_Board.tsx')), /<TaskRegister canCreate=\{canCreate\} onNew=\{onNew\} \/>/, 'the Board tab is the register');
-  assert.match(code(read('tasks/[id]/_TaskView.tsx')), /useTabParam\('tab', DETAIL_TABS, \{ fallback: 'details' \}\)/);
+  assert.match(code(read('tasks/[id]/_workspace/TaskWorkspace.tsx')), /anchorOf\(search\?\.get\('tab'\)\)/, 'the task page has no tabs now: ?tab=details|subtasks|comments|evidence|history still opens it and scrolls to the section that holds what the tab held (taskPageModel.test.ts)');
   for (const f of ['tasks/my-tasks/page.tsx', 'tasks/reports/page.tsx', 'tasks/sla/page.tsx']) assert.match(code(read(f)), /export default function \w+Forward\(\{ searchParams \}/, `${f} is still an address that works: a forward that keeps the query`);
 });
 
 test('the pieces other groups own are used as they are: the document request link and card, the module settings panel, the document-task rules', () => {
   assert.match(code(read('tasks/_ui.tsx')), /from '@\/components\/governance\/DocumentTaskActions'/);
-  assert.match(code(read('tasks/[id]/_TaskView.tsx')), /DocumentTaskCard/);
+  assert.match(code(read('tasks/[id]/_workspace/TaskWorkspace.tsx')), /DocumentTaskCard/);
   assert.match(code(read('tasks/_SettingsTab.tsx')), /import ModuleSettingsPanel from '@\/components\/settings\/ModuleSettingsPanel'/);
   assert.match(code(read('tasks/_SettingsTab.tsx')), /<ModuleSettingsPanel moduleKey="tasks" \/>/);
   assert.match(code(read('tasks/tasksModel.ts')), /from '\.\.\/\.\.\/\.\.\/lib\/documentTasks\.ts'/);

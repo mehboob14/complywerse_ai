@@ -1,8 +1,9 @@
 'use client';
 
 // /tasks/<id>: one task. This file reads it (GET critical-tasks/<id>, key ['critical-task', id], as ever) and says what the read did: a skeleton while it loads, and when it fails WHAT happened in the
-// server's words (a task that was deleted or is not one of the person's, no right to Task Management, the server unreachable) with Retry where trying again can help: it used to say "Task not found"
-// for every failure. The page itself is _TaskView. It is built on the design-system kit (components/ui/ds).
+// server's words (a task that was deleted or is not one of the person's, no right to Task Management, the server unreachable) with Retry where trying again can help. The page itself is
+// _workspace/TaskWorkspace: the task as a timeline-first workspace with its properties edited in place. ?tab=details|subtasks|comments|evidence|history still opens the page and scrolls to the
+// section that holds what the tab held. Built on the design-system kit (components/ui/ds).
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { criticalTasksApi } from '@/lib/api';
@@ -11,15 +12,15 @@ import { Button, ErrorState, Skeleton, SkeletonLines } from '@/components/ui/ds'
 import { canRetry, errorMessage, statusOf } from '@/components/ui/ds/reportOutcome';
 import { routeFor } from '@/lib/navRegistry';
 import { retryRead } from '../_queries';
-import type { TaskDetail } from '../tasksModel';
-import { TaskView } from './_TaskView';
+import { TaskWorkspace } from './_workspace/TaskWorkspace';
+import type { TaskPageData } from './_workspace/taskPageModel';
 
 const TITLE = routeFor('/tasks/1')?.label ?? 'Task';
 
 export default function TaskDetailPage() {
   const params = useParams();
   const taskId = Number(params?.id);
-  const q = useQuery<TaskDetail>({
+  const q = useQuery<TaskPageData>({
     queryKey: ['critical-task', taskId],
     queryFn: async () => (await criticalTasksApi.get(taskId)).data,
     retry: retryRead,
@@ -29,8 +30,10 @@ export default function TaskDetailPage() {
     return (
       <div role="status" aria-label="Loading the task" className="flex flex-col gap-[16px]">
         <Skeleton className="h-[28px] w-[60%]" />
-        <div className="grid grid-cols-2 gap-[12px] lg:grid-cols-4">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-[72px] w-full" />)}</div>
-        <SkeletonLines lines={5} />
+        <div className="grid grid-cols-1 gap-[16px] lg:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="flex flex-col gap-[16px]"><Skeleton className="h-[120px] w-full" /><Skeleton className="h-[160px] w-full" /><SkeletonLines lines={5} /></div>
+          <Skeleton className="h-[320px] w-full" />
+        </div>
       </div>
     );
   }
@@ -48,5 +51,5 @@ export default function TaskDetailPage() {
       </div>
     );
   }
-  return <TaskView task={q.data} />;
+  return <TaskWorkspace task={q.data} />;
 }
