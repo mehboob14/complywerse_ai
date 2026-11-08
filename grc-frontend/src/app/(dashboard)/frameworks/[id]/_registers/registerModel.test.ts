@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 import { REGISTER_CONFIGS } from '../_tabs/templateConfigs.ts';
 import {
-  aiItemsOf, aiPatchOf, aiRowsOf, bodyOf, cellText, coveragePct, defOfDefinition, defOfIso, draftOf, facetColumn, facetCounts, FACET_ALL, formatTyped,
+  aiItemsOf, aiPatchOf, cardTitleOf, aiRowsOf, bodyOf, cellText, coveragePct, defOfDefinition, defOfIso, draftOf, facetColumn, facetCounts, FACET_ALL, formatTyped,
   controlOptions, controlStores, hasEvidenceColumn, matchesFacet, pickControl, pickRisk, riskOptions, sameDraft, withCurrent, matchesSearch, movedCount, ownerName, riskTitleOf, rowLabel, rowOfData, rowOfEntry, sectionsOf, tableColumns, wantsEvidence,
   type Definition, type RegColumn,
 } from './registerModel.ts';
@@ -265,4 +265,13 @@ test('a draft is unchanged when every field reads the same; an empty, a missing 
   assert.equal(sameDraft({ a: 'x' }, { a: 'y' }), false);
   assert.equal(sameDraft({ a: 'x' }, {}), false);
   assert.equal(sameDraft({}, {}), true);
+});
+
+test('a phone card is titled by the first column, not by the whole row; a blank or risk-number first column falls back to the name of the row', () => {
+  const first = gap.columns[0];
+  assert.equal(cardTitleOf(rowOfEntry(entry()), first, gap.columns, people), '4 Context');
+  assert.equal(cardTitleOf(rowOfEntry(entry({ reference: '' })), first, gap.columns, people), 'Internal and external issues');
+  assert.equal(cardTitleOf(rowOfEntry(entry({ reference: '#2007', title: 'Laptop theft' })), first, gap.columns, people), 'Laptop theft');
+  assert.equal(cardTitleOf(rowOfEntry(entry({ reference: 'x'.repeat(200) })), first, gap.columns, people).length, 90);
+  assert.equal(cardTitleOf(rowOfEntry(entry({ reference: '', title: '' })), undefined, gap.columns, people), 'Row 1');
 });

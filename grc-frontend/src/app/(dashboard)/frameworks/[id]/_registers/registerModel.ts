@@ -376,3 +376,11 @@ export function sameDraft(a: Record<string, unknown>, b: Record<string, unknown>
   const norm = (v: unknown) => (v == null ? '' : String(v));
   return Array.from(new Set([...Object.keys(a), ...Object.keys(b)])).every((k) => norm(a[k]) === norm(b[k]));
 }
+
+/** The title of a row's card on a phone: what its first table column says (the reference, the first text), else what the row is called; the other columns are
+ *  the card's lines, so the main text is not said twice. */
+export function cardTitleOf(row: RegRow, first: RegColumn | undefined, cols: RegColumn[], people: Person[], max = 90): string {
+  const t = first ? cellText(first, row, people) : '';
+  if (t && MEANINGFUL.test(t) && !RISK_NUMBER.test(t)) return t.length > max ? `${t.slice(0, max - 1).trimEnd()}…` : t;
+  return rowLabel(row, cols, max);
+}

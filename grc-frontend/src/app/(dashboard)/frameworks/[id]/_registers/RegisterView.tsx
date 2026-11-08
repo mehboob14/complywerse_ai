@@ -20,7 +20,7 @@ import { pageRange } from '@/lib/pagerModel';
 import MoveToRiskDialog from './MoveToRiskDialog';
 import RegisterForm, { type FormContext } from './RegisterForm';
 import {
-  FACET_ALL, aiItemsOf, aiPatchOf, aiRowsOf, bodyOf, cellText, coveragePct, draftOf, facetColumn, facetCounts, matchesFacet,
+  FACET_ALL, aiItemsOf, aiPatchOf, aiRowsOf, bodyOf, cardTitleOf, cellText, coveragePct, draftOf, facetColumn, facetCounts, matchesFacet,
   matchesSearch, movedCount, optionOf, RISK_NUMBER, ownerName, riskTitleOf, rowLabel, sameDraft, tableColumns, wantsEvidence,
   type AiOut, type ControlLite, type Person, type RegColumn, type RegDef, type RegRow, type RiskLite,
 } from './registerModel';
@@ -269,7 +269,7 @@ export default function RegisterView({ def, rows, loading, error, onRetry, journ
           loading={loading}
           error={failure}
           onRowActivate={openEdit}
-          cardTitle={(r) => rowLabel(r, def.columns, 90)}
+          cardTitle={(r) => cardTitleOf(r, shownColumns[0]?.col, def.columns, people)}
           cardActions={menu}
           footer={listed.length > 25 && !error ? (
             <Pager page={range.page} pageSize={pageSize} total={listed.length} onPage={setPage} onPageSize={(n) => { setPageSize(n); setPage(1); }} pageSizes={[25, 50, 100]} noun={{ one: 'row', other: 'rows' }} />
