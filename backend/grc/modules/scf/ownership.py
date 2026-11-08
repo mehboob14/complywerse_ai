@@ -500,6 +500,37 @@ def ownership_fields(
     }
 
 
+def applicability_fields(db: Session, state: Optional[SCFControlState]) -> Dict[str, Any]:
+    """The control's applicability decision and the request behind it, for the control page.
+
+    `status` is the request's own: draft (nobody asked), pending_review (a person asked and nobody has
+    ruled), approved, rejected. While a request is pending `is_applicable` holds what was ASKED for, the
+    way the writer stores it (scf/router.py set_applicability_override), so `requested` says so.
+    Additive: names for the two people involved, nothing the page could not read before.
+    """
+    if state is None:
+        return {"is_applicable": None, "source": None, "reason": None, "obligation": None, "status": "draft",
+                "requested_by": None, "requested_by_name": None, "requested_at": None,
+                "reviewed_by": None, "reviewed_by_name": None, "reviewed_at": None, "review_comment": None}
+    ids = [i for i in (state.requested_by, state.reviewed_by) if i]
+    names = {u.id: (u.display_name or u.username or u.email or None)
+             for u in db.query(GRCUser).filter(GRCUser.id.in_(ids)).all()} if ids else {}
+    return {
+        "is_applicable": state.is_applicable,
+        "source": state.applicability_source,
+        "reason": state.applicability_reason,
+        "obligation": state.obligation,
+        "status": state.status or "draft",
+        "requested_by": state.requested_by,
+        "requested_by_name": names.get(state.requested_by),
+        "requested_at": state.requested_at.isoformat() if state.requested_at else None,
+        "reviewed_by": state.reviewed_by,
+        "reviewed_by_name": names.get(state.reviewed_by),
+        "reviewed_at": state.reviewed_at.isoformat() if state.reviewed_at else None,
+        "review_comment": state.review_comment,
+    }
+
+
 def user_in_assigned(state: Optional[SCFControlState], user_id: int) -> bool:
     if state is None:
         return False
