@@ -9,7 +9,7 @@ import re
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request, Response, UploadFile, File, Form
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func, and_, or_
+from sqlalchemy import case, func, and_, or_
 
 try:
     from openai import OpenAI
@@ -233,6 +233,8 @@ def serialize_regulatory_change(change: RegulatoryChange, counts: Optional[dict]
         completed_task_count=completed_tasks,
         obligation_count=counts.get("obligations", 0),
         met_count=counts.get("met", 0),
+        to_check_count=counts.get("to_check", 0),
+        suggestion_count=counts.get("suggestions", 0),
         late_task_count=sum(1 for t in change.implementation_tasks if is_late_task(t, today)),
         analysis=regulatory_engine.analysis_state(change),
     )
@@ -418,20 +420,28 @@ def list_regulatory_changes(
 
 
 def _row_counts(db: Session, change_ids: List[int]) -> dict:
-    """Per change: its obligations (not removed) and how many a confirmed control meets. Two grouped queries for the whole page."""
+    """Per change: its obligations (not removed), how many a confirmed control meets, how many the AI read that need checking against the circular,
+    and the control suggestions nobody has decided. Three grouped queries for the whole page."""
     if not change_ids:
         return {}
-    out = {i: {"obligations": 0, "met": 0} for i in change_ids}
+    out = {i: {"obligations": 0, "met": 0, "to_check": 0, "suggestions": 0} for i in change_ids}
     live = RegulatoryObligation.deleted_at.is_(None)
-    for cid, n in (db.query(RegulatoryObligation.regulatory_change_id, func.count(RegulatoryObligation.id))
-                   .filter(RegulatoryObligation.regulatory_change_id.in_(change_ids), live)
-                   .group_by(RegulatoryObligation.regulatory_change_id)):
-        out[cid]["obligations"] = n
-    for cid, n in (db.query(RegulatoryLink.regulatory_change_id, func.count(func.distinct(RegulatoryLink.obligation_id)))
+    for cid, n, check in (db.query(RegulatoryObligation.regulatory_change_id, func.count(RegulatoryObligation.id),
+                                   func.sum(case((and_(RegulatoryObligation.source == "ai", RegulatoryObligation.verified.is_(False)), 1), else_=0)))
+                          .filter(RegulatoryObligation.regulatory_change_id.in_(change_ids), live)
+                          .group_by(RegulatoryObligation.regulatory_change_id)):
+        out[cid]["obligations"], out[cid]["to_check"] = n, int(check or 0)
+    for cid, state, n in (db.query(RegulatoryLink.regulatory_change_id, RegulatoryLink.status, func.count(func.distinct(RegulatoryLink.obligation_id)))
+                          .join(RegulatoryObligation, RegulatoryObligation.id == RegulatoryLink.obligation_id)
+                          .filter(RegulatoryLink.regulatory_change_id.in_(change_ids), RegulatoryLink.status.in_(("confirmed", "proposed")), live)
+                          .group_by(RegulatoryLink.regulatory_change_id, RegulatoryLink.status)):
+        if state == "confirmed":
+            out[cid]["met"] = n
+    for cid, n in (db.query(RegulatoryLink.regulatory_change_id, func.count(RegulatoryLink.id))
                    .join(RegulatoryObligation, RegulatoryObligation.id == RegulatoryLink.obligation_id)
-                   .filter(RegulatoryLink.regulatory_change_id.in_(change_ids), RegulatoryLink.status == "confirmed", live)
+                   .filter(RegulatoryLink.regulatory_change_id.in_(change_ids), RegulatoryLink.status == "proposed", live)
                    .group_by(RegulatoryLink.regulatory_change_id)):
-        out[cid]["met"] = n
+        out[cid]["suggestions"] = n
     return out
 
 

@@ -90,6 +90,7 @@ def test_the_register_says_how_many_match_and_counts_obligations_met_and_late_ta
     rows = {c["id"]: c for c in http.get("/regulatory-changes/changes").json()}
     one = rows[1]
     assert (one["obligation_count"], one["met_count"]) == (2, 1), "a removed obligation is not counted, nor is its link"
+    assert (one["to_check_count"], one["suggestion_count"]) == (1, 1), "the unverified AI obligation, the undecided suggestion"
     assert one["late_task_count"] == 1, "late = not completed and the due DAY has passed: due today is not late, a completed one is not"
     assert rows[2]["obligation_count"] == 1 and rows[2]["met_count"] == 0
     assert http.get("/regulatory-changes/changes", params={"status": "completed"}).headers["X-Total-Count"] == "1"
