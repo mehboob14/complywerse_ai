@@ -28,6 +28,7 @@ import { riskText, controlText } from '@/lib/rcsa/scores';
 import { DecisionSheet } from '../../_parts/DecisionSheet';
 import { FindingSheet } from '../../_parts/FindingSheet';
 import { KEYS, useRcsaRights } from '../../_parts/rcsaData';
+import { NoRcsaAccess } from '../../_parts/NoRcsaAccess';
 import { QuestionRow } from './_parts/QuestionRow';
 import { ReviewTrail, type Step } from './_parts/ReviewTrail';
 import { useAnswers } from './_parts/useAnswers';
@@ -73,6 +74,7 @@ export default function UnitPage() {
       <SkeletonRows rows={6} columns={3} label="Loading the unit" />
     </div>
   );
+  if (detail.isError && statusOf(detail.error) === 403) return <NoRcsaAccess what="this unit" />;
   if (detail.isError || !data) {
     const gone = statusOf(detail.error) === 404;
     return (
@@ -171,6 +173,11 @@ function UnitBody({ data, starting, startFailed, onRetryStart, reload }: { data:
       <Notice tone={data.status === 'requires_changes' || data.status === 'rejected' ? 'warning' : 'info'} title={standing({ ...facts, tier: data.current_approval_tier, total: data.total_tiers }, role)}>
         {data.status === 'requires_changes' ? lastReturn(data.approval_history) : undefined}
       </Notice>
+      {rights.manage && !data.assessor_id && canStart(facts) && !starting && (
+        <Notice tone="info" title="Nobody is assigned to this unit" action={<Button onClick={onRetryStart}>Take this unit</Button>}>
+          The assessor of a unit cannot be changed afterwards. Whoever starts it becomes its assessor: take it if you will answer it yourself.
+        </Notice>
+      )}
       {startFailed && (
         <Notice tone="danger" title="This unit couldn't be started" action={<Button leftIcon={<RotateCw aria-hidden />} onClick={onRetryStart}>Retry</Button>}>
           You can read it, but you cannot answer until it starts.

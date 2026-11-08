@@ -16,6 +16,7 @@ import { moveCursor } from '@/components/records/explorerModel';
 import type { ExplorerFit } from '@/components/records/explorerFit';
 import { Button, EmptyState, ErrorState, Pager, nextSort, sortRows, type SortState, type SortValue, useAddressState } from '@/components/ui/ds';
 import { integer, listOf, oneOf, sortOf, text } from '@/lib/addressState';
+import { NoRcsaAccess } from './NoRcsaAccess';
 import { formatCount } from '@/lib/format';
 
 export interface ExplorerFacet<R> {
@@ -40,7 +41,7 @@ export interface RcsaExplorerProps<R extends { id: number }> {
   noun: { one: string; other: string };
   rows: readonly R[];
   loading: boolean;
-  error: { message: string; onRetry?: () => void } | null;
+  error: { message: string; onRetry?: () => void; forbidden?: boolean } | null;
   facets: readonly ExplorerFacet<R>[];
   quick: readonly ExplorerQuick<R>[];
   /** the text the search looks in */
@@ -166,6 +167,10 @@ export function RcsaExplorer<R extends { id: number }>(props: RcsaExplorerProps<
     onEscape: () => { if (openId) setOpen(null); },
   }, !loading && !error);
 
+  // turned away: the page head and one sentence, not an explorer of filters that can never fill
+  if (error?.forbidden && rows.length === 0 && !loading) {
+    return <div className="flex min-w-0 flex-col gap-[12px]">{head({ rail: false, list: null, compact: false, tight: false })}<NoRcsaAccess what={`the ${noun.other}`} /></div>;
+  }
   const failed = error && rows.length === 0;
   const body = loading ? (
     <RecordTable<R> caption={label} columns={columns} items={[]} sort={sort} onSort={() => undefined} onActivate={() => undefined} card={card} />

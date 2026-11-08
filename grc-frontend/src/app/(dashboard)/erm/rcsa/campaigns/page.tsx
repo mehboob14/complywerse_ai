@@ -21,6 +21,7 @@ import { csvName, toCsv } from '@/lib/rcsa/csv';
 import { saveBlob } from '@/lib/rcsa/saveBlob';
 import { csvOf, dueWords, isLate, progressOf, type CampaignRow } from '@/lib/rcsa/campaignsModel';
 import { progressTone } from '@/lib/rcsa/scores';
+import { isForbidden, retryUnlessRefused } from '@/lib/rcsa/registerModel';
 import { RcsaExplorer, type ExplorerFacet, type ExplorerQuick, type ExplorerSort } from '../_parts/RcsaExplorer';
 import { RcsaNav } from '../_parts/RcsaNav';
 import { KEYS, fetchAll, useRcsaRights } from '../_parts/rcsaData';
@@ -106,7 +107,7 @@ const card = (row: RecordRow<CampaignRow>) => {
 function Campaigns() {
   const router = useRouter();
   const { manage } = useRcsaRights();
-  const list = useQuery({ queryKey: KEYS.campaigns, queryFn: () => fetchAll<CampaignRow>('/erm/rcsa/campaigns') });
+  const list = useQuery({ queryKey: KEYS.campaigns, queryFn: () => fetchAll<CampaignRow>('/erm/rcsa/campaigns'), retry: retryUnlessRefused });
   const rows = useMemo(() => list.data ?? [], [list.data]);
   const [making, setMaking] = useState(false);
   const actions = useCampaignActions(manage);
@@ -143,7 +144,7 @@ function Campaigns() {
         noun={{ one: 'campaign', other: 'campaigns' }}
         rows={rows}
         loading={list.isLoading}
-        error={list.isError ? { message: errorMessage(list.error), onRetry: () => { void list.refetch(); } } : null}
+        error={list.isError ? { message: errorMessage(list.error), onRetry: () => { void list.refetch(); }, forbidden: isForbidden(list.error) } : null}
         facets={FACETS}
         quick={QUICK}
         searchText={(c) => `${c.name} ${c.template_name ?? ''} ${periodOf(c)} ${ownerOf(c)}`}

@@ -25,7 +25,9 @@ import { controlText, percent, progressTone, riskBand, riskText } from '@/lib/rc
 import { SHOWS, allClear, countersOf, rowView, rowsFor, totalFor, type MyWork, type Show } from '@/lib/rcsa/worklist';
 import { statusPill } from '@/lib/status';
 import { campaignStatus } from '@/lib/statuses/rcsa';
+import { NoRcsaAccess } from './_parts/NoRcsaAccess';
 import { RcsaNav } from './_parts/RcsaNav';
+import { isForbidden } from '@/lib/rcsa/registerModel';
 import { KEYS, useMyWork, useRcsaRights } from './_parts/rcsaData';
 
 const SCHEMA = { show: oneOf(SHOWS, 'all') };
@@ -196,6 +198,7 @@ export default function RcsaWorklistPage() {
         actions={rights.manage ? <Button variant="primary" href="/erm/rcsa/campaigns?new=1" leftIcon={<Plus aria-hidden />}>New campaign</Button> : undefined}
       />
       <RcsaNav active="worklist" counts={data ? { worklist: data.counts.actions } : undefined} />
+      {work.isError && !data && isForbidden(work.error) ? <NoRcsaAccess /> : (
       <Cockpit
         mode={mode}
         narrow={narrow}
@@ -213,6 +216,7 @@ export default function RcsaWorklistPage() {
         posture={posture}
         breakdowns={breakdowns}
       />
+      )}
     </div>
   );
 }

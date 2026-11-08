@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import apiClient, { rcsaApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import type { MyWork } from '@/lib/rcsa/worklist';
+import { retryUnlessRefused } from '@/lib/rcsa/registerModel';
 
 const PAGE = 200;
 const MAX_PAGES = 50;      // 10,000 rows: far past any real register, and a stop for a server that ignores skip
@@ -43,7 +44,7 @@ export const KEYS = {
 };
 
 export function useMyWork() {
-  return useQuery({ queryKey: KEYS.work, queryFn: async () => (await rcsaApi.getMyWork(30)).data as MyWork });
+  return useQuery({ queryKey: KEYS.work, queryFn: async () => (await rcsaApi.getMyWork(30)).data as MyWork, retry: retryUnlessRefused });
 }
 
 export interface Person { id: number; display_name: string; email?: string | null }

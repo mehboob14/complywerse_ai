@@ -17,6 +17,7 @@ import { statusPill } from '@/lib/status';
 import { findingSeverity, findingStatus, findingType } from '@/lib/statuses/rcsa';
 import { csvName, toCsv } from '@/lib/rcsa/csv';
 import { saveBlob } from '@/lib/rcsa/saveBlob';
+import { isForbidden, retryUnlessRefused } from '@/lib/rcsa/registerModel';
 import { csvOf, isLate, isOpen, linksText, severityRank, type FindingRow } from '@/lib/rcsa/findingsModel';
 import { RcsaExplorer, type ExplorerFacet, type ExplorerQuick, type ExplorerSort } from '../_parts/RcsaExplorer';
 import { RcsaNav } from '../_parts/RcsaNav';
@@ -91,7 +92,7 @@ const card = (row: RecordRow<FindingRow>) => {
 };
 
 function Findings() {
-  const list = useQuery({ queryKey: [...KEYS.findings, 'all'], queryFn: () => fetchAll<FindingRow>('/erm/rcsa/findings') });
+  const list = useQuery({ queryKey: [...KEYS.findings, 'all'], queryFn: () => fetchAll<FindingRow>('/erm/rcsa/findings'), retry: retryUnlessRefused });
   const rows = useMemo(() => list.data ?? [], [list.data]);
   const exportCsv = (shown: FindingRow[]) => {
     const { header, rows: lines } = csvOf(shown);
@@ -103,7 +104,7 @@ function Findings() {
       noun={{ one: 'finding', other: 'findings' }}
       rows={rows}
       loading={list.isLoading}
-      error={list.isError ? { message: errorMessage(list.error), onRetry: () => { void list.refetch(); } } : null}
+      error={list.isError ? { message: errorMessage(list.error), onRetry: () => { void list.refetch(); }, forbidden: isForbidden(list.error) } : null}
       facets={FACETS}
       quick={QUICK}
       searchText={(f) => `${f.title} ${f.description ?? ''} ${unitOf(f)} ${campaignOf(f)} ${ownerOf(f)} ${f.linked_risk_title ?? ''}`}

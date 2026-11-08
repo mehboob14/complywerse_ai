@@ -25,6 +25,7 @@ import { csvName, toCsv } from '@/lib/rcsa/csv';
 import { saveBlob } from '@/lib/rcsa/saveBlob';
 import { dueWords, isLate, sortUnits, unassigned, unfinished, type CampaignRow, type UnitRow } from '@/lib/rcsa/campaignsModel';
 import { controlText, percent, progressTone, riskText } from '@/lib/rcsa/scores';
+import { NoRcsaAccess } from '../../_parts/NoRcsaAccess';
 import { KEYS, fetchAll, useRcsaRights } from '../../_parts/rcsaData';
 import { useCampaignActions } from '../_parts/useCampaignActions';
 import { AddUnitsSheet, EditCampaignSheet } from './_parts/CampaignSheets';
@@ -54,10 +55,11 @@ function Workspace() {
   const params = useParams();
   const id = Number(Array.isArray(params?.id) ? params.id[0] : params?.id);
   const valid = Number.isFinite(id) && id > 0;
-  const detail = useQuery({ queryKey: KEYS.campaign(id), queryFn: async () => (await rcsaApi.getCampaignDetail(id)).data as Detail, enabled: valid, retry: (n, e) => n < 1 && statusOf(e) !== 404 });
+  const detail = useQuery({ queryKey: KEYS.campaign(id), queryFn: async () => (await rcsaApi.getCampaignDetail(id)).data as Detail, enabled: valid, retry: (n, e) => n < 1 && statusOf(e) !== 404 && statusOf(e) !== 403 });
   const d = detail.data;
   if (!valid) return <ErrorState title="This campaign doesn't exist" message="Check the address, or open it from the campaigns list." />;
   if (detail.isLoading) return <div className="flex flex-col gap-[16px]" aria-busy="true"><SkeletonRows rows={3} columns={3} label="Loading the campaign" /><SkeletonRows rows={6} columns={4} label="Loading the units" /></div>;
+  if (detail.isError && statusOf(detail.error) === 403) return <NoRcsaAccess what="this campaign" />;
   if (detail.isError || !d) {
     const gone = statusOf(detail.error) === 404;
     return <ErrorState title={gone ? "This campaign doesn't exist" : "Couldn't load the campaign"} message={gone ? 'It may have been deleted, or you may not have access to it.' : errorMessage(detail.error)} onRetry={!gone && canRetry(detail.error) ? () => { void detail.refetch(); } : undefined} />;
@@ -132,7 +134,7 @@ function CampaignBody({ d }: { d: Detail }) {
       {d.status === 'draft' && <Notice tone="info" title="This campaign has not started">{manage ? 'Nobody has been asked yet. Start it when the units and the days are right.' : 'It has not been started by the risk team yet.'}</Notice>}
       {d.status === 'closed' && <Notice tone="info" title="This campaign is closed">Units can no longer be answered. Approved answers and findings are kept.</Notice>}
 
-      <div className="grid gap-[12px] sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-[8px] sm:gap-[12px] xl:grid-cols-5">
         <StatTile label="Approved" value={`${formatCount(d.completed_units)} of ${formatCount(d.assigned_units)}`} unit="units" progress={percent(d.completed_units, d.assigned_units)} tone={progressTone(percent(d.completed_units, d.assigned_units), late) === 'danger' ? 'danger' : 'default'} />
         <StatTile label="Waiting for review" value={formatCount(review)} unit={review === 1 ? 'unit' : 'units'} />
         <StatTile label="Not finished" value={formatCount(left)} unit={left === 1 ? 'unit' : 'units'} note={unassigned(units).length > 0 ? `${formatCount(unassigned(units).length)} with no assessor` : undefined} tone={late && left > 0 ? 'danger' : 'default'} />
