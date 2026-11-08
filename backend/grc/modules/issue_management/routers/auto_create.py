@@ -100,7 +100,7 @@ def create_from_source(
     if source_type not in SUPPORTED_SOURCES or source_id <= 0:
         raise HTTPException(
             status_code=400,
-            detail=f"source_type ∈ {sorted(SUPPORTED_SOURCES - EVENT_SOURCES)} and source_id required",
+            detail="Say which record the issue is raised from: a vulnerability, risk, asset, control, document, policy statement, project or incident.",
         )
 
     tenant_id = get_user_primary_tenant(current_user, db)
