@@ -117,7 +117,7 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
     keywords: ['AI Governance', 'AI inventory'],
   }),
   S({
-    id: 'ai-usage', label: 'AI usage', group: 'ai', url: '/admin/ai-usage', ownHeading: false,
+    id: 'ai-usage', label: 'AI usage', group: 'ai', url: '/admin/ai-usage', ownHeading: true,
     paths: ['/admin/usage'],
     rights: ['admin:users:view', 'admin:organization:view', 'admin:organization:edit'],
     keywords: ['Token usage', 'Usage Monitoring', 'AI cost', 'Budgets'],
