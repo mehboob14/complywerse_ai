@@ -28,7 +28,7 @@ import { assessmentStatus } from '@/lib/statuses/assessments';
 import { riskLevel } from '@/lib/statuses/risk';
 import { failureWords } from '../../risks/_register/riskData';
 import { ASSESSMENT_REFRESH, REGISTER_KEY, useAssessmentRights } from '../_register/assessmentData';
-import { BANDS, STEPS, applyPatch, isEditable, movesFrom, patchBody, ratingOf, stageOf, summarise, type AssessedRisk, type Band, type Move, type RowPatch } from '../_register/assessmentModel';
+import { BANDS, STEPS, applyPatch, isEditable, movesFrom, patchBody, stageOf, summarise, type AssessedRisk, type Band, type Move, type RowPatch } from '../_register/assessmentModel';
 import { AddRisksSheet } from './_workspace/AddRisksSheet';
 import { EditSheet } from './_workspace/EditSheet';
 import { DetailsPanel, HistoryPanel, InsightsPanel } from './_workspace/Panels';
@@ -174,7 +174,9 @@ export default function AssessmentWorkspacePage() {
   const more: MenuItem[] = [{ key: 'delete', label: 'Delete assessment', icon: Trash2, danger: true, hidden: !canWrite, onSelect: () => { void askDelete(); } }];
   const stage = stageOf('manual', a.status);
   const stepAt = STEPS.findIndex((s) => s.stage === stage);
-  const roomy = room == null || room >= 980;
+  // the table needs ~640px of fixed columns plus a title worth reading (240); with the treatment and controls columns ~940. Under 880 each risk is a card.
+  const roomy = room == null || room >= 1180;
+  const cards = narrow || (room != null && room < 880);
 
   return (
     <div ref={box} className="flex min-w-0 flex-col gap-[16px]">
@@ -220,7 +222,7 @@ export default function AssessmentWorkspacePage() {
         )}
       </section>
 
-      <Tabs<Tab> ariaLabel="Assessment sections" tabs={[{ key: 'risks', label: 'Risks', count: rows.length }, { key: 'insights', label: 'Insights' }, { key: 'details', label: 'Details' }, { key: 'history', label: 'Approval record' }]} value={tab} onChange={setTab}>
+      <Tabs<Tab> ariaLabel="Assessment sections" countFormat="exact" tabs={[{ key: 'risks', label: 'Risks', count: rows.length }, { key: 'insights', label: 'Insights' }, { key: 'details', label: 'Details' }, { key: 'history', label: 'Approval record' }]} value={tab} onChange={setTab}>
         <TabPanel tabKey="risks">
           <div className="flex flex-col gap-[12px] pt-[12px]">
             <div className="flex flex-wrap items-center gap-[8px]">
@@ -240,7 +242,7 @@ export default function AssessmentWorkspacePage() {
                 edits={edits}
                 state={saveState}
                 editable={editable}
-                narrow={narrow}
+                narrow={cards}
                 roomy={roomy}
                 sort={sort}
                 onSort={onSort}
@@ -266,5 +268,3 @@ export default function AssessmentWorkspacePage() {
   );
 }
 
-// the rating the page writes is the one it shows
-export { ratingOf };

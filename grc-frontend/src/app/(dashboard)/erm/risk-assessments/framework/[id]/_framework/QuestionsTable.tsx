@@ -91,7 +91,7 @@ export function QuestionsTable(p: QuestionsTableProps) {
           {p.roomy && <col style={{ width: 130 }} />}
           <col style={{ width: 160 }} />
           <col style={{ width: 150 }} />
-          <col style={{ width: 96 }} />
+          <col style={{ width: 112 }} />
           <col style={{ width: 60 }} />
           <col style={{ width: 52 }} />
         </colgroup>

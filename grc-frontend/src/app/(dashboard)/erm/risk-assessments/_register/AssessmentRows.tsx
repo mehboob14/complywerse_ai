@@ -19,7 +19,7 @@ const plainClick = (e: { button: number; metaKey: boolean; ctrlKey: boolean; shi
 
 export const FIT: Record<'status' | 'owner' | 'progress' | 'changed', Omit<FitColumn, 'key'>> = {
   status: { px: 140 },
-  progress: { px: 190, dropRank: 1 },
+  progress: { px: 230, dropRank: 1 },
   owner: { px: 68, dropRank: 2, wide: { px: 176, titleMin: 420 } },
   changed: { px: 116, dropRank: 3 },
 };

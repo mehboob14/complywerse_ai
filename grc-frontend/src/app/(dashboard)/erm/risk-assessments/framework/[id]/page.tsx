@@ -101,7 +101,9 @@ export default function FrameworkAssessmentPage() {
   const pageRows = useMemo(() => shown.slice((pageClamped - 1) * pageSize, pageClamped * pageSize), [shown, pageClamped, pageSize]);
   const openQ = openId ? questions.find((x) => x.id === openId) ?? null : null;
   const openAt = openQ ? shown.findIndex((x) => x.id === openQ.id) : -1;
-  const roomy = room == null || room >= 900;
+  // fixed columns: tick 44, answered by 160, status 150, level 96, files 60, open 52 = 562 (+ phase 130); the question needs ~280. Under 860 each question is a card.
+  const roomy = room == null || room >= 1000;
+  const cards = narrow || (room != null && room < 860);
   const phases = useMemo(() => phaseRows(questions, methodology?.phases ?? []), [questions, methodology]);
   const [ticked, setTicked] = useState<Set<number>>(new Set());
   const tickedHere = useMemo(() => Array.from(ticked).filter((t) => shown.some((s) => s.id === t)), [ticked, shown]);
@@ -274,7 +276,7 @@ export default function FrameworkAssessmentPage() {
         <ProgressBar value={counts.pct} label="Questions completed" valueText={`${formatCount(counts.byStatus.completed)} of ${formatCount(counts.total)} completed`} className="max-w-[420px]" />
       </section>
 
-      <Tabs<Tab> ariaLabel="Assessment sections" tabs={[{ key: 'questions', label: 'Questions', count: counts.total }, { key: 'insights', label: 'Insights' }, { key: 'details', label: 'Details' }]} value={tab} onChange={setTab}>
+      <Tabs<Tab> ariaLabel="Assessment sections" countFormat="exact" tabs={[{ key: 'questions', label: 'Questions', count: counts.total }, { key: 'insights', label: 'Insights' }, { key: 'details', label: 'Details' }]} value={tab} onChange={setTab}>
         <TabPanel tabKey="questions">
           <div className="flex flex-col gap-[12px] pt-[12px]">
             <div className="flex flex-wrap items-center gap-[8px]">
@@ -317,7 +319,7 @@ export default function FrameworkAssessmentPage() {
                   onTick={(qid) => setTicked((cur) => { const n = new Set(cur); if (n.has(qid)) n.delete(qid); else n.add(qid); return n; })}
                   onTickAll={(on) => setTicked((cur) => { const n = new Set(cur); pageRows.forEach((r) => (on ? n.add(r.id) : n.delete(r.id))); return n; })}
                   canWrite={write}
-                  narrow={narrow}
+                  narrow={cards}
                   roomy={roomy}
                   activeId={openQ?.id ?? null}
                   onOpen={(qn) => setAddress({ question: String(qn.id) })}

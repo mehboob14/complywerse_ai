@@ -141,8 +141,8 @@ export function RiskRowsTable(p: RowsProps) {
           <col style={{ width: 200 }} />
           <col style={{ width: 200 }} />
           <col style={{ width: 104 }} />
-          {p.roomy && <col style={{ width: 150 }} />}
-          {p.roomy && <col style={{ width: 150 }} />}
+          {p.roomy && <col style={{ width: 140 }} />}
+          {p.roomy && <col style={{ width: 168 }} />}
           <col style={{ width: 132 }} />
         </colgroup>
         <THead>
