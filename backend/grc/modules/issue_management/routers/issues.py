@@ -22,6 +22,7 @@ from ....models import (
     Issue, IssueActivity, IssueAction, IssueComment,
     IssueVulnerabilityLink, IssueRiskLink, IssueAssetLink,
     IssueControlLink, IssueEvidenceLink, IssueVendorLink,
+    IssueISProjectLink, IssueGovernanceLink, CriticalTask,
     GRCUser, get_db,
 )
 from ....routers.auth_router import (
@@ -128,6 +129,29 @@ def _late_clause(now: datetime):
         Issue.target_closure_date < now,
         func.coalesce(Issue.workflow_state, "new").notin_(tuple(WORKFLOW_TERMINAL)),
     )
+
+
+def _stamp_closed(issue: Issue, user: GRCUser, notes: str) -> None:
+    """The fields of a formal closure, in ONE place: Approve closure (`/close`) and a move to `closed` (`/transition`) cannot disagree. A move that set only the state
+    left an issue closed in the list, open in the scorecard (`status`) and missing from the closed-in-30-days KPIs and MTTR (`closed_at`)."""
+    now = datetime.utcnow()
+    issue.workflow_state = "closed"
+    issue.status = "closed"
+    issue.closed_at = now
+    issue.approved_by_id = user.id
+    issue.approved_at = now
+    issue.closure_notes = notes
+    issue.sla_breached = False  # terminal
+
+
+def linked_tasks_query(db: Session, user: GRCUser, issue: Issue):
+    """The Task Management tasks linked to an issue (`CriticalTask.linked_issue_id`: set when an action is promoted, or when a task is picked in the Create issue form),
+    cut to the tasks the person may see (Task Management's rule), so a count and the list of it are the same."""
+    from ....services import task_visibility
+
+    return task_visibility.visible(db, user, db.query(CriticalTask).filter(
+        CriticalTask.linked_issue_id == issue.id, CriticalTask.tenant_id == issue.tenant_id,
+    ))
 
 
 def _action_progress(db: Session, issue_ids: List[int], user_tenants) -> Dict[int, Dict[str, int]]:
@@ -580,6 +604,10 @@ def get_issue(
         "vendors": db.query(IssueVendorLink).filter(IssueVendorLink.issue_id == issue.id).count(),
         "actions": db.query(IssueAction).filter(IssueAction.issue_id == issue.id).count(),
         "comments": db.query(IssueComment).filter(IssueComment.issue_id == issue.id).count(),
+        # the three families the issue form can link at create: they were written and never counted
+        "projects": db.query(IssueISProjectLink).filter(IssueISProjectLink.issue_id == issue.id).count(),
+        "governance": db.query(IssueGovernanceLink).filter(IssueGovernanceLink.issue_id == issue.id).count(),
+        "tasks": linked_tasks_query(db, current_user, issue).count(),
     }
     return payload
 
@@ -596,9 +624,21 @@ def update_issue(
 ):
     issue = _get_issue_or_404(issue_id, current_user, db)
     changes: Dict[str, Any] = {}
+    diff: Dict[str, Dict[str, Any]] = {}  # what changed, in words, for the issue's timeline (`changes` below is kept as it was)
     severity_dirty = False
     from ....routers.auth_router import refuse_imported_accounts
     refuse_imported_accounts(db, [body.get("owner_id"), body.get("assignee_id")], kept=[issue.owner_id, issue.assignee_id])
+
+    # a refusal in words here, not a 500 from the database (title and root cause are 255 characters wide) or an issue with no title
+    if "title" in body:
+        title = str(body["title"] or "").strip()
+        if not title:
+            raise HTTPException(status_code=400, detail="An issue needs a title.")
+        if len(title) > 255:
+            raise HTTPException(status_code=400, detail="Keep the title under 255 characters.")
+        body["title"] = title
+    if "root_cause" in body and body["root_cause"] and len(str(body["root_cause"])) > 255:
+        raise HTTPException(status_code=400, detail="Keep the root cause under 255 characters; the analysis has room for the rest.")
 
     for field in (
         "title", "description", "issue_type", "category",
@@ -611,12 +651,14 @@ def update_issue(
             if field in ("due_date", "detected_at") and new_val:
                 new_val = datetime.fromisoformat(new_val)
             if getattr(issue, field) != new_val:
+                diff[field] = {"old": _in_words(db, field, getattr(issue, field)), "new": _in_words(db, field, new_val)}
                 changes[field] = {"old": getattr(issue, field), "new": new_val}
                 setattr(issue, field, new_val)
 
     # Impact / urgency / severity_override changes recompute severity + SLA.
     if "impact" in body or "urgency" in body or "severity_override" in body:
         severity_dirty = True
+        was = {"impact": issue.impact, "urgency": issue.urgency, "severity_override": issue.severity_override, "severity": issue.severity}
         if "impact" in body:
             issue.impact = body["impact"]
         if "urgency" in body:
@@ -634,15 +676,31 @@ def update_issue(
         if issue.detected_at:
             issue.target_closure_date = issue.detected_at + timedelta(hours=resolve_hours)
         changes["severity"] = {"computed": new_severity, "final": issue.severity}
+        for field, before in was.items():
+            if getattr(issue, field) != before:
+                diff[field] = {"old": before, "new": getattr(issue, field)}
 
     if changes:
         _recompute_sla_breached(issue)
         _log_activity(db, issue.id, current_user.id,
                       "severity_change" if severity_dirty else "updated",
-                      {"changes": {k: str(v) for k, v in changes.items()}})
+                      {"changes": {k: str(v) for k, v in changes.items()}, "diff": diff})
         db.commit()
         db.refresh(issue)
     return _serialize_issue_summary(issue)
+
+
+def _in_words(db: Session, field: str, value: Any) -> Any:
+    """A changed value as a person would read it on the timeline: a person by name, a date as the day it is, long text cut."""
+    if value is None:
+        return None
+    if field in ("owner_id", "reporter_id", "assignee_id"):
+        who = db.get(GRCUser, value)
+        return (getattr(who, "display_name", None) or getattr(who, "username", None)) if who else None
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    text = str(value)
+    return text if len(text) <= 120 else text[:119] + "…"
 
 
 # ────────────────────────────────────────────────────────────────────────
@@ -674,12 +732,24 @@ def transition_issue(
     if target not in ALLOWED_TRANSITIONS.get(current_state, set()):
         raise HTTPException(status_code=400, detail=f"Invalid transition {current_state} → {target}")
 
+    if target == "closed":
+        # a closure is a formal act: the same notes, approver and stamps as `/close` (the body keeps `to_state`, which the workflow trigger reads)
+        notes = (body.get("closure_notes") or "").strip()
+        if not notes:
+            raise HTTPException(status_code=400, detail="closure_notes are required to close an issue")
+        _stamp_closed(issue, current_user, notes)
+        _log_activity(db, issue.id, current_user.id, "approved", {"closure_notes": notes})
+        db.commit()
+        db.refresh(issue)
+        return _serialize_issue_summary(issue)
+
     issue.workflow_state = target
     if target == "resolution":
         issue.resolved_at = datetime.utcnow()
     elif target == "cancelled":
         issue.status = "closed"
-    elif target == "in_progress" and current_state == "closed":
+    elif current_state in WORKFLOW_TERMINAL:
+        # leaving closed (to work) or cancelled (to new) opens the issue again: `status` is what the scorecard reads, and a stale closure stamp would keep it in the KPIs
         issue.status = "open"
         issue.closed_at = None
         issue.approved_at = None
@@ -712,13 +782,7 @@ def close_issue(
         return _serialize_issue_summary(issue)
     if issue.workflow_state not in {"closure_review", "in_progress", "resolution"}:
         raise HTTPException(status_code=400, detail=f"Cannot close from {issue.workflow_state}")
-    issue.workflow_state = "closed"
-    issue.status = "closed"
-    issue.closed_at = datetime.utcnow()
-    issue.approved_by_id = current_user.id
-    issue.approved_at = datetime.utcnow()
-    issue.closure_notes = closure_notes
-    issue.sla_breached = False  # terminal
+    _stamp_closed(issue, current_user, closure_notes)
     _log_activity(db, issue.id, current_user.id, "approved", {"closure_notes": closure_notes})
     db.commit()
     db.refresh(issue)

@@ -48,11 +48,40 @@ def _get_issue(issue_id: int, current_user: GRCUser, db: Session) -> Issue:
     return issue
 
 
-def _log_link(db: Session, issue_id: int, user_id: Optional[int], kind: str, target_type: str, target_id: int) -> None:
-    db.add(IssueActivity(
-        issue_id=issue_id, user_id=user_id, type=kind,
-        payload={"target_type": target_type, "target_id": target_id},
-    ))
+# What a linked record is called on the issue's timeline: the first of these columns that holds a word.
+_NAMED_BY = {
+    "vulnerability": (Vulnerability, ("title", "vuln_id")),
+    "risk": (Risk, ("title",)),
+    "asset": (ITAsset, ("name",)),
+    "evidence": (Evidence, ("name", "title")),
+    "vendor": (Vendor, ("name",)),
+    "is_project": (ISProject, ("name",)),
+    "governance_document": (GovernanceDocument, ("title",)),
+    "policy_statement": (PolicyStatement, ("statement_summary", "statement_text")),
+    "control_framework": (FrameworkControl, ("name",)),
+    "control_parsed": (ParsedFrameworkControl, ("title",)),
+    "control_normalized": (NormalizedControl, ("name", "title")),
+    "control_internal": (InternalControl, ("name",)),
+}
+
+
+def _word(row: Any, columns) -> Optional[str]:
+    for column in columns:
+        text = str(getattr(row, column, None) or "").strip()
+        if text:
+            return text if len(text) <= 120 else text[:119] + "…"
+    return None
+
+
+def _log_link(db: Session, issue_id: int, user_id: Optional[int], kind: str, target_type: str, target_id: int, name: Optional[str] = None) -> None:
+    """A link added or removed, on the timeline. `name` is the record's title, so "unlinked a risk" can say which one (rows written before it have none)."""
+    if name is None and target_type in _NAMED_BY:
+        model, columns = _NAMED_BY[target_type]
+        name = _word(db.get(model, target_id), columns)
+    payload = {"target_type": target_type, "target_id": target_id}
+    if name:
+        payload["name"] = name
+    db.add(IssueActivity(issue_id=issue_id, user_id=user_id, type=kind, payload=payload))
 
 
 # ─── Vulnerabilities ────────────────────────────────────────────────────
@@ -276,8 +305,10 @@ def remove_control_link(issue_id: int, link_id: int, db: Session = Depends(get_d
     _get_issue(issue_id, current_user, db)
     link = db.query(IssueControlLink).filter(IssueControlLink.id == link_id, IssueControlLink.issue_id == issue_id).first()
     if link:
+        control = link.framework_control or link.parsed_control or link.normalized_control or link.internal_control
+        name = _word(control, ("name", "title")) if control is not None else None
         db.delete(link)
-        _log_link(db, issue_id, current_user.id, "unlinked", "control", link_id)
+        _log_link(db, issue_id, current_user.id, "unlinked", "control", link_id, name=name or "")
         db.commit()
     return
 
@@ -500,7 +531,30 @@ def remove_governance_link(issue_id: int, link_id: int, db: Session = Depends(ge
         IssueGovernanceLink.issue_id == issue_id,
     ).first()
     if link:
+        target = link.governance_document or link.policy_statement
+        name = _word(target, ("title", "statement_summary", "statement_text")) if target is not None else None
         db.delete(link)
-        _log_link(db, issue_id, current_user.id, "unlinked", "governance", link_id)
+        _log_link(db, issue_id, current_user.id, "unlinked", "governance", link_id, name=name or "")
         db.commit()
     return
+
+
+# ─── Tasks (Task Management) ────────────────────────────────────────────
+@router.get("/{issue_id}/links/tasks")
+def list_task_links(issue_id: int, db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    """The tasks linked to this issue that the person may see: an action promoted to a task, or a task picked in the Create issue form. Read-only: a task is linked from
+    its own side (Task Management), and a promoted action keeps its twin there."""
+    issue = _get_issue(issue_id, current_user, db)
+    from .issues import linked_tasks_query
+    from ....models import CriticalTask
+
+    tasks = linked_tasks_query(db, current_user, issue).order_by(CriticalTask.created_at.desc(), CriticalTask.id.desc()).all()
+    return [{
+        "id": t.id,
+        "task_id": t.id,
+        "title": t.title,
+        "status": t.status,
+        "priority": t.priority,
+        "due_date": t.due_date.isoformat() if t.due_date else None,
+        "from_action": t.linked_issue_action_id is not None,
+    } for t in tasks]
