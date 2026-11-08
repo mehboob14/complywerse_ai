@@ -49,7 +49,7 @@ test('every section loads, fails and has nothing on its own: a skeleton, an erro
   }
   assert.match(files.parts, /canRetry\(error\) \? onRetry : undefined/, 'Retry only where asking again can help (a refusal cannot be retried)');
   assert.match(files.parts, /Still loading\. This is taking longer than usual\./, 'a slow request says so');
-  assert.match(files.modules, /Couldn&apos;t load/, 'a row that failed says so in its score cell');
+  assert.match(files.modules, /Couldn&apos;t load/, 'a row that failed says so in its Detail cell');
   assert.match(files.modules, /No access/, 'a refused row says so');
   assert.match(files.modules, /onClick=\{\(\) => onRetry\(row\.area\.key\)\}/, 'a failed row asks again for its own request');
   assert.match(files.modules, /Still loading\. This is taking longer than usual\./);

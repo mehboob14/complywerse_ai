@@ -11,7 +11,7 @@ import { statusPill } from '@/lib/status';
 import { formatCount, formatPercent } from '@/lib/format';
 import { gradeStatus } from '@/lib/statuses/dashboard';
 import { useSlow } from './parts';
-import { againstTarget, attentionOf, retryable, targetNote, weakestThree, type AreaRow } from './perfModel';
+import { againstTarget, attentionOf, retryable, scoreLine, targetNote, weakestThree, type AreaRow } from './perfModel';
 
 const DASH = <span aria-hidden className="text-ds-fg-muted">—</span>;
 
@@ -21,11 +21,11 @@ function Words({ children }: { children: string }) {
 
 function ScoreCell({ row }: { row: AreaRow }) {
   if (row.state === 'loading') return <Skeleton className="ml-auto h-[16px] w-[40px]" />;
-  if (row.state === 'error') return <span className="text-ds-body text-ds-danger">Couldn&apos;t load</span>;
-  if (row.state === 'denied') return <Words>No access</Words>;
-  if (row.state === 'link' || !row.read) return DASH;
+  if (row.state !== 'ready' || !row.read) return DASH;
   if (row.read.score !== null) return <span className="text-ds-body font-[600] tabular-nums text-ds-fg">{Math.round(row.read.score)}</span>;
-  return <Words>{row.area.kind === 'score' ? 'No score yet' : 'Not scored'}</Words>;
+  // an area with a headline instead of a score: a dash, said for a screen reader
+  if (row.area.kind !== 'score') return <>{DASH}<span className="sr-only">Not scored</span></>;
+  return <span className="whitespace-nowrap text-ds-body text-ds-fg-muted">No score yet</span>;
 }
 
 function GradeCell({ row }: { row: AreaRow }) {
@@ -52,6 +52,8 @@ function AttentionCell({ row, onRetry }: { row: AreaRow; onRetry: (areaKey: stri
 
 function DetailCell({ row }: { row: AreaRow }) {
   if (row.state === 'link') return <Words>Open it to see its figures</Words>;
+  if (row.state === 'error') return <span className="text-ds-body text-ds-danger">Couldn&apos;t load</span>;
+  if (row.state === 'denied') return <Words>No access</Words>;
   if (row.state !== 'ready' || !row.read) return DASH;
   const weakest = weakestThree(row.read)[0];
   if (row.read.score !== null && weakest) return <span className="text-ds-body text-ds-fg-body">{`Weakest: ${weakest.label}, ${formatPercent(weakest.score)}`}</span>;
@@ -118,9 +120,9 @@ export function Modules({ rows, total, onRetry, onRetryAll, narrow }: {
 
   const columns: RegisterColumn<AreaRow>[] = [
     { key: 'area', header: 'Area', isRowHeader: true, cell: (r) => <TitleLink href={r.area.href} title={r.area.label} lines={2} />, width: 'w-[220px]' },
-    { key: 'score', header: 'Score', align: 'right', card: 'meta', cell: (r) => <ScoreCell row={r} />, width: 'w-[88px]' },
-    { key: 'grade', header: 'Grade', card: 'meta', cell: (r) => <GradeCell row={r} />, width: 'w-[104px]' },
-    { key: 'target', header: 'Against target', priority: 2, card: 'meta', cell: (r) => (r.state === 'ready' && againstTarget(r.read?.score, r.read?.target)) || DASH, width: 'w-[128px]' },
+    { key: 'score', header: 'Score', align: 'right', card: 'meta', cell: (r) => <ScoreCell row={r} />, cardCell: (r) => scoreLine(r), width: 'w-[104px]' },
+    { key: 'grade', header: 'Grade', card: 'hide', cell: (r) => <GradeCell row={r} />, width: 'w-[104px]' },
+    { key: 'target', header: 'Against target', priority: 2, card: 'hide', cell: (r) => (r.state === 'ready' && againstTarget(r.read?.score, r.read?.target)) || DASH, width: 'w-[128px]' },
     { key: 'attention', header: 'Needs attention', card: 'meta', cell: (r) => <AttentionCell row={r} onRetry={onRetry} /> },
     { key: 'detail', header: 'Detail', priority: 3, card: 'meta', cell: (r) => <DetailCell row={r} /> },
   ];

@@ -6,6 +6,7 @@ import { canRetry } from '../../../../components/ui/ds/reportOutcome.ts';
 import { AREAS, GRADE_LINES, gradeOf, readArea, type Area, type Counter, type Grade, type ModuleRead } from '../../../../lib/perf/moduleFeeds.ts';
 import { formatCount } from '../../../../lib/format.ts';
 import type { Tone } from '../../../../lib/status.ts';
+import { gradeStatus } from '../../../../lib/statuses/dashboard.ts';
 import { isRefusal, type Load } from './overviewModel.ts';
 
 // ── one row per area ─────────────────────────────────────────────────────────
@@ -47,6 +48,18 @@ export function againstTarget(score: number | null | undefined, target: number |
   if (typeof score !== 'number' || typeof target !== 'number') return '';
   const gap = Math.round(score) - Math.round(target);
   return gap === 0 ? 'On target' : gap > 0 ? `${formatCount(gap)} above` : `${formatCount(-gap)} below`;
+}
+
+/** A row's score in one line, for a phone's card (the table has a column each for the score, the grade and the distance): "31 · Poor · 54 below target". */
+export function scoreLine(row: AreaRow): string {
+  if (row.state === 'loading') return 'Loading';
+  if (row.state === 'error') return 'Could not be read';
+  if (row.state === 'denied') return 'No access';
+  const read = row.read;
+  if (!read || row.state === 'link') return 'Not scored';
+  if (read.score === null) return row.area.kind === 'score' ? 'No score yet' : 'Not scored';
+  const gap = againstTarget(read.score, read.target);
+  return [String(Math.round(read.score)), read.grade ? gradeStatus.label(read.grade) : '', gap === '' || gap === 'On target' ? gap : `${gap} target`].filter(Boolean).join(' · ');
 }
 
 /** The same in a sentence for the one big number: "13 below the target of 85", "On the target of 85"; nothing recorded says so. */
@@ -97,25 +110,26 @@ export interface BandChip {
   tone: Tone;
   state: ChipState;
   value?: number;
-  /** the area whose request a failed chip asks again */
-  areaKey?: string;
+  /** the areas whose requests a failed chip asks again */
+  areaKeys?: string[];
 }
 
-/** The chips of the band: one per counter of each area that answered (a counter the answer does not carry is a dash), one "unavailable" chip for an area that failed, and ONE
- *  loading chip while any are waiting (a chip per area would be a dozen skeletons). An area the server refused has no chip: the person was never offered it. The serious
+/** The chips of the band: one per counter of each area that answered (a counter the answer does not carry is a dash), ONE "unavailable" chip for the areas that failed (named
+ *  when it is one, counted when there are more), and ONE loading chip while any are waiting (a chip per area would be a dozen skeletons or a dozen failures). An area the server refused has no chip: the person was never offered it. The serious
  *  ones first, each group in the order the areas are defined in. */
 export function bandChips(rows: readonly AreaRow[]): BandChip[] {
   const chips: BandChip[] = [];
   rows.forEach((r) => {
-    if (r.state === 'error') chips.push({ key: `${r.area.key}:error`, label: r.area.label, href: r.area.href, tone: 'neutral', state: 'error', areaKey: r.area.key });
     if (r.state !== 'ready' || !r.read) return;
     r.read.counters.forEach((c) => chips.push({
-      key: c.key, label: c.label, href: c.href, tone: c.tone, state: c.value === null ? 'none' : 'ready', value: c.value === null ? undefined : c.value, areaKey: r.area.key,
+      key: c.key, label: c.label, href: c.href, tone: c.tone, state: c.value === null ? 'none' : 'ready', value: c.value === null ? undefined : c.value,
     }));
   });
+  const failed = rows.filter((r) => r.state === 'error');
   const waiting = rows.filter((r) => r.state === 'loading').length;
   const serious = (c: BandChip) => (c.state === 'ready' && c.tone === 'danger' ? 0 : 1);
   const ordered = chips.map((c, i) => ({ c, i })).sort((a, b) => serious(a.c) - serious(b.c) || a.i - b.i).map((x) => x.c);
+  if (failed.length > 0) ordered.push({ key: 'unavailable', label: failed.length === 1 ? failed[0].area.label : `${failed.length} areas`, href: '#modules', tone: 'neutral', state: 'error', areaKeys: failed.map((r) => r.area.key) });
   if (waiting > 0) ordered.push({ key: 'loading', label: waiting === 1 ? 'Loading 1 area' : `Loading ${waiting} areas`, href: '#modules', tone: 'neutral', state: 'loading' });
   return ordered;
 }
@@ -191,8 +205,10 @@ export const SCORED_AREAS: number = AREAS.filter((a) => a.kind === 'score').leng
 /** Overall readiness: the equal-weight mean of the scores of the scored areas this person may open and that answered. Not a server number: the sentence under it says what it is. */
 export function overallOf(rows: readonly AreaRow[]): Overall {
   const scored = rows.filter((r) => r.area.kind === 'score');
+  // in the order the areas are defined in, so the sentence names the same ones first for everybody
   const members: Member[] = scored
     .filter(hasScore)
+    .sort((a, b) => AREAS.indexOf(a.area) - AREAS.indexOf(b.area))
     .map((r) => ({ key: r.area.key, label: r.area.label, score: r.read!.score as number, target: r.read!.target }));
   const leftOut = scored.filter((r) => r.state === 'loading' || r.state === 'error').map((r) => r.area.label);
   const base = { members, leftOut, shown: scored.filter((r) => r.state !== 'denied').length, of: SCORED_AREAS };
@@ -225,10 +241,19 @@ export function overallLeaves(o: Overall): string {
 export const retryable = (r: AreaRow): boolean => r.state === 'error' && canRetry(r.error);
 export const failedRows = (rows: readonly AreaRow[]): AreaRow[] => rows.filter((r) => r.state === 'error' || r.state === 'denied');
 
-/** The "N waiting for you" button of the head: the shared inbox's badge in words. */
-export type WaitingBadge = { kind: 'count'; n: number } | { kind: 'none' } | { kind: 'loading' } | { kind: 'unknown' };
+/** The "N waiting for you" button of the head, from the shared inbox: the decisions addressed to the person and the documents to acknowledge, as the Needs my action page lists them. */
+export type WaitingBadge = { kind: 'count'; n: number; incomplete?: boolean } | { kind: 'none' } | { kind: 'loading' } | { kind: 'unknown' };
+export interface InboxLike { badge: { kind: 'loading' | 'none' | 'unknown' | 'count' }; counts: { decision: number; acknowledgement: number } }
+
+export function waitingOf(inbox: InboxLike): WaitingBadge {
+  const n = inbox.counts.decision + inbox.counts.acknowledgement;
+  const settled = inbox.badge.kind === 'count' || inbox.badge.kind === 'none';
+  if (n > 0) return { kind: 'count', n, incomplete: !settled };
+  return inbox.badge.kind === 'loading' || inbox.badge.kind === 'unknown' ? { kind: inbox.badge.kind } : { kind: 'none' };
+}
+
 export function waitingText(badge: WaitingBadge): string {
-  if (badge.kind === 'count') return `${formatCount(badge.n)} waiting for you`;
+  if (badge.kind === 'count') return `${formatCount(badge.n)}${badge.incomplete ? '+' : ''} waiting for you`;
   if (badge.kind === 'none') return 'Nothing waiting for you';
   return 'Needs my action';
 }

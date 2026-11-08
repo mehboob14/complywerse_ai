@@ -6,14 +6,16 @@
 import { Button, ProgressBar, SectionCard, Skeleton, StatusPill, type ProgressTone } from '@/components/ui/ds';
 import { statusPill } from '@/lib/status';
 import { gradeStatus } from '@/lib/statuses/dashboard';
-import type { Grade } from '@/lib/perf/moduleFeeds';
+import { gradeOf, type Grade } from '@/lib/perf/moduleFeeds';
 import { Loading } from './parts';
 import { overallDefinition, overallLeaves, vsTargetText, type Overall } from './perfModel';
 
 const TONE: Record<Grade, ProgressTone> = { excellent: 'success', good: 'success', fair: 'warning', poor: 'danger' };
+const FILL: Record<ProgressTone, string> = { primary: 'bg-ds-primary', success: 'bg-ds-success', warning: 'bg-ds-warning', danger: 'bg-ds-danger' };
 
 export function Posture({ overall }: { overall: Overall }) {
   const leaves = overallLeaves(overall);
+  const members = overall.members.slice().sort((a, b) => a.score - b.score);
   return (
     <SectionCard
       id="posture"
@@ -45,6 +47,18 @@ export function Posture({ overall }: { overall: Overall }) {
           <p className="mt-[12px] text-ds-body text-ds-fg-body">{overallDefinition(overall)}</p>
           <p className="mt-[4px] text-ds-label text-ds-fg-muted">{`${overall.atTarget} of ${overall.members.length} are at or above their target.`}</p>
           {leaves && <p className="mt-[4px] text-ds-label text-ds-fg-muted">{`${leaves.charAt(0).toUpperCase()}${leaves.slice(1)}.`}</p>}
+          {/* the areas behind the number, weakest first (plain rows: the table below is where each one opens) */}
+          <ul className="m-0 mt-[12px] list-none border-t border-ds-border p-0 pt-[4px]">
+            {members.map((m) => (
+              <li key={m.key}>
+                <div className="flex min-h-[28px] items-center gap-[8px] px-[4px] text-ds-body">
+                  <span className="min-w-0 flex-1 break-words text-ds-fg">{m.label}</span>
+                  <span aria-hidden className="h-[6px] w-[64px] shrink-0 rounded-full bg-ds-border"><span className={`block h-[6px] rounded-full ${FILL[TONE[gradeOf(m.score) ?? 'poor']]}`} style={{ width: `${Math.max(4, Math.min(100, m.score))}%` }} /></span>
+                  <span className="w-[32px] shrink-0 text-right tabular-nums text-ds-fg">{Math.round(m.score)}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </SectionCard>

@@ -20,7 +20,7 @@ import { ActFirst } from './ActFirst';
 import { Modules } from './Modules';
 import { Posture } from './Posture';
 import { Loading } from './parts';
-import { bandChips, everyAreaFailed, orderRows, overallOf, rowOf, waitingText, type AreaRow } from './perfModel';
+import { bandChips, everyAreaFailed, orderRows, overallOf, retryable, rowOf, waitingOf, waitingText, type AreaRow } from './perfModel';
 import { usePerfFeeds } from './usePerfFeeds';
 
 /** The first thing a keyboard reaches: past the counters to the list of areas to act on. It shows when it has focus. */
@@ -62,19 +62,18 @@ export default function PerfOverview() {
 
   const retryArea = (areaKey: string) => { const f = AREA_BY_KEY[areaKey]?.feed; if (f) feeds[f]?.refetch(); };
   const retryRows = (list: readonly AreaRow[]) => { new Set(list.map((r) => r.area.feed)).forEach((f) => { if (f) feeds[f]?.refetch(); }); };
-  const retryAll = () => retryRows(rows.filter((r) => r.state === 'error' && canRetry(r.error)));
+  const retryAll = () => retryRows(rows.filter(retryable));
   const refreshAll = () => { feedKeys.forEach((k) => feeds[k]?.refetch()); };
   const updatedAt = Math.max(0, ...feedKeys.map((k) => feeds[k]?.updatedAt ?? 0));
 
   const chips = bandChips(rows);
-  const counters: BandCounter[] = chips.map((c) => ({
-    key: c.key, label: c.label, href: c.href, tone: c.tone, state: c.state, value: c.value,
-    onRetry: c.state === 'error' && c.areaKey && canRetry(rows.find((r) => r.area.key === c.areaKey)?.error) ? () => retryArea(c.areaKey as string) : undefined,
-  }));
+  const counters: BandCounter[] = chips.map((c) => {
+    const again = rows.filter((r) => c.areaKeys?.includes(r.area.key) && retryable(r));
+    return { key: c.key, label: c.label, href: c.href, tone: c.tone, state: c.state, value: c.value, onRetry: c.state === 'error' && again.length > 0 ? () => retryRows(again) : undefined };
+  });
   const firstError = rows.find((r) => r.state === 'error')?.error;
 
-  const badge = inbox.badge;
-  const waiting = waitingText(badge.kind === 'count' ? { kind: 'count', n: badge.n } : { kind: badge.kind });
+  const waiting = waitingText(waitingOf(inbox));
 
   return (
     <div className="flex flex-col gap-[16px]">
@@ -112,10 +111,13 @@ export default function PerfOverview() {
               onRetry: canRetry(firstError) ? retryAll : undefined,
             } : undefined}
           />
-          <div className="flex flex-wrap items-start gap-[16px]">
-            <div className="min-w-0 flex-[8_1_600px]"><ActFirst rows={rows} limit={narrow ? 5 : 10} onRetry={retryAll} /></div>
-            <div className="min-w-0 flex-[5_1_340px]"><Posture overall={overallOf(rows)} /></div>
-          </div>
+          {/* a person who is shown no scored area has nothing to rank and no number to average: the band and the rows are the page */}
+          {rows.some((r) => r.area.kind === 'score') && (
+            <div className="flex flex-wrap items-start gap-[16px]">
+              <div className="min-w-0 flex-[8_1_600px]"><ActFirst rows={rows} limit={narrow ? 5 : 10} onRetry={retryAll} /></div>
+              <div className="min-w-0 flex-[5_1_340px]"><Posture overall={overallOf(rows)} /></div>
+            </div>
+          )}
           <Modules rows={rows} total={AREAS.length} onRetry={retryArea} onRetryAll={retryAll} narrow={narrow} />
         </>
       )}

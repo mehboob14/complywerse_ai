@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { AREAS, AREA_BY_KEY, type Area } from '../../../../lib/perf/moduleFeeds.ts';
 import {
   SCORED_AREAS, againstTarget, attentionOf, bandChips, belowTarget, everyAreaFailed, failedRows, litCounters, orderRows, overallDefinition, overallLeaves, overallOf, retryable,
-  rowOf, targetNote, vsTargetText, waitingText, weakestAreas, weakestThree, type AreaRow,
+  rowOf, scoreLine, targetNote, vsTargetText, waitingOf, waitingText, weakestAreas, weakestThree, type AreaRow,
 } from './perfModel.ts';
 
 const area = (key: string): Area => AREA_BY_KEY[key];
@@ -95,7 +95,7 @@ test('what needs attention in a row: the most serious counter first, how many mo
   assert.equal(attentionOf(mixed).top?.label, 'Controls without evidence');
 });
 
-test('the band: a chip per counter of every area that answered (a missing number is a dash chip), one "unavailable" chip per failed area, one loading chip, none for a refused area; serious first', () => {
+test('the band: a chip per counter of every area that answered (a missing number is a dash chip), one "unavailable" chip for the failed areas, one loading chip, none for a refused area; serious first', () => {
   const rows = [
     ready('governance', card(50, [], {}, { overdue_reviews: 12, overdue_attestations: 0 })),
     ready('compliance', card(50, [], {}, { controls_without_evidence: 5 })),
@@ -107,12 +107,15 @@ test('the band: a chip per counter of every area that answered (a missing number
   ];
   const chips = bandChips(rows);
   assert.deepEqual(chips.map((c) => `${c.key}:${c.state}`), [
-    'overdue_reviews:ready', 'overdue_attestations:ready', 'controls_without_evidence:ready', 'risk:error:error', 'loading:loading',
+    'overdue_reviews:ready', 'overdue_attestations:ready', 'controls_without_evidence:ready', 'unavailable:error', 'loading:loading',
   ]);
   assert.equal(chips.find((c) => c.key === 'overdue_reviews')?.value, 12);
   assert.equal(chips.find((c) => c.key === 'overdue_attestations')?.value, 0, 'a recorded zero stays a zero');
-  assert.equal(chips.find((c) => c.key === 'risk:error')?.areaKey, 'risk');
+  assert.deepEqual(chips.find((c) => c.key === 'unavailable')?.areaKeys, ['risk']);
+  assert.equal(chips.find((c) => c.key === 'unavailable')?.label, 'Risk Management', 'one failed area is named');
   assert.equal(chips.find((c) => c.key === 'loading')?.label, 'Loading 2 areas');
+  const two = bandChips([rowOf(area('risk'), { load: 'error', error: err(500) }), rowOf(area('assets'), { load: 'error', error: err(500) })]);
+  assert.deepEqual(two.map((c) => [c.key, c.label, c.areaKeys]), [['unavailable', '2 areas', ['risk', 'assets']]], 'several failed areas are one chip, counted, not a chip each');
   const dash = bandChips([ready('governance', card(50))]);
   assert.deepEqual(dash.map((c) => [c.state, c.value]), [['none', undefined], ['none', undefined]]);
   assert.equal(bandChips([rowOf(area('risk'), { load: 'loading' })])[0].label, 'Loading 1 area');
@@ -244,4 +247,34 @@ test('the head says how many are waiting for the person in words, from the share
   assert.equal(waitingText({ kind: 'none' }), 'Nothing waiting for you');
   assert.equal(waitingText({ kind: 'loading' }), 'Needs my action');
   assert.equal(waitingText({ kind: 'unknown' }), 'Needs my action', 'a count that could not be made is not "nothing waiting"');
+});
+
+test('"waiting for you" is the decisions addressed to the person plus the documents to acknowledge, as the Needs my action page lists them; a source that has not answered adds a plus, never a false "nothing"', () => {
+  const inbox = (kind: 'loading' | 'none' | 'unknown' | 'count', decision: number, acknowledgement: number) => ({ badge: { kind }, counts: { decision, acknowledgement } });
+  assert.deepEqual(waitingOf(inbox('count', 3, 4)), { kind: 'count', n: 7, incomplete: false });
+  assert.deepEqual(waitingOf(inbox('none', 0, 9)), { kind: 'count', n: 9, incomplete: false }, 'nine acknowledgements wait although nothing is to decide');
+  assert.deepEqual(waitingOf(inbox('none', 0, 0)), { kind: 'none' });
+  assert.deepEqual(waitingOf(inbox('loading', 0, 0)), { kind: 'loading' });
+  assert.deepEqual(waitingOf(inbox('unknown', 0, 0)), { kind: 'unknown' });
+  assert.deepEqual(waitingOf(inbox('loading', 2, 0)), { kind: 'count', n: 2, incomplete: true });
+  assert.equal(waitingText(waitingOf(inbox('loading', 2, 0))), '2+ waiting for you');
+  assert.equal(waitingText(waitingOf(inbox('none', 0, 9))), '9 waiting for you');
+});
+
+test('the members of Overall readiness are in the order the areas are defined in, whatever order the rows are in', () => {
+  const o = overallOf(orderRows(scoredRows({ governance: 90, compliance: 10, risk: 50 })));
+  assert.deepEqual(o.members.map((m) => m.key), ['governance', 'compliance', 'risk']);
+});
+
+test('a phone card says the score in one line: the number, its grade word and its distance to the target; the other states in words', () => {
+  assert.equal(scoreLine(ready('governance', card(31, [], { target: 85 }))), '31 · Poor · 54 below target');
+  assert.equal(scoreLine(ready('governance', card(90, [], { target: 85 }))), '90 · Excellent · 5 above target');
+  assert.equal(scoreLine(ready('governance', card(85, [], { target: 85 }))), '85 · Excellent · On target');
+  assert.equal(scoreLine(ready('governance', card(60))), '60 · Fair', 'no target recorded: no distance');
+  assert.equal(scoreLine(ready('governance', card(null))), 'No score yet');
+  assert.equal(scoreLine(ready('tasks', { total: 1 })), 'Not scored');
+  assert.equal(scoreLine(rowOf(area('cyber'), undefined)), 'Not scored');
+  assert.equal(scoreLine(rowOf(area('governance'), { load: 'loading' })), 'Loading');
+  assert.equal(scoreLine(rowOf(area('governance'), { load: 'error', error: err(500) })), 'Could not be read');
+  assert.equal(scoreLine(rowOf(area('governance'), { load: 'error', error: err(403) })), 'No access');
 });
