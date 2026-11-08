@@ -126,6 +126,19 @@ export function counterTarget(kind: 'files' | 'scope', cards: readonly JourneyCa
 export const rowHref = (row: Pick<WorkRowPayload, 'journey_id' | 'kind' | 'id'>): string =>
   journeyHref(row.journey_id, { kind: row.kind === 'file' ? 'files' : 'scope', open: openKey(row.kind, row.id) });
 
+// ── the observations counter ─────────────────────────────────────────────────
+
+export interface ObservationMeta { counts_by_status?: Record<string, number> | null; status_levels?: Array<{ key: string; terminal?: boolean }> | null }
+
+/** Observations whose status is not a final one in the tenant's own Statutory Audit settings (closed and cancelled by default); null when the answer carries no counts. */
+export function openObservations(meta: ObservationMeta | null | undefined): number | null {
+  const counts = meta?.counts_by_status;
+  if (!counts || typeof counts !== 'object') return null;
+  const final: Record<string, true> = {};
+  (meta?.status_levels ?? []).forEach((l) => { if (l.terminal) final[l.key] = true; });
+  return Object.keys(counts).reduce((sum, key) => (final[key] ? sum : sum + (Number(counts[key]) || 0)), 0);
+}
+
 // ── the journey page's address ───────────────────────────────────────────────
 
 export const TABS: readonly PortalTab[] = ['queue', 'decisions', 'summary'];

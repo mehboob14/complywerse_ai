@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { readAddress, writeAddress } from '../addressState.ts';
 import {
   ADDRESS, controlLine, counterTarget, decidedShare, fileSize, frameworksHref, journeyHref, lastPage, matchJourneys, noun, openKey, orderJourneys, parseOpen, queueChips,
-  rowHref, scopeAsk, skipFor, summaryFigures, upgradeLegacyAddress, waitingOf, waitingTotal, type JourneyCard, type QueueCounts,
+  openObservations, rowHref, scopeAsk, skipFor, summaryFigures, upgradeLegacyAddress, waitingOf, waitingTotal, type JourneyCard, type QueueCounts,
 } from './portalModel.ts';
 
 const card = (id: number, name: string, filesPending: number, scopePending: number, extra: Partial<JourneyCard> = {}): JourneyCard => ({
@@ -119,4 +119,13 @@ test('small sentences: what a scope request asks, the requirement as one line, a
   assert.deepEqual([fileSize(512), fileSize(2048), fileSize(5 * 1024 * 1024), fileSize(null)], ['512 B', '2.0 KB', '5.0 MB', '—']);
   assert.deepEqual([skipFor(1, 50), skipFor(3, 50), skipFor(0, 50), lastPage(101, 50), lastPage(0, 50)], [0, 100, 0, 3, 1]);
   assert.deepEqual([noun(1, 'file', 'files'), noun(1240, 'file', 'files')], ['1 file', '1,240 files']);
+});
+
+test('open observations are the ones not in a final status of the tenant own settings; no counts is no answer, not zero', () => {
+  const levels = [{ key: 'open' }, { key: 'in_progress' }, { key: 'complied' }, { key: 'closed', terminal: true }, { key: 'cancelled', terminal: true }];
+  assert.equal(openObservations({ counts_by_status: { open: 4, in_progress: 2, complied: 1, closed: 30, cancelled: 3 }, status_levels: levels }), 7);
+  assert.equal(openObservations({ counts_by_status: { under_review: 5, closed: 2 }, status_levels: levels }), 5, 'a status the tenant added counts as open until it is made final');
+  assert.equal(openObservations({ counts_by_status: {}, status_levels: levels }), 0, 'an empty register has none open');
+  assert.equal(openObservations({}), null);
+  assert.equal(openObservations(null), null);
 });

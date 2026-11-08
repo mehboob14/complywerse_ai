@@ -1,7 +1,7 @@
 // What the Decision sheet decides, apart from React so `node --test` can pin it (decisionModel.test.ts): the two decisions, when the remarks are required,
 // the sentences that name a problem or an earlier decision. The sheet (DecisionSheet.tsx) draws it; the Auditor Portal's review queue is its first user and
 // the Issue Register's validation uses it too, with its own words and its own rule for the remarks.
-import { formatDate } from '../../lib/format.ts';
+import { formatCount, formatDate } from '../../lib/format.ts';
 
 /** The two things an auditor can decide. The server writes "rejected"; a person reads it as "Turned down" (lib/statuses/auditPortal.ts). */
 export type Decision = 'approved' | 'rejected';
@@ -30,7 +30,7 @@ export function remarksProblem(decision: Decision, remarks: string, rule: Remark
   if (remarksRequired(decision, rule) && text.length === 0) {
     return decision === 'rejected' ? 'Say why it is turned down, so the person who sent it knows what to change.' : 'Add a note before you approve.';
   }
-  if (text.length > rule.max) return `Keep the note to ${rule.max.toLocaleString('en-US')} characters or fewer (it is ${text.length.toLocaleString('en-US')}).`;
+  if (text.length > rule.max) return `Keep the note to ${formatCount(rule.max)} characters or fewer (it is ${formatCount(text.length)}).`;
   return null;
 }
 
