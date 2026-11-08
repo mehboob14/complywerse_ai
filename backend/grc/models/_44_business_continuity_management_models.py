@@ -275,6 +275,11 @@ class BcmFinding(Base):
     linked_issue_id = Column(Integer, ForeignKey("grc_issues.id"), nullable=True)
     linked_risk_id = Column(Integer, ForeignKey("grc_risks.id"), nullable=True)
 
+    # Who fixes it and by when (the Findings register's "who fixes what by when"); both optional. Added after the table was provisioned:
+    # schema_migrations._COLUMN_ADDS gives an existing tenant database the columns.
+    owner_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    due_date = Column(DateTime, nullable=True)
+
     created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -282,6 +287,7 @@ class BcmFinding(Base):
     drill = relationship("BcmDrill", back_populates="findings")
     linked_issue = relationship("Issue", foreign_keys=[linked_issue_id])
     linked_risk = relationship("Risk", foreign_keys=[linked_risk_id])
+    owner = relationship("GRCUser", foreign_keys=[owner_id])
     creator = relationship("GRCUser", foreign_keys=[created_by])
 
     __table_args__ = (

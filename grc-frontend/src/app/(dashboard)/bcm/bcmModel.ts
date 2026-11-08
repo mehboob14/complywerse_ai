@@ -22,16 +22,20 @@ export interface Bia {
 export interface Finding {
   id: number; drill_id: number; title: string; description: string | null; severity: string;
   linked_issue_id: number | null; issue_code: string | null; issue_status: string; is_open: boolean; linked_risk_id: number | null; linked_risk_title: string | null;
+  /** who fixes it and by when (a day written as a DateTime); both optional */
+  owner_id?: number | null; owner_name?: string | null; due_date?: string | null;
 }
 export interface DrillResult {
   id: number; drill_id: number; rto_met: boolean | null; rpo_met: boolean | null; actual_rto_hours: number | null; actual_rpo_hours: number | null;
   summary: string | null; recorded_by_name: string | null; recorded_at: string | null;
+  /** the evidence the drill's report was filed as, by name */
+  evidence_ref_id?: number | null; evidence_ref_title?: string | null;
 }
 export interface Drill {
   id: number; plan_id: number; plan_title: string | null; title: string; drill_type: string; scenario: string | null;
   scheduled_date: string | null; actual_start: string | null; actual_end: string | null; owner_id: number | null; owner_name: string | null;
   status: string; is_overdue: boolean; effective_status: string; source_type: string; linked_incident_id: number | null; linked_incident_title: string | null;
-  has_result: boolean; finding_count: number; result?: DrillResult | null; findings?: Finding[];
+  has_result: boolean; finding_count: number; result?: DrillResult | null; findings?: Finding[]; created_at?: string | null;
 }
 export interface Plan {
   id: number; title: string; description: string | null; business_unit: string | null; status: string;
@@ -53,12 +57,44 @@ export interface Dashboard {
   linkage?: { open_capas: number; total_capas: number; risks_linked: number; incident_invocations: number };
   recent_drills: Drill[];
   overdue_drills: Drill[];
+  /** tenant-wide counts of what needs doing (absent from an older server) */
+  attention?: Attention;
+  /** the signed-in person's own work: a list is absent when they may not read that kind of record */
+  mine?: Mine;
 }
+export interface Attention { reviews_due: number; bia_without_strategy: number; plans_without_strategy?: number; findings_without_issue: number }
+export interface MinePlan { id: number; title: string; status: string; next_review_due: string | null }
+export interface MineBia { id: number; plan_id: number; plan_title: string | null; process_name: string; criticality_rating: string }
+export interface MineFinding { id: number; drill_id: number; drill_title: string | null; title: string; severity: string; due_date: string | null }
+export interface Mine {
+  counts: Partial<Record<'overdue_drills' | 'reviews_due' | 'bia_without_strategy' | 'findings_without_issue', number>>;
+  overdue_drills?: Drill[]; reviews_due?: MinePlan[]; bia_without_strategy?: MineBia[]; findings_without_issue?: MineFinding[];
+}
+
+// ── the rows of the registers (the lean lists: GET /bcm/plans?lean=1, /bcm/drills?lean=1, /bcm/findings) ──
+/** A plan as the Plans register holds it: the plan's own fields and the counts its quick views read. */
+export type PlanRow = Plan & { bia_incomplete: number; last_drill_at: string | null; updated_at?: string | null };
+/** A drill as the Drills register holds it. */
+export type DrillRow = Drill & { open_finding_count: number; updated_at?: string | null };
+/** A finding as the Findings register holds it: with its drill and plan, who owns it and where its issue stands. */
+export interface FindingRow extends Finding {
+  drill_title: string | null; drill_owner_id: number | null; plan_id: number | null; plan_title: string | null; created_at?: string | null;
+}
+/** What the lean lists answer: the rows, the TRUE total and whether more matched than were sent. */
+export interface LeanPage<T> { items: T[]; total: number; truncated: boolean }
 /** What the plans and drills lists answer: the rows (at most `limit`, 200 by default) and the TRUE number the server holds. */
 export interface Page<T> { items: T[]; total: number }
 
 /** A list route's answer as a page, or null when it is not one (the page then says it could not read the answer instead of drawing an empty list). A missing
  *  `total` is the number of rows that came, which is all that is known. */
+/** A lean list route's answer, or null when it is not one. */
+export function asLean<T>(data: unknown): LeanPage<T> | null {
+  const page = asPage<T>(data);
+  if (!page) return null;
+  const truncated = !!(data as { truncated?: unknown }).truncated;
+  return { items: page.items, total: page.total, truncated };
+}
+
 export function asPage<T>(data: unknown): Page<T> | null {
   const o = data && typeof data === 'object' ? (data as { items?: unknown; total?: unknown }) : null;
   if (!o || !Array.isArray(o.items)) return null;
@@ -180,6 +216,11 @@ export const drillDirty = (opened: DrillForm, now: DrillForm): boolean => DRILL_
 // ── the BIA forms: a process, a dependency, a strategy ──
 export interface BiaForm { process_name: string; criticality_rating: string; rto_hours: string; rpo_hours: string; mtpd_hours: string; description: string; linked_asset_ids: number[] }
 export const blankBiaForm = (): BiaForm => ({ process_name: '', criticality_rating: 'medium', rto_hours: '', rpo_hours: '', mtpd_hours: '', description: '', linked_asset_ids: [] });
+/** The form of a process being edited: what it holds today. (Its linked assets are saved on their own, from the process's panel.) */
+export const biaFormFrom = (b: Bia): BiaForm => ({
+  process_name: b.process_name, criticality_rating: b.criticality_rating, rto_hours: hoursText(b.rto_hours), rpo_hours: hoursText(b.rpo_hours), mtpd_hours: hoursText(b.mtpd_hours),
+  description: b.description || '', linked_asset_ids: b.linked_asset_ids ?? [],
+});
 export interface BiaErrors { process_name?: string; rto_hours?: string; rpo_hours?: string; mtpd_hours?: string }
 /** The same rule the server enforces ("RTO must be shorter than MTPD") is said before the request when both are set. */
 export function biaErrors(f: BiaForm): BiaErrors {
@@ -197,10 +238,13 @@ export const biaCreatePayload = (f: BiaForm) => ({
   process_name: f.process_name, criticality_rating: f.criticality_rating, description: orNull(f.description),
   rto_hours: hoursOrNull(f.rto_hours), rpo_hours: hoursOrNull(f.rpo_hours), mtpd_hours: hoursOrNull(f.mtpd_hours), linked_asset_ids: f.linked_asset_ids,
 });
-export const biaDirty = (f: BiaForm): boolean => {
-  const b = blankBiaForm();
-  return (Object.keys(b) as Array<keyof BiaForm>).some((k) => (k === 'linked_asset_ids' ? f.linked_asset_ids.length > 0 : f[k] !== b[k]));
-};
+/** What Edit process sends: the fields of the form except the linked assets (an emptied hours field clears the value; the assets are saved from the panel and must not be overwritten). */
+export const biaUpdatePayload = (f: BiaForm) => ({
+  process_name: f.process_name, criticality_rating: f.criticality_rating, description: orNull(f.description),
+  rto_hours: hoursOrNull(f.rto_hours), rpo_hours: hoursOrNull(f.rpo_hours), mtpd_hours: hoursOrNull(f.mtpd_hours),
+});
+export const biaDirty = (f: BiaForm, opened: BiaForm = blankBiaForm()): boolean =>
+  (Object.keys(opened) as Array<keyof BiaForm>).some((k) => (k === 'linked_asset_ids' ? JSON.stringify(f.linked_asset_ids) !== JSON.stringify(opened.linked_asset_ids) : f[k] !== opened[k]));
 
 export interface DependencyForm { dependency_type: string; name: string; criticality: string; external_bcp_status: string }
 export const blankDependencyForm = (): DependencyForm => ({ dependency_type: 'system', name: '', criticality: 'medium', external_bcp_status: '' });
@@ -219,14 +263,14 @@ export const blankStrategyForm = (): StrategyForm => ({ strategy_type: 'alternat
 /** What Add strategy has always sent. */
 export const strategyPayload = (f: StrategyForm) => ({ strategy_type: f.strategy_type, description: orNull(f.description) });
 
-export interface FindingForm { title: string; description: string; severity: string }
-export const blankFindingForm = (): FindingForm => ({ title: '', description: '', severity: 'medium' });
+export interface FindingForm { title: string; description: string; severity: string; owner_id: number | null; due_date: string }
+export const blankFindingForm = (): FindingForm => ({ title: '', description: '', severity: 'medium', owner_id: null, due_date: '' });
 export function findingErrors(f: FindingForm): { title?: string } {
   if (!f.title.trim()) return { title: 'Enter a title.' };
   return f.title.length > NAME_MAX ? { title: `Use at most ${NAME_MAX} characters.` } : {};
 }
 /** What Raise finding has always sent. */
-export const findingPayload = (f: FindingForm) => ({ title: f.title, description: orNull(f.description), severity: f.severity });
+export const findingPayload = (f: FindingForm) => ({ title: f.title, description: orNull(f.description), severity: f.severity, owner_id: f.owner_id, due_date: orNull(f.due_date) });
 
 // ── the drill's result ──
 export type Tri = '' | 'yes' | 'no';
@@ -237,9 +281,11 @@ export const TRI_OPTIONS: Array<{ value: Tri; label: string }> = [
   { value: 'no', label: 'No — missed' },
 ];
 export const triLabel = (v: boolean | null | undefined): string => (TRI_OPTIONS.find((o) => o.value === triOf(v)) as { label: string }).label;
-export interface ResultForm { rto_met: Tri; rpo_met: Tri; actual_rto_hours: string; actual_rpo_hours: string; summary: string }
+/** `evidence_ref_id`: the evidence the drill's report was filed as (the result takes one; null: none). */
+export interface ResultForm { rto_met: Tri; rpo_met: Tri; actual_rto_hours: string; actual_rpo_hours: string; summary: string; evidence_ref_id: number | null }
 export const resultFormFrom = (r: DrillResult | null | undefined): ResultForm => ({
   rto_met: triOf(r?.rto_met), rpo_met: triOf(r?.rpo_met), actual_rto_hours: hoursText(r?.actual_rto_hours), actual_rpo_hours: hoursText(r?.actual_rpo_hours), summary: r?.summary ?? '',
+  evidence_ref_id: r?.evidence_ref_id ?? null,
 });
 export function resultErrors(f: ResultForm): { actual_rto_hours?: string; actual_rpo_hours?: string } {
   const e: { actual_rto_hours?: string; actual_rpo_hours?: string } = {};
@@ -247,10 +293,10 @@ export function resultErrors(f: ResultForm): { actual_rto_hours?: string; actual
   const b = parseHours(f.actual_rpo_hours); if (!b.ok) e.actual_rpo_hours = b.message;
   return e;
 }
-/** What Save result has always sent. */
+/** What Save result has always sent, and the evidence it points to (the server takes it and answers with it; a cleared field sends null, which removes the link). */
 export const resultPayload = (f: ResultForm) => ({
   rto_met: f.rto_met === '' ? null : f.rto_met === 'yes', rpo_met: f.rpo_met === '' ? null : f.rpo_met === 'yes',
-  actual_rto_hours: hoursOrNull(f.actual_rto_hours), actual_rpo_hours: hoursOrNull(f.actual_rpo_hours), summary: orNull(f.summary),
+  actual_rto_hours: hoursOrNull(f.actual_rto_hours), actual_rpo_hours: hoursOrNull(f.actual_rpo_hours), summary: orNull(f.summary), evidence_ref_id: f.evidence_ref_id,
 });
 export const resultDirty = (saved: ResultForm, now: ResultForm): boolean => (Object.keys(saved) as Array<keyof ResultForm>).some((k) => saved[k] !== now[k]);
 
@@ -401,6 +447,11 @@ export function drillDeleteWords(d: Pick<Drill, 'title' | 'finding_count'>): { t
     confirmLabel: 'Delete drill',
   };
 }
+export const biaDeleteWords = (b: Pick<Bia, 'process_name' | 'dependency_count' | 'strategy_count'>) => ({
+  title: 'Delete this process?',
+  message: `${quoted(b.process_name)} will be deleted with its ${plural(b.dependency_count, 'dependency', 'dependencies')} and ${plural(b.strategy_count, 'recovery strategy', 'recovery strategies')}. A risk linked to it stays. This can't be undone.`,
+  confirmLabel: 'Delete process',
+});
 export const dependencyDeleteWords = (name: string) => ({ title: 'Remove this dependency?', message: `${quoted(name)} will be removed from this process. This can't be undone.`, confirmLabel: 'Remove dependency' });
 export const strategyDeleteWords = (label: string) => ({
   title: 'Delete this recovery strategy?',
@@ -462,6 +513,57 @@ export const planCount = (d: Dashboard, status: string): number => d.plans_by_st
 export const findingCount = (d: Dashboard, sev: string): number => d.open_findings_by_severity[sev] ?? 0;
 
 export const FINDING_HINT = 'Findings at or above the tenant\'s issue threshold (High by default) automatically open an Issue/CAPA for remediation.';
+/** The same sentence with the tenant's real threshold in it, once it is known (it is a setting: the old hint said "High/Critical" as if it were fixed). */
+export const findingHint = (threshold: string | null | undefined): string => {
+  const word = threshold && severity.has(threshold) ? severity.label(threshold) : null;
+  return word ? `A finding at ${word} or above opens an issue in Issues / CAPA by itself.` : FINDING_HINT;
+};
 /** What a BIA process says about its recovery strategy: the server marks it complete once it has one. */
 export const biaCompleteness = (b: Pick<Bia, 'is_complete'>): { complete: boolean; label: string } =>
   b.is_complete ? { complete: true, label: 'Complete' } : { complete: false, label: 'Needs a recovery strategy' };
+
+// ── days: a review day, a scheduled day and a due day are DAYS (stored as a DateTime at midnight): they are read as the day they were written, whatever the zone ──
+const DAY_MS = 86_400_000;
+/** The day number (days since 1970) of a written day: the first ten characters of "2026-11-08T00:00:00". null when there is none or it is not a day. */
+export function dayNumber(value: string | null | undefined): number | null {
+  const hit = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value ?? '').trim());
+  if (!hit) return null;
+  const at = Date.UTC(Number(hit[1]), Number(hit[2]) - 1, Number(hit[3]));
+  return Number.isNaN(at) ? null : Math.round(at / DAY_MS);
+}
+/** Today as a day number, in the viewer's own calendar. */
+export function todayNumber(now: number): number {
+  const d = new Date(now);
+  return Math.round(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / DAY_MS);
+}
+/** Days from today to the day (negative: it has gone by); null when there is no day. */
+export function dayGap(value: string | null | undefined, now: number): number | null {
+  const n = dayNumber(value);
+  return n === null ? null : n - todayNumber(now);
+}
+/** How far ahead "soon" looks: the same 30 days the server counts reviews due over. */
+export const SOON_DAYS = 30;
+export type DayWindow = 'overdue' | 'soon' | 'later' | 'none';
+/** Where a day stands against today: before it, within the next 30 days (today included), further off, or no day. */
+export function windowOf(value: string | null | undefined, now: number): DayWindow {
+  const gap = dayGap(value, now);
+  if (gap === null) return 'none';
+  return gap < 0 ? 'overdue' : gap <= SOON_DAYS ? 'soon' : 'later';
+}
+/** "Overdue by 3 days", "Due today", "Due in 9 days", "Due tomorrow"; `noun` is the word for what is due ("Due", "Review", "Starts"). '' with no day. */
+export function dueWords(value: string | null | undefined, now: number, noun = 'Due'): string {
+  const gap = dayGap(value, now);
+  if (gap === null) return '';
+  if (gap === 0) return `${noun} today`;
+  if (gap === 1) return `${noun} tomorrow`;
+  if (gap > 1) return `${noun} in ${gap} days`;
+  const late = -gap;
+  return `Overdue by ${late} ${late === 1 ? 'day' : 'days'}`;
+}
+/** A plan tested lately: its latest drill (scheduled day, else when it was made) within the last 12 months, the rule the Overview's coverage uses; or tested longer ago; or never. */
+export function testedOf(lastDrillAt: string | null | undefined, now: number): 'recent' | 'lapsed' | 'never' {
+  if (!lastDrillAt) return 'never';
+  const at = Date.parse(/[zZ]|[+-]\d{2}:?\d{2}$/.test(lastDrillAt) ? lastDrillAt : `${lastDrillAt}Z`);
+  if (Number.isNaN(at)) return 'never';
+  return at >= now - 365 * DAY_MS ? 'recent' : 'lapsed';
+}

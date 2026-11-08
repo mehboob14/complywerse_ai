@@ -13,6 +13,7 @@ import { RightSlidePanel } from '@/components/ui';
 import { Button, FormField, Select, Textarea, TextInput, useReportedMutation } from '@/components/ui/ds';
 import { errorMessage } from '@/components/ui/ds/reportOutcome';
 import { EntityCombobox, FormProblem, HoursInput } from '../_bcm-ui';
+import { REFRESH_ALL } from '../bcmData';
 import {
   NAME_MAX, blankPlanForm, planCreatePayload, planDirty, planErrors, planFormFrom, planUpdatePayload, type Plan, type PlanForm as Form,
 } from '../bcmModel';
@@ -37,14 +38,14 @@ export function PlanForm({ plan, onClose }: {
   const create = useReportedMutation({
     mutationFn: async (payload: ReturnType<typeof planCreatePayload>) => (await bcmApi.plans.create(payload)).data,
     success: 'Plan created', failure: "Couldn't create the plan", retryable: false, toast: 'success',
-    invalidate: [['bcm-plans']],
+    invalidate: [...REFRESH_ALL],
     onSuccess: () => onClose(),
     onError: (error) => setProblem(errorMessage(error)),
   });
   const update = useReportedMutation({
     mutationFn: async (payload: ReturnType<typeof planUpdatePayload>) => (await bcmApi.plans.update(plan?.id ?? 0, payload)).data,
     success: 'Plan updated', failure: "Couldn't save the plan", toast: 'success',
-    invalidate: [['bcm-plan', plan?.id ?? 0], ['bcm-plans']],
+    invalidate: [['bcm-plan', plan?.id ?? 0], ...REFRESH_ALL],
     onSuccess: () => onClose(),
     onError: (error) => setProblem(errorMessage(error)),
   });

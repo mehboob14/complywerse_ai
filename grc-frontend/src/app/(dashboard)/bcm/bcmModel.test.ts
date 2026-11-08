@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { readAddress, writeAddress } from '../../../lib/addressState.ts';
 import {
   BIA_SORT_KEYS, DRILL_FLOW, DRILL_LIST_SCHEMA, FINDING_HINT, HOURS_MAX, NAME_MAX, OPTION_CAPS, PLAN_FILTERS, PLAN_LIST_SCHEMA, PLAN_SORT_KEYS,
-  asPage, biaCompleteness, biaCreatePayload, coverageTile, biaDirty, biaErrors, biaSortValue, blankBiaForm, blankDependencyForm, blankDrillForm, blankFindingForm, blankPlanForm,
+  asPage, findingHint, biaCompleteness, biaCreatePayload, coverageTile, biaDirty, biaErrors, biaSortValue, blankBiaForm, blankDependencyForm, blankDrillForm, blankFindingForm, blankPlanForm,
   blankStrategyForm, cutHint, cutNotice, dependencyDeleteWords, dependencyErrors, dependencyPayload, drillCreatePayload, drillDeleteWords, drillDirty, drillErrors,
   drillFormFrom, drillMoves, drillSchedulePayload, drillSortValue, drillUpdatePayload, filterDrills, filterPlans, findingCount, findingDeleteWords, findingErrors,
   findingPayload, fmtHours, isEmptyTenant, linkageOf, listCut, optionsCut, ordered, pageOf, parseHours, percentText, pickOptions, planCount, planCreatePayload,
@@ -190,7 +190,11 @@ test('a dependency is sent as it always was, except that a non-vendor no longer 
 test('a strategy and a finding are sent as they always were', () => {
   assert.deepEqual(strategyPayload({ ...blankStrategyForm(), description: '' }), { strategy_type: 'alternate_site', description: null });
   assert.deepEqual(strategyPayload({ strategy_type: 'warm_site', description: 'Move to B' }), { strategy_type: 'warm_site', description: 'Move to B' });
-  assert.deepEqual(findingPayload({ title: 'Failover too slow', description: '', severity: 'high' }), { title: 'Failover too slow', description: null, severity: 'high' });
+  // what it always sent, plus the owner and due day a finding can now have (none: null)
+  assert.deepEqual(findingPayload({ title: 'Failover too slow', description: '', severity: 'high', owner_id: null, due_date: '' }), { title: 'Failover too slow', description: null, severity: 'high', owner_id: null, due_date: null });
+  assert.deepEqual(findingPayload({ title: 'T', description: 'D', severity: 'low', owner_id: 7, due_date: '2026-12-01' }), { title: 'T', description: 'D', severity: 'low', owner_id: 7, due_date: '2026-12-01' });
+  assert.match(findingHint('critical'), /Critical or above/);
+  assert.match(findingHint(null), /issue threshold \(High by default\)/, 'until the tenant\'s setting is known, the default is named');
   assert.deepEqual(findingErrors(blankFindingForm()), { title: 'Enter a title.' });
   assert.deepEqual(findingErrors({ ...blankFindingForm(), title: 'T' }), {});
   assert.match(FINDING_HINT, /issue threshold \(High by default\)/, 'the rule is a tenant setting, said so');
@@ -204,13 +208,16 @@ test('Save result sends what it always sent; the tri-state reads Not assessed / 
     actual_rto_hours: f.actual_rto_hours === '' ? null : Number(f.actual_rto_hours), actual_rpo_hours: f.actual_rpo_hours === '' ? null : Number(f.actual_rpo_hours), summary: f.summary || null,
   });
   const forms = [
-    { rto_met: 'yes', rpo_met: 'no', actual_rto_hours: '3', actual_rpo_hours: '0', summary: 'Went well.' },
-    { rto_met: '', rpo_met: '', actual_rto_hours: '', actual_rpo_hours: '', summary: '' },
+    { rto_met: 'yes', rpo_met: 'no', actual_rto_hours: '3', actual_rpo_hours: '0', summary: 'Went well.', evidence_ref_id: null },
+    { rto_met: '', rpo_met: '', actual_rto_hours: '', actual_rpo_hours: '', summary: '', evidence_ref_id: null },
   ] as const;
-  for (const f of forms) assert.deepEqual(resultPayload(f), old(f));
-  assert.deepEqual(resultFormFrom(null), { rto_met: '', rpo_met: '', actual_rto_hours: '', actual_rpo_hours: '', summary: '' });
-  assert.deepEqual(resultFormFrom({ id: 1, drill_id: 1, rto_met: false, rpo_met: true, actual_rto_hours: 9, actual_rpo_hours: 0, summary: 'S', recorded_by_name: 'A', recorded_at: null }),
-    { rto_met: 'no', rpo_met: 'yes', actual_rto_hours: '9', actual_rpo_hours: '0', summary: 'S' });
+  // everything it always sent, and the evidence the report was filed as (none: null, which also clears a link)
+  for (const f of forms) assert.deepEqual(resultPayload(f), { ...old(f), evidence_ref_id: null });
+  assert.deepEqual(resultPayload({ ...forms[0], evidence_ref_id: 42 }), { ...old(forms[0]), evidence_ref_id: 42 });
+  assert.deepEqual(resultFormFrom(null), { rto_met: '', rpo_met: '', actual_rto_hours: '', actual_rpo_hours: '', summary: '', evidence_ref_id: null });
+  assert.deepEqual(resultFormFrom({ id: 1, drill_id: 1, rto_met: false, rpo_met: true, actual_rto_hours: 9, actual_rpo_hours: 0, summary: 'S', recorded_by_name: 'A', recorded_at: null, evidence_ref_id: 5, evidence_ref_title: 'Report' }),
+    { rto_met: 'no', rpo_met: 'yes', actual_rto_hours: '9', actual_rpo_hours: '0', summary: 'S', evidence_ref_id: 5 });
+  assert.equal(resultDirty(resultFormFrom(null), { ...resultFormFrom(null), evidence_ref_id: 3 }), true, 'attaching evidence is a change to save');
   assert.deepEqual([true, false, null, undefined].map(triLabel), ['Yes — met', 'No — missed', 'Not assessed', 'Not assessed']);
   assert.deepEqual(resultErrors({ ...forms[1], actual_rto_hours: '2.5' }), { actual_rto_hours: 'Enter whole hours, 0 or more.' });
   assert.equal(resultDirty(resultFormFrom(null), resultFormFrom(null)), false);

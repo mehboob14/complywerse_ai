@@ -24,10 +24,13 @@ const pageFile = (path: string): string => {
   const rel = path.replace(/^\/bcm\/?/, '').replace(/:([A-Za-z]+)/g, '[$1]');
   return readFileSync(`${FOLDER}${rel ? `${rel}/` : ''}page.tsx`, 'utf8');
 };
+/** The three registers draw their head in a component of their own (the page is its address); the other pages draw it themselves. */
+const HEAD_FILE: Record<string, string> = { '/bcm/plans': '_plans/PlansRegister.tsx', '/bcm/drills': '_drills/DrillsRegister.tsx', '/bcm/findings': '_findings/FindingsRegister.tsx' };
+const headFile = (path: string): string => (HEAD_FILE[path] ? readFileSync(`${FOLDER}${HEAD_FILE[path]}`, 'utf8') : pageFile(path));
 
 test('every page.tsx of the BCM folder is exactly one registry entry, and every /bcm entry is a page', () => {
   const pages = pagesOfBcm();
-  assert.deepEqual(pages.slice().sort(), ['/bcm', '/bcm/drills', '/bcm/drills/:id', '/bcm/plans', '/bcm/plans/:id']);
+  assert.deepEqual(pages.slice().sort(), ['/bcm', '/bcm/drills', '/bcm/drills/:id', '/bcm/findings', '/bcm/plans', '/bcm/plans/:id']);
   for (const page of pages) assert.equal(routes.filter((e) => e.path === page).length, 1, page);
   for (const e of routes.filter((r) => r.path === '/bcm' || r.path.startsWith('/bcm/'))) assert.ok(pages.includes(e.path), `${e.path} has no page.tsx`);
 });
@@ -35,19 +38,18 @@ test('every page.tsx of the BCM folder is exactly one registry entry, and every 
 test('every BCM entry is flagged ownHeading and its page file renders the kit\'s page head', () => {
   for (const e of routes.filter((r) => r.path === '/bcm' || r.path.startsWith('/bcm/'))) {
     assert.equal(e.ownHeading, true, `${e.path}: ownHeading`);
-    assert.match(pageFile(e.path), /<PageHeader\s+variant="page"/, `${e.path}: PageHeader variant="page"`);
+    assert.match(headFile(e.path), /<PageHeader\s+variant="page"/, `${e.path}: PageHeader variant="page"`);
     assert.equal(registryNamesPage(example(e.path)), true, e.path);
   }
 });
 
-test('the top bar names only the section on all five pages, and every page\'s own heading is its registry name', () => {
-  for (const url of ['/bcm', '/bcm/plans', '/bcm/plans/12', '/bcm/drills', '/bcm/drills/12']) assert.equal(ownHeadingSection(url), 'Compliance Management', url);
-  assert.equal(titleFor('/bcm'), 'Business Continuity Overview');
+test('the top bar names only the section on all six pages; the four list pages share the head "Business Continuity" (the Overview\'s registry name) with a strip of tabs, and the two records have their own', () => {
+  for (const url of ['/bcm', '/bcm/plans', '/bcm/plans/12', '/bcm/drills', '/bcm/drills/12', '/bcm/findings']) assert.equal(ownHeadingSection(url), 'Compliance Management', url);
+  assert.equal(titleFor('/bcm'), 'Business Continuity');
   assert.equal(titleFor('/bcm/plans'), 'Continuity Plans');
   assert.equal(titleFor('/bcm/drills'), 'Drills & Invocations');
-  assert.match(pageFile('/bcm'), /title=\{titleFor\('\/bcm'\) \?\? 'Business Continuity Overview'\}/);
-  assert.match(pageFile('/bcm/plans'), /title=\{routeFor\('\/bcm\/plans'\)\?\.label \?\? 'Continuity Plans'\}/);
-  assert.match(pageFile('/bcm/drills'), /title=\{routeFor\('\/bcm\/drills'\)\?\.label \?\? 'Drills & Invocations'\}/);
+  for (const path of ['/bcm', '/bcm/plans', '/bcm/drills', '/bcm/findings']) assert.match(headFile(path), /title=\{AREA\}/, `${path}: the head is the area's name`);
+  assert.match(readFileSync(`${FOLDER}_tabs/tabsModel.ts`, 'utf8'), /export const AREA = 'Business Continuity';/);
   assert.equal(subtitleFor('/bcm'), undefined, 'no second line: the page says what it holds in its own head');
 });
 

@@ -1,10 +1,10 @@
 'use client';
 
-// The findings of a drill: what it showed up. A finding's remediation is DERIVED from the Issue/CAPA handed to Issues (it cannot be closed here), so each row says where it stands and
-// links to the issue and the risk it is tied to. Raising one is the form above the table (at or above the tenant's issue threshold it opens an issue by itself). What a person may do is what the
-// page has always asked for: `bcm:findings:create` to raise, `bcm:findings:edit` to create the issue or link a risk, `bcm:findings:delete` to delete; the row menu holds those and shows only what the
-// person may do. Choosing a risk is a step of its own ("Link risk") because it cannot be undone from here; creating an issue or a risk in another module and deleting ask first. Every request says what
-// happened only after the server answered, in the server's words. A list of 40 findings is a paged table (cards below 768px).
+// The findings of a drill (the "Findings" tab): what it showed up, with who fixes each and by when. A finding's remediation is DERIVED from the Issue/CAPA handed to Issues (it cannot be closed
+// here), so each row says where it stands and links to the issue and the risk it is tied to. Raising one is the form above the table (at or above the tenant's issue threshold it opens an
+// issue by itself, and the form says which severity that is); it can be given an owner and a due day when it is raised, and later from the Findings register. What a person may do is what the page
+// has always asked for: `bcm:findings:create` to raise, `bcm:findings:edit` to create the issue or link a risk, `bcm:findings:delete` to delete; the row menu holds those and shows only what the
+// person may do (the actions are findingActions.tsx, shared with the register's panel). A list of 40 findings is a paged table (cards below 768px).
 import { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ClipboardCheck, ExternalLink, Link2, Plus, Trash2 } from 'lucide-react';
@@ -12,14 +12,16 @@ import { bcmApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { truncate } from '@/lib/format';
 import { findingStatus, optionsOf, severity } from '@/lib/statuses/bcm';
-import { AnimatedModal } from '@/components/ui';
 import {
-  Button, EmptyState, FormField, Menu, Pager, RegisterTable, SectionCard, Select, Textarea, TextInput, useConfirm, useReportedMutation, type RegisterColumn, type SortState,
+  Button, EmptyState, FormField, Menu, Pager, RegisterTable, SectionCard, Select, Textarea, TextInput, useReportedMutation, type RegisterColumn, type SortState,
 } from '@/components/ui/ds';
 import { errorMessage } from '@/components/ui/ds/reportOutcome';
+import { DayCell, OwnerCell } from '../../_register/bits';
+import { useFindingActions } from '../../_findings/findingActions';
 import { ClampedText, EntityCombobox, FormProblem, LABEL_LINK, Pill, TEXT_LINK } from '../../_bcm-ui';
+import { REFRESH_ALL, useIssueThreshold } from '../../bcmData';
 import {
-  FINDING_HINT, NAME_MAX, blankFindingForm, findingDeleteWords, findingErrors, findingPayload, findingSortValue, ordered, pageOf, plural, type Drill, type Finding, type FindingForm,
+  NAME_MAX, blankFindingForm, findingErrors, findingHint, findingPayload, findingSortValue, ordered, pageOf, plural, type Drill, type Finding, type FindingForm,
 } from '../../bcmModel';
 
 const MUTED = 'text-ds-fg-muted';
@@ -48,87 +50,35 @@ function Remediation({ f }: { f: Finding }) {
 
 function RiskCell({ f }: { f: Finding }) {
   if (!f.linked_risk_id) return <span className={MUTED}>Not linked</span>;
-  return <Link href={`/erm/risks/${f.linked_risk_id}`} title={f.linked_risk_title || undefined} className={`block ${TEXT_LINK}`}><span className="line-clamp-2 break-words">{f.linked_risk_title || `Risk #${f.linked_risk_id}`}</span></Link>;
-}
-
-/** Choosing the risk and saying so are two steps: a finding cannot be unlinked from a risk here. */
-function LinkRiskDialog({ finding, pending, onClose, onLink }: { finding: Finding; pending: boolean; onClose: () => void; onLink: (riskId: number) => void }) {
-  const [risk, setRisk] = useState<number | null>(null);
-  return (
-    <AnimatedModal
-      isOpen onClose={onClose} dirty={risk !== null} title="Link a risk" subtitle={truncate(finding.title, 80).text} size="md"
-      footer={(
-        <div className="flex justify-end gap-[8px]">
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" disabled={risk === null} loading={pending} onClick={() => { if (risk !== null) onLink(risk); }}>Link risk</Button>
-        </div>
-      )}
-    >
-      <div className="px-[20px] py-[16px]">
-        <FormField label="Risk" required hint="Links this finding to a risk that is already in the register. It cannot be unlinked from here.">
-          <EntityCombobox kind="risks" label="Risk" placeholder="Choose a risk…" value={risk} onChange={setRisk} />
-        </FormField>
-      </div>
-    </AnimatedModal>
-  );
+  return <Link href={`/erm/risks/${f.linked_risk_id}`} title={f.linked_risk_title || undefined} className={`block ${TEXT_LINK}`}><span className="line-clamp-2 break-words">{f.linked_risk_title || 'Open the risk'}</span></Link>;
 }
 
 export function FindingsCard({ drill, canAdd }: { drill: Drill; canAdd: boolean }) {
   const { hasPermission } = usePermissions();
   const canEditFinding = hasPermission('bcm:findings:edit');
   const canDeleteFinding = hasPermission('bcm:findings:delete');
-  const { confirm, confirmDialog } = useConfirm();
-  const refresh = [['bcm-drill', drill.id]];
   const findings = useMemo(() => drill.findings ?? [], [drill.findings]);
+  const addButton = useRef<HTMLButtonElement | HTMLAnchorElement>(null);
+  const actions = useFindingActions({ extraRefresh: [['bcm-drill', drill.id]], onRemoved: () => addButton.current?.focus() });     // the row the person was on is gone, and focus with it
+  const threshold = useIssueThreshold(canAdd);
 
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState<FindingForm>(blankFindingForm);
   const [showErrors, setShowErrors] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
-  const [linking, setLinking] = useState<Finding | null>(null);
   const [sort, setSort] = useState<SortState>(null);
   const [page, setPage] = useState(1);
   const [size, setSize] = useState<number>(25);
-  const addButton = useRef<HTMLButtonElement | HTMLAnchorElement>(null);
   const errors = findingErrors(form);
+  const now = useMemo(() => Date.now(), [drill.findings]);          // eslint-disable-line react-hooks/exhaustive-deps
 
   const add = useReportedMutation({
     mutationFn: async (payload: ReturnType<typeof findingPayload>) => (await bcmApi.findings.create(drill.id, payload)).data as Finding,
     success: (f) => ({ title: 'Finding raised', message: f?.issue_code ? `Auto-opened issue ${f.issue_code} for remediation.` : undefined }),
-    failure: "Couldn't raise the finding", retryable: false, toast: 'success', invalidate: refresh,
+    failure: "Couldn't raise the finding", retryable: false, toast: 'success', invalidate: [['bcm-drill', drill.id], ...REFRESH_ALL],
     onSuccess: () => { setShowAdd(false); setForm(blankFindingForm()); setProblem(null); setShowErrors(false); },
     onError: (error) => setProblem(errorMessage(error)),
   });
-  const remove = useReportedMutation({
-    mutationFn: async (f: Finding) => (await bcmApi.findings.remove(f.id)).data,
-    success: 'Finding deleted', failure: "Couldn't delete the finding", invalidate: refresh,
-    onSuccess: () => addButton.current?.focus(),                       // the row the person was on is gone, and focus with it
-  });
-  const makeIssue = useReportedMutation({
-    mutationFn: async (f: Finding) => (await bcmApi.findings.createIssue(f.id)).data as Finding,
-    success: (f) => ({ title: 'Issue created', message: f?.issue_code ? `Linked to ${f.issue_code}.` : undefined }),
-    failure: "Couldn't create the issue", retryable: false, invalidate: refresh,
-  });
-  const linkRisk = useReportedMutation({
-    mutationFn: async ({ id, riskId }: { id: number; riskId: number | undefined }) => (await bcmApi.findings.linkRisk(id, { risk_id: riskId })).data,
-    success: 'Risk linked', failure: "Couldn't link the risk", retryable: false, invalidate: refresh,
-  });
-
-  const askDelete = async (f: Finding) => { if (await confirm({ ...findingDeleteWords(f.title), tone: 'danger' })) remove.mutate(f); };
-  const askIssue = async (f: Finding) => {
-    const yes = await confirm({
-      title: 'Create an issue for this finding?', confirmLabel: 'Create issue',
-      message: 'The finding is handed to Issues / CAPA for remediation, and its status is then read from the issue. It cannot be unlinked from here.',
-    });
-    if (yes) makeIssue.mutate(f);
-  };
-  const askNewRisk = async (f: Finding) => {
-    const yes = await confirm({
-      title: 'Create a new risk from this finding?', confirmLabel: 'Create risk',
-      message: 'A new risk is added to the Risk Register and linked to this finding. It cannot be unlinked from here.',
-    });
-    if (yes) linkRisk.mutate({ id: f.id, riskId: undefined });
-  };
 
   const submit = () => {
     setProblem(null);
@@ -145,10 +95,10 @@ export function FindingsCard({ drill, canAdd }: { drill: Drill; canAdd: boolean 
       iconOnly
       label={`Actions for ${truncate(f.title, 60).text}`}
       items={[
-        { key: 'issue', label: 'Create issue / CAPA', icon: ClipboardCheck, hidden: !canEditFinding || !!f.linked_issue_id, onSelect: () => { void askIssue(f); } },
-        { key: 'link', label: 'Link a risk…', icon: Link2, hidden: !canEditFinding || !!f.linked_risk_id, onSelect: () => setLinking(f) },
-        { key: 'newrisk', label: 'Create a new risk', icon: Plus, hidden: !canEditFinding || !!f.linked_risk_id, onSelect: () => { void askNewRisk(f); } },
-        { key: 'delete', label: 'Delete', icon: Trash2, danger: true, hidden: !canDeleteFinding, onSelect: () => { void askDelete(f); } },
+        { key: 'issue', label: 'Create issue / CAPA', icon: ClipboardCheck, hidden: !canEditFinding || !!f.linked_issue_id, onSelect: () => { void actions.askIssue(f); } },
+        { key: 'link', label: 'Link a risk…', icon: Link2, hidden: !canEditFinding || !!f.linked_risk_id, onSelect: () => actions.startLinkRisk(f) },
+        { key: 'newrisk', label: 'Create a new risk', icon: Plus, hidden: !canEditFinding || !!f.linked_risk_id, onSelect: () => { void actions.askNewRisk(f); } },
+        { key: 'delete', label: 'Delete', icon: Trash2, danger: true, hidden: !canDeleteFinding, onSelect: () => { void actions.askDelete(f); } },
       ]}
     />
   );
@@ -157,14 +107,16 @@ export function FindingsCard({ drill, canAdd }: { drill: Drill; canAdd: boolean 
     { key: 'title', header: 'Finding', isRowHeader: true, sortable: true, cell: (f) => <FindingCell f={f} /> },
     { key: 'severity', header: 'Severity', width: 'w-[108px]', sortable: true, card: 'meta', cell: (f) => <Pill registry={severity} word={f.severity} /> },
     { key: 'status', header: 'Remediation', width: 'w-[200px]', sortable: true, card: 'meta', cell: (f) => <Remediation f={f} /> },
-    { key: 'risk', header: 'Risk', width: 'w-[184px]', priority: 2, card: 'meta', cell: (f) => <RiskCell f={f} /> },
+    { key: 'owner', header: 'Owner', width: 'w-[150px]', priority: 2, card: 'meta', cell: (f) => <div className="max-w-[138px]"><OwnerCell name={f.owner_name} withName /></div> },
+    { key: 'due', header: 'Due', width: 'w-[140px]', priority: 2, card: 'meta', cell: (f) => <DayCell value={f.due_date} now={now} late={f.is_open} empty="No date" /> },
+    { key: 'risk', header: 'Risk', width: 'w-[170px]', priority: 3, card: 'meta', cell: (f) => <RiskCell f={f} /> },
     ...(hasActions ? [{ key: 'actions', header: 'Actions', width: 'w-[64px]', align: 'right' as const, cell: menu }] : []),
   ];
 
   return (
     <SectionCard
       id="findings" title="Findings" meta={plural(findings.length, 'finding')}
-      info="What the drill showed up. A finding's status is read live from the issue it was handed to, so it cannot be closed here."
+      info="What the drill showed up. A finding's status is read live from the issue it was handed to, so it cannot be closed here. All findings of all drills are on the Findings tab of Business Continuity."
       actions={canAdd ? <Button ref={addButton} size="sm" leftIcon={<Plus aria-hidden />} aria-expanded={showAdd} onClick={() => setShowAdd((v) => !v)}>Add finding</Button> : undefined}
     >
       {showAdd && (
@@ -176,11 +128,19 @@ export function FindingsCard({ drill, canAdd }: { drill: Drill; canAdd: boolean 
           <FormField label="Description" optional>
             <Textarea rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
           </FormField>
-          <FormField label="Severity" hint={FINDING_HINT}>
-            <Select value={form.severity} className="sm:w-[200px]" onChange={(e) => setForm({ ...form, severity: e.target.value })}>
-              {optionsOf(severity).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </Select>
-          </FormField>
+          <div className="grid gap-[12px] sm:grid-cols-3">
+            <FormField label="Severity" hint={findingHint(threshold.data)}>
+              <Select value={form.severity} onChange={(e) => setForm({ ...form, severity: e.target.value })}>
+                {optionsOf(severity).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </Select>
+            </FormField>
+            <FormField label="Owner" optional info="The person who fixes it. With none, it falls to the owner of the drill.">
+              <EntityCombobox kind="users" label="Owner" placeholder="Assign owner…" clearable value={form.owner_id} onChange={(id) => setForm({ ...form, owner_id: id })} />
+            </FormField>
+            <FormField label="Due" optional info="The day it should be fixed by.">
+              <TextInput type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
+            </FormField>
+          </div>
           <div className="flex justify-end gap-[8px]">
             <Button size="sm" onClick={() => { setShowAdd(false); setProblem(null); setShowErrors(false); }}>Cancel</Button>
             <Button size="sm" variant="primary" loading={add.isPending} onClick={submit}>Raise finding</Button>
@@ -200,14 +160,7 @@ export function FindingsCard({ drill, canAdd }: { drill: Drill; canAdd: boolean 
         cardActions={hasActions ? menu : undefined}
         footer={findings.length > 0 ? <Pager page={range.page} pageSize={size} total={findings.length} noun={NOUN} pageSizes={SIZES} onPage={setPage} onPageSize={(n) => { setSize(n); setPage(1); }} /> : undefined}
       />
-
-      {linking && (
-        <LinkRiskDialog
-          finding={linking} pending={linkRisk.isPending} onClose={() => setLinking(null)}
-          onLink={(riskId) => linkRisk.mutate({ id: linking.id, riskId }, { onSuccess: () => setLinking(null) })}
-        />
-      )}
-      {confirmDialog}
+      {actions.ui}
     </SectionCard>
   );
 }

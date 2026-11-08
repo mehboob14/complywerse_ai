@@ -2,12 +2,11 @@
 
 export const dynamic = 'force-dynamic';
 
-// Business Continuity > a continuity plan. One request (GET /bcm/plans/{id}, key ['bcm-plan', id]) brings the plan with every BIA process (and its dependencies and strategies) and
-// every drill; the page is that, in the order it has always been: head with the status moves, the facts of the plan, its business impact analysis, its drills. What a person may do is
-// what the page has always asked for (`bcm:plans:edit` to edit and move it, `bcm:bia:create` to add a process, `bcm:drills:create` to schedule a drill, `bcm:bia:edit` inside a
-// process): the same rights, and no button that does nothing for a person who has none of them. A failed read says what the server said (a missing plan is not a broken server) with
-// Retry only where trying again can help. On the design-system kit: PageHeader variant="page", Menu for the status, RegisterTable sections, the drawers of PlanForm, BiaForm,
-// BiaDrawer and DrillForm, useReportedMutation for the move.
+// Business Continuity > a continuity plan. One request (GET /bcm/plans/{id}, key ['bcm-plan', id]) brings the plan with every BIA process (and its dependencies and strategies) and every drill.
+// The page is a workspace: the head with the status moves, a strip that says where the plan stands (Draft, Under review, Approved), and three tabs kept in the address (?tab=): Overview (what
+// needs doing, then the facts), Business impact analysis (the processes as a master-detail, ?process=) and Drills. What a person may do is what the page has always asked for
+// (`bcm:plans:edit` to edit and move it, `bcm:bia:create` to add a process, `bcm:drills:create` to schedule a drill, `bcm:bia:edit|delete` inside a process): the same rights, and no button that
+// does nothing for a person who has none of them. A failed read says what the server said (a missing plan is not a broken server) with Retry only where trying again can help.
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -18,29 +17,35 @@ import { NOT_SET, formatDate } from '@/lib/format';
 import { frequency, planStatus } from '@/lib/statuses/bcm';
 import { PageHeader } from '@/components/ui';
 import { InfoTip } from '@/components/ui/InfoTip';
-import { Button, ErrorState, Menu, PersonChip, ReadOnlyNote, Skeleton, useReportedMutation } from '@/components/ui/ds';
+import { Button, ErrorState, Fact, FactList, Menu, ReadOnlyNote, SectionCard, Skeleton, TabPanel, Tabs, useReportedMutation, useTabParam } from '@/components/ui/ds';
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
-import { ClampedText, Clamp, Fact, HoursText, Pill, TitleLink } from '../../_bcm-ui';
+import { useNarrow } from '@/components/overview/useNarrow';
+import { ClampedText, HoursText, Pill, TitleLink } from '../../_bcm-ui';
+import { JourneyStrip } from '../../_record/JourneyStrip';
+import { NextSteps } from '../../_record/NextSteps';
+import { lastDrillAt, planJourney, planNextSteps } from '../../_record/recordModel';
+import { DayCell, OwnerCell } from '../../_register/bits';
+import { REFRESH_ALL } from '../../bcmData';
 import { planMoves, retryRead, type Plan } from '../../bcmModel';
 import { DrillForm } from '../../drills/_DrillForm';
 import { PlanForm } from '../_PlanForm';
-import { BiaDrawer } from './_BiaDrawer';
-import { BiaForm } from './_BiaForm';
-import { BiaSection, DrillsSection } from './_Sections';
+import { BiaTab } from './_BiaTab';
+import { DrillsSection } from './_Sections';
 
 const BACK = { href: '/bcm/plans', label: 'Back to plans' };
 const MUTED = 'text-ds-fg-muted';
+const TABS = ['overview', 'bia', 'drills'] as const;
+type PlanTab = (typeof TABS)[number];
 
 function PlanSkeleton() {
   const card = 'rounded-ds-card border border-ds-border bg-ds-surface p-[16px]';
   return (
     <div role="status" aria-busy="true" className="flex flex-col gap-[16px]">
       <span className="sr-only">Loading the plan</span>
+      <div aria-hidden className={card}><Skeleton className="h-[16px] w-[200px]" /><Skeleton className="mt-[16px] h-[12px] w-full" /><Skeleton className="mt-[8px] h-[12px] w-[70%]" /></div>
       <div aria-hidden className="grid grid-cols-2 gap-[12px] sm:grid-cols-3 xl:grid-cols-4">
         {[0, 1, 2, 3, 4, 5, 6].map((i) => <div key={i} className="rounded-ds-card border border-ds-border bg-ds-surface px-[12px] py-[10px]"><Skeleton className="h-[12px] w-[64px]" /><Skeleton className="mt-[8px] h-[14px] w-[96px]" /></div>)}
       </div>
-      <div aria-hidden className={card}><Skeleton className="h-[16px] w-[200px]" /><Skeleton className="mt-[16px] h-[12px] w-full" /><Skeleton className="mt-[8px] h-[12px] w-[70%]" /></div>
-      <div aria-hidden className={card}><Skeleton className="h-[16px] w-[120px]" /><Skeleton className="mt-[16px] h-[12px] w-full" /><Skeleton className="mt-[8px] h-[12px] w-[60%]" /></div>
     </div>
   );
 }
@@ -48,16 +53,18 @@ function PlanSkeleton() {
 export default function BcmPlanDetailPage() {
   const params = useParams<{ id: string }>();
   const planId = Number(params?.id);
+  const narrow = useNarrow();
   const { hasPermission } = usePermissions();
   const canEdit = hasPermission('bcm:plans:edit');
   const canDrill = hasPermission('bcm:drills:create');
   const canAddBia = hasPermission('bcm:bia:create');
   const canEditBia = hasPermission('bcm:bia:edit');
+  const canDeleteBia = hasPermission('bcm:bia:delete');
 
+  const [tab, setTab] = useTabParam<PlanTab>('tab', TABS, { fallback: 'overview' });
   const [showEdit, setShowEdit] = useState(false);
-  const [addBia, setAddBia] = useState(false);
-  const [openBiaId, setOpenBiaId] = useState<number | null>(null);
   const [scheduleDrill, setScheduleDrill] = useState(false);
+  const [now] = useState(() => Date.now());
 
   const query = useQuery({
     queryKey: ['bcm-plan', planId],
@@ -70,7 +77,7 @@ export default function BcmPlanDetailPage() {
   const move = useReportedMutation({
     mutationFn: async (status: string) => (await bcmApi.plans.transition(planId, status)).data,
     success: (_data, status) => `Plan moved to ${planStatus.label(status)}`, failure: "Couldn't change the plan's status",
-    invalidate: [['bcm-plan', planId], ['bcm-plans']],
+    invalidate: [['bcm-plan', planId], ...REFRESH_ALL],
   });
 
   if (!plan) {
@@ -93,9 +100,17 @@ export default function BcmPlanDetailPage() {
 
   const bia = plan.bia_records ?? [];
   const drills = plan.drills ?? [];
-  const openBia = bia.find((b) => b.id === openBiaId) ?? null;
-  const readOnly = !canEdit && !canAddBia && !canEditBia && !canDrill;
+  const readOnly = !canEdit && !canAddBia && !canEditBia && !canDeleteBia && !canDrill;
   const moves = planMoves(plan.status);
+  const retired = plan.status === 'retired';
+  const steps = planNextSteps(plan, now);
+  const last = lastDrillAt(drills);
+
+  const go = (to: NonNullable<(typeof steps)[number]['go']>) => {
+    if (to === 'edit') { if (canEdit) setShowEdit(true); } else if (to === 'schedule') { if (canDrill) setScheduleDrill(true); } else if (to === 'bia' || to === 'drills') setTab(to);
+  };
+  // a button for work the person may not do is not drawn: the line stays, without it
+  const doable = steps.map((s) => (s.go === 'edit' && !canEdit) || (s.go === 'schedule' && !canDrill) ? { ...s, go: undefined } : s);
 
   return (
     <div className="flex flex-col gap-[16px]">
@@ -130,25 +145,57 @@ export default function BcmPlanDetailPage() {
         ) : undefined}
       />
 
-      {plan.description && <ClampedText text={plan.description} />}
+      <JourneyStrip journey={planJourney(plan.status)} label="Where the plan stands" />
 
-      <dl className="grid grid-cols-2 gap-[12px] sm:grid-cols-3 xl:grid-cols-4">
-        <Fact label="Business unit">{plan.business_unit ? <Clamp text={plan.business_unit} /> : <span className={MUTED}>{NOT_SET}</span>}</Fact>
-        <Fact label="Owner"><PersonChip name={plan.owner_name} /></Fact>
-        <Fact label="Review due"><span className={plan.next_review_due ? '' : MUTED}>{formatDate(plan.next_review_due, { calendar: true, empty: NOT_SET })}</span></Fact>
-        <Fact label="Plan document">
-          {plan.document_ref_id ? <TitleLink href={`/governance/documents/${plan.document_ref_id}`} title={plan.document_title || `Document #${plan.document_ref_id}`} /> : <span className={MUTED}>{NOT_SET}</span>}
-        </Fact>
-        <Fact label="RTO"><HoursText h={plan.rto_hours} /></Fact>
-        <Fact label="RPO"><HoursText h={plan.rpo_hours} /></Fact>
-        <Fact label="Testing cadence">{frequency.label(plan.testing_frequency)}</Fact>
-      </dl>
+      <Tabs
+        tabs={[
+          { key: 'overview', label: 'Overview' },
+          { key: 'bia', label: 'Business impact analysis', count: bia.length },
+          { key: 'drills', label: 'Drills', count: drills.length },
+        ]}
+        value={tab}
+        onChange={setTab}
+        ariaLabel="Continuity plan sections"
+        countFormat="exact"
+        className="flex flex-col gap-[16px]"
+      >
+        <TabPanel tabKey="overview">
+          <div className="flex flex-col gap-[16px]">
+          {!retired && (
+            <NextSteps
+              steps={doable}
+              allClear="Nothing needs doing on this plan."
+              goLabel={(g) => (g === 'edit' ? 'Edit plan' : g === 'bia' ? 'Open the processes' : g === 'schedule' ? 'Schedule drill' : 'Open')}
+              onGo={go}
+            />
+          )}
+          <SectionCard id="details" title="Details">
+            {plan.description && <ClampedText text={plan.description} className="mb-[12px]" />}
+            <FactList min={170}>
+              <Fact label="Business unit" empty={NOT_SET}>{plan.business_unit}</Fact>
+              <Fact label="Owner" empty="Unassigned">{plan.owner_name ? <OwnerCell name={plan.owner_name} withName /> : null}</Fact>
+              <Fact label="Review due" empty={NOT_SET}>{plan.next_review_due ? <DayCell value={plan.next_review_due} now={now} noun="Review" late={!retired} /> : null}</Fact>
+              <Fact label="Plan document" empty={NOT_SET}>
+                {plan.document_ref_id ? <TitleLink href={`/governance/documents/${plan.document_ref_id}`} title={plan.document_title || 'Open the document'} /> : null}
+              </Fact>
+              <Fact label="RTO"><HoursText h={plan.rto_hours} /></Fact>
+              <Fact label="RPO"><HoursText h={plan.rpo_hours} /></Fact>
+              <Fact label="Testing cadence">{frequency.label(plan.testing_frequency)}</Fact>
+              <Fact label="Last drill" empty="No drill yet">{last ? formatDate(last, { calendar: true }) : null}</Fact>
+            </FactList>
+          </SectionCard>
+          </div>
+        </TabPanel>
 
-      <BiaSection bia={bia} canAdd={canAddBia} onOpen={setOpenBiaId} onAdd={() => setAddBia(true)} />
-      <DrillsSection drills={drills} canSchedule={canDrill} onSchedule={() => setScheduleDrill(true)} />
+        <TabPanel tabKey="bia" lazy>
+          <BiaTab planId={planId} bia={bia} canAdd={canAddBia} canEdit={canEditBia} canDelete={canDeleteBia} narrow={narrow} />
+        </TabPanel>
 
-      {openBia && <BiaDrawer bia={openBia} planId={planId} onClose={() => setOpenBiaId(null)} />}
-      {addBia && <BiaForm planId={planId} onClose={() => setAddBia(false)} />}
+        <TabPanel tabKey="drills" lazy>
+          <DrillsSection drills={drills} canSchedule={canDrill} onSchedule={() => setScheduleDrill(true)} />
+        </TabPanel>
+      </Tabs>
+
       {scheduleDrill && <DrillForm mode={{ kind: 'schedule', planId, planTitle: plan.title }} onClose={() => setScheduleDrill(false)} />}
       {showEdit && <PlanForm plan={plan} onClose={() => setShowEdit(false)} />}
     </div>

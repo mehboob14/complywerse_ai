@@ -4,7 +4,7 @@ from typing import List, Optional
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from ....models import (
@@ -14,8 +14,9 @@ from ....models import (
 from ....routers.auth_router import require_auth, get_user_tenants, require_tenant_permission
 from ._common import (
     PLAN_STATUSES, CRITICALITIES, DEPENDENCY_TYPES, EXTERNAL_BCP_STATUSES,
-    STRATEGY_TYPES, STRATEGY_STATUSES, TESTING_FREQUENCIES,
-    get_or_404, audit, create_risk,
+    STRATEGY_TYPES, STRATEGY_STATUSES, TESTING_FREQUENCIES, NAME_MAX, LEAN_MAX,
+    NotNullWhenSet, hours_field,
+    get_or_404, audit, create_risk, lean_plans,
     serialize_plan, serialize_bia, serialize_dependency, serialize_strategy,
 )
 
@@ -24,25 +25,26 @@ router = APIRouter(tags=["BCM - Plans & BIA"])
 
 # ── Schemas ─────────────────────────────────────────────────────────────────
 class PlanCreate(BaseModel):
-    title: str
+    title: str = Field(min_length=1, max_length=NAME_MAX)
     description: Optional[str] = None
-    business_unit: Optional[str] = None
+    business_unit: Optional[str] = Field(None, max_length=NAME_MAX)
     document_ref_id: Optional[int] = None
     owner_id: Optional[int] = None
-    rto_hours: Optional[int] = None
-    rpo_hours: Optional[int] = None
+    rto_hours: Optional[int] = hours_field()
+    rpo_hours: Optional[int] = hours_field()
     testing_frequency: Optional[str] = "annual"
     next_review_due: Optional[datetime] = None
 
 
-class PlanUpdate(BaseModel):
-    title: Optional[str] = None
+class PlanUpdate(NotNullWhenSet):
+    not_null = ("title", "testing_frequency")
+    title: Optional[str] = Field(None, min_length=1, max_length=NAME_MAX)
     description: Optional[str] = None
-    business_unit: Optional[str] = None
+    business_unit: Optional[str] = Field(None, max_length=NAME_MAX)
     document_ref_id: Optional[int] = None
     owner_id: Optional[int] = None
-    rto_hours: Optional[int] = None
-    rpo_hours: Optional[int] = None
+    rto_hours: Optional[int] = hours_field()
+    rpo_hours: Optional[int] = hours_field()
     testing_frequency: Optional[str] = None
     next_review_due: Optional[datetime] = None
 
@@ -52,28 +54,29 @@ class PlanTransition(BaseModel):
 
 
 class BiaCreate(BaseModel):
-    process_name: str
+    process_name: str = Field(min_length=1, max_length=NAME_MAX)
     description: Optional[str] = None
     criticality_rating: Optional[str] = "medium"
-    rto_hours: Optional[int] = None
-    rpo_hours: Optional[int] = None
-    mtpd_hours: Optional[int] = None
+    rto_hours: Optional[int] = hours_field()
+    rpo_hours: Optional[int] = hours_field()
+    mtpd_hours: Optional[int] = hours_field()
     linked_asset_ids: Optional[List[int]] = None
 
 
-class BiaUpdate(BaseModel):
-    process_name: Optional[str] = None
+class BiaUpdate(NotNullWhenSet):
+    not_null = ("process_name", "criticality_rating")
+    process_name: Optional[str] = Field(None, min_length=1, max_length=NAME_MAX)
     description: Optional[str] = None
     criticality_rating: Optional[str] = None
-    rto_hours: Optional[int] = None
-    rpo_hours: Optional[int] = None
-    mtpd_hours: Optional[int] = None
+    rto_hours: Optional[int] = hours_field()
+    rpo_hours: Optional[int] = hours_field()
+    mtpd_hours: Optional[int] = hours_field()
     linked_asset_ids: Optional[List[int]] = None
 
 
 class DependencyCreate(BaseModel):
     dependency_type: str
-    name: str
+    name: str = Field(min_length=1, max_length=NAME_MAX)
     criticality: Optional[str] = "medium"
     external_bcp_status: Optional[str] = None
     notes: Optional[str] = None
@@ -116,11 +119,14 @@ def list_plans(
     search: Optional[str] = Query(None),
     skip: int = 0,
     limit: int = 200,
+    lean: bool = Query(False, description="the whole register in a few queries, with the counts the quick views read (up to 5,000 plans)"),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
     _p: bool = Depends(require_tenant_permission("bcm:plans:view")),
 ):
     tenant_ids = _tenant(current_user, db)
+    if lean:
+        limit = max(1, min(limit, LEAN_MAX))
     q = db.query(BcmPlan).filter(BcmPlan.tenant_id.in_(tenant_ids))
     if status_filter and status_filter != "all":
         q = q.filter(BcmPlan.status == status_filter)
@@ -129,6 +135,8 @@ def list_plans(
         q = q.filter(BcmPlan.title.ilike(like))
     total = q.count()
     items = q.order_by(BcmPlan.updated_at.desc()).offset(skip).limit(limit).all()
+    if lean:
+        return {"items": lean_plans(db, items, tenant_ids), "total": total, "skip": skip, "limit": limit, "truncated": total > skip + len(items)}
     return {"items": [serialize_plan(db, p) for p in items], "total": total, "skip": skip, "limit": limit}
 
 

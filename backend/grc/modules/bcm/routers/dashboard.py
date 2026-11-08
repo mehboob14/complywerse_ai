@@ -10,13 +10,18 @@ from sqlalchemy.orm import Session
 
 from ....models import (
     BcmPlan, BcmBiaRecord, BcmDrill, BcmDrillResult, BcmFinding,
-    GovernanceDocument, RiskIncident, Risk, ITAsset, GRCUser, get_db,
+    GovernanceDocument, RiskIncident, Risk, ITAsset, Evidence, GRCUser, get_db,
 )
-from ....routers.auth_router import require_auth, get_user_tenants, require_tenant_permission
+from ....routers.auth_router import require_auth, get_user_tenants, require_tenant_permission, has_tenant_permission
 from ._common import (
-    SEVERITIES, get_or_create_settings, is_drill_overdue, finding_issue_view,
-    serialize_drill,
+    SEVERITIES, SEVERITY_ORDER, get_or_create_settings, is_drill_overdue, finding_issue_view,
+    serialize_drill, _iso,
 )
+
+# A plan is "due for review" once its review day is within this many days (or past).
+REVIEW_HORIZON_DAYS = 30
+# Each list of the signed-in person's own work is cut here; the counts beside it are not.
+MINE_LIST = 10
 
 router = APIRouter(tags=["BCM - Dashboard & Config"])
 
@@ -81,8 +86,11 @@ def dashboard(
     open_capas = 0          # findings whose linked Issue/CAPA is still open
     total_capas = 0         # findings that have a linked Issue/CAPA at all
     findings_linked_risk = 0
+    no_issue_findings = []  # findings with no issue (yet): open and unremediated
     for f in findings:
         view = finding_issue_view(db, f)
+        if view["issue_id"] is None:
+            no_issue_findings.append(f)
         if view["is_open"]:
             open_findings_total += 1
             open_by_severity[f.severity] = open_by_severity.get(f.severity, 0) + 1
@@ -100,8 +108,9 @@ def dashboard(
 
     # Recent + overdue drill spotlights
     recent = sorted(drills, key=lambda d: (d.updated_at or d.created_at or datetime.min), reverse=True)[:6]
-    overdue_list = [d for d in drills if is_drill_overdue(d)]
-    overdue_list = sorted(overdue_list, key=lambda d: d.scheduled_date or datetime.min)[:6]
+    overdue_all = sorted([d for d in drills if is_drill_overdue(d)], key=lambda d: d.scheduled_date or datetime.min)
+    overdue_list = overdue_all[:6]
+    attention, mine = _work_blocks(db, current_user, plans, active_plans, drills, overdue_all, no_issue_findings, tenant_ids)
 
     return {
         "totals": {
@@ -129,7 +138,58 @@ def dashboard(
         },
         "recent_drills": [serialize_drill(db, d) for d in recent],
         "overdue_drills": [serialize_drill(db, d) for d in overdue_list],
+        # What needs doing, for the Overview's band (tenant-wide counts) and "Do now" (the signed-in person's own, each list only when they may read it).
+        "attention": attention,
+        "mine": mine,
     }
+
+
+def _work_blocks(db, user, plans, active_plans, drills, overdue_all, no_issue_findings, tenant_ids):
+    """The Overview's two additive blocks. `attention` counts across the tenant: plans whose review day has come or comes within 30 days, BIA processes of a plan in use that
+    still have no recovery strategy (and how many plans those belong to, the number the Plans list opens with), findings with no issue yet. `mine` is the same kinds of work that belongs to the signed-in person: a plan they own, a drill they own, a
+    finding they own (or, with no owner, on a drill they own). A list is included only when the person may read that kind of record, so the Overview shows nothing its own
+    page would refuse; its count is the full count, the list is cut at ten."""
+    now = datetime.utcnow()
+    horizon = now + timedelta(days=REVIEW_HORIZON_DAYS)
+    reviews_due = sorted([p for p in active_plans if p.next_review_due is not None and p.next_review_due <= horizon], key=lambda p: p.next_review_due)
+    bia_open = db.query(BcmBiaRecord).join(BcmPlan, BcmPlan.id == BcmBiaRecord.plan_id).filter(
+        BcmBiaRecord.tenant_id.in_(tenant_ids), BcmPlan.status != "retired", BcmBiaRecord.is_complete.isnot(True)).all()
+    bia_open.sort(key=lambda b: (-SEVERITY_ORDER.get((b.criticality_rating or "").lower(), 0), b.id))
+    attention = {
+        "reviews_due": len(reviews_due),
+        "bia_without_strategy": len(bia_open),
+        "plans_without_strategy": len({b.plan_id for b in bia_open}),
+        "findings_without_issue": len(no_issue_findings),
+    }
+
+    me = user.id
+    plan_title = {p.id: p.title for p in plans}
+    mine_plans = {p.id for p in plans if p.owner_id == me}
+    drill_owner = {d.id: d.owner_id for d in drills}
+    drill_title = {d.id: d.title for d in drills}
+    mine = {"counts": {}}
+    if has_tenant_permission(db, user, "bcm:drills:view"):
+        own = [d for d in overdue_all if d.owner_id == me]
+        mine["counts"]["overdue_drills"] = len(own)
+        mine["overdue_drills"] = [serialize_drill(db, d) for d in own[:MINE_LIST]]
+    if has_tenant_permission(db, user, "bcm:plans:view"):
+        own = [p for p in reviews_due if p.id in mine_plans]
+        mine["counts"]["reviews_due"] = len(own)
+        mine["reviews_due"] = [{"id": p.id, "title": p.title, "status": p.status, "next_review_due": _iso(p.next_review_due)} for p in own[:MINE_LIST]]
+    if has_tenant_permission(db, user, "bcm:bia:view"):
+        own = [b for b in bia_open if b.plan_id in mine_plans]
+        mine["counts"]["bia_without_strategy"] = len(own)
+        mine["bia_without_strategy"] = [
+            {"id": b.id, "plan_id": b.plan_id, "plan_title": plan_title.get(b.plan_id), "process_name": b.process_name, "criticality_rating": b.criticality_rating}
+            for b in own[:MINE_LIST]]
+    if has_tenant_permission(db, user, "bcm:findings:view"):
+        own = [f for f in no_issue_findings if f.owner_id == me or (f.owner_id is None and drill_owner.get(f.drill_id) == me)]
+        own.sort(key=lambda f: (f.due_date is None, f.due_date or now, -SEVERITY_ORDER.get((f.severity or "").lower(), 0)))
+        mine["counts"]["findings_without_issue"] = len(own)
+        mine["findings_without_issue"] = [
+            {"id": f.id, "drill_id": f.drill_id, "drill_title": drill_title.get(f.drill_id), "title": f.title, "severity": f.severity, "due_date": _iso(f.due_date)}
+            for f in own[:MINE_LIST]]
+    return attention, mine
 
 
 # ── Settings ────────────────────────────────────────────────────────────────
@@ -203,6 +263,26 @@ def incident_options(
     return {"items": [
         {"value": i.id, "label": i.title, "subLabel": f"{i.severity or ''} · {i.status or ''}".strip(" ·")}
         for i in rows
+    ]}
+
+
+@router.get("/evidence-options")
+def evidence_options(
+    search: Optional[str] = Query(None),
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _p: bool = Depends(require_tenant_permission("bcm:drills:view")),
+):
+    """The evidence a drill's result can point to (the report of the test, a log, a screenshot), so a BCM user needs no Evidence right to attach one."""
+    tenant_ids = _tenant(current_user, db)
+    q = db.query(Evidence).filter(Evidence.tenant_id.in_(tenant_ids), Evidence.status != "archived")
+    if search:
+        q = q.filter(Evidence.name.ilike(f"%{search}%"))
+    rows = q.order_by(Evidence.uploaded_at.desc().nullslast()).limit(limit).all()
+    return {"items": [
+        {"value": e.id, "label": e.name, "subLabel": " · ".join(x for x in ((e.status or "").replace("_", " "), e.evidence_type) if x) or None}
+        for e in rows
     ]}
 
 
