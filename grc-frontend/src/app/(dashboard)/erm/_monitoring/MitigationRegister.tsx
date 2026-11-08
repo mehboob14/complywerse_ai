@@ -23,9 +23,9 @@ import { actionTiles, isOpenAction, isOverdueAction, parseReduction, reductionWo
 import { mitigationStatus, severity, treatmentType } from '@/lib/statuses/monitoring';
 import { ActionForm } from './ActionForm';
 import { ACTION_SCHEMA, actionDef, type ActionRow } from './mitigationModel';
-import { useCurrentUserId } from './lookups';
-import { OwnerCell } from './cells';
-import { RecordDetail, RegisterFrame } from './RegisterFrame';
+import { useCurrentUserId } from '@/components/records/lookups';
+import { OwnerCell } from '@/components/records/cells';
+import { RecordDetail, RegisterFrame } from '@/components/records/RegisterFrame';
 
 type Listed = { items: ActionRow[]; total: number };
 const KEY = ['erm-mitigation-actions', 'all'] as const;

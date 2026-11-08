@@ -15,8 +15,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import or_
+from sqlalchemy.orm import Session, defer, joinedload
+from sqlalchemy import and_, func, not_, or_
 
 from ....models import (
     Issue, IssueActivity, IssueAction, IssueComment,
@@ -30,6 +30,7 @@ from ....routers.auth_router import (
 )
 from ..services.severity_resolver import resolve_severity
 from ..services.code_generator import next_issue_code
+from .by_source import SOURCE_DISPATCH
 
 router = APIRouter(prefix="/issues", tags=["Issue Management - Issues"])
 
@@ -45,6 +46,8 @@ _require_delete = require_tenant_permission("issue_management:issues:delete")
 
 
 WORKFLOW_TERMINAL = {"closed", "cancelled"}
+# ONE definition of "open": the five states the by-source lookup, BCM and auto-create already use (closure review is open: somebody still has to approve it).
+WORKFLOW_OPEN = ("new", "triage", "in_progress", "resolution", "closure_review")
 
 
 def _serialize_user(u: Optional[GRCUser]) -> Optional[Dict[str, Any]]:
@@ -58,16 +61,16 @@ def _serialize_user(u: Optional[GRCUser]) -> Optional[Dict[str, Any]]:
     }
 
 
-def _serialize_issue_summary(issue: Issue, *, action_count: Optional[int] = None) -> Dict[str, Any]:
-    return {
+def _serialize_issue_summary(issue: Issue, *, action_count: Optional[int] = None, lean: bool = False) -> Dict[str, Any]:
+    row = {
         "id": issue.id,
         "code": issue.code,
         "tenant_id": issue.tenant_id,
         "title": issue.title,
-        "description": issue.description,
+        "description": issue.description if not lean else None,
         "severity": issue.severity,
         "severity_override": issue.severity_override,
-        "severity_override_reason": issue.severity_override_reason,
+        "severity_override_reason": issue.severity_override_reason if not lean else None,
         "issue_type": issue.issue_type,
         "category": issue.category,
         "urgency": issue.urgency,
@@ -90,6 +93,9 @@ def _serialize_issue_summary(issue: Issue, *, action_count: Optional[int] = None
         "created_at": issue.created_at.isoformat() if issue.created_at else None,
         "action_count": action_count if action_count is not None else len(getattr(issue, "actions", []) or []),
     }
+    if lean:
+        del row["description"], row["severity_override_reason"]
+    return row
 
 
 def _log_activity(db: Session, issue_id: int, user_id: Optional[int], type_: str, payload: dict) -> None:
@@ -108,6 +114,38 @@ def _recompute_sla_breached(issue: Issue) -> None:
         issue.sla_breached = issue.target_closure_date < datetime.utcnow()
     else:
         issue.sla_breached = False
+
+
+def issue_is_late(issue: Issue, now: datetime) -> bool:
+    """Read-time SLA: the target date has passed and the issue is not closed or cancelled. Nothing stores it, so it is true the moment it becomes true (the stored
+    `sla_breached` flag is only written when somebody edits the issue)."""
+    return bool(issue.target_closure_date and issue.target_closure_date < now and (issue.workflow_state or "new") not in WORKFLOW_TERMINAL)
+
+
+def _late_clause(now: datetime):
+    return and_(
+        Issue.target_closure_date.isnot(None),
+        Issue.target_closure_date < now,
+        func.coalesce(Issue.workflow_state, "new").notin_(tuple(WORKFLOW_TERMINAL)),
+    )
+
+
+def _action_progress(db: Session, issue_ids: List[int], user_tenants) -> Dict[int, Dict[str, int]]:
+    """Corrective actions per issue: all of them, the ones done (completed or verified) and the ones still open (planned, in progress, blocked). One grouped read."""
+    q = db.query(IssueAction.issue_id, IssueAction.status, func.count(IssueAction.id))
+    if len(issue_ids) <= 500:
+        q = q.filter(IssueAction.issue_id.in_(issue_ids))
+    else:  # a long list: one pass over the tenant's actions instead of a thousand-name IN list
+        q = q.join(Issue, Issue.id == IssueAction.issue_id).filter(Issue.tenant_id.in_(user_tenants))
+    out: Dict[int, Dict[str, int]] = {}
+    for iid, st, cnt in q.group_by(IssueAction.issue_id, IssueAction.status).all():
+        row = out.setdefault(int(iid), {"total": 0, "done": 0, "open": 0})
+        row["total"] += int(cnt)
+        if (st or "planned") in ("completed", "verified"):
+            row["done"] += int(cnt)
+        elif (st or "planned") in ("planned", "in_progress", "blocked"):
+            row["open"] += int(cnt)
+    return out
 
 
 def _get_issue_or_404(issue_id: int, current_user: GRCUser, db: Session) -> Issue:
@@ -136,9 +174,13 @@ def list_issues(
     workflow_state: Optional[str] = Query(None),
     issue_type: Optional[str] = Query(None),
     category: Optional[str] = Query(None),
-    assignee_id: Optional[int] = Query(None),
+    assignee_id: Optional[str] = Query(None, description="a user id, or 'me'"),
     source_type: Optional[str] = Query(None),
-    sla_breached: Optional[bool] = Query(None),
+    sla_breached: Optional[bool] = Query(None, description="read-time: the target date has passed and the issue is not closed or cancelled"),
+    overdue: Optional[bool] = Query(None, description="the same test as sla_breached"),
+    linked_type: Optional[str] = Query(None, description="with linked_id: only the issues linked to that record (by-source's source types, or 'task')"),
+    linked_id: Optional[int] = Query(None),
+    lean: bool = Query(False, description="rows without the description and the override reason (a register that reads the whole list)"),
     sort_by: str = Query("created_at"),
     sort_order: str = Query("desc"),
     skip: int = 0,
@@ -149,12 +191,16 @@ def list_issues(
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
         return {"items": [], "total": 0}
+    now = datetime.utcnow()
 
     q = db.query(Issue).options(
         joinedload(Issue.owner),
         joinedload(Issue.reporter),
         joinedload(Issue.assignee),
+        joinedload(Issue.approver),
     ).filter(Issue.tenant_id.in_(user_tenants))
+    if lean:  # the long text is never read for these rows
+        q = q.options(defer(Issue.description), defer(Issue.severity_override_reason))
 
     if search:
         s = f"%{search.strip().lower()}%"
@@ -172,11 +218,30 @@ def list_issues(
     if category:
         q = q.filter(Issue.category == category)
     if assignee_id:
-        q = q.filter(Issue.assignee_id == assignee_id)
+        who = current_user.id if assignee_id.strip().lower() == "me" else None
+        if who is None:
+            try:
+                who = int(assignee_id)
+            except ValueError:
+                raise HTTPException(status_code=422, detail="assignee_id must be a user id or 'me'")
+        if who:
+            q = q.filter(Issue.assignee_id == who)
     if source_type:
         q = q.filter(Issue.source_type == source_type)
-    if sla_breached is not None:
-        q = q.filter(Issue.sla_breached == sla_breached)
+    late = overdue if overdue is not None else sla_breached
+    if late is not None:
+        q = q.filter(_late_clause(now) if late else not_(_late_clause(now)))
+    if linked_type or linked_id is not None:
+        if not linked_type or linked_id is None:
+            raise HTTPException(status_code=400, detail="linked_type and linked_id go together")
+        if linked_type == "task":
+            from ....models import CriticalTask
+            q = q.filter(Issue.id.in_(db.query(CriticalTask.linked_issue_id).filter(CriticalTask.id == linked_id, CriticalTask.linked_issue_id.isnot(None))))
+        elif linked_type in SOURCE_DISPATCH:
+            link_model, fk_col = SOURCE_DISPATCH[linked_type]
+            q = q.filter(Issue.id.in_(db.query(link_model.issue_id).filter(getattr(link_model, fk_col) == linked_id)))
+        else:
+            raise HTTPException(status_code=400, detail=f"linked_type must be one of {sorted(list(SOURCE_DISPATCH) + ['task'])}")
 
     total = q.count()
 
@@ -187,28 +252,23 @@ def list_issues(
         "target_closure_date": Issue.target_closure_date,
         "code": Issue.code,
     }.get(sort_by, Issue.created_at)
-    q = q.order_by(sort_column.desc() if sort_order == "desc" else sort_column.asc())
+    q = q.order_by(sort_column.desc() if sort_order == "desc" else sort_column.asc(), Issue.id.desc())
 
     issues = q.offset(skip).limit(limit).all()
     issue_ids = [i.id for i in issues]
-    action_counts: Dict[int, int] = {}
-    if issue_ids:
-        from sqlalchemy import func
-        rows = (
-            db.query(IssueAction.issue_id, func.count(IssueAction.id))
-            .filter(IssueAction.issue_id.in_(issue_ids))
-            .group_by(IssueAction.issue_id)
-            .all()
-        )
-        action_counts = {int(iid): int(cnt) for iid, cnt in rows}
+    progress = _action_progress(db, issue_ids, user_tenants) if issue_ids else {}
 
-    return {
-        "items": [
-            _serialize_issue_summary(i, action_count=action_counts.get(i.id, 0))
-            for i in issues
-        ],
-        "total": total,
-    }
+    items = []
+    for i in issues:
+        row = _serialize_issue_summary(i, action_count=progress.get(i.id, {}).get("total", 0), lean=lean)
+        late_now = issue_is_late(i, now)
+        row["sla_breached"] = late_now  # read when asked for, not the stored flag (which only moves when somebody edits the issue)
+        row["overdue_days"] = max(1, (now - i.target_closure_date).days) if late_now else None
+        row["is_open"] = (i.workflow_state or "new") in WORKFLOW_OPEN
+        row["actions_done"] = progress.get(i.id, {}).get("done", 0)
+        row["actions_open"] = progress.get(i.id, {}).get("open", 0)
+        items.append(row)
+    return {"items": items, "total": total}
 
 
 # ────────────────────────────────────────────────────────────────────────

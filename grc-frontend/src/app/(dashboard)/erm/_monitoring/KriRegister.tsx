@@ -26,12 +26,12 @@ import { describeTrend, formatMetricValue, isDue, type MetricOption, type Templa
 import { MeasureDialog } from '../../governance/_metrics/MeasureDialog';
 import { MetricForm, type Feed } from '../../governance/_metrics/MetricForm';
 import { Sparkline } from '../../governance/_metrics/Sparkline';
-import { ImportDialog } from './ImportDialog';
-import { OwnerCell } from './cells';
-import { RecordDetail, RegisterFrame } from './RegisterFrame';
+import { ImportDialog } from '@/components/records/ImportDialog';
+import { OwnerCell } from '@/components/records/cells';
+import { RecordDetail, RegisterFrame } from '@/components/records/RegisterFrame';
 import { ThresholdBar } from './ThresholdBar';
 import { KRI_SCHEMA, KRI_NONE, kriDef, stateOfRow, type KriRow } from './kriModel';
-import { personOptions, riskOptions, useCurrentUserId, useLeanRisks, useTenantUsers } from './lookups';
+import { personOptions, riskOptions, useCurrentUserId, useLeanRisks, useTenantUsers } from '@/components/records/lookups';
 
 type Report = { kris: KriRow[]; summary: { total: number } };
 const KEY = ['metric-report', 'kri'] as const;

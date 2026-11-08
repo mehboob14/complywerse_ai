@@ -16,7 +16,7 @@ import {
 import { incidentStatus, optionsOf, severity } from '@/lib/statuses/monitoring';
 import { useReportedMutation } from '@/components/ui/ds';
 import type { IncidentRow } from './incidentModel';
-import { personOptions, riskOptions, useLeanRisks, useTenantUsers } from './lookups';
+import { personOptions, riskOptions, useLeanRisks, useTenantUsers } from '@/components/records/lookups';
 
 const EMPTY_LINKS: LinkSet = { linked_asset_ids: [], linked_vulnerability_ids: [], linked_risk_ids: [], linked_evidence_ids: [] };
 const day = (iso: string | null | undefined): string => (iso ? iso.slice(0, 10) : new Date().toISOString().slice(0, 10));

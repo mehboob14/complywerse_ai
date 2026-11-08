@@ -1,7 +1,7 @@
 'use client';
 
-// The frame of the three monitoring registers (KRIs, incidents, mitigation actions): ONE implementation of the Facet explorer's wiring (components/records) for the Risk
-// Management monitoring pages. A register hands it its definition (registerModel.RegisterDef: facets, quick chips, sorts, board), its rows, its columns and cards and what the
+// The frame of the registers built on the Facet explorer (Risk Management's KRIs, incidents and mitigation actions; Issues and corrective actions): ONE implementation of the
+// explorer's wiring (components/records). A register hands it its definition (registerModel.RegisterDef: facets, quick chips, sorts, board), its rows, its columns and cards and what the
 // details drawer shows; the frame owns the state in the ADDRESS (search, chip, facets, sort, view, page, the open record: a link opens the same view), the live counts, the
 // selection, the keyboard layer and the empty / loading / failed states. Every list is read whole (the pages' own request); when the server holds more than came back, a
 // notice says how many. Nothing here writes: every action is the register's.
@@ -11,17 +11,17 @@ import {
   EmptyState, ErrorState, IconButton, Menu, NoAccessState, Notice, Pager, SidePanel, SkeletonRows, useAddressState, type FilterChip, type MenuItem,
 } from '@/components/ui/ds';
 import { canRetry, errorMessage, statusOf } from '@/components/ui/ds/reportOutcome';
-import { AppliedFilters } from '@/components/records/AppliedFilters';
-import { BoardColumns } from '@/components/records/BoardColumns';
-import { BulkBar, type BulkActionDef } from '@/components/records/BulkBar';
-import { RecordExplorer } from '@/components/records/RecordExplorer';
-import type { ExplorerFit } from '@/components/records/explorerFit';
-import { RecordTable, type RecordColumn, type RecordItem, type RecordRow } from '@/components/records/RecordTable';
-import { countOf } from '@/components/records/facetEngine';
-import { groupBoard, moveCursor, selectAllMatching, tickState, toggleAll, toggleOne } from '@/components/records/explorerModel';
-import type { FacetGroupView } from '@/components/records/FacetRail';
-import { useExplorerKeys } from '@/components/records/useExplorerKeys';
-import { useSelection } from '@/components/records/useSelection';
+import { AppliedFilters } from './AppliedFilters';
+import { BoardColumns } from './BoardColumns';
+import { BulkBar, type BulkActionDef } from './BulkBar';
+import { RecordExplorer } from './RecordExplorer';
+import type { ExplorerFit } from './explorerFit';
+import { RecordTable, type RecordColumn, type RecordItem, type RecordRow } from './RecordTable';
+import { countOf } from './facetEngine';
+import { groupBoard, moveCursor, selectAllMatching, tickState, toggleAll, toggleOne } from './explorerModel';
+import type { FacetGroupView } from './FacetRail';
+import { useExplorerKeys } from './useExplorerKeys';
+import { useSelection } from './useSelection';
 import { formatCount } from '@/lib/format';
 import {
   PAGE_SIZES, appliedChips, clampPage, evaluateRegister, filterCount, indexRegister, matchKey, nextSort, pageSlice, patchOf, sortRows, stateOf, withoutChip,
@@ -90,6 +90,9 @@ const rowOf = (id: number | null) => (): HTMLElement | null => {
 export function RecordDetail({ id, title, subtitle, nav, actions, footer, children }: {
   id: number | null; title: ReactNode; subtitle?: ReactNode; nav: DetailNav; actions?: ReactNode; footer?: ReactNode; children: ReactNode;
 }) {
+  // the row to give focus back to is the one that WAS open: by the time the panel closes `id` is null again, so the last open one is remembered
+  const lastOpen = useRef<number | null>(null);
+  if (id != null) lastOpen.current = id;
   return (
     <SidePanel
       open={id != null}
@@ -98,7 +101,7 @@ export function RecordDetail({ id, title, subtitle, nav, actions, footer, childr
       subtitle={subtitle}
       dockFrom={Infinity}
       width="md"
-      restoreFocus={rowOf(id)}
+      restoreFocus={rowOf(lastOpen.current)}
       actions={(
         <>
           <IconButton label="Previous" aria-disabled={!nav.hasPrev || undefined} onClick={() => { if (nav.hasPrev) nav.onStep(-1); }}><ChevronUp aria-hidden /></IconButton>

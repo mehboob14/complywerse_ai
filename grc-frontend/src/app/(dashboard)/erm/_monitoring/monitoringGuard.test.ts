@@ -20,7 +20,9 @@ function walk(dir: string): string[] {
     return /\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name) ? [p] : [];
   });
 }
-const FILES = ROOTS.flatMap((r) => walk(join(ERM, r)));
+// the frame the registers moved to (components/records): still held to the same rules from here
+const MOVED = ['RegisterFrame.tsx', 'ImportDialog.tsx', 'lookups.ts', 'cells.tsx', 'registerModel.ts'].map((f) => join(ERM, '../../../components/records', f));
+const FILES = ROOTS.flatMap((r) => walk(join(ERM, r))).concat(MOVED);
 const read = (f: string) => readFileSync(f, 'utf8');
 const code = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, '').split(/\r?\n/).map((l) => l.replace(/(^|\s)\/\/\s.*$/, '$1')).join('\n');
 

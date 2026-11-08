@@ -20,13 +20,13 @@ import { statusPill } from '@/lib/status';
 import { errorMessage } from '@/components/ui/ds/reportOutcome';
 import { formatImpact, incidentTiles } from '@/lib/erm/incident';
 import { incidentStatus, severity } from '@/lib/statuses/monitoring';
-import { ImportDialog } from './ImportDialog';
+import { ImportDialog } from '@/components/records/ImportDialog';
 import { IncidentAnalysis } from './IncidentAnalysis';
 import { IncidentForm } from './IncidentForm';
 import { INCIDENT_SCHEMA, incidentDef, linked, type IncidentRow } from './incidentModel';
-import { useCurrentUserId } from './lookups';
-import { OwnerCell } from './cells';
-import { RecordDetail, RegisterFrame } from './RegisterFrame';
+import { useCurrentUserId } from '@/components/records/lookups';
+import { OwnerCell } from '@/components/records/cells';
+import { RecordDetail, RegisterFrame } from '@/components/records/RegisterFrame';
 
 const KEY = ['erm-incidents', 'all'] as const;
 const DASH = ['erm-incident-dashboard'] as const;

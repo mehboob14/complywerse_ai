@@ -1,7 +1,7 @@
 // The incident register's definition (facets, quick chips, sorts, board), apart from React (`incidentModel.test.ts`). The rows are GET /erm/incidents (newest first, read whole).
 import { INCIDENT_SEVERITIES, INCIDENT_STATUSES, isOpenIncident, linkedTotal, resolvedThisMonth } from '../../../../lib/erm/incident.ts';
 import { incidentStatus, severity } from '../../../../lib/statuses/monitoring.ts';
-import { buildSchema, type RegisterDef } from './registerModel.ts';
+import { buildSchema, type RegisterDef } from '../../../../components/records/registerModel.ts';
 
 export interface IncidentRow {
   id: number;

@@ -252,6 +252,7 @@ test('ownHeading is on exactly the pages that draw the kit head (PageHeader vari
     '/dashboard',
     '/controls', '/control-library', '/control-library/:id', '/control-library/review',
     '/assessments/register', '/assessments/types',
+    '/issues/register', '/issues/actions',
     '/erm/incidents', '/erm/mitigation-actions', '/erm/appetite', '/erm/analytics', '/erm/analytics/aggregation', '/erm/analytics/bowtie', '/erm/analytics/dependencies', '/erm/analytics/kri-triggers',
     '/erm/analytics/scenario', '/erm/risks', '/erm/risk-assessments', '/erm/risk-assessments/ai-risk-assessment',
     '/admin/organization'];                       // Administration > Organisation: the Organisation Profile component draws the head (Company is its first stage)

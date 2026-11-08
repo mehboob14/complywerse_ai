@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { readAddress } from '../../../../lib/addressState.ts';
-import { evaluateRegister, indexRegister, sortRows, stateOf } from './registerModel.ts';
+import { evaluateRegister, indexRegister, sortRows, stateOf } from '../../../../components/records/registerModel.ts';
 import { groupBoard } from '../../../../components/records/explorerModel.ts';
 import { KRI_SCHEMA, kriDef, type KriRow } from './kriModel.ts';
 

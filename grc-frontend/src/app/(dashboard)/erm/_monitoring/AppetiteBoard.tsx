@@ -23,8 +23,8 @@ import { breaches, exposureByCategory, limitOf, unconfigured, type AppetiteConfi
 import { categoryLabel, categoryOptions } from '@/lib/erm/categories';
 import { appetiteLevel, optionsOf } from '@/lib/statuses/monitoring';
 import { ActionForm } from './ActionForm';
-import { useLeanRisks, useTenantId } from './lookups';
-import { pageSlice, clampPage } from './registerModel';
+import { useLeanRisks, useTenantId } from '@/components/records/lookups';
+import { pageSlice, clampPage } from '@/components/records/registerModel';
 
 type Config = AppetiteConfig & { tenant_id: number; escalation_owner_id?: number | null; alert_enabled?: boolean };
 const KEY = ['erm-appetite-configs'] as const;
