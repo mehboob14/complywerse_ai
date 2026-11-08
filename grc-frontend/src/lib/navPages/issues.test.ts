@@ -55,3 +55,11 @@ test('the old tabs of /issues forward: log and contract to the issue register (c
   assert.match(page, /router\.replace\(`\/issues\/register\?linked=\$\{linked\.type\}:\$\{linked\.id\}`\)/);
   assert.match(page, /router\.push\(forward\)/, 'a click on a tab that became a page goes to it');
 });
+
+test('the issue record draws the kit\'s page head itself and says so: the top bar names only the section, the title is the issue\'s', () => {
+  assert.match(read('[id]/page.tsx'), /<PageHeader\s+variant="page"/);
+  assert.equal(routeFor('/issues/12')?.ownHeading, true);
+  assert.equal(registryNamesPage('/issues/12'), true);
+  assert.ok(ownHeadingSection('/issues/12'), 'the top bar names a section');
+  assert.deepEqual(breadcrumbFor('/issues/12').map((c) => c.label), ['Issue & Incident Management', 'Issues', 'Issue'], 'the trail the record has always had');
+});
