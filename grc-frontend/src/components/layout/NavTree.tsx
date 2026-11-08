@@ -8,8 +8,8 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  Activity, BarChart3, Bot, CalendarClock, ChevronDown, ChevronRight, GitPullRequest, Globe, Layers, Radar, ScrollText, Settings, Shield,
-  ShieldCheck, Sparkles, Users, type LucideIcon,
+  BarChart3, Building2, CalendarClock, ChevronDown, ChevronRight, GitPullRequest, KeyRound, Lock, Network, PlugZap, ScrollText, Settings, ShieldCheck,
+  SlidersHorizontal, Sparkles, Users, type LucideIcon,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import {
@@ -19,6 +19,7 @@ import {
 import { isGroup, type NavEntry, type NavGroup, type NavItem } from './navAccess';
 import { groupHasActive } from './navActive';
 import { menuTarget } from './menuKeys';
+import { adminActiveHref, groupedSections } from '@/lib/adminSections';
 
 const navIconProps = { size: 18, strokeWidth: 1.75 };
 // A keyboard focus ring drawn inside the row: the menu scrolls and its groups clip what is outside them. #115e59 is the brand teal one step
@@ -417,38 +418,36 @@ export function RailTree({ entries, activeHref }: { entries: NavEntry[]; activeH
 }
 
 // ---- Administration ----
-// A button pinned at the bottom of the sidebar that opens a menu of every admin section. Each deep-links to /admin with a ?tab=<id>
-// (admin/page.tsx reads it on mount), so the admin tab bar lands on the right tab. Shown to administrators only (the old nav entry was
-// adminOnly, and administrators bypass module and permission checks). In the drawer it is a group like the others (a flyout to the right
-// of a drawer would run off a phone).
+// A button pinned at the bottom of the sidebar that opens a menu of the Administration sections, grouped as in lib/adminSections.ts (the one list: the section
+// list beside every Administration page and the navigation registry read it too). Each entry is the section's own page (/admin/<section>); the section on
+// screen is lit. Shown to administrators only (the old nav entry was adminOnly, and administrators bypass module and permission checks). In the drawer it is a
+// group like the others, with a sub-group per section group (a flyout to the right of a drawer would run off a phone).
 
-// Most items deep-link into the admin tab bar via `/admin?tab=<id>`. Items that live at their own standalone route set `href` to override that.
-const ADMIN_ITEMS: Array<{ id: string; label: string; icon: LucideIcon; href?: string }> = [
-  { id: 'company',          label: 'Company',            icon: Settings },
-  { id: 'users',            label: 'User Management',    icon: Users },
-  { id: 'ai-usage',         label: 'Token usage',        icon: BarChart3, href: '/admin/ai-usage' },
-  { id: 'ai-governance',    label: 'AI Governance',      icon: Sparkles, href: '/admin/ai-governance' },
-  { id: 'roles',            label: 'Role Management',    icon: ShieldCheck },
-  { id: 'departments',      label: 'Departments',        icon: Users },
-  { id: 'password-policy',  label: 'Password Policy',    icon: Shield },
-  { id: 'integrations',     label: 'Integrations',       icon: Bot },
-  { id: 'cloud-connectors', label: 'Cloud Connectors',   icon: Globe },
-  { id: 'connectors',       label: 'Connectors',         icon: Layers },
-  { id: 'evidence-collectors', label: 'Connections', icon: Radar },
-  { id: 'identity',         label: 'Identity Providers', icon: Shield },
-  { id: 'workflow',         label: 'Workflow Engine',    icon: GitPullRequest },
-  { id: 'usage',            label: 'Usage Monitoring',   icon: Activity, href: '/admin/usage' },
-  { id: 'audit',            label: 'Audit Logs',         icon: ScrollText },
-  { id: 'scheduler',        label: 'Scheduler',          icon: CalendarClock, href: '/admin/scheduler' },
-];
+/** One icon per section (ids of lib/adminSections.ts); the registry itself stays free of React. */
+const ADMIN_ICONS: Record<string, LucideIcon> = {
+  organization: Building2, departments: Network, users: Users, roles: ShieldCheck, 'password-policy': Lock, sso: KeyRound, connections: PlugZap,
+  'ai-governance': Sparkles, 'ai-usage': BarChart3, workflow: GitPullRequest, scheduler: CalendarClock, 'audit-logs': ScrollText, 'module-settings': SlidersHorizontal,
+};
+const GROUP_ICONS: Record<string, LucideIcon> = {
+  organisation: Building2, people: Users, connections: PlugZap, ai: Sparkles, automation: GitPullRequest, audit: ScrollText, settings: SlidersHorizontal,
+};
 
-const adminEntries: NavItem[] = ADMIN_ITEMS.map(({ id, label, icon, href }) => ({ name: label, href: href ?? `/admin?tab=${id}`, icon }));
-
-/** The same sections as a menu group, for the drawer. */
-export const ADMIN_GROUP: NavGroup = { name: 'Administration', icon: Settings, items: adminEntries };
+/** The same sections as a menu group, for the drawer (and, entry by entry, for the flyout): a sub-group per group of sections. */
+export const ADMIN_GROUP: NavGroup = {
+  name: 'Administration',
+  icon: Settings,
+  items: groupedSections().map(({ group, sections }): NavGroup => ({
+    name: group.label,
+    icon: GROUP_ICONS[group.id],
+    items: sections.map((section): NavItem => ({ name: section.label, href: section.url, icon: ADMIN_ICONS[section.id] ?? Settings })),
+  })),
+};
 
 export function AdminMenu({ collapsed }: { collapsed: boolean }) {
   const fly = useFlyout(false);
+  const pathname = usePathname();
+  const activeHref = adminActiveHref(pathname);       // the section on screen, if the page is one
+  const lit = fly.open || activeHref !== undefined;
   return (
     <div ref={fly.rootRef} onBlur={fly.onBlur} className="border-t border-[var(--sidebar-hover-bg)] px-2.5 py-2 relative">
       <button
@@ -458,7 +457,7 @@ export function AdminMenu({ collapsed }: { collapsed: boolean }) {
         onKeyDown={fly.onTriggerKeyDown}
         className={clsx(
           'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[13px] transition-colors duration-150', FOCUS,
-          fly.open
+          lit
             ? 'bg-[var(--sidebar-hover-bg)] font-medium text-[var(--color-text)]'
             : 'font-normal text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]',
           collapsed && 'justify-center px-2'
@@ -469,7 +468,7 @@ export function AdminMenu({ collapsed }: { collapsed: boolean }) {
         aria-haspopup="menu"
         aria-controls={fly.open ? fly.panelId : undefined}
       >
-        <Settings {...navIconProps} className={clsx('flex-shrink-0', fly.open ? 'text-[var(--color-base)]' : 'text-[var(--sidebar-icon)]')} />
+        <Settings {...navIconProps} className={clsx('flex-shrink-0', lit ? 'text-[var(--color-base)]' : 'text-[var(--sidebar-icon)]')} />
         {!collapsed && <span className="truncate flex-1 text-left">Administration</span>}
         {!collapsed && (
           <ChevronRight
@@ -488,26 +487,14 @@ export function AdminMenu({ collapsed }: { collapsed: boolean }) {
           tabIndex={-1}
           onKeyDown={fly.onPanelKeyDown}
           className={clsx(
-            'absolute z-50 rounded-lg border border-slate-200 bg-white shadow-xl py-1.5 focus:outline-none',
-            'min-w-[220px] max-h-[70vh] overflow-y-auto',
+            'absolute z-50 rounded-xl border border-slate-200 bg-white p-1.5 shadow-elevated focus:outline-none',
+            'min-w-[232px] max-h-[80vh] overflow-y-auto',
             // Anchor: appear to the right of the sidebar, bottom-aligned with the trigger so the menu grows upward.
             'left-full bottom-2 ml-2',
           )}
         >
-          <div aria-hidden className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-100 mb-1">
-            Administration
-          </div>
-          {adminEntries.map((item) => (
-            <MenuLink
-              key={item.href}
-              item={item}
-              active={false}
-              onPick={fly.close}
-              size={14}
-              iconClass="text-slate-500"
-              className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-slate-900"
-            />
-          ))}
+          <div aria-hidden className="px-2.5 py-1.5 text-[12px] font-semibold text-[var(--color-text)]">Administration</div>
+          <RailFlyoutItems entries={ADMIN_GROUP.items} activeHref={activeHref} onPick={fly.close} />
         </div>
       )}
     </div>

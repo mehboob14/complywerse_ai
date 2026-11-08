@@ -8,7 +8,7 @@ import {
 
 // the 13 tab ids the old /admin page knew (admin/page.tsx at 8ba076b3) and the address each of the old standalone pages had
 const OLD_TABS = ['company', 'profile', 'users', 'roles', 'departments', 'password-policy', 'integrations', 'cloud-connectors', 'connectors', 'evidence-collectors', 'identity', 'workflow', 'audit'];
-const OLD_PAGES = ['/admin/organization', '/admin/users', '/admin/roles', '/admin/departments', '/admin/password-policy', '/admin/cloud-connectors', '/admin/connectors', '/admin/evidence-collectors',
+const OLD_PAGES = ['/admin/organization', '/admin/users', '/admin/roles', '/admin/departments', '/admin/password-policy', '/admin/cloud-connectors', '/admin/connectors',
   '/admin/audit-logs', '/admin/ai-usage', '/admin/ai-governance', '/admin/usage', '/admin/scheduler', '/workflow-engine'];
 
 test('13 sections in 7 groups, each with a name, an address of its own and the right group', () => {
@@ -53,7 +53,7 @@ test('every address an Administration page had before is one section\'s (nothing
   assert.equal(sectionOfPath('/admin/usage')?.id, 'ai-usage', 'Usage Monitoring joins AI usage');
   assert.equal(sectionOfPath('/admin/cloud-connectors')?.id, 'connections');
   assert.equal(sectionOfPath('/admin/connectors')?.id, 'connections');
-  assert.equal(sectionOfPath('/admin/evidence-collectors')?.id, 'connections');
+  assert.equal(sectionOfPath('/admin/evidence-collectors'), undefined, "the Controls Automation menu's Connections page is not drawn inside Administration (its tab alias still opens /admin/connections?kind=evidence)");
   assert.equal(sectionOfPath('/admin/users/12/usage')?.id, 'users', 'a person\'s AI usage is a page of Users');
   assert.equal(sectionOfPath('/admin/users/')?.id, 'users', 'a trailing slash');
   assert.equal(sectionOfPath('/admin/users?x=1')?.id, 'users', 'a query');

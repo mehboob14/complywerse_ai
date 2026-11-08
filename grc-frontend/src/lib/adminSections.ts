@@ -60,13 +60,13 @@ const S = (section: Omit<AdminSection, 'paths' | 'tabs' | 'keywords' | 'layout'>
 export const ADMIN_SECTIONS: readonly AdminSection[] = [
   // ---- Organisation ----
   S({
-    id: 'organization', label: 'Organisation', group: 'organisation', url: '/admin/organization', ownHeading: true,
+    id: 'organization', label: 'Organisation', group: 'organisation', url: '/admin/organization', ownHeading: false,
     rights: ['admin:organization:view', 'admin:organization:edit', 'compliance:org_profile:*'],
     tabs: [{ tab: 'company' }, { tab: 'profile', query: { stage: 'profile' } }],
     keywords: ['Company', 'Company Profile', 'Organisation Profile', 'Organization Profile', 'Primary contact'],
   }),
   S({
-    id: 'departments', label: 'Departments', group: 'organisation', url: '/admin/departments', ownHeading: true,
+    id: 'departments', label: 'Departments', group: 'organisation', url: '/admin/departments', ownHeading: false,
     rights: ['admin:organization:edit'],            // reads: any signed-in person
     tabs: [{ tab: 'departments' }, { tab: 'teams' }],
     keywords: ['Teams', 'Sub-departments', 'Units', 'Level names'],
@@ -85,7 +85,7 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
     keywords: ['Role Management', 'Roles', 'Permissions'],
   }),
   S({
-    id: 'password-policy', label: 'Password & sessions', group: 'people', url: '/admin/password-policy', ownHeading: true,
+    id: 'password-policy', label: 'Password & sessions', group: 'people', url: '/admin/password-policy', ownHeading: false,
     rights: ['admin:settings:edit'],                // reads: any signed-in person
     tabs: [{ tab: 'password-policy' }],
     keywords: ['Password Policy', 'Lockout', 'Session timeout', 'Idle timeout'],
@@ -98,8 +98,9 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
   }),
   // ---- Connections ----
   S({
-    id: 'connections', label: 'Connected systems', group: 'connections', url: '/admin/connections', ownHeading: false,
-    paths: ['/admin/cloud-connectors', '/admin/connectors', '/admin/evidence-collectors'],
+    id: 'connections', label: 'Connected systems', group: 'connections', url: '/admin/connections', ownHeading: true,
+    // (/admin/evidence-collectors is also the Controls Automation menu's "Connections" page: it is not drawn inside Administration's layout from there)
+    paths: ['/admin/cloud-connectors', '/admin/connectors'],
     rights: ['admin:integrations:view', 'admin:integrations:edit', 'compliance:scan:execute', 'evidence:evidence_library:edit'],
     tabs: [
       { tab: 'integrations', query: { kind: 'scanners' } },
@@ -123,7 +124,7 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
   }),
   // ---- Automation ----
   S({
-    id: 'workflow', label: 'Workflow engine', group: 'automation', url: '/workflow-engine', ownHeading: false, layout: 'full',
+    id: 'workflow', label: 'Workflow Engine', group: 'automation', url: '/workflow-engine', ownHeading: false, layout: 'full',
     rights: ['workflow_engine:definitions:view', 'workflow_engine:definitions:edit', 'workflow_engine:integrations:view', 'workflow_engine:executions:view'],
     tabs: [{ tab: 'workflow' }],
     keywords: ['Workflow Engine', 'Workflows', 'Automation rules', 'Triggers'],

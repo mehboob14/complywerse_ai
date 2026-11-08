@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight, LogOut, Menu, UserCircle, Users, Search, Loader2, Sparkles, ClipboardCheck } from 'lucide-react';
+import { ChevronDown, ChevronRight, LogOut, Menu, Users, Search, Loader2, Sparkles, ClipboardCheck } from 'lucide-react';
 import Link from 'next/link';
 import { apiClient, searchApi } from '@/lib/api';
 import { GuideToggle } from '@/components/guide';
@@ -20,6 +20,8 @@ const DOC_ASK: Record<string, string> = { review: 'To review', approval: 'To app
   decide: 'A proposed change to decide on', revise: 'Your change was not accepted' };
 // a dropdown item that opens what it is about (a link: Tab, Enter)
 const ITEM_LINK = 'flex gap-3 px-4 py-3 text-xs hover:bg-[#f3f6f8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0f766e]';
+// a row of the user menu: at least the kit's control height (44px on a phone), a ring inside the row when it has the keyboard
+const MENU_ROW = 'flex min-h-ds-control w-full items-center gap-2 px-3 py-2 text-sm text-[var(--color-text)] transition-colors hover:bg-[var(--color-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0f766e]';
 // the Pending approvals and Notifications dropdowns: under the bar across a phone's width, else at the button
 const DROPDOWN = 'fixed inset-x-3 top-14 z-50 rounded-lg border border-gray-200 bg-white shadow-xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2';
 
@@ -539,38 +541,22 @@ export default function Header() {
               </div>
 
               <div className="py-1">
-                {canSeeUsers && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsUserMenuOpen(false);
-                      router.push('/users');
-                    }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-[var(--color-text)] transition-colors hover:bg-[var(--color-subtle)]"
+                {(canSeeUsers || isAdmin) && (
+                  // one door to the people: administrators open their Users page, anyone else who holds the users right opens the read-only list
+                  <Link
+                    href={isAdmin ? '/admin/users' : '/users'}
+                    onClick={() => setIsUserMenuOpen(false)}
+                    className={MENU_ROW}
                   >
                     <Users size={16} className="text-[var(--color-text-muted)]" />
                     Users
-                  </button>
-                )}
-
-                {isAdmin && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsUserMenuOpen(false);
-                      router.push('/admin/users');
-                    }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-[var(--color-text)] transition-colors hover:bg-[var(--color-subtle)]"
-                  >
-                    <UserCircle size={16} className="text-[var(--color-text-muted)]" />
-                    Admin Users
-                  </button>
+                  </Link>
                 )}
 
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-rose-600 transition-colors hover:bg-rose-50"
+                  className="flex min-h-ds-control w-full items-center gap-2 px-3 py-2 text-sm text-rose-600 transition-colors hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0f766e]"
                 >
                   <LogOut size={16} />
                   Logout

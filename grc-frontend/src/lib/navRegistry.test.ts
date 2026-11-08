@@ -142,7 +142,7 @@ test('a forward is another URL of an entry that is a page of its own, under the 
     ['/admin/access-reviews/connect', '/compliance/access-reviews/connect'],
     ['/admin/access-reviews/rules', '/compliance/access-reviews/rules'],
     ['/admin/access-reviews/:id', '/compliance/access-reviews/:id'],
-    ['/admin/teams', '/admin'],
+    ['/admin/teams', '/admin/departments'],
     ['/cyber-assurance/admin/teams', '/cyber-assurance/admin'],
   ]);
   for (const a of aliases) {

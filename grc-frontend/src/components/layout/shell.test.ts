@@ -75,11 +75,19 @@ test('the icon of the lit row is the text colour, readable on the mint it sits o
   assert.match(tree, /bg-\[var\(--sidebar-active-bg\)\] text-\[var\(--color-text\)\]'/, 'the rail group button');
 });
 
-test('new text in the menu stays at or above the 12px floor: only the Administration heading, which was there before, is smaller', () => {
+test('no text in the menu is below the 12px floor: the Administration flyout heading, the last 10px text, is 12px and grouped now', () => {
   const small = (tree.match(/text-\[\d+(?:\.\d+)?px\]/g) ?? []).filter((c) => parseFloat(c.slice(6)) < 12);
-  assert.deepEqual(small, ['text-[10px]'], 'the Administration flyout heading');
-  assert.match(tree, /aria-hidden className="px-2\.5 pb-0\.5 pt-2 text-\[12px\]/, 'a sub-group heading in a rail flyout');
+  assert.deepEqual(small, [], 'nothing in the menu is under 12px');
+  assert.match(tree, /aria-hidden className="px-2\.5 pb-0\.5 pt-2 text-\[12px\]/, 'a sub-group heading in a rail flyout (the Administration flyout uses it for its section groups)');
   assert.match(tree, /aria-hidden className="px-2\.5 py-1\.5 text-\[12px\]/, 'the group heading of a rail flyout');
+});
+
+test('the Administration menu is built from the sections registry and lights the section on screen', () => {
+  assert.match(tree, /from '@\/lib\/adminSections'/, 'the one list of sections');
+  assert.match(tree, /groupedSections\(\)/, 'groups, in the order of the registry');
+  assert.match(tree, /adminActiveHref\(pathname\)/, 'the lit entry is the section whose page is open');
+  assert.match(tree, /<RailFlyoutItems entries=\{ADMIN_GROUP\.items\} activeHref=\{activeHref\}/, 'the flyout draws the groups and lights the entry the way every rail flyout does');
+  assert.doesNotMatch(tree, /\?tab=/, 'no entry points at the old tab host');
 });
 
 test('the page has a skip link as its first stop, aimed at the main area', () => {
