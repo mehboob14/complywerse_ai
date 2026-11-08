@@ -547,6 +547,9 @@ export const governanceApi = {
     apiClient.get('/governance/dashboard/compliance-coverage'),
   getDocumentsOverview: () =>
     apiClient.get('/governance/dashboard/documents-overview'),
+  // keeps today's score for the trend (the GET above no longer writes): once per visit, after the first successful read
+  snapshotDocumentsOverview: () =>
+    apiClient.post('/governance/dashboard/documents-overview/snapshot'),
   getComplianceByFramework: () =>
     apiClient.get('/governance/dashboard/compliance-by-framework'),
   getOpenGapsSummary: () =>

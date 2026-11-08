@@ -10,7 +10,7 @@
 // The queries, their keys and the scorecard's formula and weights are what they were: the scorecard is computed by the server
 // (/governance/dashboard/documents-overview) and shared with the main dashboard under SCORECARD_QUERY_KEYS.governance.
 // On the design-system kit: PageHeader variant="page", Button, Menu, SectionCard, SegmentedControl, CountRow, WorkRow, Skeleton / ErrorState / EmptyState.
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { FileCheck, FileText, Lock, RefreshCw } from 'lucide-react';
@@ -80,6 +80,13 @@ export default function GovernanceDashboardPage() {
     queryFn: async () => (await governanceApi.getDocumentsOverview()).data as OverviewCard,
     retry: retryOverview,
   });
+  // the scorecard GET no longer writes: today's score is kept for the trend by one POST per visit, after the first successful read (a failure is silent: it only costs one trend point)
+  const snapshotSent = useRef(false);
+  useEffect(() => {
+    if (!scorecard.isSuccess || snapshotSent.current) return;
+    snapshotSent.current = true;
+    governanceApi.snapshotDocumentsOverview().then(undefined, () => undefined);
+  }, [scorecard.isSuccess]);
   const trends = useQuery({
     queryKey: ['governance-trends'],
     queryFn: async () => (await governanceApi.getTrends(6)).data as { created?: TrendPoint[]; published?: TrendPoint[] },
