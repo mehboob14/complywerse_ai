@@ -125,12 +125,14 @@ test('a forward is another URL of an entry that is a page of its own, under the 
     ['/governance/reviews/calendar', '/governance/reviews'],                // not a forward: the same page opened on its calendar view
     ['/governance/approvals', '/needs-my-action'],                          // "My Approvals" became the global queue; the address forwards to it (a server redirect)
     // the rest of the app (R-REG): forwards and second addresses of the same page; navPages/coverage.test.ts reads every page file and holds each one to its target
+    ['/erm/dependencies', '/erm/analytics/dependencies'],                    // Dependencies became a tool of Advanced Analytics (G9 monitoring); the address forwards to it
     ['/erm/internal-controls', '/controls'],
     ['/erm/internal-controls/:id', '/controls'],
     ['/erm/ai-risk-assessment', '/erm/risk-assessments/ai-risk-assessment'],
     ['/erm/risks/dashboard', '/erm/risks'],                                  // forwards to /erm/risks?view=insights (the old dashboard is the register's Insights view)
     ['/erm/risks/list', '/erm/risks'],                                       // forwards to /erm/risks with its parameters (?new, ?upload, ?edit, ?register_type)
     ['/erm/risk-assessments/dashboard', '/erm/risk-assessments'],            // not a forward: /erm/risk-assessments renders this page
+    ['/erm/analytics/heatmap', '/erm/analytics'],                            // the heat map is the home of Advanced Analytics; its older address forwards to it
     ['/vendor-risk/procurement', '/vendor-risk'],
     ['/vendor-risk/shadow-saas', '/vendor-risk'],
     ['/vendor-risk/settings/alert-rules', '/vendor-risk/policy'],
@@ -411,7 +413,7 @@ test('the Header names Governance pages from the registry and keeps no Governanc
 
 test('a page that draws its own heading is flagged in the registry, and only its section is shown in the top bar', () => {
   assert.deepEqual(routes.filter((e) => e.ownHeading && e.area === 'governance').map((e) => e.path).sort(), [
-    '/governance', '/governance/committees', '/governance/committees/:id', '/governance/committees/actions', '/governance/committees/meetings/:id', '/governance/kpi-report',
+    '/erm/kris', '/governance', '/governance/committees', '/governance/committees/:id', '/governance/committees/actions', '/governance/committees/meetings/:id', '/governance/kpi-report',
     '/governance/mappings', '/governance/workflows', '/is-projects', '/is-projects/:id', '/is-projects/dashboard', '/is-projects/my-projects',
   ]);
   assert.equal(ownHeadingSection('/governance'), 'Governance');

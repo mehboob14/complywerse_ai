@@ -25,6 +25,7 @@ from .routers import (
     quantification_router,
     ctem_scopes_router,
     risk_framework_requirements_router,
+    monitoring_router,
 )
 
 router = APIRouter(
@@ -36,6 +37,7 @@ router = APIRouter(
 router.include_router(risks_router)
 router.include_router(risk_framework_requirements_router)
 router.include_router(kris_router)
+router.include_router(monitoring_router)
 # Import + static link routes must register before parametric /incidents/{id}.
 router.include_router(incident_import_router)
 router.include_router(incident_links_router)

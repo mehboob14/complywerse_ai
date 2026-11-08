@@ -247,7 +247,11 @@ test('rights: a leaf has the sidebar\'s, a page navAccess lists has those, a pag
 // ---- the heading each entry says its page draws ----
 
 test('ownHeading is on exactly the pages that draw the kit head (PageHeader variant="page"), except the pages whose head is drawn by a component, and the Documents area where the tab strip is the top bar', () => {
-  const HEAD_FROM_A_COMPONENT = ['/governance/kpi-report', '/governance/mappings', '/erm/risks'];          // MetricReport.tsx and _Standalone.tsx draw it; so does RiskRegister.tsx (the explorer's head)
+  // MetricReport.tsx and _Standalone.tsx draw it; the Risk Management monitoring pages (G9) draw it in their register / board / Analytics frame (erm/_monitoring, erm/analytics/_frame)
+  const HEAD_FROM_A_COMPONENT = [
+    '/governance/kpi-report', '/governance/mappings', '/erm/incidents', '/erm/mitigation-actions', '/erm/appetite', '/erm/analytics', '/erm/analytics/aggregation', '/erm/analytics/bowtie',
+    '/erm/analytics/dependencies', '/erm/analytics/kri-triggers', '/erm/analytics/scenario', '/erm/risks',
+  ];
   const DOCUMENTS_AREA_STRIP = ['/governance/documents/attestation', '/governance/documents/studio', '/governance/documents/overview', '/governance/exceptions', '/governance/reviews', '/governance/settings'];
   const drawing = pages.filter((p) => /<PageHeader[\s\S]{0,60}variant="page"/.test(read(p.file))).map((p) => p.route).sort();
   const flagged = routes.filter((e) => e.ownHeading).map((e) => e.path).sort();
@@ -267,8 +271,9 @@ test('breadcrumbFor gives a sane trail for an example URL of every module', () =
   assert.deepEqual(labels('/governance/committees/3'), ['Governance', 'Committees', 'Committee']);
   assert.deepEqual(labels('/erm/risks/12'), ['Risk Management', 'Operational Risk', 'Risk Register', 'Risk']);
   assert.deepEqual(labels('/erm/rcsa/campaigns/4'), ['Risk Management', 'Operational Risk', 'RCSA', 'RCSA Campaigns', 'RCSA campaign']);
-  assert.deepEqual(labels('/erm/analytics/heatmap'), ['Risk Management', 'Operational Risk', 'Advanced Analytics', 'Interactive Risk Heat Map']);
-  assert.deepEqual(labels('/erm/appetite'), ['Risk Management', 'Overview', 'Risk Appetite Management']);
+  assert.deepEqual(labels('/erm/analytics/heatmap'), ['Risk Management', 'Operational Risk', 'Advanced Analytics'], 'the heat map is the home of Advanced Analytics: its older address is the same page');
+  assert.deepEqual(labels('/erm/analytics/dependencies'), ['Risk Management', 'Operational Risk', 'Advanced Analytics', 'Risk Dependencies']);
+  assert.deepEqual(labels('/erm/appetite'), ['Risk Management', 'Overview', 'Risk Appetite']);
   assert.deepEqual(labels('/erm/kris'), ['Governance', 'KRIs']);
   assert.deepEqual(labels('/vendor-risk/assessments/5'), ['Third-Party Vendor Risk', 'Vendors', 'Vendor Assessments', 'Vendor assessment']);
   assert.deepEqual(labels('/vendor-risk/policy'), ['Third-Party Vendor Risk', 'Roster', 'Policy']);
