@@ -20,10 +20,11 @@ import { isNist } from './kinds';
 const MATURITY = ['csir_maturity', 'cti_maturity', 'incident_maturity', 'itsecops_maturity', 'digital_ops_maturity'];
 
 export const LENSES: LensDef[] = [
-  { key: 'asvs', label: 'Requirements', slot: 'controls', appliesTo: (c) => c.format === 'asvs_checklist', Component: dynamic(() => import('./lenses/AsvsLens')) },
-  { key: 'owasp', label: 'Tests', slot: 'controls', appliesTo: (c) => c.format === 'owasp_v4_testing_checklist', Component: dynamic(() => import('./lenses/OwaspLens')) },
-  { key: 'mobile', label: 'Requirements', slot: 'controls', appliesTo: (c) => c.format === 'mobile_app_security', Component: dynamic(() => import('./lenses/MobileLens')) },
-  { key: 'maturity', label: 'Capabilities', slot: 'controls', appliesTo: (c) => MATURITY.includes(c.format), Component: dynamic(() => import('./lenses/MaturityLens')) },
+  { key: 'asvs', label: 'Requirements', slot: 'controls', appliesTo: (c) => c.format === 'asvs_checklist', Component: dynamic(() => import('../lenses/typeLenses').then((m) => m.AsvsLens)) },
+  { key: 'owasp', label: 'Tests', slot: 'controls', appliesTo: (c) => c.format === 'owasp_v4_testing_checklist', Component: dynamic(() => import('../lenses/typeLenses').then((m) => m.OwaspLens)) },
+  { key: 'mobile', label: 'Requirements', slot: 'controls', appliesTo: (c) => c.format === 'mobile_app_security', Component: dynamic(() => import('../lenses/typeLenses').then((m) => m.MobileLens)) },
+  { key: 'maturity', label: 'Capabilities', slot: 'controls', appliesTo: (c) => MATURITY.includes(c.format), Component: dynamic(() => import('../lenses/typeLenses').then((m) => m.MaturityLens)) },
+  { key: 'dcc', label: 'Controls', slot: 'controls', appliesTo: (c) => c.format === 'nca_dcc_tool', Component: dynamic(() => import('../lenses/typeLenses').then((m) => m.DccLens)) },
   { key: 'nist', label: 'Determinations', slot: 'controls', appliesTo: (c) => isNist(c.format), Component: dynamic(() => import('./lenses/NistLens')) },
   { key: 'nca', label: 'NCA workspace', slot: 'controls', appliesTo: (c) => c.format === 'nca_container', Component: dynamic(() => import('./lenses/NcaLens')) },
   { key: 'workbook', label: 'Workbook', slot: 'tab', appliesTo: (c) => c.format === 'xlsx_maturity', Component: dynamic(() => import('./lenses/WorkbookLens')) },
