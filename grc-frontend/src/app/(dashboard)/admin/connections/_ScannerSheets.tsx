@@ -242,6 +242,7 @@ export function ScannerManageSheet({ conn, canEdit, canDelete, onClose }: { conn
           </div>
         )}
 
+        {remove.isPending && <Notice tone="info" title="Removing the scanner">Its connection and sync history are being deleted. This can take a moment.</Notice>}
         {syncing && <Notice tone="info" title="Syncing in the background">Findings are being pulled from the scanner. This can take a few minutes; this updates by itself when it is done.</Notice>}
         {outcome && <Notice tone={outcome.tone} title={outcome.title} icon={outcome.tone === 'danger' ? XCircle : undefined}>{outcome.text}</Notice>}
 
