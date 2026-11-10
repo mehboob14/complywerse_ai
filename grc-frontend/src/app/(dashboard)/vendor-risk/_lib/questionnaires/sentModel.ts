@@ -160,8 +160,8 @@ export function sentActions(r: Pick<SentRow, 'status' | 'own_link' | 'contact_id
 /** What the confirmation before a new link says: the old link of its own stops working; a personal link is emailed to the contact. */
 export function newLinkAsk(r: Pick<SentRow, 'own_link'>): { title: string; message: string; confirmLabel: string } {
   return r.own_link
-    ? { title: 'Send a new link?', message: 'The current link stops working. The new one is copied for you.', confirmLabel: 'Send a new link' }
-    : { title: 'Email the contact a new link?', message: 'The contact is emailed a new personal link. It is copied for you too.', confirmLabel: 'Email the link' };
+    ? { title: 'Send a new link?', message: 'The current link stops working. The contact gets a new personal link and 14 more days to answer. The new link is copied for you.', confirmLabel: 'Send a new link' }
+    : { title: 'Email the contact a new link?', message: 'The contact is emailed a new personal link and gets 14 more days to answer. It is copied for you too.', confirmLabel: 'Email the link' };
 }
 
 // ── the answers, read aloud ──────────────────────────────────────────────────────────────────────────────────────────────

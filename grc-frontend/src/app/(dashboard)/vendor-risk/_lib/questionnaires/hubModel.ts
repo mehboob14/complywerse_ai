@@ -15,12 +15,13 @@ export const tabOf = (search: string): TabKey => resolveTab(search, 'tab', TAB_K
 /** The address of a tab: the Library is the plain address; the others carry only their name. */
 export const tabHref = (pathname: string, key: TabKey): string => (key === 'library' ? pathname : `${pathname}?tab=${key}`);
 
-/** Where the old Exchange address goes: the Shared tab, with every param it came with (an unknown one is harmless). */
-export function exchangeForward(search: string): string {
+/** The query the old Exchange address goes with: the Shared tab, and every param it came with (an unknown one is harmless). */
+export function exchangeQuery(search: string): string {
   const query = new URLSearchParams(search);
   query.set('tab', 'shared');
-  return `/vendor-risk/questionnaires?${query.toString()}`;
+  return query.toString();
 }
+export const exchangeForward = (search: string): string => `/vendor-risk/questionnaires?${exchangeQuery(search)}`;
 
 // ── the Library's own address ────────────────────────────────────────────────────────────────────────────────────────────
 
