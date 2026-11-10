@@ -43,10 +43,10 @@ test('a module opens on its first page the person may open; a page that stands a
   assert.equal(byName['Governance'], '/governance');
   assert.equal(byName['Third-Party Vendor Risk'], '/vendor-risk');
   assert.equal(byName['Performance Overview'], '/dashboard');
-  assert.equal(byName['Reports'], '/reports/analytics');
-  // someone whose first page is another: Reports for the one who may only export
-  const exporter = railOf(navOf(me(['reports:reports:export'])), undefined);
-  assert.equal(exporter.modules.find((m) => m.name === 'Reports')?.href, '/reports');
+  assert.equal(byName['Reports'], '/reports');
+  // someone whose first page is another: Trends for the one who may only open Analytics (the Trends board reads all three rights)
+  const analyst = railOf(navOf(me(['reports:analytics:view'])), undefined);
+  assert.equal(analyst.modules.find((m) => m.name === 'Reports')?.href, '/reports/trends');
 });
 
 test('one entry is lit: the module that holds the page (true), or the entry itself when it stands alone (page)', () => {
@@ -55,7 +55,7 @@ test('one entry is lit: the module that holds the page (true), or the entry itse
   const current = (path: string) => at(path).modules.concat(at(path).queue ? [at(path).queue!] : []).filter((m) => m.current).map((m) => `${m.name}:${m.current}`);
   assert.deepEqual(current('/governance/committees/3'), ['Governance:true']);
   assert.deepEqual(current('/governance/exceptions'), ['Governance:true'], 'a tab lights the module of the entry it hangs under');
-  assert.deepEqual(current('/vendor-risk/intake'), ['Third-Party Vendor Risk:page']);
+  assert.deepEqual(current('/vendor-risk/intake'), ['Third-Party Vendor Risk:true']);
   assert.deepEqual(current('/needs-my-action'), ['Needs my action:page']);
   assert.deepEqual(current('/governance/approvals'), ['Needs my action:page'], 'the old address lights the queue');
   assert.deepEqual(current('/erm/risks/12'), ['Risk Management:true']);
