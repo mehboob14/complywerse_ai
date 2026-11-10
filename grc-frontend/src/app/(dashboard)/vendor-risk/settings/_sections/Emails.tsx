@@ -11,6 +11,7 @@ import { Button, EmptyState, ErrorState, FormField, SectionCard, Select, Skeleto
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { usePermissions } from '@/hooks/usePermissions';
 import { vendorEmailsApi } from '@/lib/api';
+import { TPRM_QUERY_OPTS } from '../../_lib/tprmQuery';
 import { formatDate } from '@/lib/format';
 import { useDebounced } from '../../_lib/useDebounced';
 
@@ -29,7 +30,7 @@ export default function EmailsSection({ onDirty }: { onDirty: (dirty: boolean) =
   const { hasPermission } = usePermissions();
   const canEdit = hasPermission('vendor_risk:vendors:edit') || hasPermission('erm:risks:edit');      // the server's own rule for saving and resetting wording
   const [key, setKey] = useState<string | null>(null);
-  const list = useQuery<{ items: Template[] }>({ queryKey: KEY, queryFn: async () => (await vendorEmailsApi.list()).data });
+  const list = useQuery<{ items: Template[] }>({ queryKey: KEY, queryFn: async () => (await vendorEmailsApi.list()).data, ...TPRM_QUERY_OPTS });
   const items = list.data?.items ?? [];
   const current = items.find((t) => t.key === (key || items[0]?.key));
   const [subject, setSubject] = useState('');

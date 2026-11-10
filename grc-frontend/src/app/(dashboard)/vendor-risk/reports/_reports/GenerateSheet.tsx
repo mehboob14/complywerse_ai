@@ -46,7 +46,7 @@ export default function GenerateSheet({ open, onClose, canKeep, initialSupplier 
 
   return (
     <Sheet
-      open={open} onClose={onClose} width="lg" title="Generate a report" subtitle="A report is made from the programme’s own records. A kept report does not change afterwards."
+      open={open} onClose={onClose} width="lg" title={canKeep ? 'Generate a report' : 'Preview a report'} subtitle="A report is made from the programme’s own records. A kept report does not change afterwards."
       footer={(
         <div className="flex flex-wrap items-center justify-end gap-[8px]">
           <Button onClick={onClose}>Close</Button>

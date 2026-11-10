@@ -141,7 +141,7 @@ export default function ReportsRegister({ label, info, head, onGenerate }: { lab
       refreshError={q.isError && q.data ? q.error : undefined}
       serverTotal={total && total > rows.length ? total : null}
       onRetry={() => { void q.refetch(); }}
-      head={() => head({ meta: q.data ? headLine(rows, total) : undefined, info, actions: <Button variant="primary" leftIcon={<FileText aria-hidden />} onClick={onGenerate}>Generate a report</Button> })}
+      head={() => head({ meta: q.data ? headLine(rows, total) : undefined, info, actions: <Button variant="primary" leftIcon={<FileText aria-hidden />} onClick={onGenerate}>{rights.generate ? 'Generate a report' : 'Preview a report'}</Button> })}
       notices={(
         <>
           {fresh && (
@@ -165,7 +165,7 @@ export default function ReportsRegister({ label, info, head, onGenerate }: { lab
         <EmptyState
           bare kind="firstUse" icon={FileText} title="No report kept yet"
           description="Generate the committee pack, the register of functions and obligations, a supplier's evidence file or the ratings of your critical suppliers. A kept report does not change afterwards."
-          action={<Button variant="primary" onClick={onGenerate}>Generate a report</Button>}
+          action={<Button variant="primary" onClick={onGenerate}>{rights.generate ? 'Generate a report' : 'Preview a report'}</Button>}
         />
       )}
       detail={(open, nav) => (

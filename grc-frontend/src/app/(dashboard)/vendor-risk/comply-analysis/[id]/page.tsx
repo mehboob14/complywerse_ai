@@ -15,6 +15,7 @@ import { vendorFairApi } from '@/lib/api';
 import { statusPill } from '@/lib/status';
 import { EFFECT_WORDS, analysisCover, analysisRisk, analysisState } from '@/lib/statuses/vendorInsights';
 import { useLeaveGuard } from '../../_lib/useLeaveGuard';
+import { TPRM_QUERY_OPTS } from '../../_lib/tprmQuery';
 import { download } from '../../_lib/fair/shared';
 import { isDirty, metaOf, problems, saveBody, toText, type FactorText, type FairAnalysis, type Meta } from '../../_lib/fair/fairModel';
 import FactorsTab from './_workspace/FactorsTab';
@@ -37,7 +38,7 @@ export default function AnalysisPage() {
   const canDelete = hasPermission('vendor_risk:assessments:delete') || hasPermission('erm:risks:edit');         // the server's rule for deleting one: assessments:edit alone is not enough
   const [tab, setTab] = useTabParam<TabKey>('tab', KEYS, { fallback: 'result' });
 
-  const q = useQuery<FairAnalysis>({ queryKey: ['tprm-fair', analysisId], queryFn: async () => (await vendorFairApi.get(analysisId)).data });
+  const q = useQuery<FairAnalysis>({ queryKey: ['tprm-fair', analysisId], queryFn: async () => (await vendorFairApi.get(analysisId)).data, ...TPRM_QUERY_OPTS });
   const a = q.data;
   const [text, setText] = useState<FactorText | null>(null);
   const [meta, setMeta] = useState<Meta | null>(null);
