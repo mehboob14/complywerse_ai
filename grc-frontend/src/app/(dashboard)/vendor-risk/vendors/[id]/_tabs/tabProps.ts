@@ -9,6 +9,8 @@ export type TabProps = {
   /** Deep links the page reads from the address: ?stage=<key> (Lifecycle) and ?finding=<id> (Findings). */
   stage?: string | null;
   findingId?: number | null;
+  /** Counts up each time "VAT check" is picked in the head's menu: the Overview opens that section and brings it into view. */
+  vatRequest?: number;
   /** Call after a change the header or right column must reflect (refetches the vendor and its engagements). */
   onChanged?: () => void;
 };

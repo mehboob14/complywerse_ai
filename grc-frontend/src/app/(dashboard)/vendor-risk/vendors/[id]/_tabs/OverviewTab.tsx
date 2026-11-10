@@ -1,68 +1,86 @@
 'use client';
 
-// Overview tab of the vendor record. Owner: B2.
-// What the vendor does for us (and the facts about its data), its engagements, what depends on it, then the organisation's own
-// fields, the notes and the VAT check: everything the old Overview, Engagements and Dependencies tabs held.
-import type { ReactNode } from 'react';
+// Overview tab of the vendor record. What the supplier does for us (and the facts about its data), its engagements, then, as the person scrolls to them, what depends on it, the
+// organisation's own fields, the notes, the VAT check and the latest activity. The first two cards are drawn at once from what the page has already read (the vendor and its engagements);
+// every card below them is drawn when it comes near the screen, so it asks for its data then and not on arrival.
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { vendorRiskApi } from '@/lib/api';
 import { CustomValuesEditor, hasCustomFields, useModuleSettings } from '@/components/settings/CustomFields';
-import { Panel, fmt } from '../../../_ui';
+import { ChipList, ClampedText, Fact, FactList } from '@/components/ui/ds';
+import { formatDate } from '@/lib/format';
+import { fmt } from '../../../_ui/fmt';
 import { dataShared, lifecycleHref, riskLine, tierHref } from '../../../_lib/vendorRecordModel';
+import ActivityPanel from '../_record/Activity';
+import LazyMount from '../_record/LazyMount';
+import RecordPanel from '../_record/RecordPanel';
 import DependenciesPanel from '../_tpra/DependenciesPanel';
 import EngagementsPanel from '../_tpra/EngagementsPanel';
 import VatCard from '../_tpra/VatCard';
 import type { TabProps } from './tabProps';
 
-const CHIP = 'inline-flex items-center rounded-full px-2.5 py-1 text-[12px] font-medium leading-4';
+const NONE = 'None recorded';
+const texts = (v: unknown): string[] => (Array.isArray(v) ? v : []).map(String).filter(Boolean);
 
-function Facts({ label, children }: { label: string; children: ReactNode }) {
+/** The organisation's own fields: asked for (module settings) only when the card is about to be seen, and absent when the organisation has defined none. */
+function YourFields({ vendorId, values }: { vendorId: number; values: Record<string, unknown> | null | undefined }) {
+  const qc = useQueryClient();
+  const { data: settings } = useModuleSettings('vendors');
+  if (!hasCustomFields(settings, values)) return null;
   return (
-    <div className="min-w-0">
-      <dt className="text-[12px] leading-4 text-[#64707e]">{label}</dt>
-      <dd className="mt-1 break-words text-[14px] leading-5 text-[#26323d]">{children}</dd>
-    </div>
+    <RecordPanel title="Your fields">
+      <CustomValuesEditor
+        moduleKey="vendors"
+        values={values}
+        onSave={async (next) => {
+          if (!next) return;
+          await vendorRiskApi.updateVendor(vendorId, { custom_values: next });
+          await qc.invalidateQueries({ queryKey: ['vendor', vendorId] });
+        }}
+      />
+    </RecordPanel>
   );
 }
 
-const chips = (items: string[], tone: 'brand' | 'plain') => (
-  <span className="flex flex-wrap gap-1.5">
-    {items.map((t) => <span key={t} className={CHIP} style={tone === 'brand' ? { background: '#e6f6f3', color: '#0f766e' } : { background: '#f0f2f5', color: '#26323d' }}>{t}</span>)}
-  </span>
-);
-
-export default function OverviewTab({ vendorId, vendor }: TabProps) {
+export default function OverviewTab({ vendorId, vendor, vatRequest }: TabProps) {
   const router = useRouter();
   const qc = useQueryClient();
-  const { data: settings } = useModuleSettings('vendors');
-  if (!vendor) return null;
 
+  // "VAT check" in the head's menu: bring the card into view and put the cursor in its box once it is drawn.
+  useEffect(() => {
+    if (!vatRequest) return undefined;
+    const timer = setTimeout(() => {
+      document.getElementById('vendor-vat-check')?.scrollIntoView({ block: 'center' });
+      document.getElementById('vendor-vat-input')?.focus({ preventScroll: true });
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [vatRequest]);
+
+  if (!vendor) return null;
   const data = dataShared(vendor);
-  const services: string[] = (Array.isArray(vendor.services_provided) ? vendor.services_provided : []).map(String);
-  const systems: string[] = (vendor.systems_in_scope ?? []).map(String);
-  const tags: string[] = (vendor.tags ?? []).map(String);
   const start = vendor.contract_start_date;
   const end = vendor.contract_end_date;
-  const term = start && end ? `${fmt.date(start)} to ${fmt.date(end)}` : start ? `From ${fmt.date(start)}` : end ? `Until ${fmt.date(end)}` : 'Not recorded';
-  const refresh = () => qc.invalidateQueries({ queryKey: ['vendor', vendorId] });
+  const day = (v: string) => formatDate(v, { calendar: true });
+  const term = start && end ? `${day(start)} to ${day(end)}` : start ? `From ${day(start)}` : end ? `Until ${day(end)}` : 'Not recorded';
+  const refresh = () => { void qc.invalidateQueries({ queryKey: ['vendor', vendorId] }); };
 
   return (
-    <div className="space-y-5">
-      <Panel title="What they do for us">
-        <p className="text-[14px] leading-6 text-[#26323d]">{vendor.description || 'Not described yet.'}</p>
-        {services.length > 0 && <div className="mt-3">{chips(services, 'brand')}</div>}
-        <dl className="mt-4 grid gap-x-8 gap-y-4 border-t border-[#e1e6eb] pt-4 sm:grid-cols-2">
-          <Facts label="Data we share">{data.chips.length ? chips(data.chips, 'plain') : data.note}</Facts>
-          <Facts label="Where it lives">{vendor.data_location || 'Not recorded'}</Facts>
-          <Facts label="Systems in scope">{systems.length ? chips(systems, 'plain') : 'None recorded'}</Facts>
-          <Facts label="Annual value">{fmt.money(vendor.contract_value)}</Facts>
-          <Facts label="Tags">{tags.length ? chips(tags, 'plain') : 'None'}</Facts>
-          <Facts label="Data access">{vendor.data_access_level ? fmt.status(vendor.data_access_level) : 'None'}</Facts>
-          <Facts label="Contract">{term}</Facts>
-          <Facts label="Risk scores">{riskLine(vendor)}</Facts>
-        </dl>
-      </Panel>
+    <div className="flex flex-col gap-[16px]">
+      <RecordPanel title="What they do for us">
+        <ClampedText text={vendor.description || 'Not described yet.'} lines={4} />
+        {texts(vendor.services_provided).length > 0 && <ChipList className="mt-[12px]" items={texts(vendor.services_provided)} label="services" />}
+        <FactList className="mt-[16px] border-t border-ds-border pt-[16px]" min={240}>
+          <Fact label="Data we share">{data.chips.length ? <ChipList items={data.chips} label="data types" /> : data.note}</Fact>
+          <Fact label="Where it lives">{vendor.data_location || 'Not recorded'}</Fact>
+          <Fact label="Systems in scope">{texts(vendor.systems_in_scope).length ? <ChipList items={texts(vendor.systems_in_scope)} label="systems" /> : NONE}</Fact>
+          <Fact label="Annual value">{fmt.money(vendor.contract_value)}</Fact>
+          <Fact label="Tags">{texts(vendor.tags).length ? <ChipList items={texts(vendor.tags)} label="tags" /> : 'None'}</Fact>
+          <Fact label="Data access">{vendor.data_access_level ? fmt.status(vendor.data_access_level) : 'None'}</Fact>
+          <Fact label="Contract">{term}</Fact>
+          <Fact label="Risk scores">{riskLine(vendor)}</Fact>
+        </FactList>
+      </RecordPanel>
 
       <EngagementsPanel
         vendorId={vendorId}
@@ -70,33 +88,22 @@ export default function OverviewTab({ vendorId, vendor }: TabProps) {
         onTier={(id) => router.push(tierHref(vendorId, id))}
       />
 
-      <DependenciesPanel vendorId={vendorId} />
-
-      {hasCustomFields(settings, vendor.custom_values) && (
-        <Panel title="Your fields">
-          <CustomValuesEditor
-            moduleKey="vendors"
-            values={vendor.custom_values}
-            onSave={async (next) => {
-              if (!next) return;
-              await vendorRiskApi.updateVendor(vendorId, { custom_values: next });
-              await refresh();
-            }}
-          />
-        </Panel>
-      )}
+      <LazyMount label="what depends on them"><DependenciesPanel vendorId={vendorId} /></LazyMount>
+      <LazyMount label="your fields" minHeight={48}><YourFields vendorId={vendorId} values={vendor.custom_values} /></LazyMount>
 
       {vendor.notes && (
-        <Panel title="Notes">
-          <p className="whitespace-pre-wrap text-[14px] leading-6 text-[#26323d]">{vendor.notes}</p>
-        </Panel>
+        <RecordPanel title="Notes">
+          <p className="whitespace-pre-wrap break-words text-ds-body text-ds-fg-body">{vendor.notes}</p>
+        </RecordPanel>
       )}
 
-      <div id="vendor-vat-check" className="scroll-mt-24">
-        <Panel title="VAT check" info="Checked live with the European Commission's VIES when you ask.">
+      <div id="vendor-vat-check" className="scroll-mt-[64px]">
+        <RecordPanel title="VAT check" info="Checked live with the European Commission’s VIES when you ask.">
           <VatCard vendorId={vendor.id} vatNumber={vendor.vat_number || null} check={vendor.vat_check || null} onChecked={refresh} />
-        </Panel>
+        </RecordPanel>
       </div>
+
+      <LazyMount label="latest activity"><ActivityPanel vendorId={vendorId} /></LazyMount>
     </div>
   );
 }

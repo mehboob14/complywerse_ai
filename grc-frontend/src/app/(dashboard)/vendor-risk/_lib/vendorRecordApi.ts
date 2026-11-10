@@ -49,13 +49,13 @@ export function useDebounced<T>(value: T, ms = 350): T {
 
 export const DUPLICATE_MIN = 3;
 
-/** What a name (and website) may already be on record, once the name is long enough to mean something; `exclude` leaves a supplier out. */
-export function useDuplicates(name: string, website: string, exclude?: number) {
+/** What a name (and website) may already be on record, once the name is long enough to mean something; `exclude` leaves a supplier out. `enabled: false` waits (a closed disclosure asks nothing). */
+export function useDuplicates(name: string, website: string, exclude?: number, enabled = true) {
   const asked = name.trim();
   return useQuery<Duplicate[]>({
     queryKey: ['tprm-vendor-duplicates', asked, website.trim(), exclude ?? null],
     queryFn: async () => (await vendorRecordApi.duplicates({ name: asked, website: website.trim() || undefined, exclude_id: exclude })).data.items,
-    enabled: asked.length >= DUPLICATE_MIN,
+    enabled: enabled && asked.length >= DUPLICATE_MIN,
     staleTime: 30_000,
     retry: false,
   });

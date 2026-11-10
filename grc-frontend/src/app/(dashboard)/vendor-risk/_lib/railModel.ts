@@ -92,7 +92,10 @@ export const WITH_ACTIONS: readonly string[] = [`${V}/vendors`, `${V}/intake`];
 const clean = (pathname: string): string => (pathname || '').split(/[?#]/)[0].replace(/\/+$/, '') || '/';
 const under = (path: string, href: string): boolean => path === href || path.startsWith(`${href}/`);
 
-export const headOf = (pathname: string): HeadBy => HEAD[clean(pathname)] ?? 'legacy';
+/** A vendor's record (`/vendor-risk/vendors/<id>`, not its summary) is a page of this model that no row of HEAD can name (the id is the address's): it draws its own head (vendor-record). */
+const RECORD = /^\/vendor-risk\/vendors\/\d+$/;
+
+export const headOf = (pathname: string): HeadBy => HEAD[clean(pathname)] ?? (RECORD.test(clean(pathname)) ? 'page' : 'legacy');
 
 // ── which entry is on ────────────────────────────────────────────────────────────────────────────────────────────────────
 
