@@ -64,6 +64,10 @@ export const reportLabel = (r: RegisterRow): string | null => {
   const text = [r.regulator, r.report].filter((x) => x && x.trim()).join(' · ');
   return text || null;
 };
+/** The sheet a new finding is added on, from the source it came from (the client's own entry templates). */
+export const ENTRY_TEMPLATE_OF: Record<string, string> = {
+  regulator: 'regulatory', mercadien: 'ia_mercadien', ey: 'ia_ey_issue', it_pen: 'it_pen', self_id: 'self_id', credit_review: 'credit_review',
+};
 export const sourceWord = (source: string | null | undefined): string => findingSource.label(source || 'unassigned');
 export const statusWord = (r: RegisterRow): string => findingStatus.label(r.status);
 /** The finding's number as the client writes it, else its platform code. */

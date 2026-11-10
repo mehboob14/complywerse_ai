@@ -1,116 +1,62 @@
 'use client';
 
-/**
- * AI Assist on the add-a-finding form, sitting under the fields it reads from.
- * It proposes values for the empty fields only, each with its reason; list
- * fields only ever get values the platform already has. The person uses one,
- * or all, and every value stays editable. Values worked out from the
- * register or Settings rather than by the model (the owner's usual title,
- * the target date) are marked Auto.
- */
-import { Loader2, Sparkles, X } from 'lucide-react';
+// AI Assist on the Add finding form, under the columns it reads from. It proposes values for the EMPTY columns only, each with its reason; a list column only ever gets a value the platform already has
+// (anything else is left out and said). The person uses one, or all, and every value stays editable; nothing is saved until the finding is added. Values worked out from the register or Settings
+// instead of by AI (the owner's usual title, the target date) are marked Auto. The answer's `model` field is never read or shown: the page says "AI".
+import { Sparkles, X } from 'lucide-react';
+import { Button, IconButton, Notice } from '@/components/ui/ds';
 
-export type AiSuggestion = {
-  field: string; label: string; value: any; display: string; reason: string;
-  source: 'ai' | 'rule' | 'register';
-};
-export type AiAssistResult = {
-  suggestions: AiSuggestion[]; dropped: string[]; notice: string | null; model: string | null;
-};
+export type AiSuggestion = { field: string; label: string; value: unknown; display: string; reason: string; source: 'ai' | 'rule' | 'register' };
+export type AiAssistResult = { suggestions: AiSuggestion[]; dropped: string[]; notice: string | null };
 
-const tinyBtn = 'inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-semibold disabled:opacity-50';
-
-export function AiAssistBar({ canRun, running, error, result, pending, appliedCount, labelOf,
-  onRun, onUse, onUseAll, onClose }: {
-  canRun: boolean; running: boolean; error: string; result: AiAssistResult | null;
-  pending: AiSuggestion[]; appliedCount: number; labelOf: (field: string) => string;
+export function AiAssistPanel({ canRun, running, error, result, pending, appliedCount, labelOf, onRun, onUse, onUseAll, onClose }: {
+  canRun: boolean; running: boolean; error: string; result: AiAssistResult | null; pending: AiSuggestion[]; appliedCount: number; labelOf: (field: string) => string;
   onRun: () => void; onUse: (s: AiSuggestion) => void; onUseAll: () => void; onClose: () => void;
 }) {
   return (
-    <div className="bg-primary-50/40 px-3 py-2.5">
-      <div className="flex flex-wrap items-center gap-2">
-        <Sparkles className="h-3.5 w-3.5 text-primary-600" />
-        <p className="mr-auto text-[11px] text-slate-600">
-          {canRun
-            ? 'AI Assist fills the empty fields from the report and what you have entered.'
-            : 'Enter the issue name or paste the finding text, and AI Assist fills the rest.'}
+    <div className="flex flex-col gap-[8px] rounded-ds-card border border-ds-border bg-ds-primary-soft p-[12px]">
+      <div className="flex flex-wrap items-center gap-[8px]">
+        <Sparkles aria-hidden className="h-[16px] w-[16px] shrink-0 text-ds-primary-text" />
+        <p className="m-0 min-w-0 flex-1 basis-[200px] text-ds-body text-ds-fg-body">
+          {canRun ? 'AI Assist fills the empty fields from the report and what you have entered.' : 'Enter the issue name or paste the finding text, and AI Assist fills the rest.'}
         </p>
-        <button type="button" onClick={onRun} disabled={!canRun || running}
-                className={`${tinyBtn} bg-primary-600 py-1 text-[#0a0a0a] hover:bg-primary-700`}>
-          {running ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-          {running ? 'Working…' : result ? 'Suggest again' : 'AI Assist'}
-        </button>
+        <Button leftIcon={<Sparkles aria-hidden />} loading={running} disabled={!canRun} onClick={onRun}>{result ? 'Suggest again' : 'AI Assist'}</Button>
       </div>
-      {error && <p className="mt-1.5 rounded bg-red-50 px-2 py-1 text-[11px] text-red-700">{error}</p>}
+      {error && <Notice tone="danger" title="AI Assist could not run" action={<Button disabled={running} onClick={onRun}>Try again</Button>}>{error}</Notice>}
 
       {result && (
-        <div className="mt-2 overflow-hidden rounded-lg border border-primary-200 bg-white">
-          {result.notice && (
-            <p className="border-b border-amber-100 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800">{result.notice}</p>
-          )}
+        <div className="flex flex-col gap-[8px] rounded-ds-card border border-ds-border bg-ds-surface p-[8px]">
+          {result.notice && <Notice tone="warning">{result.notice}</Notice>}
           {pending.length > 0 ? (
             <>
-              <div className="flex items-center justify-between border-b border-slate-100 px-2.5 py-1.5">
-                <span className="text-[11px] font-semibold text-slate-700">
-                  {pending.length} suggestion{pending.length === 1 ? '' : 's'}
+              <div className="flex items-center justify-between gap-[8px]">
+                <span className="text-ds-body font-[600] text-ds-fg">{pending.length} {pending.length === 1 ? 'suggestion' : 'suggestions'}</span>
+                <span className="flex items-center gap-[4px]">
+                  <Button variant="primary" size="sm" onClick={onUseAll}>Use all</Button>
+                  <IconButton label="Dismiss the suggestions" onClick={onClose}><X aria-hidden /></IconButton>
                 </span>
-                <div className="flex items-center gap-1">
-                  <button type="button" onClick={onUseAll}
-                          className={`${tinyBtn} bg-primary-600 text-[#0a0a0a] hover:bg-primary-700`}>
-                    Use all
-                  </button>
-                  <button type="button" onClick={onClose} aria-label="Dismiss the suggestions"
-                          className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
               </div>
-              <ul className="max-h-96 divide-y divide-slate-50 overflow-y-auto">
+              <ul className="m-0 flex max-h-[360px] list-none flex-col gap-[8px] overflow-y-auto p-0">
                 {pending.map((s) => (
-                  <li key={s.field} className="grid grid-cols-[120px_1fr_auto] items-start gap-2 px-2.5 py-2">
-                    <span className="pt-0.5 text-[11px] font-medium text-slate-600">
-                      {s.label}
-                      {s.source !== 'ai' && (
-                        <span title="Worked out from your settings and register, not by the AI"
-                              className="ml-1 rounded bg-slate-100 px-1 text-[9px] font-semibold uppercase text-slate-500">
-                          Auto
-                        </span>
-                      )}
-                    </span>
+                  <li key={s.field} className="grid items-start gap-x-[8px] gap-y-[2px] border-t border-ds-border pt-[8px] first:border-t-0 first:pt-0 sm:grid-cols-[130px_minmax(0,1fr)_auto]">
+                    <span className="text-ds-label font-[600] text-ds-fg-muted">{s.label}{s.source !== 'ai' ? ' · Auto' : ''}</span>
                     <div className="min-w-0">
-                      <p className="line-clamp-4 whitespace-pre-wrap break-words text-xs text-slate-900" title={s.display}>
-                        {s.display}
-                      </p>
-                      {s.reason && <p className="mt-0.5 text-[10px] text-slate-400">{s.reason}</p>}
+                      <p className="m-0 line-clamp-4 whitespace-pre-wrap break-words text-ds-body text-ds-fg [overflow-wrap:anywhere]">{s.display}</p>
+                      {s.reason && <p className="m-0 text-ds-label text-ds-fg-muted">{s.reason}</p>}
                     </div>
-                    <button type="button" onClick={() => onUse(s)}
-                            className={`${tinyBtn} border border-slate-200 bg-white text-slate-700 hover:bg-slate-50`}>
-                      Use
-                    </button>
+                    <Button size="sm" onClick={() => onUse(s)}>Use</Button>
                   </li>
                 ))}
               </ul>
             </>
           ) : (
-            <div className="flex items-center justify-between px-2.5 py-2">
-              <p className="text-[11px] text-slate-500">
-                {appliedCount ? 'All used. Review the fields, then add the finding.' : 'Nothing to suggest for the empty fields.'}
-              </p>
-              <button type="button" onClick={onClose} aria-label="Close"
-                      className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
-                <X className="h-3.5 w-3.5" />
-              </button>
+            <div className="flex items-center justify-between gap-[8px]">
+              <p className="m-0 text-ds-body text-ds-fg-muted">{appliedCount ? 'All used. Review the fields, then add the finding.' : 'Nothing to suggest for the empty fields.'}</p>
+              <IconButton label="Close" onClick={onClose}><X aria-hidden /></IconButton>
             </div>
           )}
-          {result.dropped.length > 0 && (
-            <p className="border-t border-slate-100 px-2.5 py-1.5 text-[10px] text-slate-500">
-              Left out because the answer is not in your lists: {result.dropped.map(labelOf).join(', ')}.
-              Add values under Settings → Dropdown lists.
-            </p>
-          )}
-          <p className="border-t border-slate-100 px-2.5 py-1.5 text-[10px] text-slate-400">
-            AI can be wrong. Check each value against the report. Nothing is saved until you add the finding.
-          </p>
+          {result.dropped.length > 0 && <p className="m-0 text-ds-label text-ds-fg-muted">Left out because the answer is not in your lists: {result.dropped.map(labelOf).join(', ')}. Add values under Setup, Dropdown lists.</p>}
+          <p className="m-0 text-ds-label text-ds-fg-muted">AI can be wrong. Check each value against the report. Nothing is saved until you add the finding.</p>
         </div>
       )}
     </div>
