@@ -66,6 +66,10 @@ export const PAGES: PageSpec[] = [
   // The two pages removed from the rail (D50) still forward to the Overview.
   { path: `${V}/procurement`, label: OVERVIEW, area: AREA, aliasOf: V },
   { path: `${V}/shadow-saas`, label: OVERVIEW, area: AREA, aliasOf: V },
+  // Monitoring: the Signals feed and Breach alerts are ONE Alerts register; Technology and Concentration are ONE Dependencies page (vendor-monitoring, 2026-11-10). The old addresses forward.
+  { path: `${V}/alerts`, label: 'Alerts', area: AREA, aliasOf: `${V}/monitoring` },
+  { path: `${V}/technology`, label: 'Dependencies', area: AREA, aliasOf: `${V}/dependencies` },
+  { path: `${V}/concentration`, label: 'Dependencies', area: AREA, aliasOf: `${V}/dependencies` },
 
   // ---- the entries and tabs the sidebar does not list (yet) ----
   ...ENTRIES.filter((p) => !listed.has(p.path)),

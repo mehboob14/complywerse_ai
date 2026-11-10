@@ -55,7 +55,8 @@ test('only Intake and Findings carry a count, as in the reference product', () =
 
 test('the strip of a page is the tabs of its entry: none for the Overview, Intake, Findings and Questionnaires, the same four on every page of Vendors', () => {
   assert.deepEqual(tabsOf('/vendor-risk/vendors/12').map((t) => t.name), ['Register', 'Assessments', 'Contracts', 'Check-ins']);
-  assert.deepEqual(tabsOf('/vendor-risk/alerts?x=1').map((t) => t.name), ['Signals', 'Breach alerts', 'Security ratings', 'Technology', 'Concentration']);
+  assert.deepEqual(tabsOf('/vendor-risk/alerts?x=1').map((t) => t.name), ['Alerts', 'Security ratings', 'Dependencies'], 'the old Breach alerts address is still Monitoring');
+  assert.deepEqual(tabsOf('/vendor-risk/technology?q=aws').map((t) => t.name), ['Alerts', 'Security ratings', 'Dependencies']);
   assert.deepEqual(tabsOf('/vendor-risk/settings/emails').map((t) => t.name), ['Roster', 'Policy', 'Settings']);
   for (const path of ['/vendor-risk', '/vendor-risk/attention', '/vendor-risk/intake', '/vendor-risk/findings', '/vendor-risk/questionnaires', '/risks']) assert.deepEqual(tabsOf(path), [], path);
 });
@@ -82,7 +83,8 @@ test('HEAD: a page that draws its head draws the page head of the kit; a page th
   assert.equal(headOf('/vendor-risk/vendors?tier=high'), 'layout');
   assert.equal(headOf('/vendor-risk'), 'page');
   assert.equal(headOf('/vendor-risk/vendors/12'), 'legacy');
-  assert.equal(headOf('/vendor-risk/alerts'), 'legacy');
+  assert.equal(headOf('/vendor-risk/alerts'), 'legacy', 'a forward draws nothing');
+  for (const path of ['/vendor-risk/monitoring', '/vendor-risk/security', '/vendor-risk/dependencies']) assert.equal(headOf(path), 'page', `${path}: the page draws its head and the strip`);
   for (const path of WITH_ACTIONS) assert.equal(headOf(path), 'layout', `${path}: the buttons are drawn only by the layout head`);
 });
 
