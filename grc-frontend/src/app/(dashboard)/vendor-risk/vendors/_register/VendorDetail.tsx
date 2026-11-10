@@ -6,19 +6,17 @@ import { Button, Fact, FactList, PersonChip, StatusPill } from '@/components/ui/
 import { formatCount, formatDate, formatRelative, UNASSIGNED } from '@/lib/format';
 import { statusPill } from '@/lib/status';
 import { vendorTier } from '@/lib/statuses/vendor';
-import { piiWord, stageProgress, subline, websiteHref, type VendorRow } from '../../_lib/vendorRegisterDef';
+import { piiWord, stageProgress, websiteHref, type VendorRow } from '../../_lib/vendorRegisterDef';
 import { ClassPill, GradePill, NextStep, ReviewDate, StatusWord, TierPill } from './VendorCells';
-
-const MUTED = 'text-ds-fg-muted';
 
 export function VendorDetail({ v, now }: { v: VendorRow; now: Date }) {
   const life = v.lifecycle;
   const site = websiteHref(v.website);
+  const pii = ({ yes: 'Holds personal data', no: 'Holds none' } as Record<string, string | undefined>)[piiWord(v)];
   const findings = life ? (life.open_findings > 0 ? `${formatCount(life.open_findings)} open${life.open_critical > 0 ? `, ${formatCount(life.open_critical)} critical` : ''}` : 'None open') : null;
   return (
     <div className="flex flex-col gap-[16px]">
       <div className="flex flex-wrap items-center gap-[8px]"><TierPill v={v} /><StatusWord v={v} />{v.grade && <GradePill v={v} />}</div>
-      {subline(v) && <p className={`text-ds-body ${MUTED}`}>{subline(v)}</p>}
       <FactList min={150}>
         <Fact label="Next step">
           <span className="flex flex-wrap items-center gap-[8px]">
@@ -30,13 +28,13 @@ export function VendorDetail({ v, now }: { v: VendorRow; now: Date }) {
         <Fact label="Business unit">{v.business_unit?.name}</Fact>
         <Fact label="Next review">{v.next_reassessment_date ? <ReviewDate v={v} now={now} /> : null}</Fact>
         <Fact label="Lifecycle">{life ? stageProgress(life.stage) : 'Not started'}</Fact>
-        <Fact label="Residual risk">{life?.residual_rating ? <StatusPill size="sm" {...statusPill(vendorTier, life.residual_rating)} /> : null}</Fact>
-        <Fact label="Findings">{findings}</Fact>
-        <Fact label="Personal data">{({ yes: 'Holds personal data', no: 'Holds none' } as Record<string, string>)[piiWord(v)]}</Fact>
-        <Fact label="Data classification">{v.data_classification ? <ClassPill v={v} /> : null}</Fact>
-        <Fact label="Contract ends">{v.contract_end_date ? `${formatDate(v.contract_end_date, { calendar: true })} (${formatRelative(v.contract_end_date, now, { calendar: true })})` : null}</Fact>
-        <Fact label="Annual value">{typeof v.contract_value === 'number' ? formatCount(v.contract_value) : null}</Fact>
-        <Fact label="Website">{site ? <a href={site} target="_blank" rel="noopener noreferrer" className="text-ds-primary-text underline [overflow-wrap:anywhere]">{v.website}</a> : null}</Fact>
+        {life?.residual_rating && <Fact label="Residual risk"><StatusPill size="sm" {...statusPill(vendorTier, life.residual_rating)} /></Fact>}
+        {findings && <Fact label="Findings">{findings}</Fact>}
+        {pii && <Fact label="Personal data">{pii}</Fact>}
+        {v.data_classification && <Fact label="Data classification"><ClassPill v={v} /></Fact>}
+        {v.contract_end_date && <Fact label="Contract ends">{`${formatDate(v.contract_end_date, { calendar: true })} (${formatRelative(v.contract_end_date, now, { calendar: true })})`}</Fact>}
+        {typeof v.contract_value === 'number' && <Fact label="Annual value">{formatCount(v.contract_value)}</Fact>}
+        {site && <Fact label="Website"><a href={site} target="_blank" rel="noopener noreferrer" className="text-ds-primary-text underline [overflow-wrap:anywhere]">{v.website}</a></Fact>}
       </FactList>
     </div>
   );

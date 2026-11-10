@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { readAddress, writeAddress } from '../../../../../lib/addressState.ts';
 import { sortRows, type SortState } from '../../../../../components/ui/ds/tableModel.ts';
 import { CONTRACT_SCHEMA, filterContracts, inboxOf, sortValue, typesOf, viewCounts } from './contractsModel.ts';
-import { EMPTY, changedPayload, describe, noticeBy, split, toForm, toPayload } from './contractForm.ts';
+import { EMPTY, applySuggestions, changedPayload, describe, noticeBy, split, toForm, toPayload } from './contractForm.ts';
 import { countdown, money, type ContractRow, type ContractState, type HistoryRow } from './shared.ts';
 
 let id = 0;
@@ -51,7 +51,7 @@ test('the address: a reminder\'s ?contract=7 opens that contract; a view, a type
   assert.deepEqual([s.contract, s.view, s.type, s.q, s.sort], [7, 'ended', 'dpa', 'acme', { key: 'ends', dir: 'desc' }]);
   assert.equal(readAddress(CONTRACT_SCHEMA, '?contract=abc&view=nonsense').contract, 0, 'junk is the default');
   assert.equal(readAddress(CONTRACT_SCHEMA, '?view=nonsense').view, 'current');
-  assert.equal(writeAddress(CONTRACT_SCHEMA, '?contract=7', { ...s, contract: 0, view: 'current', type: '', q: '', sort: null }), '');
+  assert.equal(writeAddress(CONTRACT_SCHEMA, '?contract=7', { ...s, contract: 0, view: 'current', type: '', q: '', page: 1, sort: null }), '');
 });
 
 test('a column sorts by what it shows; a contract with nothing there is last whichever way', () => {
@@ -77,6 +77,14 @@ test('a form is the text of a contract, and a save sends only what changed, the 
   assert.deepEqual(terms, { title: 'Master agreement', currency: 'EUR' });
   assert.deepEqual(toPayload(EMPTY).pricing, null);
   assert.equal(toPayload({ ...EMPTY, notice_days: '30' }).notice_days, 30);
+});
+
+test('what the AI read from the signed copy fills the form and names the fields it filled; a field the form does not have is not made up', () => {
+  const { form, keys } = applySuggestions(EMPTY, { title: 'Master agreement', notice_days: 60, pricing: { unit_price: 12, uplift: true }, nonsense: 'x' });
+  assert.deepEqual([form.title, form.notice_days, form.unit_price, form.uplift], ['Master agreement', '60', '12', 'yes']);
+  assert.deepEqual(keys.sort(), ['notice_days', 'title', 'unit_price', 'uplift']);
+  assert.equal(EMPTY.title, '', 'the form it was given is not changed');
+  assert.deepEqual(applySuggestions(EMPTY, {}).keys, []);
 });
 
 test('the last day to give notice is the earlier of the renewal and end dates, less the notice days', () => {

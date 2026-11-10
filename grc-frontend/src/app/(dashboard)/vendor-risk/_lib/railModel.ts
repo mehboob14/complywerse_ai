@@ -79,6 +79,8 @@ export const HEAD: Readonly<Record<string, HeadBy>> = {
   [`${V}/attention`]: 'page',
   [`${V}/actions`]: 'page',
   [`${V}/vendors`]: 'page',
+  [`${V}/contracts`]: 'page',
+  [`${V}/reviews`]: 'page',
   [`${V}/intake`]: 'layout',
   [`${V}/findings`]: 'layout',
   [`${V}/questionnaires`]: 'layout',

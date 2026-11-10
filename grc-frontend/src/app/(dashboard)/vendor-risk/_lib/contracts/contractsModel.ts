@@ -19,14 +19,17 @@ export const VIEWS: ReadonlyArray<{ key: ViewKey; label: string; states: readonl
 
 export const SORT_KEYS = ['supplier', 'contract', 'started', 'ends', 'notice', 'value', 'state'] as const;
 
-/** The page's address: `?view=draft&type=dpa&q=acme&contract=7&sort=ends:asc`. `contract` opens one contract (reminders and the attention queue link straight to it). */
+/** The page's address: `?view=draft&type=dpa&q=acme&contract=7&sort=ends:asc&page=2`. `contract` opens one contract (reminders and the attention queue link straight to it). */
 export const CONTRACT_SCHEMA: Schema = {
   view: oneOf(VIEWS.map((v) => v.key), 'current'),
   type: text(),
   q: text(),
   contract: integer(0, { min: 1 }),
+  page: integer(1, { min: 1 }),
   sort: sortOf(SORT_KEYS, null),
 };
+
+export const PAGE_SIZE = 50;
 
 export interface Query { view: ViewKey; type: string; q: string }
 

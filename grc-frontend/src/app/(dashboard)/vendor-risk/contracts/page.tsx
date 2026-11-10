@@ -1,250 +1,213 @@
 'use client';
 
-// Every supplier contract on one page. What needs a decision (past its date,
-// inside its notice period, or ending within the inbox window) sits at the top.
+export const dynamic = 'force-dynamic';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+// Every supplier contract on one page (Third-Party Vendor Risk > Vendors > Contracts). What needs a decision (past its date, inside its notice period, or ending within the inbox window)
+// is the worklist at the top, while there is still time to renew, renegotiate or leave; below it the register, by view (in force, drafts, ended, all), type and search, kept in the address
+// (`?contract=7` opens one contract: reminders and the attention queue link straight to it). On the kit: counters, a work list, a register with phone cards, the contract in a sheet.
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { clsx } from 'clsx';
-import { FileSignature, Loader2, Paperclip, Plus, RefreshCw, Search } from 'lucide-react';
+import { FileSignature, Paperclip, Plus } from 'lucide-react';
+import { PageHeader } from '@/components/ui';
+import {
+  Button, DebouncedSearch, EmptyState, ErrorState, FilterChips, Pager, RegisterTable, SectionCard, Select, StatTile, StatusPill, WorkRow, sortRows, useAddressState,
+  type RegisterColumn, type SortState,
+} from '@/components/ui/ds';
+import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
+import { formatCount, formatDate } from '@/lib/format';
+import { statusPill } from '@/lib/status';
+import { vendorTier } from '@/lib/statuses/vendor';
+import { contractState } from '@/lib/statuses/vendorRegister';
 import { vendorContractsApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
-import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
-import { fmtDate } from '../_lib/tprmShared';
-import { TIER_CLS } from '../_lib/intake/types';
+import { routeFor } from '@/lib/navRegistry';
+import { VendorTabs } from '../_lib/VendorNav';
 import ContractDrawer, { CloseOutDialog, RenewDialog } from '../_lib/contracts/ContractDrawer';
-import {
-  RENEWAL_LABEL, STATE_META, countdown, money, type ContractRow, type ContractState, type Register,
-} from '../_lib/contracts/shared';
+import { CONTRACT_SCHEMA, PAGE_SIZE, VIEWS, filterContracts, inboxOf, sortValue, typesOf, viewCounts, type ViewKey } from '../_lib/contracts/contractsModel';
+import { RENEWAL_LABEL, countdown, money, type ContractRow, type Register } from '../_lib/contracts/shared';
 
-const INBOX: ContractState[] = ['lapsed', 'decide', 'ending'];
-const VIEWS: Array<{ key: 'current' | 'draft' | 'ended' | 'all'; label: string; states: ContractState[] }> = [
-  { key: 'current', label: 'In force', states: ['lapsed', 'decide', 'ending', 'in_force'] },
-  { key: 'draft', label: 'Drafts', states: ['draft'] },
-  { key: 'ended', label: 'Ended', states: ['ended'] },
-  { key: 'all', label: 'All', states: ['lapsed', 'decide', 'ending', 'in_force', 'draft', 'ended'] },
-];
-
-function StateChip({ state }: { state: ContractState }) {
-  return <span className={clsx('inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium', STATE_META[state].cls)}>{STATE_META[state].label}</span>;
-}
+const MUTED = 'text-ds-fg-muted';
+const INFO = 'Every supplier contract in one place. Anything past its date, inside its notice period, or ending soon is at the top, while there is still time to renew, renegotiate or leave.';
+const day = (v?: string | null) => formatDate(v, { calendar: true });
 
 export default function ContractsPage() {
-  const params = useSearchParams();
+  const label = routeFor('/vendor-risk/contracts')?.label ?? 'Contracts';
   const { hasPermission } = usePermissions();
   const canEdit = hasPermission('vendor_risk:contracts:edit') || hasPermission('erm:risks:edit');
   const canCreate = hasPermission('vendor_risk:contracts:create') || canEdit;
-  const [view, setView] = useState<(typeof VIEWS)[number]['key']>('current');
-  const [type, setType] = useState('');
-  const [search, setSearch] = useState('');
-  const [open, setOpen] = useState<number | 'new' | null>(null);
+  const [address, setAddress] = useAddressState(CONTRACT_SCHEMA);
+  const [adding, setAdding] = useState(false);
   const [renewing, setRenewing] = useState<ContractRow | null>(null);
   const [closing, setClosing] = useState<ContractRow | null>(null);
 
-  const { data, isLoading, isError } = useQuery<Register>({
+  const list = useQuery<Register>({
     queryKey: ['tprm-contracts'],
     queryFn: async () => (await vendorContractsApi.list()).data,
-    ...TPRM_QUERY_OPTS,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
   });
-  // Reminders and the attention queue link straight to one contract.
-  useEffect(() => {
-    const id = Number(params?.get('contract'));
-    if (id) setOpen(id);
-  }, [params]);
-
-  const items = useMemo(() => data?.items || [], [data]);
-  const inbox = items.filter((c) => INBOX.includes(c.state));
-  const types = useMemo(() => Array.from(new Set(items.map((c) => c.contract_type))).sort(), [items]);
-  const states = VIEWS.find((v) => v.key === view)!.states;
-  const needle = search.trim().toLowerCase();
-  const rows = items.filter((c) => states.includes(c.state) && (!type || c.contract_type === type)
-    && (!needle || [c.vendor.name, c.title, c.reference, c.type_label].some((x) => (x || '').toLowerCase().includes(needle))));
-  const value = Object.entries(data?.annual_value || {}).sort((a, b) => b[1] - a[1]);
+  const data = list.data;
+  const items = useMemo(() => data?.items ?? [], [data]);
+  const inbox = useMemo(() => inboxOf(items), [items]);
+  const types = useMemo(() => typesOf(items), [items]);
+  const view = address.view as ViewKey;
+  const sort = address.sort as SortState;
+  const rows = useMemo(() => sortRows(filterContracts(items, { view, type: address.type, q: address.q }), sort, sortValue), [items, view, address.type, address.q, sort]);
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const page = Math.min(address.page as number, pages);
+  const shown = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const counts = data?.counts;
+  const perView = viewCounts(counts);
+  const value = Object.entries(data?.annual_value || {}).sort((a, b) => b[1] - a[1]);
+  const open = (address.contract as number) || 0;
+  const filtering = view !== 'current' || !!address.type || !!address.q;
+  const clear = () => setAddress({ view: 'current', type: '', q: '', page: 1 });
+  const openContract = (id: number) => setAddress({ contract: id });
+  const typeName = (t: string) => data?.types[t] || t;
+
+  const columns: RegisterColumn<ContractRow>[] = [
+    {
+      key: 'supplier', header: 'Supplier', sortable: true, isRowHeader: true,
+      cell: (c) => (
+        <div className="flex min-w-0 flex-col items-start gap-[2px]">
+          <span className="line-clamp-2 break-words font-[600] text-ds-fg" title={c.vendor.name}>{c.vendor.name}</span>
+          {c.vendor.tier && <StatusPill size="sm" {...statusPill(vendorTier, c.vendor.tier)} />}
+        </div>
+      ),
+    },
+    {
+      key: 'contract', header: 'Contract', sortable: true, card: 'meta',
+      cell: (c) => (
+        <div className="min-w-0">
+          <span className="line-clamp-2 break-words text-ds-fg" title={c.title || c.type_label}>{c.title || c.type_label}</span>
+          <span className={`flex items-center gap-[4px] text-ds-label ${MUTED}`}>
+            {c.type_label}{c.reference && <> · {c.reference}</>}
+            {c.evidence_id && <Paperclip aria-label="Signed copy attached" className="h-[12px] w-[12px] shrink-0" strokeWidth={1.75} />}
+          </span>
+        </div>
+      ),
+    },
+    { key: 'started', header: 'Started', sortable: true, priority: 3, card: 'hide', cell: (c) => <span className="whitespace-nowrap text-ds-fg-body">{day(c.effective_date)}</span> },
+    {
+      key: 'ends', header: 'Ends', sortable: true, card: 'meta',
+      cell: (c) => (
+        <span className="text-ds-fg-body">
+          {c.ends_on ? day(c.ends_on) : <span className={MUTED}>No end date</span>}
+          {c.renewal_type && <span className={`block text-ds-label ${MUTED}`}>{RENEWAL_LABEL[c.renewal_type]}</span>}
+        </span>
+      ),
+    },
+    { key: 'notice', header: 'Notice by', sortable: true, priority: 2, card: 'hide', cell: (c) => (c.act_by && c.act_by !== c.ends_on ? <span className="whitespace-nowrap text-ds-fg-body">{day(c.act_by)}</span> : <span className={MUTED}>—</span>) },
+    { key: 'value', header: 'Per year', sortable: true, priority: 2, align: 'right', firstDir: 'desc', card: 'meta', cell: (c) => <span className="tabular-nums text-ds-fg-body">{money(c.annual_value, c.currency)}</span> },
+    {
+      key: 'state', header: 'State', sortable: true, card: 'meta',
+      cell: (c) => (
+        <span className="flex flex-col items-start gap-[2px]">
+          <StatusPill size="sm" {...statusPill(contractState, c.state)} />
+          {(c.state === 'lapsed' || c.state === 'decide' || c.state === 'ending') && <span className={`text-ds-label ${MUTED}`}>{countdown(c)}</span>}
+        </span>
+      ),
+    },
+  ];
+
+  const stats = [
+    {
+      label: 'Needs a decision now', value: counts ? formatCount(counts.lapsed + counts.decide) : null, tone: counts && counts.lapsed + counts.decide ? 'danger' as const : undefined,
+      note: counts?.lapsed ? `${formatCount(counts.lapsed)} past ${counts.lapsed === 1 ? 'its' : 'their'} date` : `Notice due within ${data?.decide_days ?? 30} days`,
+    },
+    { label: `Ending within ${data?.inbox_days ?? 90} days`, value: counts ? formatCount(counts.ending) : null, note: 'No notice due yet' },
+    { label: 'In force', value: counts ? formatCount(counts.lapsed + counts.decide + counts.ending + counts.in_force) : null, note: counts?.draft ? `${formatCount(counts.draft)} draft${counts.draft === 1 ? '' : 's'} not signed` : 'Signed and running' },
+    {
+      label: 'Annual value in force', value: counts && value.length ? money(value[0][1], value[0][0] || null) : null,
+      note: value.length > 1 ? `+ ${value.slice(1).map(([cur, v]) => money(v, cur || null)).join(' · ')}` : undefined,
+    },
+  ];
+
+  const head = (
+    <>
+      <PageHeader
+        variant="page"
+        title={label}
+        info={INFO}
+        meta={counts ? `${formatCount(Object.values(counts).reduce((a, b) => a + b, 0))} contracts` : undefined}
+        actions={canCreate ? <Button variant="primary" leftIcon={<Plus aria-hidden />} onClick={() => setAdding(true)}>Add contract</Button> : undefined}
+      />
+      <VendorTabs />
+    </>
+  );
+
+  if (list.isLoading) {
+    return <div className="flex flex-col gap-[16px]">{head}<RegisterTable caption="Contracts" columns={columns} rows={[]} getRowId={(c) => c.id} loading cardTitle={(c) => c.vendor.name} /></div>;
+  }
+  if (list.isError && !data) {
+    return <div className="flex flex-col gap-[16px]">{head}<ErrorState title="Couldn't load the contracts" message={errorMessage(list.error)} onRetry={canRetry(list.error) ? () => { void list.refetch(); } : undefined} /></div>;
+  }
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-900">Contracts</h1>
-          <p className="mt-0.5 max-w-2xl text-sm text-slate-500">
-            Every supplier contract in one place. Anything past its date, inside its notice period, or ending within
-            {' '}{data?.inbox_days ?? 90} days is at the top, while there is still time to renew, renegotiate or leave.
-          </p>
-        </div>
-        {canCreate && (
-          <button type="button" onClick={() => setOpen('new')}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-primary-700">
-            <Plus className="h-4 w-4" /> Add contract
-          </button>
+    <div className="flex flex-col gap-[16px]">
+      {head}
+      <div className="grid grid-cols-2 gap-[12px] lg:grid-cols-4">
+        {stats.map((s) => <StatTile key={s.label} label={s.label} value={s.value} tone={s.tone} note={s.note} />)}
+      </div>
+
+      <SectionCard id="needs-a-decision" title="Needs a decision" meta={`${formatCount(inbox.length)} ${inbox.length === 1 ? 'contract' : 'contracts'}`}
+        info={`Past its date, notice due, or ending within ${data?.inbox_days ?? 90} days.`}>
+        {inbox.length === 0 ? (
+          <p className={`text-ds-body ${MUTED}`}>Nothing is ending or due for notice in the next {data?.inbox_days ?? 90} days.</p>
+        ) : (
+          <ul className="m-0 flex list-none flex-col gap-[8px] p-0">
+            {inbox.map((c) => (
+              <WorkRow
+                key={c.id}
+                kind={{ label: contractState.label(c.state), tone: contractState.tone(c.state) }}
+                title={`${c.vendor.name} · ${c.title || c.type_label}`}
+                onOpen={() => openContract(c.id)}
+                context={[countdown(c), c.renewal_type ? RENEWAL_LABEL[c.renewal_type] : c.type_label, c.ends_on ? `${c.renewal_type === 'auto' ? 'renews' : 'ends'} ${day(c.ends_on)}` : null, c.annual_value !== null ? `${money(c.annual_value, c.currency)} a year` : null].filter(Boolean).join(' · ')}
+                action={canEdit ? { label: 'Renewed', onClick: () => setRenewing(c), ariaLabel: `Renewed: ${c.vendor.name}, ${c.title || c.type_label}` } : undefined}
+                menu={canEdit ? { label: `More for ${c.vendor.name}`, items: [{ key: 'close', label: 'Close out', onSelect: () => setClosing(c) }] } : undefined}
+              />
+            ))}
+          </ul>
         )}
-      </div>
+      </SectionCard>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Kpi label="Needs a decision now" value={counts ? counts.lapsed + counts.decide : undefined} tone={counts && counts.lapsed + counts.decide ? 'red' : undefined}
-          note={counts?.lapsed ? `${counts.lapsed} past ${counts.lapsed === 1 ? 'its' : 'their'} date` : `Notice due within ${data?.decide_days ?? 30} days`} />
-        <Kpi label={`Ending within ${data?.inbox_days ?? 90} days`} value={counts?.ending} tone={counts?.ending ? 'amber' : undefined} note="No notice due yet" />
-        <Kpi label="In force" value={counts ? counts.lapsed + counts.decide + counts.ending + counts.in_force : undefined}
-          note={counts?.draft ? `${counts.draft} draft${counts.draft === 1 ? '' : 's'} not signed` : 'Signed and running'} />
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <p className="text-xs text-slate-500">Annual value in force</p>
-          {value.length === 0 ? <p className="mt-1 text-2xl font-semibold text-slate-300">—</p> : (
-            <>
-              <p className="mt-1 text-2xl font-semibold text-slate-900">{money(value[0][1], value[0][0] || null)}</p>
-              {value.length > 1 && <p className="text-xs text-slate-500">+ {value.slice(1).map(([cur, v]) => money(v, cur || null)).join(' · ')}</p>}
-            </>
-          )}
+      <section aria-labelledby="contracts-register-h" className="flex flex-col gap-[12px]">
+        <div className="flex flex-wrap items-center gap-x-[12px] gap-y-[8px]">
+          <h2 id="contracts-register-h" className="!text-ds-section !text-ds-fg">All contracts</h2>
+          <FilterChips
+            label="Contracts shown"
+            chips={VIEWS.map((v) => ({ key: v.key, label: v.label, count: perView ? perView[v.key] : undefined, active: view === v.key }))}
+            onToggle={(k) => setAddress({ view: k as ViewKey, page: 1 })}
+          />
+          <div className="w-[200px]">
+            <Select aria-label="Contract type" value={address.type as string} onChange={(e) => setAddress({ type: e.target.value, page: 1 })}>
+              <option value="">Every type</option>
+              {types.map((t) => <option key={t} value={t}>{typeName(t)}</option>)}
+            </Select>
+          </div>
+          <DebouncedSearch className="w-full max-w-[320px] sm:ml-auto" label="Search contracts" placeholder="Search supplier, title or reference" value={address.q as string} onSearch={(q) => setAddress({ q, page: 1 })} />
         </div>
-      </div>
+        <RegisterTable
+          caption="Contracts"
+          columns={columns}
+          rows={shown}
+          getRowId={(c) => c.id}
+          sort={sort}
+          onSortChange={(next) => setAddress({ sort: next, page: 1 })}
+          onRowActivate={(c) => openContract(c.id)}
+          selectedId={open || null}
+          cardTitle={(c) => <span className="line-clamp-2 break-words font-[600] text-ds-fg">{c.vendor.name}</span>}
+          empty={items.length === 0
+            ? <EmptyState bare kind="firstUse" icon={FileSignature} title="No contracts yet" description={canCreate ? "Add one here, or at the contracting stage of a supplier's assessment." : 'No contracts have been added yet.'} action={canCreate ? <Button variant="primary" leftIcon={<Plus aria-hidden />} onClick={() => setAdding(true)}>Add contract</Button> : undefined} />
+            : <EmptyState bare kind="noMatches" title="No contract matches" description="Try another search, or take a filter off." onClearFilters={filtering ? clear : undefined} />}
+          footer={<Pager page={page} pageSize={PAGE_SIZE} total={rows.length} onPage={(n) => setAddress({ page: n })} noun={{ one: 'contract', other: 'contracts' }} />}
+        />
+      </section>
 
-      {isLoading ? (
-        <div className="flex items-center gap-2 py-10 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
-      ) : isError ? (
-        <p className="text-sm text-rose-700">Could not load contracts.</p>
-      ) : (
-        <>
-          <section aria-labelledby="tprm-contract-inbox" className="rounded-xl border border-slate-200 bg-white">
-            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-              <h2 id="tprm-contract-inbox" className="text-sm font-semibold text-slate-900">Needs a decision</h2>
-              <span className="text-xs text-slate-500">{inbox.length} contract{inbox.length === 1 ? '' : 's'}</span>
-            </div>
-            {inbox.length === 0 ? (
-              <p className="px-4 py-8 text-center text-sm text-slate-500">Nothing is ending or due for notice in the next {data?.inbox_days ?? 90} days.</p>
-            ) : (
-              <ul className="divide-y divide-slate-100">
-                {inbox.map((c) => (
-                  <li key={c.id} className={clsx('flex flex-wrap items-center gap-3 px-4 py-3', c.state === 'lapsed' && 'bg-rose-50/40')}>
-                    <button type="button" onClick={() => setOpen(c.id)} className="min-w-0 flex-1 text-left">
-                      <p className="truncate text-sm font-medium text-slate-900">{c.vendor.name}
-                        <span className="font-normal text-slate-500"> · {c.title || c.type_label}</span></p>
-                      <p className="mt-0.5 text-xs text-slate-500">
-                        {c.renewal_type ? RENEWAL_LABEL[c.renewal_type] : c.type_label}
-                        {c.ends_on && <> · {c.renewal_type === 'auto' ? 'renews' : 'ends'} {fmtDate(c.ends_on)}</>}
-                        {c.annual_value !== null && <> · {money(c.annual_value, c.currency)} a year</>}
-                      </p>
-                    </button>
-                    <div className="text-right">
-                      <StateChip state={c.state} />
-                      <p className={clsx('mt-0.5 text-xs', c.state === 'lapsed' ? 'text-rose-700' : 'text-slate-500')}>{countdown(c)}</p>
-                    </div>
-                    {canEdit && (
-                      <div className="flex gap-1.5">
-                        <button type="button" onClick={() => setRenewing(c)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
-                          <RefreshCw className="h-3.5 w-3.5" /> Renewed
-                        </button>
-                        <button type="button" onClick={() => setClosing(c)}
-                          className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
-                          Close out
-                        </button>
-                      </div>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          <section aria-labelledby="tprm-contract-register" className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 id="tprm-contract-register" className="mr-1 text-sm font-semibold text-slate-900">All contracts</h2>
-                <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-sm">
-                  {VIEWS.map((v) => (
-                    <button key={v.key} type="button" onClick={() => setView(v.key)} aria-pressed={view === v.key}
-                      className={clsx('rounded-md px-3 py-1', view === v.key ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50')}>
-                      {v.label}
-                    </button>
-                  ))}
-                </div>
-                <select aria-label="Contract type" value={type} onChange={(e) => setType(e.target.value)}
-                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-700">
-                  <option value="">Every type</option>
-                  {types.map((t) => <option key={t} value={t}>{data?.types[t] || t}</option>)}
-                </select>
-              </div>
-              <label className="relative block w-full max-w-xs">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search supplier, title or reference"
-                  className="w-full rounded-lg border border-slate-300 py-1.5 pl-8 pr-3 text-sm focus:border-primary-500 focus:outline-none" />
-              </label>
-            </div>
-
-            {rows.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
-                <FileSignature className="mx-auto mb-2 h-6 w-6 text-slate-400" />
-                <p className="text-sm text-slate-600">{items.length ? 'No contract matches.' : 'No contracts yet.'}</p>
-                {!items.length && canCreate && <p className="mt-1 text-xs text-slate-500">Add one here, or at the contracting stage of a supplier&apos;s assessment.</p>}
-              </div>
-            ) : (
-              <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-50 text-left text-[11px] uppercase tracking-wide text-slate-500">
-                    <tr>
-                      <th className="px-4 py-2.5 font-medium">Supplier</th>
-                      <th className="px-4 py-2.5 font-medium">Contract</th>
-                      <th className="hidden px-4 py-2.5 font-medium lg:table-cell">Started</th>
-                      <th className="px-4 py-2.5 font-medium">Ends</th>
-                      <th className="hidden px-4 py-2.5 font-medium md:table-cell">Notice by</th>
-                      <th className="hidden px-4 py-2.5 text-right font-medium md:table-cell">Per year</th>
-                      <th className="px-4 py-2.5 font-medium">State</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {rows.map((c) => (
-                      <tr key={c.id} className="cursor-pointer hover:bg-slate-50" onClick={() => setOpen(c.id)}>
-                        <td className="px-4 py-3">
-                          <p className="font-medium text-slate-900">{c.vendor.name}</p>
-                          {c.vendor.tier && <span className={clsx('mt-0.5 inline-flex rounded-full border px-1.5 text-[11px] capitalize', TIER_CLS[c.vendor.tier])}>{c.vendor.tier}</span>}
-                        </td>
-                        <td className="px-4 py-3">
-                          <button type="button" className="text-left text-slate-800 hover:text-primary-700 hover:underline" onClick={(e) => { e.stopPropagation(); setOpen(c.id); }}>
-                            {c.title || c.type_label}
-                          </button>
-                          <p className="flex items-center gap-1 text-xs text-slate-500">
-                            {c.type_label}{c.reference && <> · {c.reference}</>}
-                            {c.evidence_id && <Paperclip className="h-3 w-3" aria-label="Signed copy attached" />}
-                          </p>
-                        </td>
-                        <td className="hidden px-4 py-3 text-slate-600 lg:table-cell">{fmtDate(c.effective_date)}</td>
-                        <td className="px-4 py-3 text-slate-600">
-                          {c.ends_on ? fmtDate(c.ends_on) : <span className="text-slate-400">No end date</span>}
-                          {c.renewal_type && <p className="text-xs text-slate-400">{RENEWAL_LABEL[c.renewal_type]}</p>}
-                        </td>
-                        <td className="hidden px-4 py-3 text-slate-600 md:table-cell">
-                          {c.act_by && c.act_by !== c.ends_on ? fmtDate(c.act_by) : <span className="text-slate-400">—</span>}
-                        </td>
-                        <td className="hidden px-4 py-3 text-right tabular-nums text-slate-700 md:table-cell">{money(c.annual_value, c.currency)}</td>
-                        <td className="px-4 py-3">
-                          <StateChip state={c.state} />
-                          {INBOX.includes(c.state) && <p className="mt-0.5 text-xs text-slate-500">{countdown(c)}</p>}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
-        </>
-      )}
-
-      {open !== null && <ContractDrawer contractId={open === 'new' ? null : open} onClose={() => setOpen(null)} />}
+      {(adding || open > 0) && <ContractDrawer contractId={adding ? null : open} onClose={() => { if (adding) setAdding(false); else setAddress({ contract: 0 }); }} />}
       {renewing && <RenewDialog contract={renewing} onClose={() => setRenewing(null)} />}
       {closing && <CloseOutDialog contract={closing} onClose={() => setClosing(null)} />}
-    </div>
-  );
-}
-
-function Kpi({ label, value, note, tone }: { label: string; value?: number; note?: string; tone?: 'red' | 'amber' }) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className={clsx('mt-1 text-2xl font-semibold', tone === 'red' ? 'text-rose-700' : tone === 'amber' ? 'text-amber-700' : 'text-slate-900')}>
-        {value ?? '—'}
-      </p>
-      {note && <p className="text-xs text-slate-500">{note}</p>}
     </div>
   );
 }

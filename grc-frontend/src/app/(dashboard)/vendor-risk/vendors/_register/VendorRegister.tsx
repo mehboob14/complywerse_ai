@@ -163,7 +163,7 @@ export default function VendorRegister({ label }: { label: string }) {
               id={open?.id ?? null}
               nav={nav}
               title={<span dir="auto" className="line-clamp-3 break-words" title={open?.name}>{open?.name}</span>}
-              subtitle={open ? [open.vendor_type, open.business_unit?.name].filter(Boolean).join(' · ') || undefined : undefined}
+              subtitle={open ? subline(open) || undefined : undefined}
               footer={open ? (
                 <div className="flex flex-wrap items-center gap-[8px]">
                   <Button href={recordHref(open.id)} variant="primary">Open vendor</Button>

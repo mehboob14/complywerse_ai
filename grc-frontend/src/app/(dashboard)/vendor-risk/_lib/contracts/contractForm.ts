@@ -124,3 +124,25 @@ export function describe(h: HistoryRow): string {
     k === 'terms' || k === 'termination' || k === 'pricing' ? FIELD_LABEL[k] || k : `${FIELD_LABEL[k] || k} ${shown(k, a)} → ${shown(k, b)}`);
   return parts.length ? `Changed ${parts.join('; ')}` : 'Updated';
 }
+
+// ── what the AI read from the signed copy ────────────────────────────────────────────────────────────────────────────────
+
+/** The form with the terms the AI read out of the signed copy put in (`suggested` is the server's {field: value}, with `pricing` an object), and the names of the fields it filled so they can be marked. */
+export function applySuggestions(form: Form, suggested: Record<string, unknown>): { form: Form; keys: string[] } {
+  const next: Form = { ...form };
+  const bag = next as unknown as Record<string, string>;
+  const keys: string[] = [];
+  Object.entries(suggested).forEach(([k, v]) => {
+    if (k === 'pricing' && v && typeof v === 'object') {
+      Object.entries(v as Record<string, unknown>).forEach(([pk, pv]) => {
+        if (pk === 'uplift') next.uplift = pv ? 'yes' : 'no';
+        else if (pk in bag) bag[pk] = String(pv);
+        keys.push(pk);
+      });
+    } else if (k in bag) {
+      bag[k] = String(v);
+      keys.push(k);
+    }
+  });
+  return { form: next, keys };
+}
