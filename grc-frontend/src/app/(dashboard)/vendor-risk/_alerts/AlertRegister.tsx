@@ -206,7 +206,7 @@ export default function AlertRegister({ label, head }: { label: string; head: (h
         emptyFirst={(
           <EmptyState
             bare kind="firstUse" icon={Radar} title="No monitoring signals yet"
-            description={`Signals appear here when the feeds report a change (${feedsOn} ${feedsOn === 1 ? 'feed is' : 'feeds are'} on) or when one is recorded on a supplier.`}
+            description={`Signals appear here when the feeds report a change${feeds.data ? ` (${feedsOn} ${feedsOn === 1 ? 'feed is' : 'feeds are'} on)` : ''} or when one is recorded on a supplier.`}
             action={<Link href="/vendor-risk/settings#monitoring" className="text-ds-body text-ds-primary-text underline-offset-2 hover:underline">Turn on feeds in Settings</Link>}
           />
         )}
