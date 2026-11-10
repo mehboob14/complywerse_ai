@@ -200,7 +200,7 @@ export default function SupplierRequestPage() {
       </header>
 
       {r.status === 'returned' && r.review_note && (
-        <Notice tone="warning" title="Returned to you"><span className="whitespace-pre-wrap break-words">{r.review_note}</span></Notice>
+        <Notice tone="warning" title="A note from us"><span className="whitespace-pre-wrap break-words">{r.review_note}</span></Notice>
       )}
       {done && (
         <p role="status" className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
