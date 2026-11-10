@@ -134,6 +134,8 @@ export default function FindingsRegisterPage() {
   const pageIds = useMemo(() => pageRows.map((r) => r.id), [pageRows]);
 
   const searchRef = useRef<HTMLInputElement>(null);
+  const lastOpen = useRef<number | null>(null);                  // the row the drawer was opened from: focus goes back to its title when the drawer closes
+  if (openId != null) lastOpen.current = openId;
   useExplorerKeys({
     onSearch: () => searchRef.current?.focus(),
     onMove: (dir) => setCursor((c) => moveCursor(pageIds, c, dir)),
@@ -274,7 +276,7 @@ export default function FindingsRegisterPage() {
           onStep={(dir) => { const next = sorted[openAt + dir]; if (next) setOpenId(next.id); }}
           hasPrev={openAt > 0}
           hasNext={openAt >= 0 && openAt < sorted.length - 1}
-          restoreFocus={() => (openId != null ? document.querySelector<HTMLElement>(`[data-record-row="${openId}"] a`) : null)}
+          restoreFocus={() => (lastOpen.current != null ? document.querySelector<HTMLElement>(`[data-record-row="${lastOpen.current}"] a`) : null)}
         />
       )}
       ready={!loading && !noList}
