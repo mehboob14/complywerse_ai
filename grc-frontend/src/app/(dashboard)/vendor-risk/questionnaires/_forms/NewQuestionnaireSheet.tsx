@@ -6,6 +6,7 @@ import { useEffect, useId, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, FormError, FormField, Select, Sheet, TextInput, useReportedMutation } from '@/components/ui/ds';
 import { builderHref, questionnairesApi, templatesKey } from '../../_lib/questionnairesApi';
+import { plural } from '../../_lib/questionnaires/hubModel';
 import { addFromLibrary, librarySets } from '../../_lib/questionnaires/model';
 import type { Template } from '../../_lib/questionnaires/types';
 import { useCategories } from './categories';
@@ -65,7 +66,7 @@ export function NewQuestionnaireSheet({ open, templates, onClose }: { open: bool
     >
       <form id={`${uid}-form`} className="flex flex-col gap-[16px]" onSubmit={(e) => { e.preventDefault(); submit(); }}>
         <FormError title="Couldn't create the questionnaire" error={problem} />
-        <fieldset className="flex flex-col gap-[4px]">
+        <fieldset className="flex min-w-0 flex-col gap-[4px]">
           <legend className="mb-[4px] text-ds-label text-ds-fg">Start from</legend>
           {/* it scrolls: keyboard users need to reach it, so it takes focus */}
           <div tabIndex={0} className="flex max-h-[260px] flex-col gap-[2px] overflow-y-auto rounded-ds-card border border-ds-border p-[4px] focus-visible:outline-none focus-visible:shadow-ds-ring">
@@ -73,7 +74,7 @@ export function NewQuestionnaireSheet({ open, templates, onClose }: { open: bool
               <label key={row.key} className="flex min-h-ds-control cursor-pointer items-center gap-[10px] rounded-ds-control px-[10px] py-[4px] text-ds-body text-ds-fg-body hover:bg-ds-surface-hover has-[:checked]:bg-ds-primary-soft">
                 <input type="radio" name={`${uid}-start`} value={row.key} checked={start === row.key} onChange={() => setStart(row.key)} className="h-[16px] w-[16px] shrink-0 accent-ds-primary" />
                 <span className="min-w-0 flex-1 truncate">{row.label}</span>
-                {row.count !== null && <span className="shrink-0 text-ds-label tabular-nums text-ds-fg-muted">{row.count} questions</span>}
+                {row.count !== null && <span className="shrink-0 text-ds-label tabular-nums text-ds-fg-muted">{plural(row.count, 'question', 'questions')}</span>}
               </label>
             ))}
           </div>

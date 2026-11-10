@@ -96,7 +96,7 @@ export function TemplateSettingsSheet({ open, template, canConfig, onClose, onSa
         <FormField label="Description" optional>
           <Textarea rows={3} value={description} maxLength={2000} onChange={(e) => setDescription(e.target.value)} />
         </FormField>
-        <fieldset disabled={!canConfig} className="flex flex-col gap-[4px] rounded-ds-card border border-ds-border p-[12px]">
+        <fieldset disabled={!canConfig} className="flex min-w-0 flex-col gap-[4px] rounded-ds-card border border-ds-border p-[12px]">
           <legend className="px-[4px] text-ds-label text-ds-fg">Send by default to</legend>
           <p className="text-ds-label text-ds-fg-muted">The tier policy&apos;s own list, the one Settings edits. A tier with none chosen uses the built-in suggestion.</p>
           <div className="grid grid-cols-2 gap-x-[12px]">

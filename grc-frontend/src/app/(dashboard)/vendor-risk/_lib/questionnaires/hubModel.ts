@@ -52,6 +52,12 @@ export function libraryHead(templates: readonly Template[]): string {
   return bits.join(' · ');
 }
 
+/** "1 question", "12 questions": a count with its noun, the right one. */
+export const plural = (n: number, one: string, other: string): string => `${n.toLocaleString('en-GB')} ${n === 1 ? one : other}`;
+
+/** "3 questions · 1 section". */
+export const sizeText = (t: Pick<Template, 'question_count' | 'section_count'>): string => `${plural(t.question_count, 'question', 'questions')} · ${plural(t.section_count, 'section', 'sections')}`;
+
 /** How many the server holds beyond what came back (0 when it all came): the page says so instead of pretending the list is whole. */
 export const beyond = (total: number | undefined, shown: number): number => (total !== undefined && total > shown ? total - shown : 0);
 

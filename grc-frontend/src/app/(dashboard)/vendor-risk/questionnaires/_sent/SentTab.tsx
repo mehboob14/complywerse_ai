@@ -56,7 +56,7 @@ export default function SentTab({ list, label, rights, onSend }: {
         </div>
       ),
     },
-    { key: 'status', header: 'Status', sortKey: 'status', fit: { px: 150 }, cell: (row) => <span className="flex flex-wrap items-center gap-[4px]"><Status r={row.record} />{isLate(row.record, now) && <StatusPill size="sm" tone="danger" label="Late" />}</span> },
+    { key: 'status', header: 'Status', sortKey: 'status', fit: { px: 176 }, cell: (row) => <span className="flex flex-wrap items-center gap-[4px]"><Status r={row.record} />{isLate(row.record, now) && <StatusPill size="sm" tone="danger" label="Late" />}</span> },
     { key: 'answered', header: 'Answered', sortKey: 'answered', firstDir: 'desc', fit: { px: 96, dropRank: 1 }, cell: (row) => <span className="whitespace-nowrap text-ds-body tabular-nums text-ds-fg-body">{answeredText(row.record)}</span> },
     { key: 'due', header: 'Due', sortKey: 'due', firstDir: 'asc', fit: { px: 116 }, cell: (row) => <span className="whitespace-nowrap text-ds-body text-ds-fg-body">{row.record.due_date ? formatDate(row.record.due_date) : '—'}</span> },
     { key: 'sent', header: 'Sent', sortKey: 'sent', firstDir: 'desc', fit: { px: 116, dropRank: 2 }, cell: (row) => <span className="whitespace-nowrap text-ds-body text-ds-fg-body">{formatDate(row.record.last_sent_at ?? row.record.created_at)}</span> },

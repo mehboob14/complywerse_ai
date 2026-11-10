@@ -16,7 +16,7 @@ import { formatCount, formatDate } from '@/lib/format';
 import { vendorTier } from '@/lib/statuses/vendor';
 import { TPRM_QUERY_OPTS } from '../../_lib/tprmQuery';
 import { builderHref, questionnairesApi } from '../../_lib/questionnairesApi';
-import { LIBRARY_SCHEMA, beyond, templateActions, visibleTemplates, type Kind, type TemplateAction, type View } from '../../_lib/questionnaires/hubModel';
+import { LIBRARY_SCHEMA, beyond, plural, sizeText, templateActions, visibleTemplates, type Kind, type TemplateAction, type View } from '../../_lib/questionnaires/hubModel';
 import type { Template } from '../../_lib/questionnaires/types';
 import { categoryLabel } from '../_forms/categories';
 import type { Rights } from '../_forms/useRights';
@@ -25,7 +25,7 @@ import { PreviewSheet } from '../_forms/PreviewSheet';
 import { useTemplateOps } from './useTemplateOps';
 
 const CATEGORY_ICON: Record<string, LucideIcon> = { security: Shield, privacy: Lock, compliance: FileCheck, operational: Settings, financial: DollarSign, general: ClipboardList };
-const CHIP = 'inline-flex max-w-full items-center rounded-ds-control border border-ds-border bg-ds-surface-subtle px-[8px] py-[2px] text-ds-label text-ds-fg-body';
+const CHIP = 'inline-flex max-w-full items-center whitespace-nowrap rounded-ds-control border border-ds-border bg-ds-surface-subtle px-[8px] py-[2px] text-ds-label text-ds-fg-body';
 const MUTED = 'text-ds-fg-muted';
 
 const TieringView = ({ rights }: { rights: Rights }) => {
@@ -37,7 +37,7 @@ const TieringView = ({ rights }: { rights: Rights }) => {
       id="tiering-questions"
       title="Onboarding questions"
       info="Your team answers these about a supplier when it is requested. Each answer adds to a tiering factor, and some can hold the tier at a minimum. They are edited in Settings, where each answer can set a minimum tier."
-      meta={onboarding.data ? `${formatCount(count)} questions · ${formatCount(sections.length)} sections` : undefined}
+      meta={onboarding.data ? `${plural(count, 'question', 'questions')} · ${plural(sections.length, 'section', 'sections')}` : undefined}
       actions={rights.config ? <Button href="/vendor-risk/settings#questions" variant="primary" leftIcon={<Pencil aria-hidden />}>Edit in Settings</Button> : undefined}
     >
       {onboarding.isError && !onboarding.data
@@ -107,7 +107,7 @@ export function LibraryTab({ templates, total, loading, error, onRetry, rights, 
               <Link href={builderHref(t.id)} className="rounded-[4px] hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring">{t.name}</Link>
               {t.latest_version ? <span className={`ml-[6px] align-middle text-ds-label font-normal ${MUTED}`} title="Questionnaires already sent keep the version they were sent on">v{t.latest_version}</span> : null}
             </h3>
-            <p className={`text-ds-label ${MUTED}`}>{formatCount(t.question_count)} questions · {formatCount(t.section_count)} sections</p>
+            <p className={`text-ds-label ${MUTED}`}>{sizeText(t)}</p>
           </div>
           {menuFor(t)}
         </div>
@@ -134,13 +134,13 @@ export function LibraryTab({ templates, total, loading, error, onRetry, rights, 
       ),
     },
     { key: 'category', header: 'Category', priority: 2, card: 'meta', cell: (t) => (t.category ? <span className={CHIP}>{categoryLabel(t.category)}</span> : <span className={MUTED}>—</span>) },
-    { key: 'questions', header: 'Questions', priority: 2, card: 'meta', cell: (t) => <span className="tabular-nums text-ds-body text-ds-fg-body">{formatCount(t.question_count)} in {formatCount(t.section_count)} sections</span> },
+    { key: 'questions', header: 'Questions', priority: 2, card: 'meta', cell: (t) => <span className="tabular-nums text-ds-body text-ds-fg-body">{sizeText(t)}</span> },
     {
       key: 'tiers', header: 'Default tiers', priority: 3, card: 'meta',
       cell: (t) => (t.default_tiers.length ? <span className="flex flex-wrap gap-[4px]">{t.default_tiers.map((tier) => <StatusPill key={tier} size="sm" tone={vendorTier.tone(tier)} label={`${vendorTier.label(tier)} tier`} />)}</span> : <span className={MUTED}>—</span>),
     },
     { key: 'updated', header: 'Updated', priority: 2, card: 'meta', cell: (t) => <span className="whitespace-nowrap text-ds-body text-ds-fg-body">{formatDate(t.updated_at)}</span> },
-    { key: 'state', header: 'Status', card: 'meta', cell: (t) => (t.archived_at ? <StatusPill size="sm" tone="warning" label="Archived" /> : <span className={`text-ds-body ${MUTED}`}>{t.used ? 'Sent' : 'Not sent yet'}</span>) },
+    { key: 'state', header: 'Status', card: 'meta', cell: (t) => (t.archived_at ? <StatusPill size="sm" tone="warning" label="Archived" /> : <span className={`whitespace-nowrap text-ds-body ${MUTED}`}>{t.used ? 'Sent' : 'Not sent yet'}</span>) },
     { key: 'actions', header: 'Actions', card: 'hide', align: 'right', width: 'w-[56px]', cell: (t) => menuFor(t) },
   ];
 

@@ -14,6 +14,7 @@ import { formatDate, statusLabel } from '@/lib/format';
 import { TPRM_QUERY_OPTS } from '../../_lib/tprmQuery';
 import { absoluteLink, portalApi } from '../../_lib/portalApi';
 import { SENT_REFRESH, useVendorOptions } from './sentApi';
+import { plural } from '../../_lib/questionnaires/hubModel';
 import { pickerNote, vendorChoices } from '../../_lib/questionnaires/sharedModel';
 import { assessmentKind } from '@/lib/statuses/vendorQuestionnaires';
 import type { Template } from '../../_lib/questionnaires/types';
@@ -68,7 +69,7 @@ export function SendSheet({ open, templates, templateId, onClose }: { open: bool
   const choice = contact || (primary ? String(primary.id ?? 'record') : reachable[0] ? String(reachable[0].id ?? 'record') : 'new');
 
   const sendable = useMemo(() => templates.filter((t) => !t.archived_at && t.question_count > 0), [templates]);
-  const templateOptions: ListOption[] = sendable.map((t) => ({ value: String(t.id), label: t.name, description: `${t.question_count} questions` }));
+  const templateOptions: ListOption[] = sendable.map((t) => ({ value: String(t.id), label: t.name, description: plural(t.question_count, 'question', 'questions') }));
   const vendorOptions: ListOption[] = vendorChoices(vendors.data?.items ?? []);
   const note = vendors.data ? pickerNote(vendors.data.total, vendors.data.items.length) : null;
   const dirty = open && !sent && (form.vendor !== '' || form.email !== '' || form.name !== '' || (!!form.template && form.template !== String(templateId ?? '')));

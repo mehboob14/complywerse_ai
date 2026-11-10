@@ -8,6 +8,7 @@ import { Button, ErrorState, Fact, FactList, SkeletonRows, StatusPill } from '@/
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { RecordDetail, type DetailNav } from '@/components/records/RegisterFrame';
 import { formatDate } from '@/lib/format';
+import { plural } from '../../_lib/questionnaires/hubModel';
 import { statusPill } from '@/lib/status';
 import { questionnaireStatus } from '@/lib/statuses/vendorQuestionnaires';
 import {
@@ -76,7 +77,9 @@ export function SentDrawer({ row, nav, can, onAct, busy }: {
                 {detail.attested_by && (
                   <p className="text-ds-body text-ds-fg-body">Attested by {detail.attested_by.name}{detail.attested_by.title ? `, ${detail.attested_by.title}` : ''}{detail.attested_by.at ? ` on ${formatDate(detail.attested_by.at)}` : ''}.</p>
                 )}
-                {lines.every((l) => !l.answered) && <p className={`text-ds-body ${MUTED}`}>Nothing has been answered yet.</p>}
+                {lines.every((l) => !l.answered) ? (
+                  <p className={`text-ds-body ${MUTED}`}>Nothing has been answered yet. The questionnaire has {plural(lines.length, 'question', 'questions')}.</p>
+                ) : (
                 <ol className="flex flex-col divide-y divide-ds-border rounded-ds-card border border-ds-border">
                   {lines.map((l) => (
                     <li key={l.id} className="flex flex-col gap-[4px] px-[12px] py-[10px]">
@@ -86,6 +89,7 @@ export function SentDrawer({ row, nav, can, onAct, busy }: {
                     </li>
                   ))}
                 </ol>
+                )}
                 {stray > 0 && <p className={`text-ds-label ${MUTED}`}>{stray} {stray === 1 ? 'answer belongs' : 'answers belong'} to questions that were removed from the questionnaire after it was sent.</p>}
               </>
             )}

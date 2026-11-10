@@ -111,7 +111,7 @@ export function QuestionEditor({ open, base, afterId, questions, templates, temp
         </div>
 
         {d.type === 'yes_no' && (
-          <fieldset className="flex flex-col gap-[2px]">
+          <fieldset className="flex min-w-0 flex-col gap-[2px]">
             <legend className="mb-[2px] text-ds-label text-ds-fg">Needs a note on</legend>
             <div className="flex flex-wrap gap-x-[16px]">
               {YES_NO.map((a) => <Checkbox key={a.value} label={a.label} checked={d.noteOn.includes(a.value)} onChange={(e) => set({ noteOn: tick(d.noteOn, a.value, e.target.checked) })} />)}
@@ -186,7 +186,7 @@ export function QuestionEditor({ open, base, afterId, questions, templates, temp
               options={[{ value: 'none', label: 'No evidence' }, { value: 'optional', label: 'Evidence optional' }, { value: 'required', label: 'Evidence required' }]}
             />
             {d.evidence === 'required' && isChoice(d.type) && (
-              <fieldset className="flex flex-col gap-[2px] rounded-ds-card border border-ds-border p-[10px]">
+              <fieldset className="flex min-w-0 flex-col gap-[2px] rounded-ds-card border border-ds-border p-[10px]">
                 <legend className="px-[4px] text-ds-label text-ds-fg-muted">Needed when the answer is</legend>
                 {ownAnswers.map((a) => <Checkbox key={a.key} label={a.label} checked={d.evidenceOn.includes(a.key)} onChange={(e) => set({ evidenceOn: tick(d.evidenceOn, a.key, e.target.checked) })} />)}
                 <p className={HINT}>None ticked means any answer.</p>
@@ -206,7 +206,7 @@ export function QuestionEditor({ open, base, afterId, questions, templates, temp
             </Select>
           </FormField>
           {parent && (
-            <fieldset className="flex flex-col gap-[2px] rounded-ds-card border border-ds-border p-[10px]">
+            <fieldset className="flex min-w-0 flex-col gap-[2px] rounded-ds-card border border-ds-border p-[10px]">
               <legend className="px-[4px] text-ds-label text-ds-fg-muted">is answered with</legend>
               {answerValues(parent).map((v) => <Checkbox key={v} label={answerLabel(parent, v)} checked={d.showIfAnswers.includes(v)} onChange={(e) => set({ showIfAnswers: tick(d.showIfAnswers, v, e.target.checked) })} />)}
             </fieldset>
@@ -223,7 +223,7 @@ export function QuestionEditor({ open, base, afterId, questions, templates, temp
               </Select>
             </FormField>
             {d.followTemplate !== null && (
-              <fieldset className="flex flex-col gap-[2px] rounded-ds-card border border-ds-border p-[10px]">
+              <fieldset className="flex min-w-0 flex-col gap-[2px] rounded-ds-card border border-ds-border p-[10px]">
                 <legend className="px-[4px] text-ds-label text-ds-fg-muted">when answered with</legend>
                 {ownAnswers.map((a) => <Checkbox key={a.key} label={a.label} checked={d.followWhen.includes(a.key)} onChange={(e) => set({ followWhen: tick(d.followWhen, a.key, e.target.checked) })} />)}
               </fieldset>

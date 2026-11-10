@@ -70,9 +70,8 @@ export function LibrarySheet({ open, sets, questions, onClose, onAdd }: {
           return (
             <section key={g.section} aria-label={g.section} className="flex flex-col">
               <div className="flex items-center gap-[8px] border-b border-ds-border pb-[4px]">
-                <Checkbox aria-label={`Select all in ${g.section}`} checked={all} disabled={offered.length === 0} onChange={(e) => offered.forEach((r) => toggle(pickKey(key, r.q), e.target.checked))} />
-                <h3 className="min-w-0 flex-1 truncate !text-ds-body !font-[600] !text-ds-fg">{g.section}</h3>
-                <span className="text-ds-label tabular-nums text-ds-fg-muted">{g.rows.length}</span>
+                <h3 className="min-w-0 flex-1 truncate !text-ds-body !font-[600] !text-ds-fg">{g.section} <span className="text-ds-label font-normal tabular-nums text-ds-fg-muted">{g.rows.length}</span></h3>
+                <Checkbox label="Select all" aria-label={`Select all in ${g.section}`} checked={all} disabled={offered.length === 0} onChange={(e) => offered.forEach((r) => toggle(pickKey(key, r.q), e.target.checked))} />
               </div>
               <ul className="divide-y divide-ds-border">
                 {g.rows.map(({ q, added }) => (

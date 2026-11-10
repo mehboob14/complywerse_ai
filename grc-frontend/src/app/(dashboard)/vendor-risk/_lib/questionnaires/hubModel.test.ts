@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { readAddress, writeAddress } from '../../../../../lib/addressState.ts';
-import { LIBRARY_SCHEMA, TAB_KEYS, beyond, exchangeForward, libraryHead, tabHref, tabOf, templateActions, visibleTemplates } from './hubModel.ts';
+import { LIBRARY_SCHEMA, TAB_KEYS, beyond, exchangeForward, libraryHead, plural, sizeText, tabHref, tabOf, templateActions, visibleTemplates } from './hubModel.ts';
 import type { Template } from './types.ts';
 
 const tpl = (over: Partial<Template> = {}): Template => ({
@@ -61,4 +61,12 @@ test('what a person may do to a questionnaire follows the rights the server chec
   assert.deepEqual(templateActions(tpl({ archived_at: '2026-09-01T00:00:00' }), all), ['open', 'preview', 'duplicate', 'restore']);
   assert.deepEqual(templateActions(tpl({ question_count: 0, used: false }), all), ['edit', 'duplicate', 'default_tiers', 'archive', 'delete'], 'nothing to send or preview in an empty one');
   assert.deepEqual(templateActions(tpl(), { create: false, edit: false, remove: false, send: false }), ['open', 'preview'], 'a person with no right sees no button for it');
+});
+
+test('a count says its noun the right way: 1 question, 12 questions, 1 section', () => {
+  assert.equal(plural(1, 'question', 'questions'), '1 question');
+  assert.equal(plural(0, 'question', 'questions'), '0 questions');
+  assert.equal(plural(1234, 'question', 'questions'), '1,234 questions');
+  assert.equal(sizeText(tpl({ question_count: 1, section_count: 1 })), '1 question · 1 section');
+  assert.equal(sizeText(tpl({ question_count: 12, section_count: 3 })), '12 questions · 3 sections');
 });

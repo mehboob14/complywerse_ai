@@ -18,6 +18,7 @@ import { LIST_HREF, questionnairesApi, templateKey, templatesKey } from '../../.
 import {
   addFromLibrary, chipsFor, dependentsOf, insertAfter, librarySets, moveQuestion, moveRun, optionsLine, orderProblem, removeQuestion, replaceQuestion, sectionsOf,
 } from '../../../_lib/questionnaires/model';
+import { plural } from '../../../_lib/questionnaires/hubModel';
 import type { Question, Template } from '../../../_lib/questionnaires/types';
 import { categoryLabel } from '../../_forms/categories';
 import { PreviewSheet } from '../../_forms/PreviewSheet';
@@ -61,7 +62,9 @@ export default function QuestionnaireBuilderPage() {
     void qc.invalidateQueries({ queryKey: [...templatesKey] });
   };
   // a save made on a copy someone else has since changed is refused with their words; the page offers to read theirs
-  const refused = (e: unknown) => { if (statusOf(e) === 409 && /someone else/i.test(errorMessage(e))) setConflict(true); };
+  const refused = (e: unknown) => {
+    if (statusOf(e) === 409 && /someone else/i.test(errorMessage(e))) { setConflict(true); window.setTimeout(() => document.getElementById('questionnaire-conflict')?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 60); }
+  };
   const save = useReportedMutation({
     mutationFn: async (v: { next: Question[]; said?: string }) => (await questionnairesApi.update(id, { questions: v.next, expected_updated_at: template?.updated_at })).data,
     success: (_d, v) => v.said ?? 'Saved',
@@ -127,7 +130,7 @@ export default function QuestionnaireBuilderPage() {
     { key: 'copy', label: 'Duplicate', icon: Copy, hidden: !rights.create, onSelect: () => ops.duplicate(template) },
     { key: 'archive', label: archived ? 'Restore' : 'Archive', icon: archived ? ArchiveRestore : Archive, hidden: !rights.edit, onSelect: () => ops.archive(template) },
   ];
-  const meta = [`${template.question_count} questions`, `${template.section_count} sections`, `Updated ${formatDate(template.updated_at)}`, template.updated_by_name].filter(Boolean).join(' · ');
+  const meta = [plural(template.question_count, 'question', 'questions'), plural(template.section_count, 'section', 'sections'), `Updated ${formatDate(template.updated_at)}`, template.updated_by_name].filter(Boolean).join(' · ');
 
   return (
     <div className="flex flex-col gap-[16px]">
@@ -153,9 +156,11 @@ export default function QuestionnaireBuilderPage() {
       />
 
       {conflict && (
-        <Notice tone="warning" title="Someone else changed this questionnaire" action={<Button size="sm" onClick={reload}>Reload</Button>}>
-          Your last change was not saved. Reload to see their version, then make it again.
-        </Notice>
+        <div id="questionnaire-conflict" className="scroll-mt-[16px]">
+          <Notice tone="warning" title="Someone else changed this questionnaire" action={<Button size="sm" onClick={reload}>Reload</Button>}>
+            Your last change was not saved. Reload to see their version, then make it again.
+          </Notice>
+        </div>
       )}
       {query.isError && <ErrorState compact title="Couldn't refresh this questionnaire" message={`${errorMessage(query.error)} What is shown may be out of date.`} onRetry={canRetry(query.error) ? () => { void query.refetch(); } : undefined} className="rounded-ds-card border border-ds-danger-border bg-ds-danger-soft" />}
       {archived && <Notice tone="warning">Archived. Restore it to change it.</Notice>}
