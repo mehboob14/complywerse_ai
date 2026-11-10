@@ -66,3 +66,11 @@ test('the page of the old tabs forwards: it reads the address through forwardFor
   assert.match(page, /router\.replace\(forward\)/);
   assert.match(page, /return forward \? .* : <IssuesOverview \/>/);
 });
+
+test('the issue record draws the kit\'s page head itself and says so: the top bar names only the section, the title is the issue\'s', () => {
+  assert.match(read('[id]/page.tsx'), /<PageHeader\s+variant="page"/);
+  assert.equal(routeFor('/issues/12')?.ownHeading, true);
+  assert.equal(registryNamesPage('/issues/12'), true);
+  assert.ok(ownHeadingSection('/issues/12'), 'the top bar names a section');
+  assert.deepEqual(breadcrumbFor('/issues/12').map((c) => c.label), ['Issue & Incident Management', 'Issues', 'Issue'], 'the trail the record has always had');
+});

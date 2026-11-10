@@ -17,7 +17,7 @@ const read = (f: string) => readFileSync(`${BACKEND}${f}`, 'utf8');
 const NOW = new Date('2026-11-08T12:00:00Z');
 
 test('open is one rule: the five states by-source counts (closure review included), and a state nobody listed is not open', () => {
-  const server = /OPEN_STATES = \{([^}]*)\}/i.exec(read('by_source.py'))![1];
+  const server = /OPEN_STATES = \{([^}]*)\}/.exec(read('by_source.py'))![1];                // the embeds group made the lowercase local a module constant
   assert.deepEqual(Array.from(server.matchAll(/"([a-z_]+)"/g)).map((m) => m[1]).sort(), OPEN_STATES.slice().sort());
   assert.deepEqual(ISSUE_STATES.filter(isOpenIssue), OPEN_STATES.slice());
   assert.equal(stateOf(undefined), 'new');
