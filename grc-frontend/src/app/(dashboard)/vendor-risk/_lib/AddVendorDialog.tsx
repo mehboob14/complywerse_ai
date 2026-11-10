@@ -11,6 +11,7 @@ import { countsKey, registerKey } from './portfolioApi';
 export default function AddVendorDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const router = useRouter();
   const qc = useQueryClient();
+  if (!open) return null;                   // mounted only while open: the form's people and units are read when it is wanted, not on every page that has the button
   return (
     <VendorFormDialog
       open={open}

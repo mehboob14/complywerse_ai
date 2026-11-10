@@ -10,7 +10,7 @@ from sqlalchemy import case, false, func, and_, or_
 from ....models import (
     Vendor, VendorAssessment, VendorSLARecord, VendorIncident,
     GRCUser, Tenant, get_db,
-    BusinessUnit, Evidence, TPRAEngagement, TPRAEvidenceLink, VendorQuestionnaireResponse,
+    BusinessUnit, Evidence, TPRAEngagement, TPRAEvidenceLink, TPRAFinding, VendorQuestionnaireResponse,
 )
 from ....routers.auth_router import require_auth, get_user_tenants, refuse_imported_accounts
 from ....services.module_settings import clean_record_values
@@ -299,6 +299,47 @@ def register_notes(db: Session, vendors: List[Vendor], today=None) -> dict:
             for v in vendors}
 
 
+# What the register leaves out of a lean row: the long text and the lists nobody reads in a table.
+_LEAN_DROP = frozenset({
+    "description", "notes", "lifecycle_history", "offboarding_checklist", "remediation_actions", "custom_values",
+    "vat_number", "vat_check", "primary_contact_name", "primary_contact_email", "primary_contact_phone",
+    "services_provided", "data_types_accessed", "geographic_locations", "systems_in_scope", "tags",
+    "contract_document_id", "active_assessment_id",
+})
+
+
+def lifecycle_notes(db: Session, vendors: List[Vendor]) -> dict:
+    """{supplier id: General's lifecycle, or None when none was started}: the Board of the register. The same rule as
+    `tpra/board` (the highest version of the General assessment that is in the lifecycle), with its open findings,
+    from two queries however many suppliers."""
+    from ..tpra.service import IN_LIFECYCLE          # late: that package imports this router
+
+    ids = [v.id for v in vendors] or [-1]
+    chosen: dict = {}
+    for a in (db.query(VendorAssessment)
+              .filter(VendorAssessment.vendor_id.in_(ids), VendorAssessment.lifecycle_status == "active",
+                      VendorAssessment.deleted_at.is_(None), VendorAssessment.engagement_id.is_(None), IN_LIFECYCLE)):
+        cur = chosen.get(a.vendor_id)
+        if not cur or (a.version_no or 0) > (cur.version_no or 0):
+            chosen[a.vendor_id] = a
+    open_findings = {
+        aid: (int(n), int(crit or 0))
+        for aid, n, crit in db.query(
+            TPRAFinding.assessment_id, func.count(TPRAFinding.id),
+            func.sum(case((TPRAFinding.severity == "critical", 1), else_=0)))
+        .filter(TPRAFinding.assessment_id.in_([a.id for a in chosen.values()] or [-1]),
+                TPRAFinding.deleted_at.is_(None), TPRAFinding.status.in_(["open", "in_remediation"]))
+        .group_by(TPRAFinding.assessment_id)
+    }
+    out: dict = {v.id: None for v in vendors}
+    for vid, a in chosen.items():
+        n, crit = open_findings.get(a.id, (0, 0))
+        out[vid] = {"assessment_id": a.id, "stage": a.current_stage, "version_no": a.version_no,
+                    "residual_rating": a.residual_rating, "residual_score": a.residual_score,
+                    "open_findings": n, "open_critical": crit}
+    return out
+
+
 # ── Helper ────────────────────────────────────────────────────────
 
 def get_vendor_or_404(vendor_id: int, tenant_ids: List[int], db: Session) -> Vendor:
@@ -419,6 +460,8 @@ def list_vendors(
     include_requests: bool = Query(False, description="Also list requests not yet in review, and turned-down ones"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, description="Page size; page with skip until `total` is reached"),
+    lean: bool = Query(False, description="The register's rows: no long text or lists, and each row's `lifecycle` "
+                                          "(General's stage, residual and open findings, or null)"),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
@@ -485,12 +528,13 @@ def list_vendors(
 
     named = {i for v in vendors for i in (v.security_owner_id, v.relationship_owner_id) if i}
     people = {u.id: u for u in db.query(GRCUser).filter(GRCUser.id.in_(named))} if named else {}
-    return {
-        "items": [{**serialize_vendor(v, people=people), **notes[v.id]} for v in vendors],
-        "total": total,
-        "skip": skip,
-        "limit": limit,
-    }
+    if lean:
+        life = lifecycle_notes(db, vendors)
+        items = [{**{k: x for k, x in serialize_vendor(v, people=people).items() if k not in _LEAN_DROP},
+                  **notes[v.id], "lifecycle": life[v.id]} for v in vendors]
+    else:
+        items = [{**serialize_vendor(v, people=people), **notes[v.id]} for v in vendors]
+    return {"items": items, "total": total, "skip": skip, "limit": limit}
 
 
 @router.post("/vendors", status_code=status.HTTP_201_CREATED)

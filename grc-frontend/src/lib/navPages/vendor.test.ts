@@ -25,7 +25,7 @@ test('the four strips of the model are the four tab strips of the registry: same
   }
   assert.equal(text(`${V}/vendors`), 'Register');
   assert.equal(entry(`${V}/vendors`).title ?? entry(`${V}/vendors`).label, 'Vendors');
-  assert.equal(text(`${V}/assessments`), 'Assessments');
+  assert.equal(routeFor(`${V}/assessments`)?.aliasOf, `${V}/vendors`, 'the Assessments board is the Board view of the Register: its old address forwards there');
   assert.equal(text(`${V}/reviews`), 'Check-ins');
   assert.equal(text(`${V}/settings`), 'Settings');
 });
@@ -48,7 +48,7 @@ test('the single entries are pages of the registry at the address of the model, 
 
 test('every page the model covers lights its tab of the strip, and the detail pages of the module hang under the right tab', () => {
   assert.equal(activeTab('vendor-vendors', `${V}/vendors/12`)?.path, `${V}/vendors`, 'a vendor record is under Register');
-  assert.equal(activeTab('vendor-vendors', `${V}/assessments/5`)?.path, `${V}/assessments`);
+  assert.equal(activeTab('vendor-vendors', `${V}/assessments/5`), undefined, 'the legacy review page is under no tab of the strip: it hangs under Vendors (the Assessments board is the Board view of the Register)');
   assert.equal(activeTab('vendor-insights', `${V}/reports/3`)?.path, `${V}/reports`);
   assert.equal(activeTab('vendor-insights', `${V}/comply-analysis/9`)?.path, `${V}/comply-analysis`);
   assert.equal(activeTab('vendor-setup', `${V}/settings/emails`)?.path, `${V}/settings`);

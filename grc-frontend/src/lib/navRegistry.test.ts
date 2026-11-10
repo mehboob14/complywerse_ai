@@ -134,6 +134,7 @@ test('a forward is another URL of an entry that is a page of its own, under the 
     ['/erm/risks/list', '/erm/risks'],                                       // forwards to /erm/risks with its parameters (?new, ?upload, ?edit, ?register_type)
     ['/erm/risk-assessments/dashboard', '/erm/risk-assessments'],            // not a forward: /erm/risk-assessments renders this page
     ['/erm/analytics/heatmap', '/erm/analytics'],                            // the heat map is the home of Advanced Analytics; its older address forwards to it
+    ['/vendor-risk/assessments', '/vendor-risk/vendors'],                    // the Assessments board is the Register's Board view (?view=board)
     ['/vendor-risk/procurement', '/vendor-risk'],
     ['/vendor-risk/shadow-saas', '/vendor-risk'],
     ['/vendor-risk/settings/alert-rules', '/vendor-risk/policy'],
