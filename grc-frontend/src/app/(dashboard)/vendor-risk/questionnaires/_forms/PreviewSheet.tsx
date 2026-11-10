@@ -1,15 +1,14 @@
 'use client';
 
-// The questionnaire as the person answering it sees it, with follow-up questions opening as answers are picked. Nothing is saved
-// and nothing here shows a score: that is for the people reading the answers.
+// The questionnaire as the person answering it sees it, with follow-up questions opening as answers are picked. Nothing is saved and nothing here shows a score: that is for the people reading the
+// answers. A sheet over the Library or the builder, so a questionnaire can be tried without leaving the page.
 import { useState } from 'react';
 import { Upload } from 'lucide-react';
-import { Dialog, BTN } from '@/app/(dashboard)/vendor-risk/_ui';
+import { Button, Sheet, Textarea } from '@/components/ui/ds';
 import {
   answerLabel, evidenceOf, evidenceOnOf, optFlag, optLabel, optValue, sectionKey, sectionName, visibleIds, YES_NO,
 } from '../../_lib/questionnaires/model';
 import type { Question } from '../../_lib/questionnaires/types';
-import { AREA } from './ui';
 
 const NOT_APPLICABLE = { value: 'n-a', label: 'Not applicable' };
 
@@ -37,9 +36,7 @@ function asks(q: Question, answer: string): string[] {
   return out;
 }
 
-export function PreviewDialog({ open, name, questions, onClose }: {
-  open: boolean; name: string; questions: Question[]; onClose: () => void;
-}) {
+export function PreviewSheet({ open, name, questions, onClose }: { open: boolean; name: string; questions: Question[]; onClose: () => void }) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const shown = visibleIds(questions, answers);
   const asked = questions.filter((q) => shown.has(q.id));
@@ -47,45 +44,45 @@ export function PreviewDialog({ open, name, questions, onClose }: {
   const close = () => { setAnswers({}); onClose(); };
 
   return (
-    <Dialog
+    <Sheet
       open={open}
       onClose={close}
-      title="Preview"
-      description={name}
-      size={720}
+      title="Preview as the supplier sees it"
+      subtitle={name}
+      width="lg"
       footer={(
-        <>
-          <span className="mr-auto text-[13px] text-[#586472]">{asked.length} of {questions.length} questions showing</span>
-          <button type="button" onClick={() => setAnswers({})} className={BTN}>Clear answers</button>
-          <button type="button" onClick={close} className={BTN}>Close</button>
-        </>
+        <div className="flex flex-wrap items-center gap-[8px]">
+          <span className="mr-auto text-ds-body text-ds-fg-muted">{asked.length} of {questions.length} questions showing</span>
+          <Button onClick={() => setAnswers({})}>Clear answers</Button>
+          <Button variant="primary" onClick={close}>Close</Button>
+        </div>
       )}
     >
-      <div className="space-y-6">
+      <div className="flex flex-col gap-[24px]">
         {asked.map((q, i) => {
           const prev = asked[i - 1];
           const answer = answers[q.id] || '';
           return (
             <div key={q.id}>
               {(!prev || sectionKey(prev) !== sectionKey(q)) && (
-                <h3 className="mb-3 border-b border-[#e1e6eb] pb-1.5 text-[14px] font-semibold text-[#1f2933]">{sectionName(q)}</h3>
+                <h3 className="mb-[12px] border-b border-ds-border pb-[6px] !text-ds-section !font-[600] !text-ds-fg">{sectionName(q)}</h3>
               )}
-              <p className="text-sm font-medium leading-5 text-[#1f2933]">
+              <p className="text-ds-body font-[600] text-ds-fg">
                 {q.text}
-                {!q.required && <span className="ml-1.5 text-[12px] font-normal text-[#64707e]">Optional</span>}
+                {!q.required && <span className="ml-[6px] text-ds-label font-normal text-ds-fg-muted">Optional</span>}
               </p>
-              {q.help && <p className="mt-0.5 text-[13px] leading-5 text-[#586472]">{q.help}</p>}
-              <div className="mt-2">
+              {q.help && <p className="mt-[2px] text-ds-body text-ds-fg-muted">{q.help}</p>}
+              <div className="mt-[8px]">
                 {q.type === 'file' ? (
-                  <span className="inline-flex items-center gap-2 rounded-lg border border-dashed border-[#c3ccd5] px-3 py-2 text-[13px] text-[#586472]">
-                    <Upload aria-hidden className="h-4 w-4" /> The supplier uploads a document here
+                  <span className="inline-flex min-h-ds-control items-center gap-[8px] rounded-ds-control border border-dashed border-ds-border-strong px-[12px] text-ds-body text-ds-fg-muted">
+                    <Upload aria-hidden className="h-[16px] w-[16px]" /> The supplier uploads a document here
                   </span>
                 ) : q.type === 'text' ? (
-                  <textarea rows={2} aria-label={q.text} value={answer} onChange={(e) => set(q.id, e.target.value)} className={AREA} />
+                  <Textarea rows={2} aria-label={q.text} value={answer} onChange={(e) => set(q.id, e.target.value)} />
                 ) : (
-                  <div role="radiogroup" aria-label={q.text} className="flex flex-wrap gap-2">
+                  <div role="radiogroup" aria-label={q.text} className="flex flex-wrap gap-[8px]">
                     {choices(q).map((c) => (
-                      <label key={c.value} className="flex cursor-pointer items-center gap-2 rounded-lg border border-[#c3ccd5] bg-[#fff] px-3 py-1.5 text-sm text-[#26323d] hover:bg-[#f3f6f8] has-[:checked]:border-[#0f766e] has-[:checked]:bg-[#f0fdfa] has-[:checked]:text-[#0f766e] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[#0f766e]">
+                      <label key={c.value} className="flex min-h-ds-control cursor-pointer items-center rounded-ds-control border border-ds-border-strong bg-ds-surface px-[12px] text-ds-body text-ds-fg-body hover:bg-ds-surface-hover has-[:checked]:border-ds-primary has-[:checked]:bg-ds-primary-soft has-[:checked]:text-ds-primary-text has-[:focus-visible]:shadow-ds-ring">
                         <input type="radio" name={`preview-${q.id}`} value={c.value} checked={answer === c.value} onChange={() => set(q.id, c.value)} className="sr-only" />
                         {c.label}
                       </label>
@@ -93,14 +90,12 @@ export function PreviewDialog({ open, name, questions, onClose }: {
                   </div>
                 )}
               </div>
-              {q.type !== 'file' && asks(q, answer).map((line) => (
-                <p key={line} className="mt-1.5 text-[12px] leading-4 text-[#64707e]">{line}</p>
-              ))}
+              {q.type !== 'file' && asks(q, answer).map((line) => <p key={line} className="mt-[6px] text-ds-label text-ds-fg-muted">{line}</p>)}
             </div>
           );
         })}
-        {asked.length === 0 && <p className="text-sm text-[#586472]">No questions yet.</p>}
+        {asked.length === 0 && <p className="text-ds-body text-ds-fg-muted">No questions yet.</p>}
       </div>
-    </Dialog>
+    </Sheet>
   );
 }

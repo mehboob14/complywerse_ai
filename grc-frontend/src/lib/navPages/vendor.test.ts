@@ -58,7 +58,7 @@ test('every page the model covers lights its tab of the strip, and the detail pa
   // the Emails page is the Emails section of Settings now: its address forwards there, and Settings hangs under the first page of the Setup strip
   const trail = breadcrumbFor(`${V}/settings/emails`).map((c) => c.label);
   assert.equal(trail[0], 'Third-Party Vendor Risk');
-  assert.equal(trail.slice(-2).join(' > '), 'Roster > Third-party risk settings');
+  assert.equal(trail.slice(-2).join(' > '), 'Setup > Third-party risk settings');
 });
 
 test('ownHeading follows HEAD: true where the layout or the page draws the head of the kit, absent where the page still draws its own old heading', () => {

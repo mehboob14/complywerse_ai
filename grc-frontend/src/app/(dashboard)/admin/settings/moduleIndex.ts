@@ -24,8 +24,8 @@ export const SETTINGS_PLACE: Record<string, { href: string; where: string }> = {
   risks: { href: '/erm/risks', where: 'Risk Register, the register settings menu' },
   controls: { href: '/automation/soc2-controls', where: 'Controls, the Settings menu' },
   vendors: { href: '/vendor-risk/vendors', where: 'Vendors, Settings' },
-  statutory_audit: { href: '/auditor-portal/statutory-audit', where: 'Statutory Audit, Settings' },
-  internal_audit: { href: '/auditor-portal/internal-audit', where: 'Internal Audit, Settings' },
+  statutory_audit: { href: '/auditor-portal/statutory-audit/settings', where: 'Statutory Audit, Settings' },
+  internal_audit: { href: '/auditor-portal/internal-audit', where: 'Internal Audit, open an audit, Audit Plan lens, Settings' },
   vulnerabilities: { href: '/vulnerabilities/sla', where: 'Vulnerabilities, SLA' },
 };
 

@@ -105,13 +105,22 @@ export const navigation: NavEntry[] = [
       },
     ],
   },
+  // The module's eight pages (vendor-risk/_lib/railModel.ts SIDEBAR is the same list): the page's own tab strip carries the pages a group holds (Vendors: Register, Contracts, Check-ins; Monitoring; Insights; Setup)
   {
     name: 'Third-Party Vendor Risk',
-    href: '/vendor-risk',
     icon: Building2,
     rail: 'Vendors',
     requiredModules: ['erm'],
-    requiredPermissions: ['erm:risks:*'],
+    items: [
+      { name: 'Overview', href: '/vendor-risk', exact: true, activeMatch: ['/vendor-risk/attention', '/vendor-risk/actions'], icon: LayoutDashboard, requiredPermissions: ['erm:risks:*'] },
+      { name: 'Vendors', href: '/vendor-risk/vendors', activeMatch: ['/vendor-risk/assessments', '/vendor-risk/contracts', '/vendor-risk/reviews'], icon: Building2, requiredPermissions: ['erm:risks:*'] },
+      { name: 'Intake', href: '/vendor-risk/intake', icon: ListTodo, requiredPermissions: ['erm:risks:*'] },
+      { name: 'Findings', href: '/vendor-risk/findings', icon: AlertTriangle, requiredPermissions: ['erm:risks:*'] },
+      { name: 'Questionnaires', href: '/vendor-risk/questionnaires', activeMatch: ['/vendor-risk/exchange'], icon: ClipboardList, requiredPermissions: ['erm:risks:*'] },
+      { name: 'Monitoring', href: '/vendor-risk/monitoring', activeMatch: ['/vendor-risk/alerts', '/vendor-risk/technology', '/vendor-risk/concentration', '/vendor-risk/security', '/vendor-risk/dependencies'], icon: Radar, requiredPermissions: ['erm:risks:*'] },
+      { name: 'Insights', href: '/vendor-risk/risk-360', activeMatch: ['/vendor-risk/comply-analysis', '/vendor-risk/reports'], icon: BarChart3, requiredPermissions: ['erm:risks:*'] },
+      { name: 'Setup', href: '/vendor-risk/roster', activeMatch: ['/vendor-risk/policy', '/vendor-risk/settings'], icon: Gauge, requiredPermissions: ['erm:risks:*'] },
+    ],
   },
   {
     name: 'Compliance Management',

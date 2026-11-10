@@ -288,7 +288,7 @@ test('breadcrumbFor gives a sane trail for an example URL of every module', () =
   assert.deepEqual(labels('/erm/appetite'), ['Risk Management', 'Operational Risk', 'Risk Appetite']);
   assert.deepEqual(labels('/erm/kris'), ['Governance', 'KRIs']);
   assert.deepEqual(labels('/vendor-risk/assessments/5'), ['Third-Party Vendor Risk', 'Vendors', 'Vendor assessment']);
-  assert.deepEqual(labels('/vendor-risk/policy'), ['Third-Party Vendor Risk', 'Roster', 'Policy']);
+  assert.deepEqual(labels('/vendor-risk/policy'), ['Third-Party Vendor Risk', 'Setup', 'Policy']);
   assert.deepEqual(labels('/compliance/assessments/8'), ['Compliance Management', 'Overview', 'Assessment Control Center', 'Assessment']);
   assert.deepEqual(labels('/frameworks/3'), ['Compliance Management', 'Frameworks', 'Framework']);
   assert.deepEqual(labels('/evidence/44'), ['Compliance Management', 'Evidence Management', 'Evidence item']);
@@ -322,5 +322,5 @@ test('breadcrumbFor gives a sane trail for an example URL of every module', () =
   // a forward shows its target's trail
   assert.deepEqual(labels('/erm/internal-controls'), ['Compliance Management', 'Overview', 'Control Catalog']);
   assert.deepEqual(labels('/erm/internal-controls'), labels('/controls'));
-  assert.deepEqual(labels('/vendor-risk/shadow-saas'), ['Third-Party Vendor Risk']);
+  assert.deepEqual(labels('/vendor-risk/shadow-saas'), ['Third-Party Vendor Risk', 'Overview']);
 });

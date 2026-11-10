@@ -28,7 +28,7 @@ test('every page that used to have a rail entry still belongs to one, and the th
     '/vendor-risk/monitoring': 'monitoring', '/vendor-risk/alerts': 'monitoring', '/vendor-risk/alerts/3': 'monitoring', '/vendor-risk/security': 'monitoring',
     '/vendor-risk/technology': 'monitoring', '/vendor-risk/concentration': 'monitoring',
     '/vendor-risk/risk-360': 'insights', '/vendor-risk/comply-analysis': 'insights', '/vendor-risk/comply-analysis/5': 'insights',
-    '/vendor-risk/reports': 'insights', '/vendor-risk/reports/7': 'insights', '/vendor-risk/exchange': 'insights',
+    '/vendor-risk/reports': 'insights', '/vendor-risk/reports/7': 'insights', '/vendor-risk/exchange': 'questionnaires',
     '/vendor-risk/roster': 'setup', '/vendor-risk/policy': 'setup', '/vendor-risk/settings': 'setup', '/vendor-risk/settings/emails': 'setup',
     '/vendor-risk/policy/': 'setup', '/vendor-risk/vendors?tier=high': 'vendors',
   };
@@ -118,11 +118,21 @@ test('SIDEBAR is the eight entries: the Overview lights on its own page, every o
   assert.equal(activeNavHref('/vendor-risk/settings/emails', nav), '/vendor-risk/roster');
 });
 
+test('Questionnaires is ONE entry whose page has three tabs in its own address: the Exchange left the Insights strip, its old address still lights Questionnaires, and the page and the builder draw their own head', () => {
+  assert.deepEqual(tabsOf('/vendor-risk/reports').map((t) => t.name), ['Risks', 'Comply analyses', 'Reports'], 'the Vendor Exchange is the Shared tab of Questionnaires now; Risk 360° is named Risks');
+  assert.equal(RAIL.find((e) => e.key === 'questionnaires')?.tabs, undefined, 'the tabs are the page\'s own (?tab=library|sent|shared), not link tabs of the strip');
+  assert.equal(entryOf('/vendor-risk/exchange')?.key, 'questionnaires');
+  assert.equal(entryOf('/vendor-risk/questionnaires/12/builder')?.key, 'questionnaires');
+  assert.equal(headOf('/vendor-risk/questionnaires'), 'page');
+  assert.equal(headOf('/vendor-risk/questionnaires/12/builder'), 'page', 'the builder names the questionnaire and draws a back link');
+  assert.equal(headOf('/vendor-risk/exchange'), 'legacy', 'a forward draws nothing');
+});
+
 test('Insights and Setup draw their own heads: Risks (it was Risk 360), Comply analyses, Reports, Roster, Policy and Settings, and the two records of Insights, are page rows; the old name stays findable', () => {
   for (const path of ['/vendor-risk/risk-360', '/vendor-risk/comply-analysis', '/vendor-risk/comply-analysis/5', '/vendor-risk/reports', '/vendor-risk/reports/7', '/vendor-risk/roster', '/vendor-risk/policy', '/vendor-risk/settings']) {
     assert.equal(headOf(path), 'page', `${path}: the page draws its head and, under it, the strip of its entry`);
   }
-  assert.deepEqual(tabsOf('/vendor-risk/reports/7').map((t) => t.name), ['Risks', 'Comply analyses', 'Reports', 'Exchange'], 'Exchange stays here until Questionnaires has its Shared tab (vendor-questionnaires removes this one row)');
+  assert.deepEqual(tabsOf('/vendor-risk/reports/7').map((t) => t.name), ['Risks', 'Comply analyses', 'Reports'], 'the Vendor Exchange left this strip: it is the Shared tab of Questionnaires');
   assert.deepEqual(tabsOf('/vendor-risk/settings').map((t) => t.name), ['Roster', 'Policy', 'Settings']);
   const risks = RAIL.find((e) => e.key === 'insights')?.tabs?.[0];
   assert.equal(risks?.title, 'Third-party risks');
