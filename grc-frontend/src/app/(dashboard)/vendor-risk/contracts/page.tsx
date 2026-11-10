@@ -71,7 +71,7 @@ export default function ContractsPage() {
       key: 'supplier', header: 'Supplier', sortable: true, isRowHeader: true,
       cell: (c) => (
         <div className="flex min-w-0 flex-col items-start gap-[2px]">
-          <span className="line-clamp-2 break-words font-[600] text-ds-fg" title={c.vendor.name}>{c.vendor.name}</span>
+          <span className="line-clamp-2 [overflow-wrap:anywhere] font-[600] text-ds-fg" title={c.vendor.name}>{c.vendor.name}</span>
           {c.vendor.tier && <StatusPill size="sm" {...statusPill(vendorTier, c.vendor.tier)} />}
         </div>
       ),
@@ -80,7 +80,7 @@ export default function ContractsPage() {
       key: 'contract', header: 'Contract', sortable: true, card: 'meta',
       cell: (c) => (
         <div className="min-w-0">
-          <span className="line-clamp-2 break-words text-ds-fg" title={c.title || c.type_label}>{c.title || c.type_label}</span>
+          <span className="line-clamp-2 [overflow-wrap:anywhere] text-ds-fg" title={c.title || c.type_label}>{c.title || c.type_label}</span>
           <span className={`flex items-center gap-[4px] text-ds-label ${MUTED}`}>
             {c.type_label}{c.reference && <> · {c.reference}</>}
             {c.evidence_id && <Paperclip aria-label="Signed copy attached" className="h-[12px] w-[12px] shrink-0" strokeWidth={1.75} />}
@@ -197,7 +197,7 @@ export default function ContractsPage() {
           onSortChange={(next) => setAddress({ sort: next, page: 1 })}
           onRowActivate={(c) => openContract(c.id)}
           selectedId={open || null}
-          cardTitle={(c) => <span className="line-clamp-2 break-words font-[600] text-ds-fg">{c.vendor.name}</span>}
+          cardTitle={(c) => <span className="line-clamp-2 [overflow-wrap:anywhere] font-[600] text-ds-fg">{c.vendor.name}</span>}
           empty={items.length === 0
             ? <EmptyState bare kind="firstUse" icon={FileSignature} title="No contracts yet" description={canCreate ? "Add one here, or at the contracting stage of a supplier's assessment." : 'No contracts have been added yet.'} action={canCreate ? <Button variant="primary" leftIcon={<Plus aria-hidden />} onClick={() => setAdding(true)}>Add contract</Button> : undefined} />
             : <EmptyState bare kind="noMatches" title="No contract matches" description="Try another search, or take a filter off." onClearFilters={filtering ? clear : undefined} />}

@@ -66,7 +66,7 @@ export default function CheckinsPage() {
       key: 'supplier', header: 'Supplier', isRowHeader: true,
       cell: (r) => (
         <div className="flex min-w-0 flex-col items-start gap-[2px]">
-          <span className="line-clamp-2 break-words font-[600] text-ds-fg" title={r.name}>{r.name}</span>
+          <span className="line-clamp-2 [overflow-wrap:anywhere] font-[600] text-ds-fg" title={r.name}>{r.name}</span>
           {r.tier && <StatusPill size="sm" {...statusPill(vendorTier, r.tier)} />}
         </div>
       ),
@@ -91,7 +91,7 @@ export default function CheckinsPage() {
       ),
     },
     {
-      key: 'actions', header: 'Actions', align: 'right', card: 'hide',
+      key: 'actions', header: 'Actions', align: 'right', card: 'meta',
       cell: (r) => (
         <span className="inline-flex items-center gap-[6px]">
           <IconButton label={`History of ${r.name}`} onClick={() => setViewing(r.vendor_id)}><HistoryIcon aria-hidden /></IconButton>
@@ -141,7 +141,7 @@ export default function CheckinsPage() {
             onClearFilters={q || show !== 'overdue' ? () => setAddress({ state: 'overdue', q: '' }) : undefined}
           />
         )}
-        cardTitle={(r) => <span className="line-clamp-2 break-words font-[600] text-ds-fg">{r.name}</span>}
+        cardTitle={(r) => <span className="line-clamp-2 [overflow-wrap:anywhere] font-[600] text-ds-fg">{r.name}</span>}
         footer={rows.length > 0 ? <p className={`px-[4px] pt-[8px] text-ds-label ${MUTED}`}>{formatCount(rows.length)} {rows.length === 1 ? 'supplier' : 'suppliers'}</p> : undefined}
       />
 
