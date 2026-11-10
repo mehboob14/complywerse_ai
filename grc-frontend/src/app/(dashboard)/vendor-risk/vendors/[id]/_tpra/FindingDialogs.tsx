@@ -32,6 +32,8 @@ const Subject = ({ finding }: { finding: Pick<FindingRow, 'title'> }) => <p clas
 const BLANK = { title: '', description: '', severity: 'medium', domain: 'cybersecurity', owner: '' as number | '', blocking: false, engagement: '' as number | '' };
 const blank = (engagement?: number | null): typeof BLANK => ({ ...BLANK, engagement: engagement ?? '' });
 const cap = (s: string): string => s[0].toUpperCase() + s.slice(1);
+// 255 (the column) less the 16 characters of "Vendor finding: " that the finding's issue adds: the server's issue sync fails on a longer title
+const TITLE_MAX = 239;
 
 export function RaiseFindingDialog({ open, onClose, onRaise, busy, error, people, engagements, defaultEngagementId }: {
   open: boolean; onClose: () => void; busy: boolean;
@@ -62,7 +64,7 @@ export function RaiseFindingDialog({ open, onClose, onRaise, busy, error, people
       <form id={formId} className="flex flex-col gap-[12px]" onSubmit={(e) => { e.preventDefault(); submit(); }}>
         <FormError title="The finding could not be raised" error={error ?? null} onRetry={submit} />
         <FormField label="What is wrong" required>
-          <TextInput maxLength={255} value={form.title} onChange={(e) => set('title', e.target.value)} />
+          <TextInput maxLength={TITLE_MAX} value={form.title} onChange={(e) => set('title', e.target.value)} />
         </FormField>
         <FormField label="Detail" optional>
           <Textarea rows={3} maxLength={8000} value={form.description} onChange={(e) => set('description', e.target.value)} />

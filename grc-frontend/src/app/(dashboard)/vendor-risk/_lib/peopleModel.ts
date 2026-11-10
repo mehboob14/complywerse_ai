@@ -8,8 +8,8 @@ export interface PersonLike { id: number; name: string | null | undefined }
 export const FORMER = 'A former colleague';
 
 /** The name of person `id`: the list's, else the name the record carries itself, else "A former colleague". `null` for no id (nobody is assigned). */
+export function personName(people: ReadonlyArray<PersonLike>, id: number, carried?: string | null): string;
 export function personName(people: ReadonlyArray<PersonLike>, id: number | null | undefined, carried?: string | null): string | null;
-export function personName(people: ReadonlyArray<PersonLike>, id: number): string;
 export function personName(people: ReadonlyArray<PersonLike>, id: number | null | undefined, carried?: string | null): string | null {
   if (id == null) return null;
   const listed = people.find((p) => p.id === id)?.name?.trim();

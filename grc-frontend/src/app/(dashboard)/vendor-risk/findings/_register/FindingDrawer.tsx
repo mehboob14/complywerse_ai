@@ -40,8 +40,8 @@ export default function FindingDrawer({ row, openId, onClose, onStep, hasPrev, h
     <SidePanel
       open={openId != null && !!row}
       onClose={onClose}
-      title={<span dir="auto" className="line-clamp-3 break-words" title={row?.title || undefined}>{row?.title || 'Untitled finding'}</span>}
-      subtitle={row?.vendor_name || undefined}
+      title="Finding"
+      subtitle={row?.vendor_name ? <span dir="auto" className="break-words">{row.vendor_name}</span> : undefined}
       dockFrom={Infinity}
       width="lg"
       restoreFocus={restoreFocus}

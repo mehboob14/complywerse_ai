@@ -261,7 +261,7 @@ export default function IntakeForm({
     return <div className="flex flex-col gap-[12px]">{nav}{body}{side}</div>;
   }
   return (
-    <div className="grid gap-[16px] lg:grid-cols-[210px_minmax(0,1fr)_300px]">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-[16px] lg:grid-cols-[210px_minmax(0,1fr)_300px]">
       <aside className="lg:sticky lg:top-[16px] lg:self-start">{nav}</aside>
       <SectionCard id="request-questions" title={tabs[Math.max(0, at)].title}>{body}</SectionCard>
       <aside className="lg:sticky lg:top-[16px] lg:self-start">{side}</aside>

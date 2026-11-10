@@ -108,7 +108,7 @@ export default function RequestsPage() {
     onMove: (dir) => { const next = stepTo(ids, selected?.id ?? null, dir); if (next != null) set({ open: next }); },
     onOpen: () => {},
     onEscape: () => { if (open) set({ open: 0 }); },
-  }, rows.length > 0);
+  }, rows.length > 0 && wide);                            // beside the queue only: below 1024 a key must not open the sheet
 
   const searching = q.trim() !== '';
   const empty = emptyCopy(scope, searching);

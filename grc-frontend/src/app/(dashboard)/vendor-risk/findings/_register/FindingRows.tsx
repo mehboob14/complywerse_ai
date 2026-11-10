@@ -18,8 +18,8 @@ import { FindingStatus, SeverityPill } from '../../vendors/[id]/_tpra/FindingCar
 const plainClick = (e: { button: number; metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean }) => e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
 
 export const FINDING_FIT: Record<'severity' | 'vendor' | 'status' | 'due' | 'owner', Omit<FitColumn, 'key'>> = {
-  severity: { px: 104 },
-  status: { px: 136 },
+  severity: { px: 96 },
+  status: { px: 152 },
   due: { px: 116, dropRank: 1 },
   vendor: { px: 168, dropRank: 2 },
   owner: { px: 68, dropRank: 3, wide: { px: 176, titleMin: 420 } },
