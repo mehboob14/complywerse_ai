@@ -1,23 +1,14 @@
 'use client';
 
-// /reports/trends — cross-module KPI trends.
-//
-// TrendsView and its backend (/reporting/trends/*) both survived the
-// canvas-first revamp of /reports; only the mode switcher that mounted it was
-// removed, which left a whole working feature unreachable. This is that route.
+// /reports/trends — how the key numbers of every module have moved (the page itself is _trends/TrendsPage): a board or a table of figures with a Sheet for each, filtered by status, kept in the address.
 
 export const dynamic = 'force-dynamic';
 
-import TrendsView from '../_reports/TrendsView';
 import PermissionGuard from '@/components/ui/PermissionGuard';
 import { navPermissions } from '@/components/layout/navAccess';
+import { TrendsPage } from '../_trends/TrendsPage';
 
-export default function ReportsTrendsPage() {
-  return (
-    <PermissionGuard required={navPermissions('/reports/trends')}>
-      <div className="flex min-h-[calc(100dvh-3.5rem)] min-w-0 flex-col overflow-hidden bg-white">
-        <TrendsView />
-      </div>
-    </PermissionGuard>
-  );
+// opened by its URL without any of the three reports rights: the no-access page
+export default function GuardedTrendsPage() {
+  return <PermissionGuard required={navPermissions('/reports/trends')}><TrendsPage /></PermissionGuard>;
 }
