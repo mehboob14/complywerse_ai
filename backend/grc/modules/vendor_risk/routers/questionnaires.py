@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form, Request
 from fastapi.responses import Response
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from ....models import (
@@ -468,17 +468,67 @@ def delete_template(
 
 # ── Questionnaire response management (authenticated) ────────────
 
+def _lean_rows(db: Session, rows: List[VendorQuestionnaireResponse]) -> List[dict]:
+    """What the Sent list shows of a questionnaire: who it went to, what, where it stands, how much is answered. The names are
+    joined here (one query each) so the page needs no vendors, templates or assessments list; the answers, the comments and the
+    link's token stay out of it (they are read one at a time, GET /questionnaire-responses/{id})."""
+    vendors = {v.id: v for v in db.query(Vendor.id, Vendor.name, Vendor.deleted_at).filter(
+        Vendor.id.in_({r.vendor_id for r in rows} or {-1}))}
+    templates = {t.id: t for t in db.query(VendorQuestionnaireTemplate).filter(
+        VendorQuestionnaireTemplate.id.in_({r.template_id for r in rows if r.template_id} or {-1}))}
+    versions_ = {v.id: v for v in db.query(TPRATemplateVersion).filter(
+        TPRATemplateVersion.id.in_({r.template_version_id for r in rows if r.template_version_id} or {-1}))}
+    assessments = {a.id: a for a in db.query(VendorAssessment.id, VendorAssessment.assessment_type, VendorAssessment.status).filter(
+        VendorAssessment.id.in_({r.assessment_id for r in rows if r.assessment_id} or {-1}))}
+    out = []
+    for qr in rows:
+        vendor, template, version, assessment = (vendors.get(qr.vendor_id), templates.get(qr.template_id),
+                                                 versions_.get(qr.template_version_id), assessments.get(qr.assessment_id))
+        # The questions it was SENT on, else the template's as it is now (an older questionnaire has no version).
+        asked = (version.questions if version else template.questions if template else None) or []
+        out.append({
+            "id": qr.id,
+            "vendor_id": qr.vendor_id,
+            "vendor_name": vendor.name if vendor else None,
+            "vendor_archived": bool(vendor and vendor.deleted_at),
+            "assessment_id": qr.assessment_id,
+            "assessment_type": assessment.assessment_type if assessment else None,
+            "assessment_status": assessment.status if assessment else None,
+            "template_id": qr.template_id,
+            "template_name": template.name if template else None,
+            "template_version_no": version.version_no if version else None,
+            "respondent_name": qr.respondent_name,
+            "respondent_email": qr.respondent_email,
+            "contact_id": qr.contact_id,
+            "status": qr.status,
+            "own_link": not (qr.status == "accepted" or portal.is_sealed(qr.token)),      # a link of its own still works (sent before personal links)
+            "due_date": qr.due_date.isoformat() if qr.due_date else None,
+            "expires_at": qr.expires_at.isoformat() if qr.expires_at else None,
+            "last_sent_at": qr.last_sent_at.isoformat() if qr.last_sent_at else None,
+            "submitted_at": qr.submitted_at.isoformat() if qr.submitted_at else None,
+            "accepted_at": qr.accepted_at.isoformat() if qr.accepted_at else None,
+            "created_at": qr.created_at.isoformat() if qr.created_at else None,
+            "answered": len(qr.responses or {}),
+            "question_count": len(asked),
+        })
+    return out
+
+
 @router.get("/questionnaire-responses")
 def list_questionnaire_responses(
     vendor_id: Optional[int] = Query(None),
     assessment_id: Optional[int] = Query(None),
+    lean: bool = Query(False, description="The Sent list's rows: names joined, how much is answered, no answers, comments or token; "
+                                          "answers `{items, total, skip, limit}`, newest first"),
+    skip: int = Query(0, ge=0, description="lean only"),
+    limit: int = Query(500, ge=1, le=5000, description="lean only"),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
     """List questionnaire responses for the current tenant."""
     tenant_ids = get_user_tenants(current_user, db)
     if not tenant_ids:
-        return []
+        return {"items": [], "total": 0, "skip": skip, "limit": limit} if lean else []
     query = db.query(VendorQuestionnaireResponse).filter(
         VendorQuestionnaireResponse.tenant_id.in_(tenant_ids),
     )
@@ -486,7 +536,68 @@ def list_questionnaire_responses(
         query = query.filter(VendorQuestionnaireResponse.vendor_id == vendor_id)
     if assessment_id:
         query = query.filter(VendorQuestionnaireResponse.assessment_id == assessment_id)
-    return [serialize_questionnaire_response(qr) for qr in query.all()]
+    if not lean:
+        return [serialize_questionnaire_response(qr) for qr in query.all()]
+    total = query.count()
+    rows = (query.order_by(VendorQuestionnaireResponse.created_at.desc(), VendorQuestionnaireResponse.id.desc())
+            .offset(skip).limit(limit).all())
+    return {"items": _lean_rows(db, rows), "total": total, "skip": skip, "limit": limit}
+
+
+@router.get("/questionnaire-responses/{response_id}")
+def get_questionnaire_response(
+    response_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """One questionnaire as the list serializes it (answers, comments, attestation) with the questions it was sent on. Read by
+    whoever may read the list: the same data, one at a time."""
+    qr = _response_or_404(db, current_user, response_id)
+    version = db.get(TPRATemplateVersion, qr.template_version_id) if qr.template_version_id else None
+    template = db.get(VendorQuestionnaireTemplate, qr.template_id) if qr.template_id else None
+    vendor = db.get(Vendor, qr.vendor_id)
+    return {
+        **serialize_questionnaire_response(qr),
+        "questions": (version.questions if version else template.questions if template else None) or [],
+        "template_name": template.name if template else None,
+        "template_version_no": version.version_no if version else None,
+        "vendor_name": vendor.name if vendor else None,
+    }
+
+
+@router.get("/vendor-options")
+def vendor_options(
+    search: Optional[str] = Query(None, description="Part of the name"),
+    with_assessment: bool = Query(False, description="Only suppliers with an active assessment (what the Exchange can publish)"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(2000, ge=1, le=5000),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """The suppliers a picker offers, light: a name to pick, the tier and the primary contact to show beside it, and the active
+    assessment. The same suppliers GET /vendors lists by default (not archived, requests picked up), by name, without the register's
+    per-row work, so a picker can hold every one of them instead of the first hundred."""
+    tenant_ids = get_user_tenants(current_user, db)
+    if not tenant_ids:
+        return {"items": [], "total": 0, "skip": skip, "limit": limit}
+    query = db.query(Vendor).filter(
+        Vendor.tenant_id.in_(tenant_ids), Vendor.deleted_at.is_(None),
+        or_(Vendor.intake_status.is_(None), Vendor.intake_status.in_(("in_review", "approved"))))
+    if search:
+        query = query.filter(Vendor.name.ilike(f"%{search}%"))
+    if with_assessment:
+        query = query.filter(Vendor.active_assessment_id.isnot(None))
+    total = query.count()
+    vendors = query.order_by(func.lower(Vendor.name), Vendor.id).offset(skip).limit(limit).all()
+    return {
+        "items": [{
+            "id": v.id, "name": v.name, "status": v.status,
+            "tier": v.tier if v.inherent_risk_score is not None else None,       # a tier counts once someone has tiered the supplier (as the register says)
+            "primary_contact_name": v.primary_contact_name, "primary_contact_email": v.primary_contact_email,
+            "active_assessment_id": v.active_assessment_id,
+        } for v in vendors],
+        "total": total, "skip": skip, "limit": limit,
+    }
 
 
 class UpdateQuestionnaireResponseRequest(BaseModel):
