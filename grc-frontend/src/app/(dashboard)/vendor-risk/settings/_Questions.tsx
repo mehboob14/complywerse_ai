@@ -228,7 +228,7 @@ export default function QuestionsEditor({ value, onChange, builtin, factors, evi
             <div className="w-full space-y-1 pt-1">
               <RolePicker label="Who sees it" value={rule.see || []} roles={roles} canEdit={canEdit} onChange={(v) => setRule('see', v)} />
               <RolePicker label="Who answers it" value={rule.answer || []} roles={roles} canEdit={canEdit} onChange={(v) => setRule('answer', v)} />
-              <p className="text-[11px] text-slate-400">The review team always sees and answers every section. A requester who cannot answer a section is not held up by it.</p>
+              <p className="text-[12px] text-slate-400">The review team always sees and answers every section. A requester who cannot answer a section is not held up by it.</p>
             </div>
             {!current.builtin && canEdit && (
               <button type="button" disabled={activeHere.length > 0}
@@ -314,7 +314,7 @@ function QuestionRow({ open, onToggle, label, type, builtin, hidden, required, f
   open: boolean; onToggle: () => void; label: string; type: string; builtin?: boolean; hidden?: boolean; required?: boolean;
   factor?: string; evidence?: string; showIf?: string; minTier?: string; children: React.ReactNode;
 }) {
-  const chip = 'rounded-full border px-1.5 py-px text-[10px] font-medium';
+  const chip = 'rounded-full border px-1.5 py-px text-[12px] font-medium';
   return (
     <li className={clsx(hidden && 'bg-slate-50/70')}>
       <button type="button" onClick={onToggle} aria-expanded={open}
@@ -344,7 +344,7 @@ function Field({ label, children, hint }: { label: string; children: React.React
     <label className="block text-xs font-medium text-slate-600">
       {label}
       <span className="mt-1 block font-normal">{children}</span>
-      {hint && <span className="mt-0.5 block font-normal text-[11px] text-slate-400">{hint}</span>}
+      {hint && <span className="mt-0.5 block font-normal text-[12px] text-slate-400">{hint}</span>}
     </label>
   );
 }
@@ -370,7 +370,7 @@ function OptionsEditor({ options, scored, canEdit, onChange, fixed = [] }: {
             onChange={(e) => onChange(options.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
             className={clsx(fieldCls, 'flex-1')} />
           {scored && (
-            <label className="flex items-center gap-1 text-[11px] text-slate-500">
+            <label className="flex items-center gap-1 text-[12px] text-slate-500">
               points
               <select value={o.points ?? 0} disabled={!canEdit || o.archived}
                 onChange={(e) => onChange(options.map((x, j) => (j === i ? { ...x, points: Number(e.target.value) } : x)))}
@@ -431,7 +431,7 @@ function BuiltinEditor({ q, change, canEdit, evidence, onChange, onReset }: {
         Hide from the form
       </label>
       {change.hidden && (
-        <p className="sm:col-span-2 rounded-md bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
+        <p className="sm:col-span-2 rounded-md bg-amber-50 px-2 py-1.5 text-[12px] text-amber-800">
           Hidden questions are not asked, so their built-in tiering rule stops counting for new requests.
         </p>
       )}
@@ -455,7 +455,7 @@ function BuiltinEditor({ q, change, canEdit, evidence, onChange, onReset }: {
           <p className="mb-1 text-xs font-medium text-slate-600">Options</p>
           <OptionsEditor options={options} scored={false} canEdit={canEdit} fixed={(q.options || []).map((o) => o.value)}
             onChange={(next) => onChange({ options: next })} />
-          <p className="mt-1 text-[11px] text-slate-400">Built-in options can be renamed or taken off, not deleted: the tiering rules read them. New options count as a supplier that supplies us.</p>
+          <p className="mt-1 text-[12px] text-slate-400">Built-in options can be renamed or taken off, not deleted: the tiering rules read them. New options count as a supplier that supplies us.</p>
         </div>
       )}
       <div className="sm:col-span-2 flex justify-end">
@@ -528,8 +528,8 @@ function CustomEditor({ q, canEdit, typeLocked, factors, evidence, yesNo, sectio
               </select>
             </Field>
           )}
-          {q.factor && q.type === 'level' && <p className="self-end text-[11px] text-slate-500">Raised to the level chosen: none 0, low 1, moderate 2, high 3, severe 4.</p>}
-          {q.factor && ['choice', 'multi_choice'].includes(q.type) && <p className="self-end text-[11px] text-slate-500">Set the points on each option above; with several chosen, the highest counts.</p>}
+          {q.factor && q.type === 'level' && <p className="self-end text-[12px] text-slate-500">Raised to the level chosen: none 0, low 1, moderate 2, high 3, severe 4.</p>}
+          {q.factor && ['choice', 'multi_choice'].includes(q.type) && <p className="self-end text-[12px] text-slate-500">Set the points on each option above; with several chosen, the highest counts.</p>}
         </div>
       )}
       {q.type === 'yes_no' && (
