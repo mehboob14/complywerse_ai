@@ -11,14 +11,16 @@ import type { useNextUp, VendorRecord } from './recordData';
 
 const TONE_TEXT: Record<ReviewWords['tone'], string> = { danger: 'text-ds-danger', warning: 'text-ds-warning', neutral: 'text-ds-fg-body' };
 
-export default function NextUpStrip({ vendor, items, next }: { vendor: VendorRecord; items: Scope[] | undefined; next: ReturnType<typeof useNextUp> }) {
+export default function NextUpStrip({ vendor, items, next, archived = false }: { vendor: VendorRecord; items: Scope[] | undefined; next: ReturnType<typeof useNextUp>; archived?: boolean }) {
   const review = reviewWords(items, vendor.next_reassessment_date);
   const step = nextUp(next.data);
   return (
     <section aria-label="Where this supplier stands" className="flex flex-wrap items-center gap-x-[24px] gap-y-[8px] rounded-ds-card border border-ds-border bg-ds-surface px-[16px] py-[8px] text-ds-body text-ds-fg-body">
       <div className="min-w-0 flex-1 basis-[16rem]">
         <span className="mr-[8px] text-ds-label font-[600] uppercase tracking-[0.04em] text-ds-fg-muted">Next up</span>
-        {next.isError ? (
+        {archived ? (
+          <span className="text-ds-fg-muted">Archived: no step is waiting</span>
+        ) : next.isError ? (
           <span>
             Couldn’t read who is next.{' '}
             <Button size="sm" onClick={() => { void next.refetch(); }}>Retry</Button>

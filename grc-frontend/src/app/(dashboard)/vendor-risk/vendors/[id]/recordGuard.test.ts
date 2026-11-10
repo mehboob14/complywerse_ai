@@ -56,11 +56,11 @@ test('the first paint asks for four reads (the vendor, its engagements, its exit
   assert.match(PAGE, /useVendorRecord\(vendorId\)/);
   assert.match(PAGE, /useEngagements\(vendorId\)/);
   assert.match(PAGE, /useOffboarding\(vendorId\)/);
-  assert.match(read(join(HERE, '_record/AtAGlance.tsx')), /useRecordContacts\(vendorId\)/);
+  assert.match(read(join(HERE, '_record/AtAGlance.tsx')), /useRecordContacts\(vendorId, !archived\)/);
   // who is next, the two tab counts and the logo are asked for after the first paint
   assert.match(PAGE, /const late = useAfterPaint\(!!vendor\)/);
-  assert.match(PAGE, /useNextUp\(vendorId, engagementId, late\)/);
-  assert.match(PAGE, /useTabCounts\(vendorId, engagementId, late\)/);
+  assert.match(PAGE, /useNextUp\(vendorId, engagementId, late && !archived\)/);
+  assert.match(PAGE, /useTabCounts\(vendorId, engagementId, late && !archived\)/);       // an archived supplier has nothing to read: no request that would answer "not found"
   assert.match(data, /enabled,\s*staleTime: 15_000/);
   assert.match(read(join(HERE, '_record/AtAGlance.tsx')), /\{late && <VendorLogo/);
   // the duplicates are read when the section is opened, the stage count never loads a list of its own

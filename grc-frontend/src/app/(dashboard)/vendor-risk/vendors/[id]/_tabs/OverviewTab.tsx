@@ -58,6 +58,7 @@ export default function OverviewTab({ vendorId, vendor, vatRequest }: TabProps) 
   }, [vatRequest]);
 
   if (!vendor) return null;
+  const archived = !!vendor.archived_at;                 // its engagements, dependencies and activity are not readable until it is restored
   const data = dataShared(vendor);
   const start = vendor.contract_start_date;
   const end = vendor.contract_end_date;
@@ -82,13 +83,16 @@ export default function OverviewTab({ vendorId, vendor, vatRequest }: TabProps) 
         </FactList>
       </RecordPanel>
 
-      <EngagementsPanel
-        vendorId={vendorId}
-        onOpenLifecycle={(id) => router.push(lifecycleHref(vendorId, id))}
-        onTier={(id) => router.push(tierHref(vendorId, id))}
-      />
-
-      <LazyMount label="what depends on them"><DependenciesPanel vendorId={vendorId} /></LazyMount>
+      {!archived && (
+        <>
+          <EngagementsPanel
+            vendorId={vendorId}
+            onOpenLifecycle={(id) => router.push(lifecycleHref(vendorId, id))}
+            onTier={(id) => router.push(tierHref(vendorId, id))}
+          />
+          <LazyMount label="what depends on them"><DependenciesPanel vendorId={vendorId} /></LazyMount>
+        </>
+      )}
       <LazyMount label="your fields" minHeight={48}><YourFields vendorId={vendorId} values={vendor.custom_values} /></LazyMount>
 
       {vendor.notes && (
@@ -103,7 +107,7 @@ export default function OverviewTab({ vendorId, vendor, vatRequest }: TabProps) 
         </RecordPanel>
       </div>
 
-      <LazyMount label="latest activity"><ActivityPanel vendorId={vendorId} /></LazyMount>
+      {!archived && <LazyMount label="latest activity"><ActivityPanel vendorId={vendorId} /></LazyMount>}
     </div>
   );
 }

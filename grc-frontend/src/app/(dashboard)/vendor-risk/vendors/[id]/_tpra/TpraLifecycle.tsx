@@ -13,7 +13,8 @@ import { BTN, BTN_PRIMARY } from '../_record/btn';
 import { TierBadge } from '../_record/recordUi';
 import RecordPanel from '../_record/RecordPanel';
 import { tpraApi } from '@/lib/api';
-import { Sheet } from '@/components/ui/ds';
+import { ErrorState, Sheet, SkeletonLines } from '@/components/ui/ds';
+import { errorMessage } from '@/components/ui/ds/reportOutcome';
 import { ActivityBody } from '../_record/Activity';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -200,19 +201,8 @@ export default function TpraLifecycle({
     />
   );
 
-  if (isLoading) {
-    return <div className="flex items-center gap-2 py-12 text-[13px] text-ds-fg-muted"><Loader2 className="h-4 w-4 animate-spin" /> Loading lifecycle…</div>;
-  }
-  if (error) {
-    return (
-      <div className="flex h-48 flex-col items-center justify-center text-ds-danger">
-        <AlertTriangle className="mb-2 h-7 w-7" />
-        <p className="text-[13px]">Failed to load the lifecycle.</p>
-        <button type="button" onClick={() => qc.invalidateQueries({ queryKey: lifecycleKey(vendorId, engagementId) })}
-          className="mt-2 text-[13px] font-medium text-ds-primary-text hover:underline">Retry</button>
-      </div>
-    );
-  }
+  if (isLoading) return <SkeletonLines lines={8} label="Loading the lifecycle" />;
+  if (error) return <ErrorState title="Couldn’t load the lifecycle" message={errorMessage(error)} onRetry={() => { void qc.invalidateQueries({ queryKey: lifecycleKey(vendorId, engagementId) }); }} />;
 
   // No assessment yet → tier it (which starts the lifecycle) or just start it.
   if (!assessment) {

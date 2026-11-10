@@ -78,9 +78,11 @@ export default function VendorRecordPage() {
     if (address.tab && address.tab !== tab) set({ tab });
   }, [address.tab, tab, set]);
 
+  // An archived supplier has no engagements, contacts, steps or findings to read (the server answers "not found"): nothing is asked for them.
+  const archived = !!vendor?.archived_at;
   const late = useAfterPaint(!!vendor);
-  const next = useNextUp(vendorId, engagementId, late);
-  const counts = useTabCounts(vendorId, engagementId, late);
+  const next = useNextUp(vendorId, engagementId, late && !archived);
+  const counts = useTabCounts(vendorId, engagementId, late && !archived);
 
   const [editing, setEditing] = useState(false);
   const [addingEngagement, setAddingEngagement] = useState(false);
@@ -115,7 +117,6 @@ export default function VendorRecordPage() {
 
   const supplier = engagements.data?.supplier;
   const tiered = isTiered(vendor);
-  const archived = !!vendor.archived_at;
   const closing = archived || !!offboarding.data?.started;
   // The picker is on the Lifecycle and Assessments tabs: only there is the engagement picked on purpose (elsewhere "Tier engagement" is for the vendor, and for the first engagement still to be tiered).
   const picker = showsPicker(tab, openScopes(items).length);
@@ -160,8 +161,13 @@ export default function VendorRecordPage() {
         </Notice>
       )}
 
+      {archived && (
+        <Notice tone="info" title="This supplier is archived">
+          Its engagements, contacts and lifecycle are kept but cannot be opened until it is restored from the register’s Archived view.
+        </Notice>
+      )}
       <OffboardingPanel vendorId={vendorId} exitOnly />
-      <NextUpStrip vendor={vendor} items={items} next={next} />
+      <NextUpStrip vendor={vendor} items={items} next={next} archived={archived} />
 
       <div className="grid items-start gap-[16px] xl:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="min-w-0">
@@ -185,7 +191,8 @@ export default function VendorRecordPage() {
           engagements={engagements.data}
           engagementsFailed={engagementsFailed}
           onRetryEngagements={() => { void engagements.refetch(); }}
-          canEdit={canEdit}
+          canEdit={canEdit && !archived}
+          archived={archived}
           late={late}
           onAddContact={() => setContact('new')}
           onEditContact={setContact}

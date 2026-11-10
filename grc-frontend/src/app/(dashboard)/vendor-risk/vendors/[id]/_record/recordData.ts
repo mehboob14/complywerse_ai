@@ -29,10 +29,11 @@ export function useVendorRecord(vendorId: number) {
 }
 
 /** The supplier's contacts (portal links included): the "At a glance" card lists them, the Assessments tab shares the answer. */
-export function useRecordContacts(vendorId: number) {
+export function useRecordContacts(vendorId: number, enabled = true) {
   return useQuery<SupplierContact[]>({
     queryKey: ['tprm-contacts', vendorId, false],
     queryFn: async () => (await portalApi.contacts(vendorId, false)).data.items,
+    enabled,
     ...TPRM_QUERY_OPTS,
   });
 }

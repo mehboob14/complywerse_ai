@@ -102,13 +102,13 @@ function Row({ e, list, canEdit, canTier, onOpen, onTier, onEdit, onEnd }: {
   ].filter(Boolean).join(' · ');
   return (
     <li className={clsx('flex flex-wrap items-start justify-between gap-x-4 gap-y-2 py-3 first:pt-0 last:pb-0', ended && 'opacity-60')}>
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 basis-[14rem]">
         <p className="text-[14px] font-[600] leading-5 text-ds-fg">{e.name}</p>
         {e.description && <p className="line-clamp-1 text-[13px] leading-5 text-ds-fg-muted">{e.description}</p>}
         <p className="text-[12px] leading-4 text-ds-fg-muted">{facts}</p>
         {standing && <p className="mt-0.5 text-[12px] leading-4 text-ds-fg-muted">{standing}</p>}
       </div>
-      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+      <div className="flex max-w-full flex-wrap items-center justify-end gap-2">
         <TierBadge tier={tiered ? e.tier : null} variant="dot" />
         {ended ? (
           <span className="inline-flex items-center gap-0.5">

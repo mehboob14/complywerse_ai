@@ -9,7 +9,7 @@ import { Pencil, Plus, Star } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Disclosure, ErrorState, Fact, IconButton, PersonChip, ProgressBar, SectionCard, SkeletonLines } from '@/components/ui/ds';
-import { formatDate } from '@/lib/format';
+import { formatDate, formatRelative } from '@/lib/format';
 import { errorMessage } from '@/components/ui/ds/reportOutcome';
 import VendorLogo from '../../../_lib/VendorLogo';
 import type { EngagementList } from '../../../_lib/engagementsApi';
@@ -18,12 +18,12 @@ import { matchHref, matchNote } from '../../../_lib/intakeModel';
 import type { SupplierContact } from '../../../_lib/portalApi';
 import { reviewWords } from '../../../_lib/recordShellModel';
 import { useDuplicates } from '../../../_lib/vendorRecordApi';
-import { contactLine, isTiered, openScopes, recordHref, settled, sourceLabel } from '../../../_lib/vendorRecordModel';
+import { contactLine, isTiered, nextReview, openScopes, recordHref, settled, sourceLabel } from '../../../_lib/vendorRecordModel';
 import { useRecordContacts, type VendorRecord } from './recordData';
 
 const cap = (s: string) => s.replace(/^./, (c) => c.toUpperCase());
 
-export default function AtAGlance({ vendorId, vendor, engagementId, engagements, engagementsFailed, onRetryEngagements, canEdit, late, onAddContact, onEditContact }: {
+export default function AtAGlance({ vendorId, vendor, engagementId, engagements, engagementsFailed, onRetryEngagements, canEdit, archived = false, late, onAddContact, onEditContact }: {
   vendorId: number;
   vendor: VendorRecord;
   /** the engagement the page picked; null is General */
@@ -32,12 +32,14 @@ export default function AtAGlance({ vendorId, vendor, engagementId, engagements,
   engagementsFailed: boolean;
   onRetryEngagements: () => void;
   canEdit: boolean;
+  /** the supplier is archived: its contacts cannot be read */
+  archived?: boolean;
   /** the first paint is out: the logo may be fetched now */
   late: boolean;
   onAddContact: () => void;
   onEditContact: (contact: SupplierContact) => void;
 }) {
-  const contacts = useRecordContacts(vendorId);
+  const contacts = useRecordContacts(vendorId, !archived);
   const [wantDuplicates, setWantDuplicates] = useState(false);
   const duplicates = useDuplicates(String(vendor.name ?? ''), String(vendor.website ?? ''), vendorId, wantDuplicates);
 
@@ -52,6 +54,7 @@ export default function AtAGlance({ vendorId, vendor, engagementId, engagements,
   const row = openScopes(items).find((e) => (engagementId ? e.id === engagementId : e.is_general)) ?? null;
   const progress = settled(life.data?.stages);
   const listed = (contacts.data ?? []).filter((c) => !c.archived_at);
+  const next = nextReview(items, vendor.next_reassessment_date);
   const review = reviewWords(items, vendor.next_reassessment_date);
 
   return (
@@ -65,7 +68,9 @@ export default function AtAGlance({ vendorId, vendor, engagementId, engagements,
           <Fact label="Business owner"><PersonChip name={vendor.owner?.full_name} /></Fact>
           <Fact label="Security owner"><PersonChip name={vendor.security_owner?.full_name} /></Fact>
           <Fact label="Relationship owner"><PersonChip name={vendor.relationship_owner?.full_name} /></Fact>
-          <Fact label="Next reassessment"><span className={review.tone === 'danger' ? 'text-ds-danger' : undefined}>{review.text.replace(/^Reassessment /, '')}</span></Fact>
+          <Fact label="Next reassessment">
+            {next ? <span className={review.tone === 'danger' ? 'text-ds-danger' : undefined}>{formatDate(next, { calendar: true })} ({formatRelative(next)})</span> : 'After tiering'}
+          </Fact>
           <Fact label="Added">{formatDate(vendor.created_at)}</Fact>
           <Fact label="Last changed">{formatDate(vendor.updated_at)}</Fact>
           <Fact label="Source">{sourceLabel(vendor)}</Fact>
@@ -77,7 +82,9 @@ export default function AtAGlance({ vendorId, vendor, engagementId, engagements,
         title="Contacts"
         actions={canEdit ? <IconButton label="Add contact" onClick={onAddContact}><Plus aria-hidden /></IconButton> : undefined}
       >
-        {contacts.isPending ? (
+        {archived ? (
+          <p className="text-ds-body text-ds-fg-muted">Not shown while the supplier is archived.</p>
+        ) : contacts.isPending ? (
           <SkeletonLines lines={3} label="Loading the contacts" />
         ) : contacts.isError ? (
           <ErrorState compact title="Couldn’t load the contacts" message={errorMessage(contacts.error)} onRetry={() => { void contacts.refetch(); }} />
