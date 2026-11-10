@@ -79,9 +79,11 @@ test('HEAD: a page that draws its head draws the page head of the kit; a page th
     if (by === 'page') assert.match(source, /<PageHeader[\s\S]{0,80}variant="page"/, `${path} draws PageHeader variant="page"`);
     if (by === 'layout') assert.ok(!/<h1|<PageHeader|ModuleHeader/.test(source), `${path}: the layout draws its head, so the page draws none`);
   }
+  assert.equal(headOf('/vendor-risk/vendors?tier=high'), 'layout');
+  assert.equal(headOf('/vendor-risk'), 'page');
   assert.equal(headOf('/vendor-risk/vendors/12'), 'legacy');
   assert.equal(headOf('/vendor-risk/alerts'), 'legacy');
-  for (const path of WITH_ACTIONS) assert.ok(headOf(path) === 'layout' || Object.keys(HEAD).length === 0, `${path}: the buttons are drawn only by the layout head`);
+  for (const path of WITH_ACTIONS) assert.equal(headOf(path), 'layout', `${path}: the buttons are drawn only by the layout head`);
 });
 
 // ---- what the sidebar lists ----

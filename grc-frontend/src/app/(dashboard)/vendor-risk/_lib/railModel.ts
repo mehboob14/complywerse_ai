@@ -74,7 +74,17 @@ export const RAIL: RailEntry[] = [
  *  the top bar names only the section), false for `legacy`. */
 export type HeadBy = 'page' | 'layout' | 'legacy';
 
-export const HEAD: Readonly<Record<string, HeadBy>> = {};
+export const HEAD: Readonly<Record<string, HeadBy>> = {
+  [V]: 'page',
+  [`${V}/attention`]: 'page',
+  [`${V}/actions`]: 'page',
+  [`${V}/vendors`]: 'layout',
+  [`${V}/intake`]: 'layout',
+  [`${V}/findings`]: 'layout',
+  [`${V}/questionnaires`]: 'layout',
+  [`${V}/roster`]: 'layout',
+  [`${V}/policy`]: 'layout',
+};
 
 /** The pages whose head carries the module's two ways to bring a vendor in (Request vendor, Add vendor) when the layout draws it. */
 export const WITH_ACTIONS: readonly string[] = [`${V}/vendors`, `${V}/intake`];
