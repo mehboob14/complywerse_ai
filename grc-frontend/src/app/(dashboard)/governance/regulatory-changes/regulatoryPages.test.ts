@@ -66,13 +66,13 @@ test('the status of a change is moved from a menu and Completed only through Clo
   assert.match(source(`${GOV}regulatory-changes/[id]/_head.tsx`), /closeChange|regulatoryApi\.closeChange/);
 });
 
-test('the legacy file is only what the three Vendor Risk files import', () => {
+test('the legacy file has no importer left: the Vendor Risk record moved to its own date helper and the kit (it is a dead-code candidate for the parent)', () => {
   const s = readFileSync(`${GOV}${LEGACY}`, 'utf8');
   const exported = Array.from(s.matchAll(/^export (?:const|function|type) (\w+)/gm)).map((m) => m[1]).sort();
   assert.deepEqual(exported, ['Option', 'Segmented', 'fmtDate', 'inDays', 'isoDay']);
   const vendor = fileURLToPath(new URL('../../vendor-risk/vendors/[id]/', import.meta.url));
   const users = walk(vendor).filter((f) => readFileSync(f, 'utf8').includes('governance/regulatory-changes/_ui'));
-  assert.equal(users.length, 3, 'SendDialog, RenewalDialog and PortalPanel');
+  assert.equal(users.length, 0, 'SendDialog, RenewalDialog and PortalPanel now use inDays of vendor-risk/_lib/recordShellModel.ts, formatDate and the kit SegmentedControl');
 });
 
 test('the Feed offers Not relevant and says what Convert made; the seeded defaults are named for what they add', () => {

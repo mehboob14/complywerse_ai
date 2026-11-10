@@ -98,11 +98,11 @@ test('Rule U1: no record number, no "#id", no endpoint and no browser-locale dat
   }
 });
 
-test('the vendor module\'s own _ui kit is gone from the record: only its pure formatters and two charts are still imported', () => {
+test('the vendor module\'s own _ui kit is gone from the record: only its pure formatters and the tier maths are still imported', () => {
   for (const { f, name } of MINE) {
     for (const m of Array.from(code(read(f)).matchAll(/from '([^']*\/_ui)(?:\/([A-Za-z]+))?'/g))) {
       if (/regulatory-changes/.test(m[1])) assert.fail(`${name}: imports another module's ui kit`);
-      assert.ok(m[2] && ['fmt', 'Charts', 'tiers'].includes(m[2]), `${name}: imports ${m[0]}`);
+      assert.ok(m[2] && ['fmt', 'chartMath', 'tiers'].includes(m[2]), `${name}: imports ${m[0]}`);
     }
   }
 });

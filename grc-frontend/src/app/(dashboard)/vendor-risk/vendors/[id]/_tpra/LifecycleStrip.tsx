@@ -5,7 +5,7 @@
 import { BTN, BTN_PRIMARY } from '../_record/btn';
 import { TierBadge } from '../_record/recordUi';
 import { TONE } from '@/lib/status';
-import { ThresholdRuler } from '../../../_ui/Charts';
+import RecordRuler from '../_record/RecordRuler';
 import { clsx } from 'clsx';
 import { STAGES, chartFacts, segments, stageName, type Check, type Segment, type StageFact } from '../../../_lib/lifecycleLogic';
 import type { HeldPolicy } from '../../../_lib/lifecycleApi';
@@ -101,7 +101,7 @@ export function TierHalf({ tier, score, policy, canTier, blockedWhy, onTier, onO
       </div>
       <div className="mt-3">
         {policy?.thresholds
-          ? <ThresholdRuler score={typeof score === 'number' ? score : null} thresholds={policy.thresholds} compact showNext />
+          ? <RecordRuler score={typeof score === 'number' ? score : null} thresholds={policy.thresholds} compact showNext />
           : <p className="text-[13px] leading-5 text-ds-fg-muted">Not tiered</p>}
       </div>
     </div>

@@ -11,7 +11,7 @@ import { clsx } from 'clsx';
 import { BTN, BTN_PRIMARY } from '../_record/btn';
 import { Dialog, TierBadge } from '../_record/recordUi';
 import { TONE } from '@/lib/status';
-import { ThresholdRuler } from '../../../_ui/Charts';
+import RecordRuler from '../_record/RecordRuler';
 import { useToast } from '@/components/ui/ToastProvider';
 import { tpraApi } from '@/lib/api';
 import { QuestionRow, useIntake, useIntakeCatalogue } from '../../../_lib/intake/IntakeForm';
@@ -222,7 +222,7 @@ export default function TieringDialog({
                   {moved && <span className="rounded-full px-2 py-0.5 text-[12px] font-[600]" style={{ background: TONE.warning.tint, color: TONE.warning.text }}>Changes from {moved}</span>}
                   <span className="ml-auto text-[13px] tabular-nums text-ds-fg-muted">{answered}/{total}</span>
                 </div>
-                <ThresholdRuler score={score.score} thresholds={policy?.thresholds ?? BANDS} compact showNext />
+                <RecordRuler score={score.score} thresholds={policy?.thresholds ?? BANDS} compact showNext />
               </div>
             )}
           </div>
