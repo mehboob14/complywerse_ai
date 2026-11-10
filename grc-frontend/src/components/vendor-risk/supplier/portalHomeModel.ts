@@ -163,6 +163,7 @@ export function deepLink(home: Pick<PortalHome, 'questionnaires'>, wanted: numbe
 
 /** The title of the file a download is saved as: the questionnaire's own name, never an id ("Security questionnaire.xlsx" as "Security-questionnaire.xlsx"). */
 export function downloadName(title: string | null | undefined, as: 'xlsx' | 'pdf'): string {
-  const base = String(title || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60).replace(/-+$/, '');
+  let base = String(title || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  if (base.length > 60) base = base.slice(0, 60).replace(/-[^-]*$/, '') || base.slice(0, 60);       // at a word, not through one
   return `${base || 'Questionnaire'}.${as}`;
 }

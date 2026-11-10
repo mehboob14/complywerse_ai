@@ -52,6 +52,7 @@ test('a gone link keeps the server\'s sentence, or ours when it gave none', () =
 test('an action that was refused says why when the server did, else the caller\'s words', () => {
   assert.equal(actionText(fail(409, 'This request is not waiting on you now.'), 'x'), 'This request is not waiting on you now.');
   assert.equal(actionText(fail(500), 'That did not go through. Try again.'), 'That did not go through. Try again.');
+  assert.equal(actionText(fail(500, 'psycopg2.errors.UndefinedTable: relation does not exist'), 'That did not save.'), 'That did not save.', "a failing server's own words are not shown");
   assert.equal(actionText(fail(429), 'x'), BUSY);
 });
 

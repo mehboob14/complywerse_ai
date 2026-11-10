@@ -50,7 +50,7 @@ export default function ReadyBar({ answered, total, left, missing, notSaved, sav
         )}
         {canNext && (
           <button type="button" onClick={onNext} className={BTN}>
-            Next<span className="hidden sm:inline">&nbsp;to do</span> <ArrowRight aria-hidden className="h-4 w-4" />
+            <span>Next<span className="hidden sm:inline"> to do</span></span> <ArrowRight aria-hidden className="h-4 w-4" />
           </button>
         )}
         <button type="button" onClick={onSend} disabled={!ready || sending} className={`${BTN_MAIN} ml-auto`}>

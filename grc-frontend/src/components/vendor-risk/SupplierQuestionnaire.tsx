@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { AlertCircle, ArrowLeft, CheckCircle, ChevronDown, Download, FileSpreadsheet, Loader2, Shield, Upload } from 'lucide-react';
+import { useConfirm } from '@/components/ui/ds';
 import { formatDate } from '@/lib/format';
 import { portalQuestionnaire } from '@/lib/statuses/vendorPortal';
 import {
@@ -57,6 +58,7 @@ export default function SupplierQuestionnaire({ apiBase, backHref }: {
   const [sendError, setSendError] = useState<string | null>(null);
   const [attesting, setAttesting] = useState(false);
   const [sectionsOpen, setSectionsOpen] = useState(false);
+  const { confirm, confirmDialog } = useConfirm();
   const [sending, setSending] = useState(false);
   const [importing, setImporting] = useState(false);
   const [who, setWho] = useState<Attestation>({ name: '', title: '', email: '' });
@@ -153,6 +155,8 @@ export default function SupplierQuestionnaire({ apiBase, backHref }: {
   };
 
   const remove = async (id: string, fileId: number) => {
+    const name = files[id]?.find((f) => f.id === fileId)?.file_name ?? 'This document';
+    if (!(await confirm({ title: 'Remove this document?', message: `${name} will be taken back. You can attach it again.`, confirmLabel: 'Remove document', tone: 'danger' }))) return;
     working(id, true);
     setProblem(id, null);
     try {
@@ -333,8 +337,8 @@ export default function SupplierQuestionnaire({ apiBase, backHref }: {
         </section>
       ) : (
         <section className="rounded-xl border border-ds-border bg-ds-surface p-5 shadow-sm sm:p-6">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-[#b9ddd8] bg-[#e6f4f1] px-3 py-1 text-xs font-medium text-[#0b4f4a]">
-            <Shield aria-hidden className="h-3.5 w-3.5" /> {data.title || 'Questionnaire'}
+          <span className="inline-flex max-w-full items-start gap-1.5 rounded-lg border border-[#b9ddd8] bg-[#e6f4f1] px-3 py-1 text-xs font-medium text-[#0b4f4a]">
+            <Shield aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0" /> <span title={data.title || undefined} className="line-clamp-2 min-w-0 break-words">{data.title || 'Questionnaire'}</span>
           </span>
           <h1 className="mt-3 break-words text-xl font-semibold tracking-tight text-ds-fg sm:text-2xl">
             {org ? `${org} has some questions about ${vendor}` : `Some questions about ${vendor}`}
@@ -434,6 +438,7 @@ export default function SupplierQuestionnaire({ apiBase, backHref }: {
           <AttestDialog open={attesting} initial={who} busy={sending} onCancel={() => setAttesting(false)} onConfirm={send} />
         </>
       )}
+      {confirmDialog}
     </PortalFrame>
   );
 }

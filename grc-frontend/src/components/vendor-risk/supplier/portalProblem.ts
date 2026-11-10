@@ -42,11 +42,12 @@ export function problemText(e: unknown, fallback = UNREACHABLE): string {
   return fallback;
 }
 
-/** The sentence for a refusal of something the supplier did (a save, an upload, a message): the server's words when it gave a plain reason. */
+/** The sentence for a refusal of something the supplier did (a save, an upload, a message): the server's words when it refused with a plain reason (a 4xx), ours when the server failed. */
 export function actionText(e: unknown, fallback: string): string {
   const kind = kindOf(e);
   if (kind === 'busy') return BUSY;
   if (kind === 'address') return WRONG_ADDRESS;
+  if ((responseOf(e)?.status ?? 0) >= 500) return fallback;                    // a failing server's own words are not for the supplier
   const detail = responseOf(e)?.data?.detail;
   return typeof detail === 'string' && detail.trim() ? detail : fallback;
 }

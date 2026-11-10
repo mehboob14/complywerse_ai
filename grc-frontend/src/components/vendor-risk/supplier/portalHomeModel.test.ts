@@ -125,5 +125,6 @@ test('a download is named after the questionnaire, never its id', () => {
   assert.equal(downloadName('   ', 'pdf'), 'Questionnaire.pdf');
   assert.equal(downloadName('البيانات', 'xlsx'), 'Questionnaire.xlsx');
   assert.ok(downloadName('x'.repeat(300), 'pdf').length <= 64);
+  assert.equal(downloadName('[UXSEED] Annual third-party security, privacy and resilience due diligence questionnaire', 'xlsx'), 'UXSEED-Annual-third-party-security-privacy-and-resilience.xlsx', 'cut at a word');
   assert.doesNotMatch(downloadName('Anything', 'pdf'), /\d/);
 });

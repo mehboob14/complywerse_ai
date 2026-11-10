@@ -37,29 +37,31 @@ export function TodoItem({ base, row }: { base: string; row: TodoRow }) {
   const pct = row.progress && row.progress.total ? Math.round((row.progress.answered / row.progress.total) * 100) : 0;
   return (
     <li className="rounded-xl border border-ds-border bg-ds-surface p-4 shadow-sm">
-      <div className="flex items-start gap-3">
-        <KindBadge kind={row.kind} />
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-medium text-ds-fg-body">{portalKind.label(row.kind)}</p>
-          <p title={row.title} className="line-clamp-3 break-words text-[15px] font-semibold leading-snug text-ds-fg">{row.title}</p>
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            <StatusPill {...statusPill(wordsOf(row), row.word)} />
-            {row.late && <StatusPill {...statusPill(portalLateness, 'late')} />}
-            {row.due && <span className="text-sm text-ds-fg-body">Due {formatDate(row.due)}</span>}
-          </div>
-          {row.note && <p className="mt-1.5 text-sm text-ds-fg-body">{row.note}</p>}
-          {row.progress && (
-            <div className="mt-3">
-              <ProgressBar value={pct} label={`${row.title}: questions answered`} valueText={`${row.progress.answered} of ${row.progress.total} answered`} />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-5">
+        <div className="flex min-w-0 flex-1 items-start gap-3">
+          <KindBadge kind={row.kind} />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium text-ds-fg-body">{portalKind.label(row.kind)}</p>
+            <p title={row.title} className="line-clamp-3 break-words text-[15px] font-semibold leading-snug text-ds-fg">{row.title}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              <StatusPill {...statusPill(wordsOf(row), row.word)} />
+              {row.late && <StatusPill {...statusPill(portalLateness, 'late')} />}
+              {row.due && <span className="text-sm text-ds-fg-body">Due {formatDate(row.due)}</span>}
             </div>
-          )}
-          <Unread n={row.unread} what={row.family === 'questionnaire' ? 'comment' : 'message'} />
+            {row.note && <p className="mt-1.5 text-sm text-ds-fg-body">{row.note}</p>}
+            {row.progress && (
+              <div className="mt-3">
+                <ProgressBar value={pct} label={`${row.title}: questions answered`} valueText={`${row.progress.answered} of ${row.progress.total} answered`} />
+              </div>
+            )}
+            <Unread n={row.unread} what={row.family === 'questionnaire' ? 'comment' : 'message'} />
+          </div>
         </div>
-      </div>
-      <div className="mt-3">
-        <Button variant="primary" href={`${base}/${row.path}`} fullWidth className="sm:w-auto" rightIcon={<ChevronRight />} aria-label={`${row.action}: ${row.title}`}>
-          {row.action}
-        </Button>
+        <div className="sm:shrink-0">
+          <Button variant="primary" href={`${base}/${row.path}`} fullWidth className="sm:w-auto" rightIcon={<ChevronRight />} aria-label={`${row.action}: ${row.title}`}>
+            {row.action}
+          </Button>
+        </div>
       </div>
     </li>
   );
