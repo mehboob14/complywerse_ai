@@ -301,11 +301,20 @@ def _written_for(a: TPRAFairAnalysis) -> str:
     return hashlib.sha256(json.dumps(basis, sort_keys=True, default=str).encode()).hexdigest()
 
 
+def _cover_state(a: TPRAFairAnalysis) -> str:
+    """How the supplier's insurance stands against the one-in-twenty year, as the result says it (`result.cover`): `none` when no cover is
+    recorded, `covers` when it pays for that year, `short` when it does not. Said by the server so no page recomputes the comparison."""
+    if a.insurance_cover is None:
+        return "none"
+    covers = ((a.result or {}).get("cover") or {}).get("covers_one_in_twenty")
+    return "none" if covers is None else ("covers" if covers else "short")
+
+
 def _out(a: TPRAFairAnalysis, v: Vendor, currency: str, full: bool = True) -> dict:
     row = {"id": a.id, "vendor": {"id": v.id, "name": v.name, "tier": v.tier}, "name": a.name, "effect": a.effect,
            "scenario": a.scenario, "asset": a.asset, "threat": a.threat, "status": a.status, "currency": currency,
            "annual": (a.result or {}).get("annual"), "liability_cap": (a.result or {}).get("liability_cap"),
-           "insurance_cover": a.insurance_cover,
+           "insurance_cover": a.insurance_cover, "cover_state": _cover_state(a),
            "risk_level": (a.ai_review or {}).get("risk_level"),
            "updated_at": a.updated_at, "run_at": a.run_at, "row_version": a.row_version}
     if full:

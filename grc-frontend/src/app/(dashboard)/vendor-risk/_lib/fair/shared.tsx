@@ -1,61 +1,11 @@
 'use client';
 
-// Shapes, money formatting and the loss exceedance curve shared by the Comply analysis pages.
-
+// The loss exceedance curve of a Comply analysis, and the CSV download helper. The shapes, the money and share formats and the factor rules are fairModel.ts (pure, tested). The curve is one series
+// (for each amount, the chance a year costs at least that much), so the title names it; a crosshair reads the nearest point (pointer or the arrow keys); the same points are available as a table. Its
+// colours are the design-system tokens and its text is 12px or more.
 import { useId, useState } from 'react';
-
-export type Triple = [number, number, number];
-export interface FairInputs {
-  tef: Triple; vulnerability: Triple;
-  primary: { response: Triple; productivity: Triple; replacement: Triple };
-  secondary: { probability: Triple; fines: Triple; reputation: Triple; competitive: Triple };
-  iterations: number;
-}
-export interface FairResult {
-  iterations: number; lef: { mean: number; p10: number; p90: number };
-  annual: { chance: number; mean: number; p50: number; p90: number; p95: number; p99: number; max: number };
-  per_event: { p10: number; p50: number; p90: number };
-  split: { primary: number; secondary: number; secondary_share: number };
-  lec: Array<{ loss: number; chance: number }>; liability_cap: number;
-  cover?: { amount: number; chance_exceeded: number; gap_one_in_twenty: number; covers_one_in_twenty: boolean } | null;
-}
-export type RiskLevel = 'low' | 'medium' | 'high' | 'critical';
-export interface WriteUp {
-  risk_level: RiskLevel; confidence: 'low' | 'medium' | 'high'; summary: string; reasons: string[]; actions: string[];
-  insurance: string; at: string; by: string | null;
-}
-export interface FairAnalysis {
-  id: number; vendor: { id: number; name: string; tier: string | null }; name: string;
-  effect: 'confidentiality' | 'integrity' | 'availability'; scenario: string | null; asset: string | null; threat: string | null;
-  status: 'draft' | 'final'; currency: string; annual: FairResult['annual'] | null; liability_cap: number | null;
-  updated_at: string; run_at: string | null; row_version: number;
-  insurance_cover?: number | null; risk_level?: RiskLevel | null;
-  inputs?: FairInputs; notes?: string[]; result?: FairResult | null;
-  ai_review?: WriteUp | null; ai_review_stale?: boolean;
-}
-
-export const LEVEL_CLS: Record<RiskLevel, string> = {
-  low: 'border-emerald-200 bg-emerald-50 text-emerald-800', medium: 'border-amber-200 bg-amber-50 text-amber-800',
-  high: 'border-orange-200 bg-orange-50 text-orange-800', critical: 'border-rose-200 bg-rose-50 text-rose-800',
-};
-
-/** "1 year in 14", from a chance a year. */
-export const oneIn = (chance: number) => (chance <= 0 ? 'never in the simulated years' : `about 1 year in ${Math.max(1, Math.round(1 / chance))}`);
-
-export const EFFECT_LABEL: Record<FairAnalysis['effect'], string> = {
-  confidentiality: 'Data exposed', integrity: 'Data tampered with', availability: 'Service stops',
-};
-
-export function money(value: number | null | undefined, currency = 'USD', compact = true): string {
-  if (value === null || value === undefined) return '—';
-  try {
-    return new Intl.NumberFormat(undefined, { style: 'currency', currency, notation: compact ? 'compact' : 'standard', maximumFractionDigits: compact ? 1 : 0 }).format(value);
-  } catch {
-    return `${Math.round(value).toLocaleString()} ${currency}`;
-  }
-}
-
-export const pct = (x: number | null | undefined, digits = 0) => (x === null || x === undefined ? '—' : `${(x * 100).toFixed(digits)}%`);
+import { Button } from '@/components/ui/ds';
+import { money, pct } from './fairModel';
 
 export async function download(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob);
@@ -64,17 +14,17 @@ export async function download(blob: Blob, name: string) {
   URL.revokeObjectURL(url);
 }
 
-/** For each amount, the chance a year costs at least that much. One series, so the
- *  title names it; a crosshair reads the nearest point; the same points are
- *  available as a table. */
+const GRID = { stroke: 'var(--ds-border)' } as const;
+const AXIS = { fill: 'var(--ds-fg-muted)' } as const;
+
 export function LossCurve({ points, currency, marks }: {
   points: Array<{ loss: number; chance: number }>; currency: string; marks?: Array<{ loss: number; label: string }>;
 }) {
   const [at, setAt] = useState<number | null>(null);
   const [table, setTable] = useState(false);
   const id = useId();
-  if (!points.length) return <p className="text-sm text-slate-500">No simulated year had a loss, so there is no curve to draw.</p>;
-  const W = 640, H = 240, L = 48, R = 12, T = 12, B = 30;
+  if (!points.length) return <p className="text-ds-body text-ds-fg-muted">No simulated year had a loss, so there is no curve to draw.</p>;
+  const W = 640, H = 260, L = 52, R = 12, T = 12, B = 34;
   const lx = points.map((p) => Math.log10(Math.max(1, p.loss)));
   const x0 = Math.floor(Math.min(...lx)), x1 = Math.ceil(Math.max(...lx));
   const x = (loss: number) => L + ((Math.log10(Math.max(1, loss)) - x0) / Math.max(1e-9, x1 - x0)) * (W - L - R);
@@ -102,43 +52,41 @@ export function LossCurve({ points, currency, marks }: {
           <title id={`${id}-t`}>Loss exceedance curve: the chance a year costs at least each amount</title>
           {yTicks.map((t) => (
             <g key={t}>
-              <line x1={L} x2={W - R} y1={y(t)} y2={y(t)} stroke="#e2e8f0" strokeWidth={1} />
-              <text x={L - 6} y={y(t) + 4} textAnchor="end" fontSize={11} fill="#64748b">{pct(t)}</text>
+              <line x1={L} x2={W - R} y1={y(t)} y2={y(t)} style={GRID} strokeWidth={1} />
+              <text x={L - 6} y={y(t) + 4} textAnchor="end" fontSize={12} style={AXIS}>{pct(t)}</text>
             </g>
           ))}
           {ticks.map((t) => (
-            <text key={t} x={x(t)} y={H - 10} textAnchor="middle" fontSize={11} fill="#64748b">{money(t, currency)}</text>
+            <text key={t} x={x(t)} y={H - 10} textAnchor="middle" fontSize={12} style={AXIS}>{money(t, currency)}</text>
           ))}
-          <line x1={L} x2={W - R} y1={y(0)} y2={y(0)} stroke="#cbd5e1" strokeWidth={1} />
+          <line x1={L} x2={W - R} y1={y(0)} y2={y(0)} style={{ stroke: 'var(--ds-border-strong)' }} strokeWidth={1} />
           {(marks || []).filter((m) => m.loss > 0).map((m) => (
             <g key={m.label}>
-              <line x1={x(m.loss)} x2={x(m.loss)} y1={T} y2={y(0)} stroke="#cbd5e1" strokeWidth={1} />
-              <text x={x(m.loss) + 4} y={T + 10} fontSize={11} fill="#475569">{m.label}</text>
+              <line x1={x(m.loss)} x2={x(m.loss)} y1={T} y2={y(0)} style={{ stroke: 'var(--ds-border-strong)' }} strokeWidth={1} strokeDasharray="4 3" />
+              <text x={x(m.loss) + 4} y={T + 12} fontSize={12} style={{ fill: 'var(--ds-fg-body)' }}>{m.label}</text>
             </g>
           ))}
-          <path d={path} fill="none" stroke="currentColor" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" className="text-primary-600" />
+          <path d={path} fill="none" style={{ stroke: 'var(--ds-primary)' }} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
           {shown && (
             <>
-              <line x1={x(shown.loss)} x2={x(shown.loss)} y1={T} y2={y(0)} stroke="#94a3b8" strokeWidth={1} />
-              <circle cx={x(shown.loss)} cy={y(shown.chance)} r={4} fill="currentColor" stroke="#ffffff" strokeWidth={2} className="text-primary-600" />
+              <line x1={x(shown.loss)} x2={x(shown.loss)} y1={T} y2={y(0)} style={{ stroke: 'var(--ds-fg-muted)' }} strokeWidth={1} />
+              <circle cx={x(shown.loss)} cy={y(shown.chance)} r={4} style={{ fill: 'var(--ds-primary)', stroke: 'var(--ds-surface)' }} strokeWidth={2} />
             </>
           )}
         </svg>
         {shown && (
-          <div className="pointer-events-none absolute top-2 rounded-md bg-slate-900 px-2 py-1 text-xs text-white shadow"
-            style={{ left: `min(max(0px, calc(${(x(shown.loss) / W) * 100}% - 70px)), calc(100% - 150px))` }}>
-            <b className="font-semibold">{pct(shown.chance, 1)}</b> <span className="text-slate-300">chance of {money(shown.loss, currency)} or more</span>
+          <div className="pointer-events-none absolute top-[8px] rounded-ds-control bg-ds-fg px-[8px] py-[4px] text-ds-label text-ds-surface shadow-ds-pop"
+            style={{ left: `min(max(0px, calc(${(x(shown.loss) / W) * 100}% - 70px)), calc(100% - 170px))` }}>
+            <b className="font-[600]">{pct(shown.chance, 1)}</b> chance of {money(shown.loss, currency)} or more
           </div>
         )}
       </div>
-      <button type="button" onClick={() => setTable(!table)} aria-expanded={table} className="mt-1 text-xs text-primary-700 hover:underline">
-        {table ? 'Hide the table' : 'Show as a table'}
-      </button>
+      <Button variant="link" onClick={() => setTable(!table)} aria-expanded={table}>{table ? 'Hide the table' : 'Show as a table'}</Button>
       {table && (
-        <table className="mt-2 w-full max-w-sm text-xs">
-          <thead className="text-left text-slate-500"><tr><th className="py-1 font-medium">A year costing at least</th><th className="py-1 text-right font-medium">Chance</th></tr></thead>
-          <tbody className="divide-y divide-slate-100 tabular-nums">
-            {points.map((p) => <tr key={p.loss}><td className="py-1">{money(p.loss, currency, false)}</td><td className="py-1 text-right">{pct(p.chance, 1)}</td></tr>)}
+        <table className="mt-[8px] w-full max-w-sm">
+          <thead><tr><th className="py-[4px] text-left text-ds-label font-[600] text-ds-fg-muted">A year costing at least</th><th className="py-[4px] text-right text-ds-label font-[600] text-ds-fg-muted">Chance</th></tr></thead>
+          <tbody className="divide-y divide-ds-border tabular-nums">
+            {points.map((p) => <tr key={p.loss}><td className="py-[4px] text-ds-body text-ds-fg">{money(p.loss, currency, false)}</td><td className="py-[4px] text-right text-ds-body text-ds-fg">{pct(p.chance, 1)}</td></tr>)}
           </tbody>
         </table>
       )}

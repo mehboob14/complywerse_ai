@@ -119,11 +119,23 @@ test('SIDEBAR is the eight entries: the Overview lights on its own page, every o
 });
 
 test('Questionnaires is ONE entry whose page has three tabs in its own address: the Exchange left the Insights strip, its old address still lights Questionnaires, and the page and the builder draw their own head', () => {
-  assert.deepEqual(tabsOf('/vendor-risk/reports').map((t) => t.name), ['Risk 360°', 'Comply analyses', 'Reports'], 'the Vendor Exchange is the Shared tab of Questionnaires now');
+  assert.deepEqual(tabsOf('/vendor-risk/reports').map((t) => t.name), ['Risks', 'Comply analyses', 'Reports'], 'the Vendor Exchange is the Shared tab of Questionnaires now; Risk 360° is named Risks');
   assert.equal(RAIL.find((e) => e.key === 'questionnaires')?.tabs, undefined, 'the tabs are the page\'s own (?tab=library|sent|shared), not link tabs of the strip');
   assert.equal(entryOf('/vendor-risk/exchange')?.key, 'questionnaires');
   assert.equal(entryOf('/vendor-risk/questionnaires/12/builder')?.key, 'questionnaires');
   assert.equal(headOf('/vendor-risk/questionnaires'), 'page');
   assert.equal(headOf('/vendor-risk/questionnaires/12/builder'), 'page', 'the builder names the questionnaire and draws a back link');
   assert.equal(headOf('/vendor-risk/exchange'), 'legacy', 'a forward draws nothing');
+});
+
+test('Insights and Setup draw their own heads: Risks (it was Risk 360), Comply analyses, Reports, Roster, Policy and Settings, and the two records of Insights, are page rows; the old name stays findable', () => {
+  for (const path of ['/vendor-risk/risk-360', '/vendor-risk/comply-analysis', '/vendor-risk/comply-analysis/5', '/vendor-risk/reports', '/vendor-risk/reports/7', '/vendor-risk/roster', '/vendor-risk/policy', '/vendor-risk/settings']) {
+    assert.equal(headOf(path), 'page', `${path}: the page draws its head and, under it, the strip of its entry`);
+  }
+  assert.deepEqual(tabsOf('/vendor-risk/reports/7').map((t) => t.name), ['Risks', 'Comply analyses', 'Reports'], 'the Vendor Exchange left this strip: it is the Shared tab of Questionnaires');
+  assert.deepEqual(tabsOf('/vendor-risk/settings').map((t) => t.name), ['Roster', 'Policy', 'Settings']);
+  const risks = RAIL.find((e) => e.key === 'insights')?.tabs?.[0];
+  assert.equal(risks?.title, 'Third-party risks');
+  assert.ok((risks?.keywords ?? []).includes('Risk 360'), 'a search for "Risk 360" still finds the page');
+  assert.equal(entryOf('/vendor-risk/settings/emails')?.key, 'setup', 'the old Emails address belongs to Setup (it forwards to Settings)');
 });

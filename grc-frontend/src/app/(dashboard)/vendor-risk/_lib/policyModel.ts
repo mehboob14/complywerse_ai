@@ -85,14 +85,15 @@ export function policyPatch(draft: Draft, saved: Draft): Partial<PolicyView> | n
   return Object.keys(body).length ? body : null;
 }
 
-/** The tier policy sent to PUT /vendor-risk/tpra/config for the reopen threshold: the tiers that changed, nothing else of the
- *  tier policy (the questionnaires and evidence are Settings'). null when none did. */
-export function reopenPatch(draft: Draft, saved: Draft): Record<string, { reassess_on: Tier }> | null {
-  const changed = changedTiers(draft.reopen, saved.reopen);
-  return changed ? Object.fromEntries(Object.entries(changed).map(([tier, value]) => [tier, { reassess_on: value as Tier }])) : null;
+/** The ONE body of PUT /vendor-risk/policy: the policy changes and, in `reassess_on`, the reopen thresholds that changed, so Save is a single request that either happens whole or not at all
+ *  (it used to be two: the policy, then the program config). null when nothing changed. */
+export function savePatch(draft: Draft, saved: Draft): (Partial<PolicyView> & { reassess_on?: Partial<Reopen> }) | null {
+  const reopen = changedTiers(draft.reopen, saved.reopen);
+  const body = { ...(policyPatch(draft, saved) ?? {}), ...(reopen ? { reassess_on: reopen } : {}) };
+  return Object.keys(body).length ? body : null;
 }
 
-export const isDirty = (draft: Draft, saved: Draft): boolean => policyPatch(draft, saved) !== null || reopenPatch(draft, saved) !== null;
+export const isDirty = (draft: Draft, saved: Draft): boolean => savePatch(draft, saved) !== null;
 
 /** The sections of the form that can be put back to the shipped defaults, one by one. */
 export type Part = 'bands' | 'remediation' | 'skips' | 'reviewers' | 'approvals';

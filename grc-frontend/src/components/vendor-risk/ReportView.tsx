@@ -1,6 +1,8 @@
-// Draws any third-party risk report (committee pack, register, vendor file, supplier
-// summary): the headline figures, then each section as a table, or as paragraphs. Used inside the app and on the
-// examiner's read-only page, so it depends on nothing but its props.
+// Draws any third-party risk report (committee pack, register, vendor file, ratings, supplier summary): the headline figures, then each section as a table, or as paragraphs. Used inside the app (the kept
+// report page, the Generate sheet's preview) and on the examiner's read-only page, so it depends on nothing but its props and the design-system tokens (no shell class, no hook). Rebuilt on the kit's
+// tokens in vendor-insights-setup: nothing under 12px (it had seven text sizes at 11px), every cell carries its own size and colour (a bare <td> is 11.5px in the shell), dates read "12 Nov 2026".
+// `heading` says how the report names itself: the examiner's page keeps the report's title as its h1 (the default), the app's pages name it in their own head ('none') or in a sheet ('h2').
+import { formatDate } from '@/lib/format';
 
 export interface ReportSection {
   key: string;
@@ -22,61 +24,66 @@ export interface ReportContent {
 
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
+/** A date as "12 Nov 2026"; a date-only value keeps its calendar day; nothing recorded is "—"; a value that is not a date is returned as it is. */
 export function fmtDay(value?: string | null): string {
   if (!value) return '—';
-  const d = new Date(ISO_DAY.test(value) ? `${value}T00:00:00` : value);
-  return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  const shown = formatDate(value, { calendar: ISO_DAY.test(value) });
+  return shown === '—' ? value : shown;
 }
 
 function cell(value: string | number | null) {
-  if (value === null || value === undefined || value === '') return <span className="text-gray-400">—</span>;
+  if (value === null || value === undefined || value === '') return <span className="text-ds-fg-muted">—</span>;
   if (typeof value === 'string' && ISO_DAY.test(value)) return fmtDay(value);
   return String(value);
 }
 
-export default function ReportView({ content }: { content: ReportContent }) {
+const TITLE = 'min-w-0 break-words !text-ds-title !font-[600] !text-ds-fg';
+const SUB = 'min-w-0 break-words !text-ds-section !font-[600] !text-ds-fg';
+
+export default function ReportView({ content, heading = 'h1' }: { content: ReportContent; heading?: 'h1' | 'h2' | 'none' }) {
   return (
-    <div className="space-y-5">
+    <div className="flex flex-col gap-[16px]">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">{content.title}</h1>
-        <p className="text-xs text-gray-500">
+        {heading === 'h1' && <h1 className={`m-0 ${TITLE}`}>{content.title}</h1>}
+        {heading === 'h2' && <h2 className={`m-0 ${SUB}`}>{content.title}</h2>}
+        <p className="text-ds-body text-ds-fg-muted">
           {content.period ? <>Period {fmtDay(content.period.start)} to {fmtDay(content.period.end)} · </> : null}
           Figures as at {fmtDay(content.as_of)}
         </p>
       </div>
 
       {(content.headline || []).length > 0 && (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6 print:grid-cols-6">
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-[8px] print:grid-cols-6">
           {content.headline!.map((h) => (
-            <div key={h.label} className="rounded-lg border border-gray-200 bg-white p-3">
-              <p className="text-[11px] text-gray-500">{h.label}</p>
-              <p className="text-lg font-semibold text-slate-900">{h.value ?? '—'}</p>
-              {h.hint && <p className="text-[11px] text-gray-500">{h.hint}</p>}
+            <div key={h.label} className="min-w-0 rounded-ds-card border border-ds-border bg-ds-surface p-[12px]">
+              <p className="break-words text-ds-label text-ds-fg-muted">{h.label}</p>
+              <p className="break-words text-[20px] font-[600] leading-[28px] text-ds-fg">{h.value ?? '—'}</p>
+              {h.hint && <p className="break-words text-ds-label text-ds-fg-muted">{h.hint}</p>}
             </div>
           ))}
         </div>
       )}
 
       {content.sections.map((s) => (
-        <section key={s.key} className="break-inside-avoid rounded-xl border border-gray-200 bg-white p-4">
-          <h2 className="text-sm font-semibold text-slate-900">{s.title}</h2>
-          {s.note && <p className="mt-0.5 text-xs text-gray-500">{s.note}</p>}
+        <section key={s.key} className="break-inside-avoid rounded-ds-card border border-ds-border bg-ds-surface p-[16px]">
+          <h2 className={`m-0 ${SUB}`}>{s.title}</h2>
+          {s.note && <p className="mt-[2px] text-ds-body text-ds-fg-muted">{s.note}</p>}
           {s.paragraphs?.length ? (
-            <div className="mt-2 space-y-2 text-sm leading-relaxed text-slate-800">{s.paragraphs.map((p, i) => <p key={i}>{p}</p>)}</div>
+            <div className="mt-[8px] flex flex-col gap-[8px]">{s.paragraphs.map((p, i) => <p key={i} className="text-ds-body text-ds-fg-body">{p}</p>)}</div>
           ) : s.rows.length === 0 ? (
-            <p className="mt-2 text-sm text-gray-500">None.</p>
+            <p className="mt-[8px] text-ds-body text-ds-fg-muted">None.</p>
           ) : (
-            <div className="mt-2 overflow-x-auto">
-              <table className="min-w-full text-left text-xs">
+            <div className="mt-[8px] overflow-x-auto">
+              <table className="min-w-full text-left">
                 <thead>
-                  <tr className="border-b border-gray-200 text-gray-500">
-                    {s.columns.map((c) => <th key={c} scope="col" className="px-2 py-1.5 font-medium">{c}</th>)}
+                  <tr className="border-b border-ds-border">
+                    {s.columns.map((c) => <th key={c} scope="col" className="px-[8px] py-[6px] text-ds-label font-[600] text-ds-fg-muted">{c}</th>)}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-ds-border">
                   {s.rows.map((r, i) => (
-                    <tr key={i} className="align-top text-slate-800">
-                      {r.map((v, j) => <td key={j} className="whitespace-pre-line px-2 py-1.5">{cell(v)}</td>)}
+                    <tr key={i} className="align-top">
+                      {r.map((v, j) => <td key={j} className="whitespace-pre-line break-words px-[8px] py-[6px] text-ds-body text-ds-fg">{cell(v)}</td>)}
                     </tr>
                   ))}
                 </tbody>
