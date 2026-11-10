@@ -65,7 +65,7 @@ export function AuditRegister({ initialSource: _initialSource = '', head }: { in
     if (!/[?&]finding=/.test(now)) return;
     const next = withFindingAsId(now);
     window.history.replaceState(null, '', window.location.pathname + (next ? `?${next}` : '') + window.location.hash);
-  }, []);
+  }, [search]);
 
   const closeFinding = useCallback(() => setAddress({ id: 0 }), [setAddress]);
   const open = useCallback((issueId: number) => setAddress({ id: issueId }), [setAddress]);
