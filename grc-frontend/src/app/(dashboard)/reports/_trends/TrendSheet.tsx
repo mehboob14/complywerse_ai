@@ -13,7 +13,7 @@ import { trendsApi } from '../_reports/trends';
 import { BreakdownChart, TrendChart } from './TrendCharts';
 import { Delta } from './TrendCards';
 import { TargetPanel } from './TargetPanel';
-import { RANGES, formatDay, formatValue, hasSeries, rangeLabel, sinceWords, sliceRows, summarySentence, unitTag, valueRows, type TrendCard } from './trendsModel';
+import { RANGES, formatDay, formatValue, hasSeries, rangeLabel, signedChange, sinceWords, sliceLabel, sliceRows, summarySentence, unitTag, valueRows, type TrendCard } from './trendsModel';
 
 const HEAD = 'm-0 !text-ds-body !font-[600] !text-ds-fg';
 const SUMMARY = 'flex min-h-[44px] cursor-pointer list-none items-center gap-[6px] rounded-ds-control px-[4px] text-ds-body font-[600] text-ds-primary-text hover:bg-ds-primary-soft focus-visible:outline-none focus-visible:shadow-ds-ring sm:min-h-ds-control [&::-webkit-details-marker]:hidden';
@@ -31,7 +31,7 @@ function ValuesTable({ card }: { card: TrendCard }) {
       <div className="mt-[4px] max-h-[240px] overflow-auto rounded-ds-card border border-ds-border">
         <Table caption={`${card.label}: every captured value, newest first`}>
           <THead><Tr><Th>Day</Th><Th align="right">Value</Th></Tr></THead>
-          <TBody>{rows.map((r) => <Tr key={r.date}><RowHeaderCell>{r.day}</RowHeaderCell><Td align="right"><span className="tabular-nums">{r.value}</span></Td></Tr>)}</TBody>
+          <TBody>{rows.map((r) => <Tr key={r.date}><RowHeaderCell>{r.day}</RowHeaderCell><Td align="right"><span className="whitespace-nowrap tabular-nums">{r.value}</span></Td></Tr>)}</TBody>
         </Table>
       </div>
     </details>
@@ -58,7 +58,7 @@ export function TrendSheet({ boardCard, boardDays, onClose }: { boardCard: Trend
   const sentence = summarySentence(card);
 
   return (
-    <Sheet open onClose={onClose} title={card.label} subtitle={card.module_label} width="lg" dirty={dirty} discardLabel="Discard the changes" keepLabel="Keep editing">
+    <Sheet open onClose={onClose} title={card.label} subtitle={card.module_label} width="lg" dirty={dirty} discardLabel="Discard the changes" keepLabel="Keep editing" closeLabel="Close" initialFocus='button[aria-label="Close"]'>
       <div className="flex min-w-0 flex-col gap-[16px]">
         <div className="flex flex-wrap items-center gap-x-[12px] gap-y-[6px]">
           <span className="text-[24px] font-[600] leading-[32px] tabular-nums text-ds-fg">{formatValue(card.current, card.unit)}</span>
@@ -92,7 +92,7 @@ export function TrendSheet({ boardCard, boardDays, onClose }: { boardCard: Trend
 
         {card.dimension && (
           <section aria-label={`By ${card.dimension}`} className="flex flex-col gap-[8px]">
-            <h3 className={`${HEAD} capitalize`}>By {card.dimension}</h3>
+            <h3 className={HEAD}>By {card.dimension}</h3>
             {breakdown.isPending ? (
               <Skeleton className="h-[220px] w-full" />
             ) : breakdown.isError || !breakdown.data ? (
@@ -100,15 +100,15 @@ export function TrendSheet({ boardCard, boardDays, onClose }: { boardCard: Trend
             ) : (
               <>
                 <BreakdownChart data={breakdown.data} unit={card.unit} title={`${card.label} by ${card.dimension}`} rangeLabel={label} />
-                <div className="max-h-[260px] overflow-auto rounded-ds-card border border-ds-border">
+                <div className="overflow-hidden rounded-ds-card border border-ds-border">
                   <Table caption={`${card.label} by ${card.dimension}: the latest value of every one`}>
-                    <THead><Tr><Th><span className="capitalize">{card.dimension}</span></Th><Th align="right">Latest</Th><Th align="right">Change over {label}</Th></Tr></THead>
+                    <THead><Tr><Th>{sliceLabel(card.dimension)}</Th><Th align="right">Latest</Th><Th align="right">Change over {label}</Th></Tr></THead>
                     <TBody>
                       {sliceRows(breakdown.data.series).map((r) => (
                         <Tr key={r.key}>
-                          <RowHeaderCell><span className="capitalize">{r.key}</span></RowHeaderCell>
-                          <Td align="right"><span className="tabular-nums">{formatValue(r.latest, card.unit)}</span></Td>
-                          <Td align="right"><span className="tabular-nums">{r.change == null ? '—' : `${r.change > 0 ? '+' : r.change < 0 ? '−' : ''}${formatValue(Math.abs(r.change), card.unit)}`}</span></Td>
+                          <RowHeaderCell>{sliceLabel(r.key)}</RowHeaderCell>
+                          <Td align="right"><span className="whitespace-nowrap tabular-nums">{formatValue(r.latest, card.unit)}</span></Td>
+                          <Td align="right"><span className="whitespace-nowrap tabular-nums">{r.change == null ? '—' : r.change === 0 ? 'no change' : signedChange(r.change, card.unit)}</span></Td>
                         </Tr>
                       ))}
                     </TBody>

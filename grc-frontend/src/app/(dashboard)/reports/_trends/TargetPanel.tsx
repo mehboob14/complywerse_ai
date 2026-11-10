@@ -56,7 +56,12 @@ export function TargetPanel({ card, onDirty }: { card: TrendCard; /** the boxes 
     <section aria-label="Target" className="rounded-ds-card border border-ds-border bg-ds-surface p-[12px]">
       <div className="mb-[8px] flex flex-wrap items-center justify-between gap-[8px]">
         <h3 className={HEAD}>Target</h3>
-        {!editing && <Button size="sm" onClick={start}>Change target</Button>}
+        {!editing && (
+          <div className="flex flex-wrap items-center gap-[8px]">
+            {card.customized && <Button size="sm" variant="ghost" leftIcon={<RotateCcw aria-hidden />} loading={reset.isPending} onClick={() => { void askReset(); }}>Reset to the default</Button>}
+            <Button size="sm" onClick={start}>Change target</Button>
+          </div>
+        )}
       </div>
       {!editing ? (
         <FactList min={140}>

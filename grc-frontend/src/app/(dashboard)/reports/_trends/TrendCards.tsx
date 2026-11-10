@@ -32,8 +32,7 @@ export function Delta({ card }: { card: Pick<TrendCard, 'delta_abs' | 'previous'
   return (
     <span className={`inline-flex items-center gap-[4px] text-ds-label font-[600] tabular-nums ${tone}`}>
       <Icon aria-hidden className="h-[14px] w-[14px] shrink-0" strokeWidth={2} />
-      {d.text}
-      {d.verdict && <span className="font-normal">, {d.verdict}</span>}
+      {d.verdict ? `${d.text}, ${d.verdict}` : d.text}
     </span>
   );
 }

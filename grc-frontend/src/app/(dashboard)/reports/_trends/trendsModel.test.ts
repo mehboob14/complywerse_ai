@@ -7,8 +7,8 @@ import assert from 'node:assert/strict';
 import { readAddress, writeAddress } from '../../../../lib/addressState.ts';
 import { TRENDS_SCHEMA, metricHref, rangeOf } from './trendsAddress.ts';
 import {
-  RAG_ORDER, RANGES, axisDate, checkTarget, chartSlices, daysBetween, deltaView, directionWords, filterCards, formatDay, formatValue, groupByModule, hasSeries, lastCaptured, orderCards, previousPoint,
-  levelsHint, sinceWords, sliceRows, sortCards, sparkPath, staleDays, statusCounts, summarySentence, targetChanged, totalPoints, unitTag, valueRows, yDomain, type Direction, type Rag, type TrendCard, type TrendPoint, type Unit,
+  RAG_ORDER, RANGES, signedChange, axisDate, checkTarget, chartSlices, daysBetween, deltaView, directionWords, filterCards, formatDay, formatValue, groupByModule, hasSeries, lastCaptured, orderCards, previousPoint,
+  levelsHint, sinceWords, sliceLabel, sliceRows, sortCards, sparkPath, staleDays, statusCounts, summarySentence, targetChanged, totalPoints, unitTag, valueRows, yDomain, type Direction, type Rag, type TrendCard, type TrendPoint, type Unit,
 } from './trendsModel.ts';
 
 const pts = (...xs: Array<[string, number | null]>): TrendPoint[] => xs.map(([date, value]) => ({ date, value }));
@@ -118,6 +118,10 @@ test('the editor says what the two levels mean for the direction of a figure', (
   assert.match(levelsHint('neutral'), /does not give it a status/);
 });
 
+test('a change between two values is signed and in the words of its unit: pp for a percentage, thousands for a count', () => {
+  assert.deepEqual([signedChange(14.24, 'pct'), signedChange(-7, 'count'), signedChange(1500, 'count'), signedChange(2.5, 'days'), signedChange(-0.34, 'score'), signedChange(0, 'count')], ['+14.2 pp', '−7', '+1,500', '+2.5 days', '−0.3', '+0']);
+});
+
 test('the sentence that sums a chart up: first value and day, last value and day, the target; nothing when there is no line', () => {
   const c = card({ points: pts(['2026-08-12', 62], ['2026-10-01', null], ['2026-11-09', 55]), unit: 'score', target: 40, label: 'Avg residual risk' });
   assert.equal(summarySentence(c), 'Avg residual risk: from 62 on 12 Aug 2026 to 55 on 9 Nov 2026 (target 40).');
@@ -167,6 +171,10 @@ test('the table of a breakdown lists every slice, largest first, a slice with no
   assert.equal(hidden, 4);
   assert.equal(keys[0], 's11');
   assert.deepEqual(chartSlices([]), { keys: [], hidden: 0 });
+});
+
+test('a slice is named for a person: a plain key gets a capital, the title of a framework is left as written', () => {
+  assert.deepEqual(['critical', 'in_progress', 'GDPR', 'ISO/IEC 27001:2022', 'State Bank of Pakistan Framework', '2FA'].map(sliceLabel), ['Critical', 'In progress', 'GDPR', 'ISO/IEC 27001:2022', 'State Bank of Pakistan Framework', '2FA']);
 });
 
 test('a typed target: blank is none, text that is not a number is an error (it used to be sent as NaN), and the warning level sits on the right side of the target', () => {

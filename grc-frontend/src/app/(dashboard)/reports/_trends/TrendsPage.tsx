@@ -79,7 +79,7 @@ export function TrendsPage() {
       title={TITLE}
       info={INFO}
       meta={overview.isSuccess && cards.length > 0 ? `${cards.length} ${cards.length === 1 ? 'figure' : 'figures'} · ${last ? `last captured ${formatDay(last)}` : 'nothing captured yet'}` : undefined}
-      actions={overview.isSuccess && cards.length > 0 && !noHistory ? captureButton(false) : undefined}
+      actions={overview.isSuccess && cards.length > 0 && !noHistory && old == null ? captureButton(false) : undefined}       // when the values are old the notice below carries the button
     />
   );
 

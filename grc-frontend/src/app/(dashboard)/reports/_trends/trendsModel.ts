@@ -184,10 +184,15 @@ export function deltaView(card: Pick<TrendCard, 'delta_abs' | 'previous' | 'dire
     if (card.direction === 'up_good') good = d > 0;
     else if (card.direction === 'down_good') good = d < 0;
   }
-  const unit = card.unit === 'pct' ? ' pp' : card.unit === 'days' ? ' days' : '';           // percentage points read clearer than "%"
-  const mag = card.unit === 'count' ? Math.abs(Math.round(d)).toLocaleString(EN) : `${Math.abs(round1(d))}${unit}`;
-  const text = d === 0 ? 'no change' : `${d > 0 ? '+' : '−'}${mag}`;
+  const text = d === 0 ? 'no change' : signedChange(d, card.unit);
   return { arrow, text, good, verdict: good == null ? null : good ? 'better' : 'worse', color: good == null ? INK.muted : good ? INK.good : INK.bad };
+}
+
+/** A change between two values, signed: "+3.2 pp" (percentage points read clearer than "%"), "−12", "+1,500", "+2.5 days". */
+export function signedChange(d: number, unit: Unit): string {
+  const suffix = unit === 'pct' ? ' pp' : unit === 'days' ? ' days' : '';
+  const mag = unit === 'count' ? Math.abs(Math.round(d)).toLocaleString(EN) : `${Math.abs(round1(d))}${suffix}`;
+  return `${d < 0 ? '−' : '+'}${mag}`;
 }
 
 /** "since 12 Oct 2026" (the day the change is measured from), or '' when there is no earlier value. */
@@ -268,6 +273,11 @@ export function sliceRows(series: readonly BreakdownSeries[]): SliceRow[] {
     return { key: s.key, latest, first, change: latest != null && first != null && real.length > 1 ? latest - first : null };
   });
   return rows.map((row, index) => ({ row, index })).sort((a, b) => (a.row.latest == null ? 1 : 0) - (b.row.latest == null ? 1 : 0) || (b.row.latest ?? 0) - (a.row.latest ?? 0) || a.index - b.index).map((x) => x.row);
+}
+
+/** A slice's name for a person: "critical" is "Critical", "in_progress" is "In progress"; a name that already has capitals, digits first or spaces (a framework's title) is left as written. */
+export function sliceLabel(key: string): string {
+  return /^[a-z][a-z0-9_]*$/.test(key) ? key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ') : key;
 }
 
 /** The chart draws at most this many slices (one colour each, in a fixed order); the table lists all of them. */

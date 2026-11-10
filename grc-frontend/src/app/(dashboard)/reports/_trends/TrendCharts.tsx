@@ -7,7 +7,7 @@ import { Area, AreaChart, CartesianGrid, Line, LineChart, ReferenceLine, Respons
 import { ChartFrame } from '@/components/ui/ds';
 import { SERIES } from '../_reports/vizPalette';
 import {
-  INK, axisDate, chartSlices, formatDay, formatValue, sliceRows, valueRows, yDomain, type BreakdownResp, type TrendCard, type Unit,
+  INK, axisDate, chartSlices, formatDay, formatValue, sliceLabel, sliceRows, valueRows, yDomain, type BreakdownResp, type TrendCard, type Unit,
 } from './trendsModel';
 
 const TICK = { fontSize: 12, fill: INK.muted };
@@ -85,7 +85,7 @@ export function BreakdownChart({ data, unit, title, rangeLabel }: { data: Breakd
   const sr = rows.slice().reverse().map((r) => [formatDay(String(r.date)), ...keys.map((k) => (typeof r[k] === 'number' ? (r[k] as number) : null))]);
   return (
     <div>
-      <ChartFrame title={`${title}, last ${rangeLabel}`} height={220} data={{ columns: ['Day', ...keys], rows: sr }}>
+      <ChartFrame title={`${title}, last ${rangeLabel}`} height={220} data={{ columns: ['Day', ...keys.map(sliceLabel)], rows: sr }}>
         {(focusOff) => (
           <ResponsiveContainer width="100%" height="100%">
             <Chart data={rows} margin={{ top: 12, right: 16, bottom: 4, left: 0 }} {...focusOff}>
@@ -94,17 +94,17 @@ export function BreakdownChart({ data, unit, title, rangeLabel }: { data: Breakd
               <YAxis tick={TICK} tickLine={false} axisLine={false} width={44} />
               <Tooltip content={(p) => <Tip active={p.active} payload={p.payload as unknown as TipPayload[]} unit={unit} />} />
               {keys.map((k) => (stack
-                ? <Area key={k} type="monotone" dataKey={k} name={k} stackId="1" stroke={colour(k)} fill={colour(k)} fillOpacity={0.22} strokeWidth={2} isAnimationActive={false} />
-                : <Line key={k} type="monotone" dataKey={k} name={k} stroke={colour(k)} strokeWidth={2} dot={false} isAnimationActive={false} connectNulls />))}
+                ? <Area key={k} type="monotone" dataKey={k} name={sliceLabel(k)} stackId="1" stroke={colour(k)} fill={colour(k)} fillOpacity={0.22} strokeWidth={2} isAnimationActive={false} />
+                : <Line key={k} type="monotone" dataKey={k} name={sliceLabel(k)} stroke={colour(k)} strokeWidth={2} dot={false} isAnimationActive={false} connectNulls />))}
             </Chart>
           </ResponsiveContainer>
         )}
       </ChartFrame>
       <ul className="m-0 mt-[6px] flex list-none flex-wrap gap-x-[12px] gap-y-[4px] p-0">
         {keys.map((k) => (
-          <li key={k} className="inline-flex items-center gap-[6px] text-ds-label capitalize text-ds-fg-body">
+          <li key={k} className="inline-flex items-center gap-[6px] text-ds-label text-ds-fg-body">
             <span aria-hidden className="inline-block h-[10px] w-[10px] rounded-[2px]" style={{ background: colour(k) }} />
-            {k}
+            {sliceLabel(k)}
           </li>
         ))}
       </ul>

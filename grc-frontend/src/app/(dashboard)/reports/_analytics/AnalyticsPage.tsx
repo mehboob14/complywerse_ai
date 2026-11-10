@@ -78,7 +78,7 @@ export function AnalyticsPage() {
       variant="page"
       title={TITLE}
       info={INFO}
-      chips={status ? <StatusPill {...statusPill(analyticsConnection, status.ready ? 'ready' : 'not_set_up')} /> : undefined}
+      chips={status?.ready ? <StatusPill {...statusPill(analyticsConnection, 'ready')} /> : undefined}
       actions={status?.ready ? <Button variant="primary" rightIcon={<ExternalLink aria-hidden />} loading={busy === ''} disabled={busy !== null && busy !== ''} onClick={() => { void openTool('/', ''); }}>Open analytics</Button> : undefined}
     />
   );
