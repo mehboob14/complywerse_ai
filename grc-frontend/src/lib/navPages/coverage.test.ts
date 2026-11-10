@@ -258,6 +258,7 @@ test('ownHeading is on exactly the pages that draw the kit head (PageHeader vari
     '/erm/incidents', '/erm/mitigation-actions', '/erm/appetite', '/erm/analytics', '/erm/analytics/aggregation', '/erm/analytics/bowtie', '/erm/analytics/dependencies', '/erm/analytics/kri-triggers',
     '/erm/analytics/scenario', '/erm/risks', '/erm/risk-assessments', '/erm/risk-assessments/ai-risk-assessment',
     '/admin/organization',                        // Administration > Organisation: the Organisation Profile component draws the head (Company is its first stage)
+    '/admin/users', '/admin/roles', '/users',      // Administration > People & access: the Users register (also the page behind the user menu's Users) and the Roles register draw theirs from a component
     '/reports', '/reports/dashboards'];           // Reports: the library (_library/ReportsLibrary) and the dashboards (_library/dashboards/DashboardsPage) draw theirs
   const DOCUMENTS_AREA_STRIP = ['/governance/documents/attestation', '/governance/documents/studio', '/governance/documents/overview', '/governance/exceptions', '/governance/reviews', '/governance/settings'];
   const drawing = pages.filter((p) => /<PageHeader[\s\S]{0,60}variant="page"/.test(read(p.file))).map((p) => p.route).sort();
@@ -300,7 +301,7 @@ test('breadcrumbFor gives a sane trail for an example URL of every module', () =
   assert.deepEqual(labels('/reports/trends'), ['Reports', 'Quick export', 'Trends']);
   assert.deepEqual(labels('/admin/roles'), ['Administration', 'Roles & permissions']);
   assert.deepEqual(labels('/admin/users/4/usage'), ['Administration', 'Users', 'User usage']);
-  assert.deepEqual(labels('/users'), ['User Management']);
+  assert.deepEqual(labels('/users'), ['Users']);
   assert.deepEqual(labels('/complychat'), ['Comply Agent']);
   assert.deepEqual(labels('/workflow-engine'), ['Administration', 'Workflow Engine']);
   assert.deepEqual(labels('/cyber-assurance/assets/11'), ['Cybersecurity Assurance', 'IT Asset Inventory', 'Asset']);

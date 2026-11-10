@@ -73,13 +73,13 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
   }),
   // ---- People & access ----
   S({
-    id: 'users', label: 'Users', group: 'people', url: '/admin/users', ownHeading: false,
+    id: 'users', label: 'Users', group: 'people', url: '/admin/users', ownHeading: true,
     rights: ['admin:users:view', 'admin:users:create', 'admin:users:edit', 'admin:users:delete'],
     tabs: [{ tab: 'users' }],
     keywords: ['User Management', 'Admin Users', 'People', 'Accounts'],
   }),
   S({
-    id: 'roles', label: 'Roles & permissions', group: 'people', url: '/admin/roles', ownHeading: false,
+    id: 'roles', label: 'Roles & permissions', group: 'people', url: '/admin/roles', ownHeading: true,
     rights: ['admin:users:view', 'admin:roles:view', 'admin:permissions:view', 'admin:roles:create', 'admin:roles:edit', 'admin:roles:delete'],
     tabs: [{ tab: 'roles' }],
     keywords: ['Role Management', 'Roles', 'Permissions'],

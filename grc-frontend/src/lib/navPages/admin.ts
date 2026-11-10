@@ -38,7 +38,7 @@ export const PAGES: PageSpec[] = [
   { path: `${ADMIN}/connectors`, label: 'Connectors', area: AREA, parent: `${ADMIN}/connections`, hidden: 'only forwards to Connected systems (Business tools); the vendor pages that ask for a connector key (Breach alerts, Security ratings, Settings, a vendor record) and a vulnerability still link here' },
   { path: `${ADMIN}/usage`, label: 'Usage Monitoring', area: AREA, parent: `${ADMIN}/ai-usage`, hidden: 'no link opens it any more: it forwards to the Activity view of AI usage, and stays so an old link still works' },
   // a person's AI usage opens from a row of Users
-  { path: `${ADMIN}/users/:id/usage`, label: 'User usage', area: AREA, parent: `${ADMIN}/users`, hidden: 'opens from a user row of Users (Usage)' },
+  { path: `${ADMIN}/users/:id/usage`, label: 'User usage', area: AREA, parent: `${ADMIN}/users`, hidden: 'opens from a user row of Users (AI usage)', ownHeading: true },
   // the style guide: an administrator's page that guards itself with navPermissions (an unlisted page is administrators' only)
   { path: `${ADMIN}/ui-kit`, label: 'UI kit', area: AREA, parent: ADMIN, adminOnly: true, hidden: 'no link opens it: reached by a typed address (the design-system style guide)', keywords: ['Style guide', 'Design system'], ownHeading: true },
   // scanner onboarding: reached from Compliance & Scans, the asset pages and each other; the connect wizard and the AD discovery say "locked" without the agents right
@@ -49,5 +49,5 @@ export const PAGES: PageSpec[] = [
   // the old Teams page forwards to Departments
   { path: `${ADMIN}/teams`, label: 'Departments', area: AREA, aliasOf: `${ADMIN}/departments` },
   // Users at its own address: the top bar's user menu (Users), for the people who hold the users right and are not administrators (navAccess PAGE_PERMISSIONS)
-  { path: '/users', label: 'User Management', area: AREA, hidden: 'opens from the user menu in the top bar (Users), for people who hold the users right and are not administrators', keywords: ['Users'] },
+  { path: '/users', label: 'Users', area: AREA, hidden: 'opens from the user menu in the top bar (Users), for people who hold the users right and are not administrators', keywords: ['User Management', 'People'], ownHeading: true },
 ];
