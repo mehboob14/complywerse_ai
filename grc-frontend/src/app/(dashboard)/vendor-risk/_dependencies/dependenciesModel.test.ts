@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { DISMISS_SAYS, VIEWS, VIEW_LABEL, aliasSays, cveOf, dependantLabel, foundBy, platformLine, requestHref, sharedFirst, viewFrom, type SharedVuln } from './dependenciesModel.ts';
+import { DISMISS_SAYS, VIEWS, VIEW_LABEL, aliasSays, cveOf, dependantLabel, foundBy, requestHref, sharedFirst, viewFrom, type SharedVuln } from './dependenciesModel.ts';
 
 test('the views an address can name, and the old Concentration page\'s word', () => {
   assert.deepEqual(VIEWS, ['technology', 'platforms', 'vulnerabilities', 'unregistered']);
@@ -29,9 +29,7 @@ test('flaws that hit more than one supplier come first, each group in the server
   assert.deepEqual(sharedFirst([]), []);
 });
 
-test('words: a platform line, a dependant that is critical, what an alias says, where a supplier was found', () => {
-  assert.equal(platformLine({ vendor_count: 3, critical_count: 1 }), '3 suppliers · 1 critical');
-  assert.equal(platformLine({ vendor_count: 1, critical_count: 0 }), '1 supplier');
+test('words: a dependant that is critical, what an alias says, where a supplier was found', () => {
   assert.equal(dependantLabel({ name: 'Acme', critical_dependency: true }), 'Acme · critical dependency');
   assert.equal(dependantLabel({ name: 'Acme', critical_dependency: false }), 'Acme');
   assert.equal(aliasSays({ alias: 'AWS', platform: 'Amazon Web Services', excluded: false }), '“AWS” means Amazon Web Services');

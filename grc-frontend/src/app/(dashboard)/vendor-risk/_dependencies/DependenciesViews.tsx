@@ -22,13 +22,15 @@ import { vendorTier } from '@/lib/statuses/vendor';
 import { signalSeverity } from '@/lib/statuses/vendorMonitoring';
 import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
 import {
-  DISMISS_SAYS, aliasSays, cveOf, dependantLabel, foundBy, platformLine, requestHref, sharedFirst,
+  DISMISS_SAYS, aliasSays, cveOf, dependantLabel, foundBy, requestHref, sharedFirst,
   type Alias, type Catalogue, type Platform, type Shadow, type Shows, type SharedVuln, type Tech, type Who,
 } from './dependenciesModel';
 
 const MUTED = 'text-ds-fg-muted';
 const LINK = linkClasses({ tone: 'text', size: 'label' });
 const retry = (e: unknown, r?: () => void) => (canRetry(e) && r ? r : undefined);
+/** A list of chips in a table cell: capped, so a long name is cut inside its chip (full name on hover) instead of widening the column past the page. */
+const Cap = ({ children }: { children: React.ReactNode }) => <div className="min-w-0 max-w-[440px]">{children}</div>;
 const Tier = ({ tier }: { tier: string | null }) => (tier ? <StatusPill size="sm" {...statusPill(vendorTier, tier)} /> : null);
 const vendorHref = (id: number, tab?: string) => `/vendor-risk/vendors/${id}${tab ? `?${tab}` : ''}`;
 
@@ -95,7 +97,7 @@ export function TechnologyView({ q, category, onQuery, onCategory }: { q: string
                 { key: 'c', header: 'Category', card: 'meta', cell: (t) => <span className="text-ds-body text-ds-fg-body">{t.category}</span> },
                 { key: 's', header: 'Suppliers', align: 'right', card: 'meta', cell: (t) => <span className="tabular-nums text-ds-body text-ds-fg">{t.vendors}</span> },
                 { key: 'k', header: 'Critical', align: 'right', priority: 2, card: 'meta', cell: (t) => <span className={`tabular-nums text-ds-body ${t.critical ? 'font-[600] text-ds-fg' : MUTED}`}>{t.critical}</span> },
-                { key: 'v', header: 'Versions seen', priority: 3, card: 'hide', cell: (t) => <ChipList items={t.versions} label="versions" shown={3} /> },
+                { key: 'v', header: 'Versions seen', priority: 3, card: 'hide', cell: (t) => <Cap><ChipList items={t.versions} label="versions" shown={3} /></Cap> },
               ]}
               empty={(
                 <EmptyState
@@ -163,18 +165,17 @@ export function PlatformsView({ canEdit }: { canEdit: boolean }) {
           cardTitle={(p) => <span className="font-[600] text-ds-fg">{p.platform}</span>}
           columns={[
             {
-              key: 'p', header: 'Platform', isRowHeader: true, card: 'hide',
+              key: 'p', header: 'Platform', isRowHeader: true, card: 'hide', width: 'w-[240px]',
               cell: (p) => (
                 <span className="flex flex-col">
-                  <span className="font-[600] text-ds-fg">{p.platform}</span>
-                  <span className={`text-ds-label ${MUTED}`}>{platformLine(p)}</span>
+                  <span className="break-words font-[600] text-ds-fg">{p.platform}</span>
                   {p.direct_vendor_id && <Link href={vendorHref(p.direct_vendor_id)} className={LINK}>Also a direct supplier</Link>}
                 </span>
               ),
             },
-            { key: 'n', header: 'Suppliers', align: 'right', card: 'meta', cell: (p) => <span className="tabular-nums text-ds-body text-ds-fg">{p.vendor_count}</span> },
-            { key: 'c', header: 'Critical', align: 'right', card: 'meta', cell: (p) => <span className={`tabular-nums text-ds-body ${p.critical_count ? 'font-[600] text-ds-danger' : MUTED}`}>{p.critical_count}</span> },
-            { key: 'v', header: 'Who relies on it', card: 'meta', cell: (p) => <ChipList items={p.vendors.map((v) => ({ label: dependantLabel(v), href: vendorHref(v.id, 'tab=dependencies') }))} label="suppliers" shown={3} /> },
+            { key: 'n', header: 'Suppliers', align: 'right', card: 'meta', width: 'w-[96px]', cell: (p) => <span className="tabular-nums text-ds-body text-ds-fg">{p.vendor_count}</span> },
+            { key: 'c', header: 'Critical', align: 'right', card: 'meta', width: 'w-[88px]', cell: (p) => <span className={`tabular-nums text-ds-body ${p.critical_count ? 'font-[600] text-ds-danger' : MUTED}`}>{p.critical_count}</span> },
+            { key: 'v', header: 'Who relies on it', card: 'meta', cell: (p) => <Cap><ChipList items={p.vendors.map((v) => ({ label: dependantLabel(v), href: vendorHref(v.id, 'tab=dependencies') }))} label="suppliers" shown={3} /></Cap> },
           ]}
           empty={<EmptyState kind="firstUse" bare icon={Layers} title="No platform is shared yet" description="No platform is relied on by two or more suppliers. Record a supplier's fourth parties on its Dependencies tab." />}
         />
@@ -247,10 +248,10 @@ export function VulnerabilitiesView() {
           getRowId={(v) => v.cve}
           cardTitle={(v) => <span className="font-[600] text-ds-fg">{v.title || v.cve}</span>}
           columns={[
-            { key: 'v', header: 'Vulnerability', isRowHeader: true, card: 'hide', cell: (v) => <span className="flex flex-col"><span className="font-[600] text-ds-fg">{v.title || v.cve}</span>{v.title && <span className={`text-ds-label ${MUTED}`}>{v.cve}</span>}</span> },
+            { key: 'v', header: 'Vulnerability', isRowHeader: true, card: 'hide', width: 'w-[280px]', cell: (v) => <span className="flex flex-col"><span className="font-[600] text-ds-fg">{v.title || v.cve}</span>{v.title && <span className={`text-ds-label ${MUTED}`}>{v.cve}</span>}</span> },
             { key: 's', header: 'Severity', card: 'meta', cell: (v) => <StatusPill size="sm" {...statusPill(signalSeverity, v.severity)} /> },
             { key: 'n', header: 'Suppliers', align: 'right', card: 'meta', cell: (v) => <span className={`tabular-nums text-ds-body ${v.vendors.length > 1 ? 'font-[600] text-ds-danger' : 'text-ds-fg'}`}>{v.vendors.length}</span> },
-            { key: 'w', header: 'Who is affected', card: 'meta', cell: (v) => <ChipList items={v.vendors.map((x) => ({ label: x.name, href: vendorHref(x.id, 'stage=monitoring') }))} label="suppliers" shown={3} /> },
+            { key: 'w', header: 'Who is affected', card: 'meta', cell: (v) => <Cap><ChipList items={v.vendors.map((x) => ({ label: x.name, href: vendorHref(x.id, 'stage=monitoring') }))} label="suppliers" shown={3} /></Cap> },
             { key: 'd', header: 'Seen', priority: 2, card: 'meta', cell: (v) => <span className="whitespace-nowrap text-ds-body text-ds-fg-body">{formatDate(v.occurred_at)}</span> },
           ]}
           empty={<EmptyState kind="firstUse" bare icon={Bug} title="None in the last 90 days" description="No known-exploited vulnerability has been seen in the products watched on suppliers." />}
@@ -294,9 +295,9 @@ export function UnregisteredView({ canRequest, canEdit }: { canRequest: boolean;
           cardTitle={(s) => <span className="font-[600] text-ds-fg">{s.name}</span>}
           cardActions={(s) => menu(s, true)}
           columns={[
-            { key: 'n', header: 'Supplier found', isRowHeader: true, card: 'hide', cell: (s) => <span className="font-[600] text-ds-fg">{s.name}</span> },
+            { key: 'n', header: 'Supplier found', isRowHeader: true, card: 'hide', width: 'w-[240px]', cell: (s) => <span className="font-[600] text-ds-fg">{s.name}</span> },
             { key: 'f', header: 'Found by', card: 'meta', cell: (s) => <span className="text-ds-body text-ds-fg-body">{foundBy(s)}</span> },
-            { key: 'p', header: 'Products', priority: 2, card: 'meta', cell: (s) => <ChipList items={s.products} label="products" shown={2} /> },
+            { key: 'p', header: 'Products', priority: 2, card: 'meta', cell: (s) => <Cap><ChipList items={s.products} label="products" shown={2} /></Cap> },
             {
               key: 'a', header: 'Next step', width: 'w-[260px]', card: 'hide',
               cell: (s) => (

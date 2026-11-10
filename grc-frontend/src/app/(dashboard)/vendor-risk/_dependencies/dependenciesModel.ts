@@ -54,11 +54,6 @@ export function sharedFirst(vulns: readonly SharedVuln[]): SharedVuln[] {
 
 export const severityLabel = (word: string | null | undefined): string => signalSeverity.label(word || 'medium');
 
-/** The line under a platform: "3 suppliers · 1 critical". */
-export function platformLine(p: Pick<Platform, 'vendor_count' | 'critical_count'>): string {
-  return `${p.vendor_count} ${p.vendor_count === 1 ? 'supplier' : 'suppliers'}${p.critical_count ? ` · ${p.critical_count} critical` : ''}`;
-}
-
 /** A supplier on a platform: its name, and that it is a critical dependency there (said in words, not a colour). */
 export const dependantLabel = (v: { name: string; critical_dependency: boolean }): string => (v.critical_dependency ? `${v.name} · critical dependency` : v.name);
 
