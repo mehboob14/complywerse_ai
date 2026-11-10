@@ -372,7 +372,8 @@ def findings_register(
     sort: str = Query("created_at"),
     order: str = Query("desc", pattern="^(asc|desc)$"),
     skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(50, ge=1, le=1000),
+    include_archived: bool = Query(False),
     db: Session = Depends(get_db),
     user: GRCUser = Depends(require_auth),
 ):
@@ -381,7 +382,9 @@ def findings_register(
     (open + in remediation), accepted, closed or all; `status` still asks for one
     status. `blocking_total` counts the open findings that hold the approval gate,
     whatever the scope. `sort` also takes vendor, owner and due (the earliest fix
-    date, none last); severity sorts by seriousness, so desc is the worst first."""
+    date, none last); severity sorts by seriousness, so desc is the worst first. The findings of an archived
+    vendor are left out, as the module's badge and the Overview leave them out, unless `include_archived`;
+    `limit` takes up to 1000 so a page can load the register whole."""
     tids = _tids(user, db)
     _prep_tpra_db(db, tids)
     now = datetime.utcnow()
@@ -390,6 +393,9 @@ def findings_register(
     q = db.query(TPRAFinding).filter(
         TPRAFinding.tenant_id.in_(tids), TPRAFinding.deleted_at.is_(None),
     )
+    if not include_archived:
+        q = q.filter(~TPRAFinding.vendor_id.in_(
+            select(Vendor.id).where(Vendor.tenant_id.in_(tids), Vendor.deleted_at.isnot(None))))
     if severity:
         q = q.filter(TPRAFinding.severity == severity)
     if domain:

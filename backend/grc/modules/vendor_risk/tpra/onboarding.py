@@ -182,18 +182,31 @@ def _request_row(v: Vendor, names: dict, stages: dict, custom: Optional[dict] = 
     }
 
 
+_URGENCY_RANK = {"high": 2, "normal": 1, "low": 0}
+
+
 @router.get("/intake/requests")
 def list_requests(
     intake_status: Optional[str] = Query(None, alias="status"),
     scope: Literal["all", "mine"] = "all",
     search: Optional[str] = None,
+    statuses: Optional[str] = Query(None, description="several statuses at once, comma separated"),
+    sort: Literal["updated", "queue"] = "updated",
+    skip: int = Query(0, ge=0),
+    limit: Optional[int] = Query(None, ge=1, le=200),
     db: Session = Depends(get_db), user: GRCUser = Depends(require_auth),
 ):
+    """The requests, newest change first. `counts` is how many of each status the search and `scope` leave (before
+    any status filter); `status` / `statuses` keep some of them; `sort=queue` puts the most urgent first and, among
+    equals, the one that has waited longest (what a review team works through); `limit` (with `skip`) returns one
+    page and `total` says how many there are, the card's heavy parts (open answers, duplicate screening, who decided)
+    being worked out for that page only. Without `limit` everything comes back, as before."""
     tids = _tids(user, db)
     q = db.query(Vendor).filter(Vendor.tenant_id.in_(tids), Vendor.deleted_at.is_(None),
                                 Vendor.intake_status.isnot(None))
     if search:
-        q = q.filter(Vendor.name.ilike(f"%{search}%"))
+        like = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        q = q.filter(Vendor.name.ilike(f"%{like}%", escape="\\"))
     rows = q.order_by(Vendor.updated_at.desc()).all()
     if scope == "mine":
         rows = [v for v in rows if intake.mine(v, user.id)]
@@ -202,6 +215,15 @@ def list_requests(
         counts[v.intake_status] = counts.get(v.intake_status, 0) + 1
     if intake_status:
         rows = [v for v in rows if v.intake_status == intake_status]
+    if statuses:
+        wanted = {s.strip() for s in statuses.split(",") if s.strip()}
+        rows = [v for v in rows if v.intake_status in wanted]
+    if sort == "queue":
+        rows.sort(key=lambda v: (-_URGENCY_RANK.get(intake.request_of(v.intake)["urgency"], 1),
+                                 v.submitted_at or v.created_at or datetime.min))
+    total = len(rows)
+    if limit is not None:
+        rows = rows[skip:skip + limit]
     names = _names(db, [x for v in rows for x in (v.requested_by, v.owner_id)])
     stages = {v.id: {"key": v.lifecycle_stage, "label": _STAGE_LABEL.get(v.lifecycle_stage or "")}
               for v in rows if v.intake_status in ("in_review", "approved")}
@@ -210,7 +232,7 @@ def list_requests(
     found = intake.screen(intake.on_record(db, tids[0]), open_rows) if open_rows else {}
     said = _decisions(db, rows)
     return {"items": [_request_row(v, names, stages, custom, found.get(v.id), said.get(v.id)) for v in rows],
-            "counts": counts,
+            "counts": counts, "total": total, "skip": skip, "limit": limit,
             "can_create": _can(db, user, "intake", "create"), "can_review": _can(db, user, "intake", "review")}
 
 

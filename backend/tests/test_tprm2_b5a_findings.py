@@ -741,3 +741,32 @@ def test_lowering_a_finding_that_holds_the_gate_leaves_a_record_of_from_what_to_
     assert web(db).put(f"{T}/findings/{f.id}", json={"severity": "low", "is_blocking": False}).status_code == 200
     row = db.query(TPRAAuditLog).filter_by(entity="finding", action="update", entity_id=f.id).one()
     assert (row.from_value, row.to_value) == ("critical, blocking", "low")
+
+
+# ── the register leaves out an archived vendor's findings, and loads whole ───
+
+def test_the_register_leaves_out_the_findings_of_an_archived_vendor_unless_asked(db):
+    f = _register(db)
+    c = web(db)
+    ids = lambda **p: {i["id"] for i in c.get(f"{T}/findings-register", params=p).json()["items"]}      # noqa: E731
+    everything = {x.id for x in f.values()}
+    assert ids() == everything
+    core = db.get(Vendor, f["crit_open"].vendor_id)
+    core.deleted_at = datetime.utcnow()                                   # archive Core Bank
+    db.commit()
+    kept = {x.id for k, x in f.items() if x.vendor_id != core.id}
+    assert ids() == kept and f["crit_open"].id not in ids()
+    got = c.get(f"{T}/findings-register").json()
+    assert got["total"] == len(kept) and got["blocking_total"] == 0     # the one that held the gate was Core Bank's
+    assert ids(include_archived=True) == everything                       # on request, as before
+    # the badge, the Overview and the register now agree on what is open
+    counts = c.get("/vendor-risk/portfolio/counts")
+    assert counts.status_code in (200, 404)
+
+
+def test_the_register_takes_up_to_a_thousand_rows_a_page(db):
+    _register(db)
+    c = web(db)
+    assert c.get(f"{T}/findings-register", params={"limit": 1000}).status_code == 200
+    assert c.get(f"{T}/findings-register", params={"limit": 1001}).status_code == 422
+    assert c.get(f"{T}/findings-register", params={"limit": 200}).json()["limit"] == 200

@@ -1,8 +1,10 @@
 // What the findings cards work out from the server's story of a finding: whether it is open, what is due and whether that is late,
 // whether closing it needs a note, the words for its source and treatment. Pure, so `node --test` runs findingsModel.test.ts against it.
 
-import { fmt } from '../_ui/fmt.ts';
-import type { Tone } from '../_ui/tones.ts';
+import { formatRelative, statusLabel } from '../../../../lib/format.ts';
+import type { Tone } from '../../../../lib/status.ts';
+
+const word = (value?: string | null): string => statusLabel(value, '');
 
 export const OPEN_STATUSES = ['open', 'in_remediation'] as const;
 
@@ -15,11 +17,11 @@ export const SOURCE_LABEL: Record<string, string> = {
   assessment: 'Assessment', manual: 'Manual', sla_breach: 'Service level', signal: 'Signal',
   document_review: 'Document review', offboarding: 'Offboarding',
 };
-export const sourceLabel = (source?: string | null): string => SOURCE_LABEL[String(source)] ?? fmt.status(source);
+export const sourceLabel = (source?: string | null): string => SOURCE_LABEL[String(source)] ?? word(source);
 
 /** What is being done about it. */
 export const TREATMENT_LABEL: Record<string, string> = { remediate: 'Remediate', mitigate: 'Mitigate', transfer: 'Transfer', accept: 'Accept' };
-export const treatmentLabel = (treatment?: string | null): string => TREATMENT_LABEL[String(treatment)] ?? fmt.status(treatment);
+export const treatmentLabel = (treatment?: string | null): string => TREATMENT_LABEL[String(treatment)] ?? word(treatment);
 
 interface Closable { severity?: string | null; is_blocking?: boolean | null; is_critical_control_fail?: boolean | null; fix_done?: boolean | null }
 
@@ -44,7 +46,7 @@ interface Dated { status?: string | null; due_date?: string | null; sla_due?: st
 export function dueOf(f: Dated, today: Date = new Date()): { date: string | null; text: string; overdue: boolean } {
   const date = f.due_date || f.sla_due || null;
   if (!date || !isOpen(f.status)) return { date: null, text: '', overdue: false };
-  const when = fmt.countdown(date, today);
+  const when = formatRelative(date, today, { calendar: true });
   return { date, text: when ? `due ${when}` : '', overdue: when.endsWith(' ago') };
 }
 
@@ -81,4 +83,4 @@ export const SIGNAL_TYPE_LABEL: Record<string, string> = {
   breach: 'Breach', adverse_media: 'Adverse news', security_rating: 'Rating change', financial: 'Financial', sla: 'Service level',
   cert_expiry: 'Certificate lapsed', vulnerability: 'Vulnerability',
 };
-export const signalTypeLabel = (type?: string | null): string => SIGNAL_TYPE_LABEL[String(type)] ?? fmt.status(type);
+export const signalTypeLabel = (type?: string | null): string => SIGNAL_TYPE_LABEL[String(type)] ?? word(type);

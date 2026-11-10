@@ -15,7 +15,9 @@ import {
 import { BTN_ICON, BTN_PRIMARY, StatusPill, TONE, fmt, tones } from '@/app/(dashboard)/vendor-risk/_ui';
 import { RightSlidePanel } from '@/components/ui';
 import { InfoTip } from '@/components/ui/InfoTip';
-import { tpraApi, adminApi } from '@/lib/api';
+import { tpraApi } from '@/lib/api';
+import { usePeople } from '../../../_lib/actions/shared';
+import { personName } from '../../../_lib/peopleModel';
 import { skippedBy, type Fix } from '../../../_lib/lifecycleLogic';
 import type { GateView } from '../../../_lib/lifecycleApi';
 import type { StageInstance, TpraAssessment } from './types';
@@ -137,19 +139,9 @@ export default function StageWorkspace({
 
   // Names for the roster user_ids so the stage's abstract RACI labels resolve to
   // real people. Shares the roster/intake user cache — no extra request in practice.
-  const { data: users } = useQuery({
-    queryKey: ['admin-users-for-tpra-intake'],
-    queryFn: async () => {
-      try {
-        const r = await adminApi.getUsers();
-        return ((r.data || []) as Array<{ id: number; email?: string; full_name?: string; name?: string; first_name?: string; last_name?: string }>).map((u) => ({
-          id: u.id,
-          name: u.full_name || u.name || [u.first_name, u.last_name].filter(Boolean).join(' ').trim() || u.email || `User ${u.id}`,
-        }));
-      } catch { return []; }
-    },
-  });
-  const nameFor = (id: number) => (users || []).find((u) => u.id === id)?.name || `User ${id}`;
+  // the module's own list of people (any signed-in person may read it): the administrators' user list needs a right most analysts do not hold, and showed them "User 12"
+  const users = usePeople();
+  const nameFor = (id: number) => personName(users, id);
   const roster = assessment.team_roster;
   // The single Accountable person for this stage (first "A" label that resolves).
   const accountable = (meta.raci.A || [])

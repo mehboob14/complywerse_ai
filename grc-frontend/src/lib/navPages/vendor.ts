@@ -77,7 +77,7 @@ export const PAGES: PageSpec[] = [
   ...ENTRIES.filter((p) => !listed.has(p.path)),
 
   // ---- pages that open from an entry or a tab ----
-  { path: `${V}/intake/:id`, label: 'Vendor request', area: AREA, parent: `${V}/intake`, hidden: 'opens from an Intake row and from the request dialog once a request is filed' },
+  { path: `${V}/intake/:id`, label: 'Vendor request', area: AREA, parent: `${V}/intake`, hidden: 'opens from an Intake row and from the request dialog once a request is filed', ...heading(`${V}/intake/:id`) },
   { path: `${V}/questionnaires/:token/builder`, label: 'Questionnaire builder', area: AREA, parent: `${V}/questionnaires`, hidden: 'opens from a questionnaire (Edit or New) in Questionnaires' },
   { path: `${V}/vendors/:id`, label: 'Vendor', area: AREA, parent: `${V}/vendors`, hidden: 'opens from a Register row and from the vendor name on most pages of the module and of the Auditor Portal' },
   { path: `${V}/vendors/:id/summary`, label: 'Vendor summary report', area: AREA, parent: `${V}/vendors`, hidden: 'opens from the vendor record\'s menu ("Summary report")' },
