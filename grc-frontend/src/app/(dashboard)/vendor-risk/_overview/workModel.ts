@@ -7,7 +7,7 @@
 import { formatDate } from '../../../../lib/format.ts';
 import type { Tone } from '../../../../lib/status.ts';
 import { vendorTier } from '../../../../lib/statuses/vendor.ts';
-import type { QueueItem } from '../_lib/attentionModel.ts';
+import { aboutOf, type QueueItem } from '../_lib/attentionModel.ts';
 
 export interface RequestLike { id: number; name: string; requested_by: string | null; submitted_at: string | null; duplicate: boolean }
 export interface ActionLike {
@@ -46,10 +46,10 @@ export function queueWork(i: QueueItem): WorkItem {
   const late = i.tone === 'red';
   return {
     key: `queue:${i.key}`,
-    kind: { label: i.label, tone: late ? 'danger' : 'warning' },
+    kind: { label: aboutOf(i.record_type), tone: late ? 'danger' : 'warning' },
     title: i.title,
     href: i.link,
-    context: [i.badge, tier, i.assignee_name ? `Assigned to ${i.assignee_name}` : '', i.since ? `since ${formatDate(i.since)}` : ''].filter(Boolean).join(' · '),
+    context: [i.label, i.badge, tier, i.assignee_name ? `Assigned to ${i.assignee_name}` : '', i.since ? `since ${formatDate(i.since)}` : ''].filter(Boolean).join(' · '),
     action: { label: 'Open', href: i.link },
     late, rank: late ? LATE : OTHER, at: day(i.since),
   };
@@ -84,7 +84,10 @@ export function actionWork(a: ActionLike): WorkItem {
 
 /** The list: every source's rows, urgent first, the oldest first inside a rank, ties by title so the order never shuffles between two loads. */
 export function buildWork(sources: { queue?: readonly QueueItem[]; requests?: readonly RequestLike[]; actions?: readonly ActionLike[] }): WorkItem[] {
-  const rows = (sources.queue ?? []).map(queueWork).concat((sources.requests ?? []).map(requestWork), (sources.actions ?? []).map(actionWork));
+  // a planned action that is due is ALSO an item of the Work queue ("Planned action due"): it is one row, the planned action's (it has the day and the kind)
+  const planned = new Set((sources.actions ?? []).map((a) => a.id));
+  const queue = (sources.queue ?? []).filter((i) => !(i.record_type === 'action' && i.condition === 'action_due' && planned.has(i.record_id)));
+  const rows = queue.map(queueWork).concat((sources.requests ?? []).map(requestWork), (sources.actions ?? []).map(actionWork));
   return rows.sort((a, b) => a.rank - b.rank || a.at.localeCompare(b.at) || a.title.localeCompare(b.title) || a.key.localeCompare(b.key));
 }
 

@@ -192,7 +192,7 @@ export function postureView(d: Pick<Dashboard, 'kpis' | 'coverage' | 'reassessme
   const residual = k.portfolio_residual ?? 0;
   const inherent = k.portfolio_inherent ?? 0;
   const has = typeof appetite === 'number' && Number.isFinite(appetite);
-  const gap = has ? residual - (appetite as number) : 0;
+  const gap = has ? Math.round((residual - (appetite as number)) * 10) / 10 : 0;          // one decimal: 45.8 - 45 is 0.8, not 0.7999999999999972
   const critical = k.critical_count ?? 0;
   return {
     verdict: verdictOf(residual, appetite),

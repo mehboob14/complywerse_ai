@@ -16,7 +16,7 @@ import { titleFor } from '@/lib/navRegistry';
 import { tpraApi } from '@/lib/api';
 import { vendorTier } from '@/lib/statuses/vendor';
 import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
-import { DID, EMPTY, perCondition, type QueueAction, type QueueAnswer, type QueueForm, type QueueItem, type QueueView } from '../_lib/attentionModel';
+import { DID, EMPTY, aboutOf, perCondition, type QueueAction, type QueueAnswer, type QueueForm, type QueueItem, type QueueView } from '../_lib/attentionModel';
 import { ActionSheet, HistorySheet, type FormValues } from './_sheets';
 
 const SCHEMA = { scope: oneOf(['portfolio', 'mine'] as const, 'portfolio'), view: oneOf(['open', 'snoozed', 'closed'] as const, 'open'), condition: text() };
@@ -27,7 +27,7 @@ type ActVars = { item: QueueItem; action: QueueAction; text?: string; until?: st
 function contextOf(item: QueueItem): string {
   const who = item.assignee_name ? `Assigned to ${item.assignee_name}` : item.owner_name ? `Owner: ${item.owner_name}` : 'No owner';
   return [
-    item.badge, item.vendor_name, item.vendor_tier ? `${vendorTier.label(item.vendor_tier)} tier` : '', who,
+    item.label, item.badge, item.vendor_name, item.vendor_tier ? `${vendorTier.label(item.vendor_tier)} tier` : '', who,
     item.snoozed_until ? `Back on ${formatDate(item.snoozed_until, { calendar: true })}${item.snooze_reason ? `: ${item.snooze_reason}` : ''}` : '',
   ].filter(Boolean).join(' · ');
 }
@@ -90,7 +90,7 @@ export default function AttentionPage() {
         meta={counts && view === 'open' && counts.urgent > 0 ? <span className="font-[600] text-ds-danger">{`${formatCount(counts.urgent)} urgent`}</span> : undefined}
         actions={<SegmentedControl label="Whose items" name="queue-scope" options={SCOPES} value={scope} onChange={(value) => set({ scope: value, condition: '' })} />}
       />
-      <SegmentedControl label="Which items" name="queue-view" options={views} value={view} onChange={(value) => { set({ view: value, condition: '' }); setForm(null); }} />
+      <SegmentedControl label="Which items" name="queue-view" className="self-start" options={views} value={view} onChange={(value) => { set({ view: value, condition: '' }); setForm(null); }} />
       {chips.length > 0 && <FilterChips label="What the items are about" chips={chips} onToggle={(key) => set({ condition: key === condition ? '' : key })} />}
 
       {q.isPending && <SkeletonRows rows={6} columns={3} label="Loading the queue" />}
@@ -105,7 +105,7 @@ export default function AttentionPage() {
           {shown.map((item) => (
             <WorkRow
               key={item.key}
-              kind={{ label: item.label, tone: item.tone === 'red' ? 'danger' : 'warning' }}
+              kind={{ label: aboutOf(item.record_type), tone: item.tone === 'red' ? 'danger' : 'warning' }}
               title={item.title}
               href={item.link}
               context={contextOf(item)}

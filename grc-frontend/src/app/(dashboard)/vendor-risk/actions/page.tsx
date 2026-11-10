@@ -39,7 +39,7 @@ export default function PlannedActionsPage() {
         back={{ href: '/vendor-risk', label: 'Back to the Overview' }}
         actions={<SegmentedControl label="Whose actions" name="actions-scope" options={WHOSE} value={scope} onChange={(value) => set({ scope: value })} />}
       />
-      <SegmentedControl label="Which actions" name="actions-state" options={stateOptions(q.data?.counts)} value={state} onChange={(value) => set({ state: value })} />
+      <SegmentedControl label="Which actions" name="actions-state" className="self-start" options={stateOptions(q.data?.counts)} value={state} onChange={(value) => set({ state: value })} />
       <section aria-label="Planned actions" className="rounded-ds-card border border-ds-border bg-ds-surface p-[8px]">
         {q.isPending && <SkeletonRows rows={5} columns={3} label="Loading the planned actions" />}
         {q.isError && <ErrorState title="Couldn't load the planned actions" message={errorMessage(q.error)} onRetry={canRetry(q.error) ? () => { void q.refetch(); } : undefined} />}

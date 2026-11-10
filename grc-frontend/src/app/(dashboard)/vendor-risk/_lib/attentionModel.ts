@@ -87,3 +87,10 @@ export const EMPTY: Record<QueueView, string> = {
   snoozed: 'Nothing is snoozed.',
   closed: 'Nothing is closed. Closed items that are still true show here, so they can be reopened.',
 };
+
+/** What a queue item is about, in one word for the pill of its row (the condition's own words, which are long, lead the row's context line). */
+const ABOUT: Record<string, string> = {
+  finding: 'Finding', acceptance: 'Finding', obligation: 'Contract', contract: 'Contract', evidence_link: 'Document', assessment: 'Assessment', approval: 'Approval',
+  vendor: 'Vendor', engagement: 'Vendor', snapshot: 'Rating', questionnaire: 'Questionnaire', signal: 'Signal', checkin: 'Check-in', action: 'Action', supplier_request: 'Supplier',
+};
+export const aboutOf = (recordType: string): string => ABOUT[recordType] ?? 'Vendor';

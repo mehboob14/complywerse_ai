@@ -13,11 +13,13 @@ const item = (over: Partial<QueueItem>): QueueItem => ({
 
 test('a queue item is one row that opens where the queue sends it; red is late', () => {
   const row = queueWork(item({ assignee_name: 'Sam' }));
-  assert.deepEqual([row.kind, row.late, row.rank], [{ label: 'Reassessment overdue', tone: 'danger' }, true, 0]);
-  assert.equal(row.context, 'Due 7 days ago · High tier · Assigned to Sam · since 1 Nov 2026');
+  assert.deepEqual([row.kind, row.late, row.rank], [{ label: 'Vendor', tone: 'danger' }, true, 0]);
+  assert.equal(row.context, 'Reassessment overdue · Due 7 days ago · High tier · Assigned to Sam · since 1 Nov 2026');
   assert.deepEqual(row.action, { label: 'Open', href: '/vendor-risk/vendors/1?stage=reassessment' });
   const amber = queueWork(item({ key: 'b', tone: 'amber', vendor_tier: null, badge: '', since: '' }));
-  assert.deepEqual([amber.kind.tone, amber.late, amber.rank, amber.context], ['warning', false, 3, '']);
+  assert.deepEqual([amber.kind.tone, amber.late, amber.rank, amber.context], ['warning', false, 3, 'Reassessment overdue']);
+  assert.equal(queueWork(item({ record_type: 'finding' })).kind.label, 'Finding');
+  assert.equal(queueWork(item({ record_type: 'something_new' })).kind.label, 'Vendor');
 });
 
 test('a request is a row for the person to decide, with who asked and the warning when it may be a duplicate', () => {
@@ -48,4 +50,14 @@ test('the list puts late work first, then requests, then actions due, then the r
   assert.deepEqual(buildWork({}), []);
   const again = buildWork({ requests: [{ id: 2, name: 'Same', requested_by: null, submitted_at: '2026-11-01', duplicate: false }, { id: 1, name: 'Same', requested_by: null, submitted_at: '2026-11-01', duplicate: false }] });
   assert.deepEqual(again.map((r) => r.key), ['request:1', 'request:2']);
+});
+
+test('a planned action that is due is one row, not two: the queue item that mirrors it is dropped; a failed one and a different action stay', () => {
+  const action = { id: 7, vendor: { id: 3, name: 'Beta' }, kind_label: 'To-do', title: 'Chase the SOC 2', due_on: '2026-11-08', overdue_days: 0 };
+  const rows = buildWork({
+    queue: [item({ key: 'action_due:action:7', condition: 'action_due', record_type: 'action', record_id: 7 }), item({ key: 'action_failed:action:7', condition: 'action_failed', record_type: 'action', record_id: 7 }),
+      item({ key: 'action_due:action:8', condition: 'action_due', record_type: 'action', record_id: 8 }), item({ key: 'finding:finding:7', condition: 'critical_finding_past_sla', record_type: 'finding', record_id: 7 })],
+    actions: [action],
+  });
+  assert.deepEqual(rows.map((r) => r.key).sort(), ['action:7', 'queue:action_due:action:8', 'queue:action_failed:action:7', 'queue:finding:finding:7']);
 });
