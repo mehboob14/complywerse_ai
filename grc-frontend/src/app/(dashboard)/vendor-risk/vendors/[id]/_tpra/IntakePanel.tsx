@@ -8,9 +8,10 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Save } from 'lucide-react';
-import { vendorRiskApi, adminApi } from '@/lib/api';
+import { vendorRiskApi } from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
+import { usePeople } from '../../../_lib/actions/shared';
 import IntakeForm from '../../../_lib/intake/IntakeForm';
 
 const inputCls =
@@ -59,18 +60,8 @@ function ProfileFields({ vendorId, onChanged }: { vendorId: number; onChanged?: 
     queryFn: async () => (await vendorRiskApi.getVendor(vendorId)).data as Record<string, unknown>,
   });
 
-  const { data: users } = useQuery({
-    queryKey: ['admin-users-for-tpra-intake'],
-    queryFn: async () => {
-      try {
-        const r = await adminApi.getUsers();
-        return ((r.data || []) as Array<{ id: number; email?: string; full_name?: string; name?: string; first_name?: string; last_name?: string }>).map((u) => ({
-          id: u.id,
-          name: u.full_name || u.name || [u.first_name, u.last_name].filter(Boolean).join(' ').trim() || u.email || `User ${u.id}`,
-        }));
-      } catch { return []; }
-    },
-  });
+  // the module's own list of people (any signed-in person may read it): the administrators' user list needs a right most analysts do not hold, and showed them "User 12"
+  const users = usePeople();
 
   const [form, setForm] = useState({
     owner_id: '' as number | '' , data_access_level: 'none', data_types_accessed: '',

@@ -6,11 +6,12 @@
 // Procurement, Exec approver, IT) to real users. Persists to assessment.team_roster.
 
 import { useEffect, useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Save, Users } from 'lucide-react';
-import { tpraApi, adminApi } from '@/lib/api';
+import { tpraApi } from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
+import { usePeople } from '../../../_lib/actions/shared';
 
 // Canonical roster roles — the distinct org functions across all 11 stages.
 export const TEAM_ROLES: Array<{ key: string; label: string; hint: string }> = [
@@ -37,18 +38,8 @@ export default function TeamRosterPanel({
   const { hasPermission } = usePermissions();
   const canEdit = hasPermission('vendor_risk:assessments:edit') || hasPermission('erm:risks:edit');
 
-  const { data: users } = useQuery({
-    queryKey: ['admin-users-for-tpra-intake'],
-    queryFn: async () => {
-      try {
-        const r = await adminApi.getUsers();
-        return ((r.data || []) as Array<{ id: number; email?: string; full_name?: string; name?: string; first_name?: string; last_name?: string }>).map((u) => ({
-          id: u.id,
-          name: u.full_name || u.name || [u.first_name, u.last_name].filter(Boolean).join(' ').trim() || u.email || `User ${u.id}`,
-        }));
-      } catch { return []; }
-    },
-  });
+  // the module's own list of people (any signed-in person may read it): the administrators' user list needs a right most analysts do not hold, and showed them "User 12"
+  const users = usePeople();
 
   const [roster, setRoster] = useState<Record<string, number | ''>>({});
   useEffect(() => {
