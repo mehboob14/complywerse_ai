@@ -1,5 +1,5 @@
 // Server-mode reporting — talks to the backend query engine (POST /reporting/query).
-// Used by ReportGrid when a dataset declares `server: true` so filter/sort/paginate
+// Used by the report workspace when a dataset declares `server: true` so filter/sort/paginate
 // run in SQL and the browser only holds one page.
 
 import apiClient from '@/lib/api';

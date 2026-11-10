@@ -14,7 +14,7 @@
 // prerequisite.
 
 import type {
-  ColumnDef, FilterRules, ReportDataset, ReportSpec, Row, ServerQuery, SortSpec,
+  ColumnDef, FilterRules, ReportDataset, ReportSpec, Row, ServerQuery, SkippedFilter, SortSpec,
 } from './types';
 import { asRows, rowMatchesRules, rowMatchesSearch } from './grid-utils.ts';
 import { isClientSideFilter } from './filter-utils.ts';
@@ -73,11 +73,12 @@ export async function fetchServerBuildRows(
   search: string,
   sorts: SortSpec[],
   resolveCol?: (key: string) => ColumnDef | undefined,
-): Promise<{ rows: Row[]; total: number }> {
+): Promise<{ rows: Row[]; total: number; skipped: SkippedFilter[] }> {
   const { serverFilters } = partitionServerFilters(rules, resolveCol);
   const out: Row[] = [];
   let total = 0;
   let skip = 0;
+  let skipped: SkippedFilter[] = [];
   while (skip < SERVER_BUILD_CAP) {
     const body: ServerQuery = {
       dataset: datasetKey,
@@ -90,14 +91,16 @@ export async function fetchServerBuildRows(
     };
     const page = await queryServer(body);
     total = page.total;
+    if (skip === 0) skipped = page.warnings?.skipped_filters ?? [];             // the same on every page: said once
     out.push(...asRows(page.rows));
     if (out.length >= page.total || page.rows.length < SERVER_BUILD_PAGE) break;
     skip += SERVER_BUILD_PAGE;
   }
   // `total` is what the query matched; `out` is what we could hold. Any
   // client-side pass over these rows — gap counts, link totals, chart tiles —
-  // describes only the part we fetched, so the caller has to say so.
-  return { rows: out, total };
+  // describes only the part we fetched, so the caller has to say so. `skipped` are the
+  // filters the server could not apply: the rows are NOT narrowed by them, and the caller says so too.
+  return { rows: out, total, skipped };
 }
 
 export interface ResolvedReport {
@@ -178,16 +181,18 @@ export async function loadReportRows(
   dataset: ReportDataset,
   plan: Pick<ResolvedReport, 'includes' | 'projectFields' | 'lookupCols'>,
   opts: { forceClientFetch?: boolean } = {},
-): Promise<{ rows: Row[]; total: number; truncated: boolean }> {
+): Promise<{ rows: Row[]; total: number; truncated: boolean; skipped: SkippedFilter[] }> {
   const resolve = (k: string) => plan.lookupCols.find((c) => c.key === k);
   let rows: Row[];
   let total: number;
+  let skipped: SkippedFilter[] = [];
   if (dataset.server && !opts.forceClientFetch) {
     const page = await fetchServerBuildRows(
       dataset.key, spec.rules, spec.search, spec.sorts ?? [], resolve,
     );
     rows = page.rows;
     total = page.total;
+    skipped = page.skipped;
   } else {
     rows = asRows(await dataset.fetch());
     total = rows.length;
@@ -195,7 +200,7 @@ export async function loadReportRows(
   if (plan.includes.length && rows.length) {
     rows = await enrichReportRows(dataset.key, rows, plan.includes, plan.projectFields);
   }
-  return { rows, total, truncated: total > rows.length };
+  return { rows, total, truncated: total > rows.length, skipped };
 }
 
 /** The filtering the browser still owes after SQL has done its part. */

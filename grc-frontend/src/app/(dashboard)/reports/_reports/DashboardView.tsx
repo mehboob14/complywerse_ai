@@ -18,6 +18,8 @@
 
 import { useMemo } from 'react';
 import { BarChart3, LayoutGrid, Minus } from 'lucide-react';
+import { Button, Notice } from '@/components/ui/ds';
+import { formatCount } from '@/lib/format';
 import PivotChart from './PivotChart';
 import { buildPivot } from './pivot';
 import { displayText, numericValue } from './grid-utils';
@@ -165,18 +167,18 @@ function Card({
   footer?: React.ReactNode;
 }) {
   return (
-    <article className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <header className="flex shrink-0 items-baseline justify-between gap-2 border-b border-slate-100 px-3 py-2">
-        <h3 className="truncate text-xs font-semibold text-slate-800" title={title}>
+    <article className="flex min-w-0 flex-col overflow-hidden rounded-ds-card border border-ds-border bg-ds-surface">
+      <header className="flex shrink-0 items-baseline justify-between gap-[8px] border-b border-ds-border px-[12px] py-[8px]">
+        <h3 className="m-0 min-w-0 truncate !text-ds-body !font-[600] !text-ds-fg" title={title}>
           {title}
         </h3>
         {subtitle && (
-          <span className="shrink-0 text-[10px] font-medium tabular-nums text-slate-400">{subtitle}</span>
+          <span className="shrink-0 text-ds-label tabular-nums text-ds-fg-muted">{subtitle}</span>
         )}
       </header>
-      <div className="min-h-0 flex-1 p-2.5">{children}</div>
+      <div className="min-h-0 flex-1 p-[10px]">{children}</div>
       {footer && (
-        <p className="shrink-0 border-t border-slate-100 px-3 py-1.5 text-[10px] text-slate-400">{footer}</p>
+        <p className="m-0 shrink-0 border-t border-ds-border px-[12px] py-[6px] text-ds-label text-ds-fg-muted">{footer}</p>
       )}
     </article>
   );
@@ -193,16 +195,16 @@ function StatBody({
   tone?: 'slate' | 'muted';
 }) {
   return (
-    <div className="flex h-full min-h-[9rem] flex-col items-center justify-center px-2 text-center">
+    <div className="flex h-full min-h-[144px] flex-col items-center justify-center px-[8px] text-center">
       <p
-        className={`max-w-full truncate text-2xl font-bold tabular-nums ${
-          tone === 'muted' ? 'text-slate-300' : 'text-slate-800'
+        className={`m-0 max-w-full truncate text-[24px] font-[600] leading-[32px] tabular-nums ${
+          tone === 'muted' ? 'text-ds-fg-muted' : 'text-ds-fg'
         }`}
         title={primary}
       >
         {primary}
       </p>
-      <p className="mt-1.5 max-w-full text-[11px] leading-snug text-slate-500">{caption}</p>
+      <p className="m-0 mt-[6px] max-w-full text-ds-label text-ds-fg-muted">{caption}</p>
     </div>
   );
 }
@@ -211,23 +213,23 @@ function StatBody({
 function NumericBody({ stats, filled }: { stats: { min: number; max: number; avg: number }; filled: number }) {
   const span = stats.max - stats.min;
   const pos = span > 0 ? ((stats.avg - stats.min) / span) * 100 : 50;
-  const fmt = (n: number) => (Number.isInteger(n) ? n.toLocaleString() : n.toFixed(1));
+  const fmt = (n: number) => (Number.isInteger(n) ? formatCount(n) : n.toFixed(1));
   return (
-    <div className="flex h-full min-h-[9rem] flex-col justify-center gap-3 px-2">
+    <div className="flex h-full min-h-[144px] flex-col justify-center gap-[12px] px-[8px]">
       <div className="text-center">
-        <p className="text-2xl font-bold tabular-nums text-slate-800">{fmt(stats.avg)}</p>
-        <p className="mt-0.5 text-[11px] text-slate-500">average across {filled.toLocaleString()} values</p>
+        <p className="m-0 text-[24px] font-[600] leading-[32px] tabular-nums text-ds-fg">{fmt(stats.avg)}</p>
+        <p className="m-0 mt-[2px] text-ds-label text-ds-fg-muted">average across {formatCount(filled)} values</p>
       </div>
       <div>
-        <div className="relative h-1.5 rounded-full bg-slate-100">
+        <div className="relative h-[6px] rounded-full bg-ds-border">
           <div
-            className="absolute top-1/2 h-3 w-0.5 -translate-y-1/2 rounded-full"
+            className="absolute top-1/2 h-[12px] w-[2px] -translate-y-1/2 rounded-full"
             style={{ left: `${Math.max(0, Math.min(100, pos))}%`, background: SERIES[0] }}
           />
         </div>
-        <div className="mt-1 flex justify-between text-[10px] tabular-nums text-slate-400">
-          <span>min {fmt(stats.min)}</span>
-          <span>max {fmt(stats.max)}</span>
+        <div className="mt-[4px] flex justify-between text-ds-label tabular-nums text-ds-fg-muted">
+          <span>lowest {fmt(stats.min)}</span>
+          <span>highest {fmt(stats.max)}</span>
         </div>
       </div>
     </div>
@@ -272,23 +274,14 @@ export default function DashboardView({
   // ── No columns picked ──────────────────────────────────────────────────────
   if (visibleKeys.length === 0) {
     return (
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-6 text-center">
-        <LayoutGrid className="h-9 w-9 text-slate-300" />
-        <h2 className="mt-3 text-base font-semibold text-slate-800">Nothing to visualise yet</h2>
-        <p className="mt-1 max-w-md text-sm text-slate-500">
-          Add columns and each one appears here as a chart — a donut for a few categories, a
+      <div className="flex min-h-[240px] flex-1 flex-col items-center justify-center rounded-ds-card border border-dashed border-ds-border-strong bg-ds-surface-subtle px-[24px] text-center">
+        <LayoutGrid aria-hidden className="h-[32px] w-[32px] text-ds-fg-muted" />
+        <h2 className="m-0 mt-[12px] !text-ds-section !text-ds-fg">Nothing to show yet</h2>
+        <p className="m-0 mt-[4px] max-w-md text-ds-body text-ds-fg-muted">
+          Add columns and each one appears here as a chart: a donut for a few categories, a
           ranked bar for many, a summary for numbers.
         </p>
-        {onOpenColumns && (
-          <button
-            type="button"
-            onClick={onOpenColumns}
-            className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-          >
-            <BarChart3 className="h-3.5 w-3.5" />
-            Add columns
-          </button>
-        )}
+        {onOpenColumns && <Button className="mt-[16px]" leftIcon={<BarChart3 aria-hidden />} onClick={onOpenColumns}>Add columns</Button>}
       </div>
     );
   }
@@ -297,14 +290,14 @@ export default function DashboardView({
   if (rows.length === 0) {
     const filteredOut = totalRows > 0;
     return (
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-6 text-center">
-        <Minus className="h-9 w-9 text-slate-300" />
-        <h2 className="mt-3 text-base font-semibold text-slate-800">
-          {filteredOut ? 'No rows match your filters' : 'No data in this report yet'}
+      <div className="flex min-h-[240px] flex-1 flex-col items-center justify-center rounded-ds-card border border-dashed border-ds-border-strong bg-ds-surface-subtle px-[24px] text-center">
+        <Minus aria-hidden className="h-[32px] w-[32px] text-ds-fg-muted" />
+        <h2 className="m-0 mt-[12px] !text-ds-section !text-ds-fg">
+          {filteredOut ? 'No rows match the filters' : 'No data in this report yet'}
         </h2>
-        <p className="mt-1 max-w-md text-sm text-slate-500">
+        <p className="m-0 mt-[4px] max-w-md text-ds-body text-ds-fg-muted">
           {filteredOut
-            ? `All ${totalRows.toLocaleString()} rows were filtered out. Clear or widen a filter to see the charts.`
+            ? `All ${formatCount(totalRows)} rows were filtered out. Clear or widen a filter to see the charts.`
             : 'Once this module has records they will appear here as charts automatically.'}
         </p>
       </div>
@@ -316,19 +309,19 @@ export default function DashboardView({
   return (
     <div className="min-h-0 flex-1 overflow-auto">
       {(sampled || chartable === 0) && (
-        <p className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] text-amber-800">
+        <Notice tone="info" className="mb-[8px]">
           {sampled
-            ? `Charts estimated from a ${sample.length.toLocaleString()}-row sample of ${rows.length.toLocaleString()} — the table view has every row.`
+            ? `Charts estimated from a ${formatCount(sample.length)}-row sample of ${formatCount(rows.length)}. The table view has every row.`
             : 'None of these columns has a shape worth charting yet. The cards below show what each one holds.'}
-        </p>
+        </Notice>
       )}
 
-      <div className="grid grid-cols-1 gap-3 pb-1 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-[12px] pb-[4px] sm:grid-cols-2 2xl:grid-cols-3">
         {analyses.map((a) => {
           const pct = a.total > 0 ? Math.round((a.filled / a.total) * 100) : 0;
           const subtitle =
             a.card.kind === 'chart' || a.card.kind === 'single'
-              ? `${a.distinct.toLocaleString()} value${a.distinct === 1 ? '' : 's'}`
+              ? `${formatCount(a.distinct)} value${a.distinct === 1 ? '' : 's'}`
               : `${pct}% filled`;
 
           // Blank column — say so rather than draw six identical empty slices.
@@ -338,7 +331,7 @@ export default function DashboardView({
                 <StatBody
                   tone="muted"
                   primary="—"
-                  caption={`No values recorded in ${a.total.toLocaleString()} row${a.total === 1 ? '' : 's'}.`}
+                  caption={`No values recorded in ${formatCount(a.total)} row${a.total === 1 ? '' : 's'}.`}
                 />
               </Card>
             );
@@ -352,8 +345,8 @@ export default function DashboardView({
                   primary={a.card.value}
                   caption={
                     a.filled === a.total
-                      ? `Every row (${a.total.toLocaleString()}) has this value.`
-                      : `${a.filled.toLocaleString()} of ${a.total.toLocaleString()} rows; the rest are blank.`
+                      ? `Every row (${formatCount(a.total)}) has this value.`
+                      : `${formatCount(a.filled)} of ${formatCount(a.total)} rows; the rest are blank.`
                   }
                 />
               </Card>
@@ -378,8 +371,8 @@ export default function DashboardView({
                 footer="Nearly unique per row — not a distribution."
               >
                 <StatBody
-                  primary={a.distinct.toLocaleString()}
-                  caption={`distinct values across ${a.filled.toLocaleString()} filled row${a.filled === 1 ? '' : 's'}.`}
+                  primary={formatCount(a.distinct)}
+                  caption={`distinct values across ${formatCount(a.filled)} filled row${a.filled === 1 ? '' : 's'}.`}
                 />
               </Card>
             );
@@ -407,11 +400,11 @@ export default function DashboardView({
               footer={
                 a.card.note ??
                 (a.filled < a.total
-                  ? `${(a.total - a.filled).toLocaleString()} row${a.total - a.filled === 1 ? '' : 's'} blank, not charted.`
+                  ? `${formatCount((a.total - a.filled))} row${a.total - a.filled === 1 ? '' : 's'} blank, not charted.`
                   : undefined)
               }
             >
-              <div className="h-[13rem]">
+              <div className="h-[208px]">
                 <PivotChart
                   result={result}
                   kind={chart}
@@ -425,9 +418,9 @@ export default function DashboardView({
         })}
       </div>
 
-      <p className="py-2 text-center text-[10px] text-slate-400">
-        Chart type follows each column&apos;s shape — donut for a few categories, ranked bar for
-        many, a summary for numbers. Colour and slice limits are fixed by the palette rules.
+      <p className="m-0 py-[8px] text-center text-ds-label text-ds-fg-muted">
+        Each chart follows its column&apos;s shape: a donut for a few categories, a ranked bar for
+        many, a summary for numbers.
       </p>
     </div>
   );
