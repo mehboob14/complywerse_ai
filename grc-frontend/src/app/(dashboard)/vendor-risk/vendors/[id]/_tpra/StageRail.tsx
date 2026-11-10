@@ -5,7 +5,7 @@
 // A skipped stage shows why when hovered. Colours are inline hex (the platform CSS repaints utilities in the shell).
 import { Check, Minus } from 'lucide-react';
 import { clsx } from 'clsx';
-import { TONE } from '@/app/(dashboard)/vendor-risk/_ui';
+import { TONE } from '@/lib/status';
 import {
   GROUPS, STAGES, railNote, skippedBy, stageNumber, type StageFact,
 } from '../../../_lib/lifecycleLogic';
@@ -22,7 +22,7 @@ function Mark({ state, gate }: { state: Marker; gate: boolean }) {
         <span className={clsx('grid place-items-center', gate && '-rotate-45')} style={{ color: '#fff' }}>
           {state === 'done' && <Check className="h-2.5 w-2.5" strokeWidth={3.5} />}
           {state === 'skipped' && <Minus className="h-2.5 w-2.5" strokeWidth={3.5} />}
-          {state === 'blocked' && <span className="text-[10px] font-bold leading-none">!</span>}
+          {state === 'blocked' && <span className="text-[12px] font-[700] leading-none">!</span>}
           {state === 'current' && <span className="h-1.5 w-1.5 rounded-full" style={{ background: TONE.progress.dot }} />}
         </span>
       </span>
@@ -40,10 +40,10 @@ export default function StageRail({ stages, current, selected, openChecks, tier,
   onSelect: (key: string) => void;
 }) {
   return (
-    <nav aria-label="Lifecycle stages" className="space-y-3 border-b border-[#e1e6eb] p-2.5 lg:border-b-0 lg:border-r">
+    <nav aria-label="Lifecycle stages" className="space-y-[12px] border-b border-ds-border p-2.5 lg:border-b-0 lg:border-r">
       {GROUPS.map((group, g) => (
         <div key={group}>
-          <p className="px-2 pb-1 text-[11px] font-bold uppercase tracking-wider text-[#64707e]">{group}</p>
+          <p className="px-2 pb-1 text-[12px] font-[700] uppercase tracking-wider text-ds-fg-muted">{group}</p>
           <ul className="space-y-0.5">
             {STAGES.filter((s) => s.group === g).map((def) => {
               const row = stages.find((s) => s.stage_key === def.key);
@@ -60,16 +60,16 @@ export default function StageRail({ stages, current, selected, openChecks, tier,
                     aria-current={isCurrent ? 'step' : undefined}
                     title={why}
                     className={clsx(
-                      'flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]',
-                      selected === def.key ? 'bg-[#e6f6f3]' : 'hover:bg-[#f3f6f8]',
+                      'flex w-full items-center gap-2.5 rounded-ds-card px-2 py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-primary',
+                      selected === def.key ? 'bg-ds-primary-soft' : 'hover:bg-ds-surface-hover',
                     )}
                   >
                     <Mark state={state} gate={def.gate} />
                     <span className="min-w-0 flex-1">
-                      <span className="block text-[11px] font-semibold leading-3 tabular-nums text-[#64707e]">{String(stageNumber(def.key)).padStart(2, '0')}</span>
-                      <span className={clsx('block truncate text-[13px] leading-4', selected === def.key ? 'font-semibold text-[#0f5f59]' : 'font-medium text-[#26323d]')}>{def.label}</span>
+                      <span className="block text-[12px] font-[600] leading-3 tabular-nums text-ds-fg-muted">{String(stageNumber(def.key)).padStart(2, '0')}</span>
+                      <span className={clsx('block truncate text-[13px] leading-4', selected === def.key ? 'font-[600] text-ds-primary-hover' : 'font-medium text-ds-fg-body')}>{def.label}</span>
                     </span>
-                    {note && <span className="shrink-0 text-[12px] font-semibold" style={{ color: note.tone === 'neutral' ? '#586472' : TONE[note.tone].text }}>{note.text}</span>}
+                    {note && <span className="shrink-0 text-[12px] font-[600]" style={{ color: note.tone === 'neutral' ? '#586472' : TONE[note.tone].text }}>{note.text}</span>}
                   </button>
                 </li>
               );

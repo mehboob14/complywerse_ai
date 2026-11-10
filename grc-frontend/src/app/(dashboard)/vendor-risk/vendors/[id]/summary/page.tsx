@@ -1,17 +1,16 @@
 'use client';
 
-// A supplier on a few printable pages: where it stands, what is open, what it
-// could cost, and its NIST CSF 2.0 profile. The AI can write the summary on top;
-// keeping it freezes the whole report, the AI's paragraphs with it.
-
-import { useState } from 'react';
-import Link from 'next/link';
+// A supplier on a few printable pages: where it stands, what is open, what it could cost, and its NIST CSF 2.0 profile. The AI can write the summary on top; keeping it freezes the whole
+// report, the AI's paragraphs with it. This stays a page of its own (it prints on its own: only the report is visible on paper), without the kit's page head. The AI's text lives in this
+// page until it is kept, so leaving by a link asks first and closing or reloading the tab is warned by the browser.
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Loader2, Printer, Save, Sparkles } from 'lucide-react';
+import { ArrowLeft, Printer, Save, Sparkles } from 'lucide-react';
 import { tpraApi, vendorSummaryApi } from '@/lib/api';
 import ReportView, { type ReportContent } from '@/components/vendor-risk/ReportView';
-import { useToast } from '@/components/ui/ToastProvider';
+import { Button, ErrorState, SkeletonLines, useConfirm, useNotify } from '@/components/ui/ds';
+import { errorMessage } from '@/components/ui/ds/reportOutcome';
 import { usePermissions } from '@/hooks/usePermissions';
 import { errText } from '../../../_lib/intake/types';
 
@@ -25,27 +24,48 @@ export default function SupplierSummaryPage() {
   const { id } = useParams<{ id: string }>();
   const vendorId = Number(id);
   const router = useRouter();
-  const { toast } = useToast();
+  const notify = useNotify();
+  const { confirm, confirmDialog } = useConfirm();
   const { hasPermission } = usePermissions();
   const canWrite = hasPermission('vendor_risk:vendors:edit') || hasPermission('erm:risks:edit');
   const [paragraphs, setParagraphs] = useState<string[] | null>(null);
-  const { data, isLoading, isError } = useQuery<ReportContent>({
+  const { data, isLoading, isError, error, refetch } = useQuery<ReportContent>({
     queryKey: ['tprm-summary', vendorId],
     queryFn: async () => (await vendorSummaryApi.get(vendorId)).data,
   });
   const write = useMutation({
     mutationFn: async () => (await vendorSummaryApi.narrative(vendorId)).data as { paragraphs: string[] },
     onSuccess: (r) => setParagraphs(r.paragraphs),
-    onError: (e) => toast({ type: 'error', title: 'The AI could not write it', message: errText(e, 'Try again.') }),
+    onError: (e) => notify.error(errText(e, 'Try again.'), { title: 'The AI could not write it', retry: () => write.mutate() }),
   });
   const keep = useMutation({
     mutationFn: async () => (await tpraApi.createReport({ kind: 'vendor_summary', vendor_id: vendorId, narrative: paragraphs || undefined })).data as { id: number },
-    onSuccess: (r) => router.push(`/vendor-risk/reports/${r.id}`),
-    onError: (e) => toast({ type: 'error', title: 'Not kept', message: errText(e, 'Try again.') }),
+    onSuccess: (r) => { setParagraphs(null); router.push(`/vendor-risk/reports/${r.id}`); },
+    onError: (e) => notify.error(errText(e, 'Try again.'), { title: 'The report was not kept', retry: () => keep.mutate() }),
   });
 
-  if (isLoading) return <div className="flex items-center gap-2 py-10 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Putting the summary together…</div>;
-  if (isError || !data) return <p className="text-sm text-rose-700">Could not put the summary together.</p>;
+  // the AI's text is not saved anywhere until it is kept: the browser warns before the tab is closed or reloaded
+  useEffect(() => {
+    if (!paragraphs) return undefined;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [paragraphs]);
+
+  const back = async () => {
+    if (paragraphs && !(await confirm({ title: 'Leave without keeping the summary?', message: 'The text the AI wrote is not saved until you keep it as a report.', confirmLabel: 'Leave', cancelLabel: 'Stay', tone: 'danger' }))) return;
+    router.push(`/vendor-risk/vendors/${vendorId}`);
+  };
+
+  if (isLoading) return <div aria-busy="true"><SkeletonLines lines={8} label="Putting the summary together" /></div>;
+  if (isError || !data) {
+    return (
+      <div className="flex flex-col gap-[16px]">
+        <ErrorState title="Couldn’t put the summary together" message={errorMessage(error)} onRetry={() => { void refetch(); }} />
+        <div><Button href={`/vendor-risk/vendors/${vendorId}`}>Back to the supplier</Button></div>
+      </div>
+    );
+  }
   const content: ReportContent = paragraphs ? {
     ...data,
     sections: [{ key: 'narrative', title: 'Summary', note: 'Written by AI from the figures in this report; check it against them.',
@@ -53,33 +73,22 @@ export default function SupplierSummaryPage() {
   } : data;
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-[16px]">
       <style>{PRINT_ONLY}</style>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Link href={`/vendor-risk/vendors/${vendorId}`} className="inline-flex items-center gap-1 text-xs text-primary-700 hover:underline">
-          <ArrowLeft className="h-3.5 w-3.5" /> Back to the supplier
-        </Link>
-        <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-[8px]">
+        <Button variant="ghost" leftIcon={<ArrowLeft aria-hidden />} onClick={() => { void back(); }}>Back to the supplier</Button>
+        <div className="flex flex-wrap gap-[8px]">
           {canWrite && (
-            <button type="button" onClick={() => write.mutate()} disabled={write.isPending}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-violet-700 disabled:opacity-60">
-              {write.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+            <Button variant="primary" leftIcon={<Sparkles aria-hidden />} loading={write.isPending} onClick={() => write.mutate()}>
               {write.isPending ? 'Writing…' : paragraphs ? 'Write it again' : 'Write the summary with AI'}
-            </button>
+            </Button>
           )}
-          {canWrite && (
-            <button type="button" onClick={() => keep.mutate()} disabled={keep.isPending}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60">
-              <Save className="h-3.5 w-3.5" /> Keep as a report
-            </button>
-          )}
-          <button type="button" onClick={() => window.print()}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
-            <Printer className="h-3.5 w-3.5" /> Print or save as PDF
-          </button>
+          {canWrite && <Button leftIcon={<Save aria-hidden />} loading={keep.isPending} onClick={() => keep.mutate()}>Keep as a report</Button>}
+          <Button leftIcon={<Printer aria-hidden />} onClick={() => window.print()}>Print or save as PDF</Button>
         </div>
       </div>
       <div id="tprm-summary"><ReportView content={content} /></div>
+      {confirmDialog}
     </div>
   );
 }

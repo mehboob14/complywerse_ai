@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { usePeople } from '../../../_lib/portfolioApi';
 import { Loader2, Save, Send, CheckCircle2, ClipboardList } from 'lucide-react';
 import { tpraApi, vendorRiskApi } from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -17,8 +18,8 @@ import EvidencePanel from './EvidencePanel';
 import { reviewsApi } from '../../../_lib/reviewsApi';
 
 const inputCls =
-  'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500';
-const labelCls = 'mb-1 block text-xs font-medium text-gray-700';
+  'w-full rounded-ds-card border border-ds-border-strong bg-ds-surface px-3 py-2 text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-primary focus-visible:border-ds-primary';
+const labelCls = 'mb-1 block text-[12px] font-medium text-ds-fg-body';
 
 function errMsg(e: unknown, fallback: string): string {
   return (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || fallback;
@@ -42,15 +43,7 @@ export default function PlanningPanel({
     },
   });
 
-  // The TPRA directory, which anyone working an assessment can read (/admin/users needs admin rights).
-  const { data: users } = useQuery({
-    queryKey: ['tpra-config-directory', 'people'],
-    queryFn: async () => {
-      try {
-        return ((await tpraApi.configDirectory()).data as { people: Array<{ id: number; name: string }> }).people || [];
-      } catch { return []; }
-    },
-  });
+  const users = usePeople();           // everyone who signs in here, from the module's own read
 
   const [templateId, setTemplateId] = useState<number | ''>('');
   const [reviewerId, setReviewerId] = useState<number | ''>('');
@@ -86,12 +79,12 @@ export default function PlanningPanel({
         : `Reviewer ${reviewerSet ? 'assigned' : 'needed'}`;
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-gray-200 bg-white p-4">
-        <p className="mb-3 flex items-center gap-1.5 text-xs font-semibold text-slate-800">
-          <ClipboardList className="h-4 w-4 text-primary-600" /> Assessment plan
+    <div className="space-y-[16px]">
+      <div className="rounded-ds-card border border-ds-border bg-ds-surface p-[16px]">
+        <p className="mb-3 flex items-center gap-1.5 text-[12px] font-[600] text-ds-fg">
+          <ClipboardList className="h-4 w-4 text-ds-primary-text" /> Assessment plan
         </p>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-[12px] sm:grid-cols-3">
           <div>
             <label className={labelCls}>Questionnaire template</label>
             <select className={inputCls} value={templateId} disabled={!canEdit}
@@ -105,7 +98,7 @@ export default function PlanningPanel({
             <select className={inputCls} value={reviewerId} disabled={!canEdit}
               onChange={(e) => setReviewerId(e.target.value ? Number(e.target.value) : '')}>
               <option value="">Unassigned</option>
-              {(users || []).map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+              {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
             </select>
           </div>
           <div>
@@ -115,11 +108,11 @@ export default function PlanningPanel({
           </div>
         </div>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap gap-3 text-[11px]">
-            <span className={`inline-flex items-center gap-1 ${templateSet ? 'text-emerald-600' : 'text-gray-400'}`}>
+          <div className="flex flex-wrap gap-[12px] text-[12px]">
+            <span className={`inline-flex items-center gap-1 ${templateSet ? 'text-ds-success' : 'text-ds-fg-muted'}`}>
               <CheckCircle2 className="h-3 w-3" /> Template {templateSet ? 'selected' : 'needed'}
             </span>
-            <span className={`inline-flex items-center gap-1 ${reviewerSet ? 'text-emerald-600' : 'text-gray-400'}`}
+            <span className={`inline-flex items-center gap-1 ${reviewerSet ? 'text-ds-success' : 'text-ds-fg-muted'}`}
               title={reviewers?.roles.length ? `This tier needs ${reviewers.roles.join(', ')}` : undefined}>
               <CheckCircle2 className="h-3 w-3" /> {reviewerLabel}
             </span>
@@ -127,11 +120,11 @@ export default function PlanningPanel({
           {canEdit && (
             <div className="flex items-center gap-2">
               <Link href={`/vendor-risk/vendors/${vendorId}?tab=assessments${engagementId ? `&engagement=${engagementId}` : ''}`}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                className="inline-flex items-center gap-1.5 rounded-ds-card border border-ds-border-strong bg-ds-surface px-3 py-1.5 text-[12px] font-medium text-ds-fg-body hover:bg-ds-surface-subtle">
                 <Send className="h-3.5 w-3.5" /> Send questionnaires
               </Link>
               <button onClick={() => savePlan.mutate()} disabled={savePlan.isPending}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-700 disabled:opacity-50">
+                className="inline-flex items-center gap-1.5 rounded-ds-card bg-ds-primary px-3 py-1.5 text-[12px] font-medium text-ds-on-primary hover:bg-ds-primary-hover disabled:opacity-50">
                 {savePlan.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Save plan
               </button>
             </div>
@@ -141,7 +134,7 @@ export default function PlanningPanel({
 
       {/* Evidence request list — SOC 2 / ISO / pen-test / DPA */}
       <div>
-        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Evidence requests</p>
+        <p className="mb-1.5 text-[12px] font-[600] uppercase tracking-wide text-ds-fg-muted">Evidence requests</p>
         <EvidencePanel assessmentId={assessmentId} title="Evidence pack" />
       </div>
     </div>

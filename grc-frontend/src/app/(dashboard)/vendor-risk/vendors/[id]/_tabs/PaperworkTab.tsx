@@ -11,7 +11,7 @@ import type { TabProps } from './tabProps';
 
 export default function PaperworkTab({ vendorId }: TabProps) {
   return (
-    <div className="space-y-5">
+    <div className="space-y-[20px]">
       <PaperworkPanel vendorId={vendorId} sections={['documents']} />
       <PaperworkPanel vendorId={vendorId} sections={['soc']} />
       <ContractsPanel vendorId={vendorId} framed />

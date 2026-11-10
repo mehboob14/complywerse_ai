@@ -7,7 +7,9 @@
 // link. Internal evidence attachment stays as a fallback for offline vendors.
 
 import { useState } from 'react';
+import { ErrorState } from '@/components/ui/ds';
 import { useQuery } from '@tanstack/react-query';
+import { formatDate } from '@/lib/format';
 import Link from 'next/link';
 import {
   ClipboardList, Copy, ExternalLink, Clock, CheckCircle2, Loader2, ChevronDown, ChevronRight,
@@ -29,8 +31,8 @@ interface QResponse {
 }
 
 const STATUS_STYLE: Record<string, string> = {
-  pending: 'bg-gray-100 text-gray-600', in_progress: 'bg-amber-100 text-amber-700',
-  submitted: 'bg-emerald-100 text-emerald-700', expired: 'bg-red-100 text-red-700',
+  pending: 'bg-ds-surface-hover text-ds-fg-body', in_progress: 'bg-ds-warning-soft text-ds-warning',
+  submitted: 'bg-ds-success-soft text-ds-success', expired: 'bg-ds-danger-soft text-ds-danger',
 };
 
 function formatAnswer(a: unknown): string {
@@ -42,10 +44,7 @@ function formatAnswer(a: unknown): string {
   }
   return JSON.stringify(a);
 }
-function fmtDate(d?: string | null): string {
-  if (!d) return '—';
-  try { return new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); } catch { return '—'; }
-}
+const fmtDate = (d?: string | null): string => formatDate(d);
 function isExpired(r: QResponse): boolean {
   return r.status !== 'submitted' && !!r.expires_at && new Date(r.expires_at) < new Date();
 }
@@ -57,7 +56,7 @@ export default function QuestionnaireReviewPanel({ vendorId, assessmentId }: { v
   const [open, setOpen] = useState<number | null>(null);
   const [only, setOnly] = useState<Record<number, string[] | null>>({});     // a reviewer's own sections
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['tpra-questionnaire-responses', assessmentId],
     queryFn: async () => (await vendorRiskApi.getQuestionnaireResponses({ vendor_id: vendorId, assessment_id: assessmentId })).data as QResponse[],
   });
@@ -79,29 +78,31 @@ export default function QuestionnaireReviewPanel({ vendorId, assessmentId }: { v
   const anySubmitted = responses.some((r) => r.status === 'submitted');
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-[16px]">
       {/* Framing + who's turn */}
-      <div className="flex items-start justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
-        <div className="flex items-start gap-2 text-xs text-gray-600">
-          <ClipboardList className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary-600" />
+      <div className="flex items-start justify-between gap-2 rounded-ds-card border border-ds-border bg-ds-surface-subtle p-3">
+        <div className="flex items-start gap-2 text-[12px] text-ds-fg-body">
+          <ClipboardList className="mt-0.5 h-4 w-4 flex-shrink-0 text-ds-primary-text" />
           <p>The <span className="font-medium">vendor</span> completes the questionnaire and uploads evidence via the link you send. Track status and <span className="font-medium">review their answers</span> here — you don&apos;t fill it in.</p>
         </div>
         {responses.length > 0 && (
           anySubmitted && !anyWaiting ? (
-            <span className="inline-flex flex-shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700"><CheckCircle2 className="h-3 w-3" /> Ready to review</span>
+            <span className="inline-flex flex-shrink-0 items-center gap-1 rounded-full bg-ds-success-soft px-2 py-0.5 text-[12px] font-medium text-ds-success"><CheckCircle2 className="h-3 w-3" /> Ready to review</span>
           ) : anyWaiting ? (
-            <span className="inline-flex flex-shrink-0 items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700"><Clock className="h-3 w-3" /> Waiting on vendor</span>
+            <span className="inline-flex flex-shrink-0 items-center gap-1 rounded-full bg-ds-warning-soft px-2 py-0.5 text-[12px] font-medium text-ds-warning"><Clock className="h-3 w-3" /> Waiting on vendor</span>
           ) : null
         )}
       </div>
 
       {isLoading ? (
-        <div className="flex items-center gap-2 py-6 text-sm text-gray-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
+        <div className="flex items-center gap-2 py-[24px] text-[13px] text-ds-fg-muted"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
+      ) : isError ? (
+        <ErrorState compact title="Couldn’t load the questionnaires" onRetry={() => { void refetch(); }} />
       ) : responses.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center">
-          <Send className="mx-auto mb-2 h-6 w-6 text-gray-400" />
-          <p className="text-sm font-medium text-gray-700">No questionnaire issued yet</p>
-          <p className="text-xs text-gray-500">Issue one from <span className="font-medium">Due Diligence Planning</span> (send questionnaire), then the vendor&apos;s responses appear here.</p>
+        <div className="rounded-ds-card border border-dashed border-ds-border-strong bg-ds-surface-subtle p-[24px] text-center">
+          <Send className="mx-auto mb-2 h-6 w-6 text-ds-fg-muted" />
+          <p className="text-[13px] font-medium text-ds-fg-body">No questionnaire issued yet</p>
+          <p className="text-[12px] text-ds-fg-muted">Issue one from <span className="font-medium">Due Diligence Planning</span> (send questionnaire), then the vendor&apos;s responses appear here.</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -111,17 +112,17 @@ export default function QuestionnaireReviewPanel({ vendorId, assessmentId }: { v
             const answered = Object.values(r.responses || {}).filter((v) => v !== null && v !== undefined && v !== '').length;
             const entries = Object.entries(r.responses || {}).filter(([qid]) => !only[r.id] || only[r.id]!.includes(qid));
             return (
-              <div key={r.id} className="rounded-xl border border-gray-200 bg-white">
-                <div className="flex items-start gap-3 p-3">
-                  <button onClick={() => setOpen(open === r.id ? null : r.id)} className="mt-0.5 text-gray-400 hover:text-gray-600">
+              <div key={r.id} className="rounded-ds-card border border-ds-border bg-ds-surface">
+                <div className="flex items-start gap-[12px] p-3">
+                  <button onClick={() => setOpen(open === r.id ? null : r.id)} className="mt-0.5 text-ds-fg-muted hover:text-ds-fg-body">
                     {open === r.id ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                   </button>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${STATUS_STYLE[status] || 'bg-gray-100 text-gray-600'}`}>{status.replace('_', ' ')}</span>
-                      <span className="text-sm font-medium text-slate-900">{answered} answer{answered === 1 ? '' : 's'}</span>
+                      <span className={`rounded-full px-1.5 py-0.5 text-[12px] font-medium ${STATUS_STYLE[status] || 'bg-ds-surface-hover text-ds-fg-body'}`}>{status.replace('_', ' ')}</span>
+                      <span className="text-[13px] font-medium text-ds-fg">{answered} answer{answered === 1 ? '' : 's'}</span>
                     </div>
-                    <p className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
+                    <p className="mt-0.5 flex flex-wrap items-center gap-2 text-[12px] text-ds-fg-muted">
                       <span className="inline-flex items-center gap-1"><User className="h-3 w-3" /> {r.respondent_name || r.respondent_email || 'Vendor contact'}</span>
                       <span>· sent {fmtDate(r.created_at)}</span>
                       {r.submitted_at && <span>· submitted {fmtDate(r.submitted_at)}</span>}
@@ -129,37 +130,37 @@ export default function QuestionnaireReviewPanel({ vendorId, assessmentId }: { v
                   </div>
                   <div className="flex flex-shrink-0 items-center gap-1">
                     {(r.token || (r.contact_id && ['pending', 'in_progress', 'returned'].includes(r.status))) && (
-                      <button onClick={() => copyLink(r)} title="Copy vendor link" className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"><Copy className="h-3.5 w-3.5" /></button>
+                      <button onClick={() => copyLink(r)} title="Copy vendor link" className="rounded-ds-card p-1.5 text-ds-fg-muted hover:bg-ds-surface-hover hover:text-ds-fg-body"><Copy className="h-3.5 w-3.5" /></button>
                     )}
                     {r.token && (
-                      <a href={portalLink(r.token)} target="_blank" rel="noreferrer" title="Open portal" className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"><ExternalLink className="h-3.5 w-3.5" /></a>
+                      <a href={portalLink(r.token)} target="_blank" rel="noreferrer" title="Open portal" className="rounded-ds-card p-1.5 text-ds-fg-muted hover:bg-ds-surface-hover hover:text-ds-fg-body"><ExternalLink className="h-3.5 w-3.5" /></a>
                     )}
                   </div>
                 </div>
 
                 {open === r.id && (
-                  <div className="border-t border-gray-100 p-3">
+                  <div className="border-t border-ds-border p-3">
                     <div className="mb-3">
                       <ReviewersStrip qr={r} canEdit={canReview} filtered={!!only[r.id]}
                         onFilter={(keys) => setOnly((prev) => ({ ...prev, [r.id]: keys }))} />
                     </div>
                     {r.status !== 'submitted' && (
-                      <p className="mb-2 inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700"><AlertCircle className="h-3 w-3" /> Not yet submitted — answers may be incomplete.</p>
+                      <p className="mb-2 inline-flex items-center gap-1 rounded-ds-control bg-ds-warning-soft px-2 py-0.5 text-[12px] text-ds-warning"><AlertCircle className="h-3 w-3" /> Not yet submitted — answers may be incomplete.</p>
                     )}
                     {entries.length === 0 ? (
-                      <p className="text-xs text-gray-400">No answers submitted yet.</p>
+                      <p className="text-[12px] text-ds-fg-muted">No answers submitted yet.</p>
                     ) : (
                       <div className="space-y-1.5">
                         {entries.map(([qid, ans]) => (
-                          <div key={qid} className="rounded-lg border border-gray-100 bg-gray-50/60 px-2.5 py-1.5">
-                            <p className="font-mono text-[10px] text-gray-400">{qid}</p>
-                            <p className="text-xs text-slate-700">{formatAnswer(ans)}</p>
+                          <div key={qid} className="rounded-ds-card border border-ds-border bg-ds-surface-subtle px-2.5 py-1.5">
+                            <p className="font-mono text-[12px] text-ds-fg-muted">{qid}</p>
+                            <p className="text-[12px] text-ds-fg-body">{formatAnswer(ans)}</p>
                           </div>
                         ))}
                       </div>
                     )}
                     <Link href={`/vendor-risk/assessments/${assessmentId}?tab=questionnaire`}
-                      className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-primary-600 hover:underline">
+                      className="mt-2 inline-flex items-center gap-1 text-[12px] font-medium text-ds-primary-text hover:underline">
                       Full review &amp; vendor evidence <ExternalLink className="h-3 w-3" />
                     </Link>
                   </div>
@@ -172,7 +173,7 @@ export default function QuestionnaireReviewPanel({ vendorId, assessmentId }: { v
 
       {/* Fallback: analyst-attached evidence for offline vendors */}
       <div>
-        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Analyst-attached evidence <span className="font-normal normal-case text-gray-400">(fallback for offline vendors)</span></p>
+        <p className="mb-1.5 text-[12px] font-[600] uppercase tracking-wide text-ds-fg-muted">Analyst-attached evidence <span className="font-normal normal-case text-ds-fg-muted">(fallback for offline vendors)</span></p>
         <EvidencePanel assessmentId={assessmentId} title="Evidence pack" />
       </div>
     </div>

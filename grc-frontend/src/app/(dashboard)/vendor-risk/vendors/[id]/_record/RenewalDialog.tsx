@@ -6,9 +6,10 @@
 import { useEffect, useId, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
-import { inDays } from '@/app/(dashboard)/governance/regulatory-changes/_ui';
+import { inDays } from '../../../_lib/recordShellModel';
 import { useToast } from '@/components/ui/ToastProvider';
-import { BTN, BTN_PRIMARY, Dialog } from '../../../_ui';
+import { BTN, BTN_PRIMARY } from './btn';
+import { Dialog } from './recordUi';
 import type { PaperDoc } from '../../../_lib/paperworkApi';
 import { requestsApi, sentNote } from '../../../_lib/requestsApi';
 import { errText } from '../../../_lib/intake/types';
@@ -63,7 +64,7 @@ export default function RenewalDialog({ vendorId, doc, onClose }: { vendorId: nu
         </>
       )}
     >
-      <form id={form} className="space-y-3.5" onSubmit={(e) => { e.preventDefault(); if (ready && !send.isPending) send.mutate(); }}>
+      <form id={form} className="space-y-[14px]" onSubmit={(e) => { e.preventDefault(); if (ready && !send.isPending) send.mutate(); }}>
         <div>
           <label htmlFor={`${form}-title`} className={LABEL}>Title</label>
           <input id={`${form}-title`} data-autofocus required maxLength={255} className={FIELD} value={title} onChange={(e) => setTitle(e.target.value)} />
@@ -72,7 +73,7 @@ export default function RenewalDialog({ vendorId, doc, onClose }: { vendorId: nu
           <label htmlFor={`${form}-detail`} className={LABEL}>Note <span className={HINT}>(the vendor reads this)</span></label>
           <textarea id={`${form}-detail`} rows={3} maxLength={8000} className={AREA} value={detail} onChange={(e) => setDetail(e.target.value)} />
         </div>
-        <div className="grid gap-3.5 sm:grid-cols-2">
+        <div className="grid gap-[14px] sm:grid-cols-2">
           <div>
             <label htmlFor={`${form}-due`} className={LABEL}>Due</label>
             <input id={`${form}-due`} type="date" min={inDays(0)} className={FIELD} value={due} onChange={(e) => setDue(e.target.value)} />

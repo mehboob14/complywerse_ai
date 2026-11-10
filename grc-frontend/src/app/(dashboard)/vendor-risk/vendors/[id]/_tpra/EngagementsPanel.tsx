@@ -11,7 +11,11 @@ import { ArrowRight, Loader2, Pencil, Plus, XCircle } from 'lucide-react';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
-import { BTN, BTN_PRIMARY, Dialog, EmptyState, ErrorState, Panel, Skeleton, StatusPill, TierBadge, fmt } from '../../../_ui';
+import { BTN, BTN_PRIMARY } from '../_record/btn';
+import { Dialog, EmptyState, StatusPill, TierBadge } from '../_record/recordUi';
+import RecordPanel from '../_record/RecordPanel';
+import { ErrorState, Skeleton } from '@/components/ui/ds';
+import { fmt } from '../../../_ui/fmt';
 import { errText, usePeople } from '../../../_lib/actions/shared';
 import {
   engagementsApi, engagementsKey, useEngagements, type Engagement, type EngagementInput, type EngagementList,
@@ -22,8 +26,8 @@ import { AREA, FIELD, HINT, LABEL } from '../../_components/formStyles';
 import { STAGE_META } from './constants';
 
 const CRITICALITY = ['low', 'medium', 'high', 'critical'];
-const DANGER_FILL = 'inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-[#b42318] px-3 text-sm font-medium text-[#fff] hover:bg-[#912018] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]';
-const ICON_BTN = 'grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[#586472] hover:bg-[#f3f6f8] hover:text-[#1f2933] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]';
+const DANGER_FILL = 'inline-flex h-9 shrink-0 items-center gap-1.5 rounded-ds-card bg-ds-danger px-3 text-[13px] font-medium text-ds-on-primary hover:bg-ds-danger-hover disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-primary';
+const ICON_BTN = 'grid h-[32px] w-[32px] shrink-0 place-items-center rounded-ds-card text-ds-fg-muted hover:bg-ds-surface-hover hover:text-ds-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-primary';
 
 function useCanEdit() {
   const { hasPermission } = usePermissions();
@@ -50,7 +54,7 @@ export default function EngagementsPanel({ vendorId, onOpenLifecycle, onTier }: 
 
   return (
     <>
-      <Panel
+      <RecordPanel
         title="Engagements"
         count={data?.items.filter((e) => e.status !== 'ended').length}
         info="Each use of this vendor by one part of the business, tiered and assessed on its own. The vendor shows the worst open one. General is the vendor itself."
@@ -65,7 +69,7 @@ export default function EngagementsPanel({ vendorId, onOpenLifecycle, onTier }: 
         ) : data.items.length === 0 ? (
           <EmptyState bare title="No engagements yet" hint="Each one is tiered and assessed on its own." />
         ) : (
-          <ul className="divide-y divide-[#e1e6eb]">
+          <ul className="divide-y divide-ds-border">
             {data.items.map((e) => (
               <Row key={e.id ?? 'general'} e={e} list={data} canEdit={canEdit} canTier={canTier}
                 onOpen={onOpenLifecycle ? () => onOpenLifecycle(e.is_general ? null : e.id) : undefined}
@@ -74,7 +78,7 @@ export default function EngagementsPanel({ vendorId, onOpenLifecycle, onTier }: 
             ))}
           </ul>
         )}
-      </Panel>
+      </RecordPanel>
 
       {editing && data && (
         <EngagementForm vendorId={vendorId} engagement={editing === 'new' ? null : editing} list={data} onClose={() => setEditing(null)} />
@@ -98,13 +102,13 @@ function Row({ e, list, canEdit, canTier, onOpen, onTier, onEdit, onEnd }: {
   ].filter(Boolean).join(' · ');
   return (
     <li className={clsx('flex flex-wrap items-start justify-between gap-x-4 gap-y-2 py-3 first:pt-0 last:pb-0', ended && 'opacity-60')}>
-      <div className="min-w-0 flex-1">
-        <p className="text-[14px] font-semibold leading-5 text-[#1f2933]">{e.name}</p>
-        {e.description && <p className="line-clamp-1 text-[13px] leading-5 text-[#586472]">{e.description}</p>}
-        <p className="text-[12px] leading-4 text-[#64707e]">{facts}</p>
-        {standing && <p className="mt-0.5 text-[12px] leading-4 text-[#64707e]">{standing}</p>}
+      <div className="min-w-0 flex-1 basis-[14rem]">
+        <p className="text-[14px] font-[600] leading-5 text-ds-fg">{e.name}</p>
+        {e.description && <p className="line-clamp-1 text-[13px] leading-5 text-ds-fg-muted">{e.description}</p>}
+        <p className="text-[12px] leading-4 text-ds-fg-muted">{facts}</p>
+        {standing && <p className="mt-0.5 text-[12px] leading-4 text-ds-fg-muted">{standing}</p>}
       </div>
-      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+      <div className="flex max-w-full flex-wrap items-center justify-end gap-2">
         <TierBadge tier={tiered ? e.tier : null} variant="dot" />
         {ended ? (
           <span className="inline-flex items-center gap-0.5">
@@ -208,7 +212,7 @@ export function EngagementForm({ vendorId, engagement, list, onClose }: {
         </>
       )}
     >
-      <form id={form} onSubmit={(e) => { e.preventDefault(); if (ready && !save.isPending) save.mutate(); }} className="space-y-3.5">
+      <form id={form} onSubmit={(e) => { e.preventDefault(); if (ready && !save.isPending) save.mutate(); }} className="space-y-[14px]">
         <div>
           <label htmlFor={`${form}-name`} className={LABEL}>Name</label>
           <input id={`${form}-name`} data-autofocus required maxLength={255} className={FIELD} value={f.name} onChange={set('name')} placeholder="Payroll for HR" />
@@ -217,7 +221,7 @@ export function EngagementForm({ vendorId, engagement, list, onClose }: {
           <label htmlFor={`${form}-desc`} className={LABEL}>What this engagement covers <span className={HINT}>(optional)</span></label>
           <textarea id={`${form}-desc`} rows={2} className={AREA} value={f.description} onChange={set('description')} />
         </div>
-        <div className="grid gap-3.5 sm:grid-cols-2">
+        <div className="grid gap-[14px] sm:grid-cols-2">
           <div>
             <label htmlFor={`${form}-owner`} className={LABEL}>Business owner</label>
             <select id={`${form}-owner`} className={FIELD} value={f.owner_id} onChange={set('owner_id')}>
@@ -324,21 +328,21 @@ export function EngagementFacts({ vendorId, engagement }: { vendorId: number; en
     ['What we buy', type], ['Criticality', titleCase(engagement.criticality)],
   ];
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4">
+    <div className="rounded-ds-card border border-ds-border bg-ds-surface p-[16px]">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold text-slate-800">{engagement.name}</p>
+        <p className="text-[12px] font-[600] text-ds-fg">{engagement.name}</p>
         {canEdit && engagement.status !== 'ended' && (
           <button type="button" onClick={() => setEditing(true)}
-            className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50">
+            className="inline-flex items-center gap-1 rounded-ds-card border border-ds-border-strong bg-ds-surface px-2.5 py-1 text-[12px] font-medium text-ds-fg-body hover:bg-ds-surface-subtle">
             <Pencil className="h-3 w-3" /> Edit
           </button>
         )}
       </div>
-      <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <dl className="mt-3 grid grid-cols-2 gap-[12px] sm:grid-cols-4">
         {facts.map(([label, value]) => (
           <div key={label}>
-            <dt className="text-[11px] text-slate-500">{label}</dt>
-            <dd className="text-[13px] font-medium text-slate-800">{value || '—'}</dd>
+            <dt className="text-[12px] text-ds-fg-muted">{label}</dt>
+            <dd className="text-[13px] font-medium text-ds-fg">{value || '—'}</dd>
           </div>
         ))}
       </dl>

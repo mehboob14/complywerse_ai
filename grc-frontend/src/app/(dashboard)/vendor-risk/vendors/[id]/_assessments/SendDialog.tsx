@@ -6,8 +6,11 @@
 import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Check, Copy, Info } from 'lucide-react';
-import { BTN, BTN_PRIMARY, Dialog, fmt, tierLabel } from '@/app/(dashboard)/vendor-risk/_ui';
-import { inDays } from '@/app/(dashboard)/governance/regulatory-changes/_ui';
+import { BTN, BTN_PRIMARY } from '../_record/btn';
+import { Dialog } from '../_record/recordUi';
+import { fmt } from '../../../_ui/fmt';
+import { tierLabel } from '../../../_ui/tiers';
+import { inDays } from '../../../_lib/recordShellModel';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { useToast } from '@/components/ui/ToastProvider';
 import { apiErrorText } from '@/lib/apiError';
@@ -16,8 +19,8 @@ import { assessmentsApi, type AssessmentCard, type CardsScope, type SentLink } f
 import { dueInDays, linkDays, reachable, resendTarget, sendHint, WAITING } from '../../../_lib/assessmentsLogic';
 import { absoluteLink, type SupplierContact } from '../../../_lib/portalApi';
 
-const FIELD = 'h-9 w-full rounded-lg border border-[#c3ccd5] bg-[#fff] px-2.5 text-sm text-[#1f2933] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e] disabled:bg-[#f3f6f8] disabled:text-[#64707e]';
-const LABEL = 'mb-1 flex items-center gap-1 text-[13px] font-medium text-[#26323d]';
+const FIELD = 'h-9 w-full rounded-ds-card border border-ds-border-strong bg-ds-surface px-2.5 text-[13px] text-ds-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-primary disabled:bg-ds-surface-hover disabled:text-ds-fg-muted';
+const LABEL = 'mb-1 flex items-center gap-1 text-[13px] font-medium text-ds-fg-body';
 
 interface Template { id: number; name: string; question_count: number; archived_at?: string | null; archived?: boolean }
 interface Certificate { id: number; name: string; expiry_date: string; read: boolean }
@@ -111,11 +114,11 @@ export function SendDialog({ onClose, vendorId, scope, cards, contacts, onSent }
         </>
       )}
     >
-      <form id="send-questionnaire" className="space-y-3.5" onSubmit={(e) => { e.preventDefault(); if (ready) submit.mutate(); }}>
+      <form id="send-questionnaire" className="space-y-[14px]" onSubmit={(e) => { e.preventDefault(); if (ready) submit.mutate(); }}>
         <div>
           <label htmlFor="send-template" className={LABEL}>Questionnaire</label>
           <select id="send-template" className={FIELD} value={templateId ?? ''} onChange={(e) => setPicked(Number(e.target.value))}>
-            {list.length === 0 && <option value="">{templates.isLoading ? 'Loading…' : 'No questionnaires yet'}</option>}
+            {list.length === 0 && <option value="">{templates.isLoading ? 'Loading…' : templates.isError ? 'Couldn’t load the questionnaires' : 'No questionnaires yet'}</option>}
             {list.map((t) => (
               <option key={t.id} value={t.id} disabled={t.question_count === 0}>{t.name} · {t.question_count} questions</option>
             ))}
@@ -149,15 +152,15 @@ export function SendDialog({ onClose, vendorId, scope, cards, contacts, onSent }
 
         <div>
           <label htmlFor="send-due" className={LABEL}>
-            Due date <span className="font-normal text-[#64707e]">(optional)</span>
+            Due date <span className="font-normal text-ds-fg-muted">(optional)</span>
             <InfoTip text="Shown to the vendor. It does not close the link." label="About the due date" />
           </label>
           <input id="send-due" type="date" className={FIELD} min={inDays(0)} value={due} onChange={(e) => setDue(e.target.value)} />
         </div>
 
         {!resend && certs.length > 0 && (
-          <details className="rounded-lg border border-[#d5dbe1] px-3 py-2">
-            <summary className="cursor-pointer text-[13px] font-medium text-[#26323d]">Answer from a certificate</summary>
+          <details className="rounded-ds-card border border-ds-border px-3 py-2">
+            <summary className="cursor-pointer text-[13px] font-medium text-ds-fg-body">Answer from a certificate</summary>
             <div className="mt-2.5 space-y-2.5">
               <div>
                 <label htmlFor="send-cert" className={LABEL}>
@@ -209,14 +212,14 @@ export function LinkDialog({ sent, onClose }: { sent: SentLink; onClose: () => v
         : 'The email did not go out. Copy the link and send it yourself. It works for 30 days.'}
       footer={<button type="button" className={BTN_PRIMARY} onClick={onClose}>Done</button>}
     >
-      <div className="rounded-lg border border-[#d5dbe1] bg-[#f7f9fa] p-3">
-        <p className="break-all font-mono text-[13px] leading-5 text-[#1f2933]">{sent.link}</p>
+      <div className="rounded-ds-card border border-ds-border bg-ds-surface-subtle p-3">
+        <p className="break-all font-mono text-[13px] leading-5 text-ds-fg">{sent.link}</p>
       </div>
       <button type="button" className={`${BTN} mt-3`} onClick={copy}>
         {copied ? <Check aria-hidden className="h-4 w-4" /> : <Copy aria-hidden className="h-4 w-4" />}
         {copied ? 'Copied' : 'Copy link'}
       </button>
-      <p className="mt-3 flex items-start gap-1.5 text-[13px] leading-5 text-[#586472]">
+      <p className="mt-3 flex items-start gap-1.5 text-[13px] leading-5 text-ds-fg-muted">
         <Info aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
         Anyone with the link can answer, so share it only with this contact. You can revoke it under Contacts and links.
       </p>

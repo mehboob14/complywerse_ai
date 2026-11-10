@@ -64,23 +64,23 @@ export default function StageChecklist({
   const pct = items.length ? Math.round((doneCount / items.length) * 100) : 0;
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4">
+    <div className="rounded-ds-card border border-ds-border bg-ds-surface p-[16px]">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
-          <ListChecks className="h-4 w-4 text-primary-600" /> Stage checklist
-          <span className="font-normal text-gray-400">{doneCount}/{items.length} done</span>
+        <p className="flex items-center gap-1.5 text-[12px] font-[600] text-ds-fg">
+          <ListChecks className="h-4 w-4 text-ds-primary-text" /> Stage checklist
+          <span className="font-normal text-ds-fg-muted">{doneCount}/{items.length} done</span>
         </p>
-        {save.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400" />}
+        {save.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-ds-fg-muted" />}
       </div>
 
       {/* progress bar */}
-      <div className="mb-3 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
-        <div className={`h-full rounded-full transition-all ${pct === 100 ? 'bg-emerald-500' : 'bg-primary-500'}`} style={{ width: `${pct}%` }} />
+      <div className="mb-3 h-1.5 w-full overflow-hidden rounded-full bg-ds-surface-hover">
+        <div className={`h-full rounded-full transition-all ${pct === 100 ? 'bg-ds-success' : 'bg-ds-primary'}`} style={{ width: `${pct}%` }} />
       </div>
 
       <div className="space-y-1">
         {items.map((it, i) => (
-          <div key={i} className="rounded-lg border border-gray-100 bg-gray-50/60 px-2.5 py-1.5">
+          <div key={i} className="rounded-ds-card border border-ds-border bg-ds-surface-subtle px-2.5 py-1.5">
             <div className="flex items-start gap-2">
               <button
                 type="button"
@@ -90,17 +90,17 @@ export default function StageChecklist({
                 className={`mt-0.5 flex-shrink-0 ${canEdit ? 'hover:opacity-80' : 'cursor-default'}`}
               >
                 {it.done
-                  ? <CheckSquare className="h-4 w-4 text-emerald-600" />
-                  : <Square className="h-4 w-4 text-gray-400" />}
+                  ? <CheckSquare className="h-4 w-4 text-ds-success" />
+                  : <Square className="h-4 w-4 text-ds-fg-muted" />}
               </button>
-              <span className={`flex-1 text-xs ${it.done ? 'text-gray-400 line-through' : 'text-slate-700'}`}>{it.text}</span>
+              <span className={`flex-1 text-[12px] ${it.done ? 'text-ds-fg-muted line-through' : 'text-ds-fg-body'}`}>{it.text}</span>
               {canEdit && (
                 <div className="flex flex-shrink-0 items-center gap-1">
                   <button type="button" onClick={() => setNoteOpen(noteOpen === i ? null : i)}
-                    aria-label="Add note" className="text-gray-300 hover:text-primary-600">
+                    aria-label="Add note" className="text-ds-surface hover:text-ds-primary-text">
                     <MessageSquarePlus className="h-3.5 w-3.5" />
                   </button>
-                  <button type="button" onClick={() => remove(i)} aria-label="Remove item" className="text-gray-300 hover:text-red-500">
+                  <button type="button" onClick={() => remove(i)} aria-label="Remove item" className="text-ds-surface hover:text-ds-danger">
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </div>
@@ -114,10 +114,10 @@ export default function StageChecklist({
                     onChange={(e) => setNote(i, e.target.value)}
                     onBlur={() => commit(items)}
                     placeholder="Add a note…"
-                    className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-[11px] text-slate-600 focus:outline-none focus:ring-1 focus:ring-primary-400"
+                    className="w-full rounded border border-ds-border bg-ds-surface px-2 py-1 text-[12px] text-ds-fg-body focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ds-primary"
                   />
                 ) : it.note ? (
-                  <p className="text-[11px] text-gray-500">{it.note}</p>
+                  <p className="text-[12px] text-ds-fg-muted">{it.note}</p>
                 ) : null}
               </div>
             )}
@@ -132,10 +132,10 @@ export default function StageChecklist({
             onChange={(e) => setNewText(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
             placeholder="Add a task…"
-            className="flex-1 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            className="flex-1 rounded-ds-card border border-ds-border-strong bg-ds-surface px-2.5 py-1.5 text-[12px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-primary focus-visible:border-ds-primary"
           />
           <button type="button" onClick={add} disabled={!newText.trim()}
-            className="inline-flex items-center gap-1 rounded-lg bg-primary-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-primary-700 disabled:opacity-40">
+            className="inline-flex items-center gap-1 rounded-ds-card bg-ds-primary px-2.5 py-1.5 text-[12px] font-medium text-ds-on-primary hover:bg-ds-primary-hover disabled:opacity-40">
             <Plus className="h-3.5 w-3.5" /> Add
           </button>
         </div>

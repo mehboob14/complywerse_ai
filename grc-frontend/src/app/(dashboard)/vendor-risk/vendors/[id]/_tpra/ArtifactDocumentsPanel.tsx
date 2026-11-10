@@ -7,6 +7,7 @@
 // straight into the assessment's evidence — all with existing endpoints.
 
 import { useState } from 'react';
+import { ErrorState } from '@/components/ui/ds';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   FileText, Plus, Eye, Pencil, Download, Trash2, Paperclip, Loader2, ChevronDown,
@@ -24,15 +25,15 @@ interface TenantArtifact {
 }
 
 const inputCls =
-  'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500';
-const labelCls = 'mb-1 block text-xs font-medium text-gray-700';
+  'w-full rounded-ds-card border border-ds-border-strong bg-ds-surface px-3 py-2 text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-primary focus-visible:border-ds-primary';
+const labelCls = 'mb-1 block text-[12px] font-medium text-ds-fg-body';
 // The shipped types; the organisation's own list comes from Settings (module "vendors", list "document_type").
 const TYPES = ['Document', 'Policy', 'Procedure', 'Form', 'Register', 'Agreement', 'Report', 'Plan', 'Attestation'];
 const STATUSES = ['draft', 'in_review', 'approved', 'archived'];
 const DOC_FORMATS = ['docx', 'pdf', 'md'];
 const STATUS_STYLE: Record<string, string> = {
-  draft: 'bg-gray-100 text-gray-600', in_review: 'bg-amber-100 text-amber-700',
-  approved: 'bg-emerald-100 text-emerald-700', archived: 'bg-slate-100 text-slate-500',
+  draft: 'bg-ds-surface-hover text-ds-fg-body', in_review: 'bg-ds-warning-soft text-ds-warning',
+  approved: 'bg-ds-success-soft text-ds-success', archived: 'bg-ds-surface-hover text-ds-fg-muted',
 };
 
 function errMsg(e: unknown, fallback: string): string {
@@ -54,7 +55,7 @@ export default function ArtifactDocumentsPanel({
   const canEdit = hasPermission('vendor_risk:assessments:edit') || hasPermission('erm:risks:edit');
   const fk = `tpra-vendor-${vendorId}`;
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['tpra-artifacts', vendorId],
     queryFn: async () => (await artifactsApi.list({ framework_key: fk })).data as TenantArtifact[],
   });
@@ -103,15 +104,15 @@ export default function ArtifactDocumentsPanel({
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-[12px]">
       {/* Create from the stage's expected artifact templates */}
       {canEdit && toCreate.length > 0 && (
-        <div className="rounded-lg bg-gray-50 p-2.5">
-          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Create from template</p>
+        <div className="rounded-ds-card bg-ds-surface-subtle p-2.5">
+          <p className="mb-1.5 text-[12px] font-[600] uppercase tracking-wide text-ds-fg-muted">Create from template</p>
           <div className="flex flex-wrap gap-1.5">
             {toCreate.map((n) => (
               <button key={n} onClick={() => { setSeed(n); setEditing('new'); }}
-                className="inline-flex items-center gap-1 rounded-md border border-primary-200 bg-white px-2 py-1 text-[11px] font-medium text-primary-700 hover:bg-primary-50">
+                className="inline-flex items-center gap-1 rounded-ds-control border border-ds-border-strong bg-ds-surface px-2 py-1 text-[12px] font-medium text-ds-primary-text hover:bg-ds-primary-soft">
                 <Plus className="h-3 w-3" /> {n}
               </button>
             ))}
@@ -120,67 +121,69 @@ export default function ArtifactDocumentsPanel({
       )}
 
       <div className="flex items-center justify-between">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Documents ({stageArtifacts.length})</p>
+        <p className="text-[12px] font-[600] uppercase tracking-wide text-ds-fg-muted">Documents ({stageArtifacts.length})</p>
         {canEdit && (
           <button onClick={() => { setSeed(''); setEditing('new'); }}
-            className="inline-flex items-center gap-1 rounded-lg bg-primary-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-primary-700">
+            className="inline-flex items-center gap-1 rounded-ds-card bg-ds-primary px-2.5 py-1.5 text-[12px] font-medium text-ds-on-primary hover:bg-ds-primary-hover">
             <Plus className="h-3.5 w-3.5" /> New document
           </button>
         )}
       </div>
 
       {isLoading ? (
-        <div className="flex items-center gap-2 py-6 text-sm text-gray-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
+        <div className="flex items-center gap-2 py-[24px] text-[13px] text-ds-fg-muted"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
+      ) : isError ? (
+        <ErrorState compact title="Couldn’t load the documents" onRetry={() => { void refetch(); }} />
       ) : stageArtifacts.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center">
-          <FileText className="mx-auto mb-2 h-6 w-6 text-gray-400" />
-          <p className="text-sm font-medium text-gray-700">No documents yet</p>
-          <p className="text-xs text-gray-500">Create one from a template above, or start a new document.</p>
+        <div className="rounded-ds-card border border-dashed border-ds-border-strong bg-ds-surface-subtle p-[24px] text-center">
+          <FileText className="mx-auto mb-2 h-6 w-6 text-ds-fg-muted" />
+          <p className="text-[13px] font-medium text-ds-fg-body">No documents yet</p>
+          <p className="text-[12px] text-ds-fg-muted">Create one from a template above, or start a new document.</p>
         </div>
       ) : (
         <div className="space-y-2">
           {stageArtifacts.map((a) => (
-            <div key={a.id} className="rounded-xl border border-gray-200 bg-white p-3">
-              <div className="flex items-start gap-3">
-                <FileText className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary-600" />
+            <div key={a.id} className="rounded-ds-card border border-ds-border bg-ds-surface p-3">
+              <div className="flex items-start gap-[12px]">
+                <FileText className="mt-0.5 h-4 w-4 flex-shrink-0 text-ds-primary-text" />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-sm font-medium text-slate-900">{a.name}</span>
-                    <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${STATUS_STYLE[a.status] || 'bg-gray-100 text-gray-600'}`}>{a.status.replace('_', ' ')}</span>
-                    <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">{a.artifact_type}</span>
+                    <span className="text-[13px] font-medium text-ds-fg">{a.name}</span>
+                    <span className={`rounded-full px-1.5 py-0.5 text-[12px] font-medium ${STATUS_STYLE[a.status] || 'bg-ds-surface-hover text-ds-fg-body'}`}>{a.status.replace('_', ' ')}</span>
+                    <span className="rounded-full bg-ds-surface-hover px-1.5 py-0.5 text-[12px] text-ds-fg-muted">{a.artifact_type}</span>
                   </div>
-                  {a.description && <p className="mt-0.5 line-clamp-1 text-[11px] text-gray-500">{a.description}</p>}
+                  {a.description && <p className="mt-0.5 line-clamp-1 text-[12px] text-ds-fg-muted">{a.description}</p>}
                 </div>
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                <button onClick={() => setPreview(a)} className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-50">
+                <button onClick={() => setPreview(a)} className="inline-flex items-center gap-1 rounded-ds-control border border-ds-border px-2 py-1 text-[12px] text-ds-fg-body hover:bg-ds-surface-subtle">
                   <Eye className="h-3 w-3" /> Preview
                 </button>
                 {canEdit && (
-                  <button onClick={() => { setSeed(''); setEditing(a); }} className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-50">
+                  <button onClick={() => { setSeed(''); setEditing(a); }} className="inline-flex items-center gap-1 rounded-ds-control border border-ds-border px-2 py-1 text-[12px] text-ds-fg-body hover:bg-ds-surface-subtle">
                     <Pencil className="h-3 w-3" /> Edit
                   </button>
                 )}
                 <div className="relative">
-                  <button onClick={() => setDlOpen(dlOpen === a.id ? null : a.id)} className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-50">
+                  <button onClick={() => setDlOpen(dlOpen === a.id ? null : a.id)} className="inline-flex items-center gap-1 rounded-ds-control border border-ds-border px-2 py-1 text-[12px] text-ds-fg-body hover:bg-ds-surface-subtle">
                     <Download className="h-3 w-3" /> Download <ChevronDown className="h-3 w-3" />
                   </button>
                   {dlOpen === a.id && (
-                    <div className="absolute z-10 mt-1 w-24 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                    <div className="absolute z-10 mt-1 w-24 rounded-ds-card border border-ds-border bg-ds-surface py-1 shadow-ds-pop">
                       {DOC_FORMATS.map((f) => (
-                        <button key={f} onClick={() => download(a, f)} className="block w-full px-3 py-1 text-left text-[11px] uppercase text-gray-600 hover:bg-gray-50">{f}</button>
+                        <button key={f} onClick={() => download(a, f)} className="block w-full px-3 py-1 text-left text-[12px] uppercase text-ds-fg-body hover:bg-ds-surface-subtle">{f}</button>
                       ))}
                     </div>
                   )}
                 </div>
                 {canEdit && (
                   <button onClick={() => useAsEvidence(a)} disabled={evBusy === a.id}
-                    className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50">
+                    className="inline-flex items-center gap-1 rounded-ds-control border border-ds-border-strong bg-ds-success-soft px-2 py-1 text-[12px] font-medium text-ds-success hover:bg-ds-success-soft disabled:opacity-50">
                     {evBusy === a.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Paperclip className="h-3 w-3" />} Use as evidence
                   </button>
                 )}
                 {canEdit && (
-                  <button onClick={() => del.mutate(a.id)} className="ml-auto inline-flex items-center rounded-md p-1 text-gray-300 hover:bg-red-50 hover:text-red-500">
+                  <button onClick={() => del.mutate(a.id)} className="ml-auto inline-flex items-center rounded-ds-control p-1 text-ds-surface hover:bg-ds-danger-soft hover:text-ds-danger">
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 )}
@@ -192,7 +195,7 @@ export default function ArtifactDocumentsPanel({
 
       {/* Preview */}
       <RightSlidePanel isOpen={!!preview} onClose={() => setPreview(null)} title={preview?.name || 'Preview'} width="w-full max-w-2xl">
-        {preview?.content ? <GovernanceDocumentMarkdown content={preview.content} /> : <p className="text-sm text-gray-400">This document has no content yet.</p>}
+        {preview?.content ? <GovernanceDocumentMarkdown content={preview.content} /> : <p className="text-[13px] text-ds-fg-muted">This document has no content yet.</p>}
       </RightSlidePanel>
 
       {/* Create / edit */}
@@ -253,19 +256,19 @@ function ArtifactEditor({
     <RightSlidePanel isOpen onClose={onClose} title={artifact ? 'Edit artifact' : 'New artifact'} width="w-full max-w-2xl"
       footer={
         <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+          <button onClick={onClose} className="rounded-ds-card border border-ds-border-strong px-[16px] py-2 text-[13px] font-medium text-ds-fg-body hover:bg-ds-surface-subtle">Cancel</button>
           <button onClick={() => save.mutate()} disabled={save.isPending || !form.name.trim()}
-            className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">
+            className="rounded-ds-card bg-ds-primary px-[16px] py-2 text-[13px] font-medium text-ds-on-primary hover:bg-ds-primary-hover disabled:opacity-50">
             {save.isPending ? 'Saving…' : artifact ? 'Save' : 'Create'}
           </button>
         </div>
       }>
-      <div className="space-y-4">
+      <div className="space-y-[16px]">
         <div>
           <label className={labelCls}>Name</label>
           <input className={inputCls} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-[12px]">
           <div>
             <label className={labelCls}>Type</label>
             <select className={inputCls} value={form.artifact_type} onChange={(e) => setForm({ ...form, artifact_type: e.target.value })}>
@@ -286,16 +289,16 @@ function ArtifactEditor({
         </div>
         <div>
           <div className="mb-1 flex items-center justify-between">
-            <label className={labelCls}>Content <span className="text-gray-400">(markdown)</span></label>
+            <label className={labelCls}>Content <span className="text-ds-fg-muted">(markdown)</span></label>
             <div className="flex items-center gap-2">
-              <label className="cursor-pointer text-[11px] font-medium text-gray-500 hover:text-gray-700">
+              <label className="cursor-pointer text-[12px] font-medium text-ds-fg-muted hover:text-ds-fg-body">
                 Load from file
                 <input type="file" accept=".md,.txt,.markdown" className="hidden"
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) loadFile(f); }} />
               </label>
-              <div className="inline-flex overflow-hidden rounded-md border border-gray-200 text-[11px]">
-                <button type="button" onClick={() => setMode('edit')} className={`px-2 py-0.5 ${mode === 'edit' ? 'bg-primary-600 text-white' : 'bg-white text-gray-600'}`}>Edit</button>
-                <button type="button" onClick={() => setMode('preview')} className={`px-2 py-0.5 ${mode === 'preview' ? 'bg-primary-600 text-white' : 'bg-white text-gray-600'}`}>Preview</button>
+              <div className="inline-flex overflow-hidden rounded-ds-control border border-ds-border text-[12px]">
+                <button type="button" onClick={() => setMode('edit')} className={`px-2 py-0.5 ${mode === 'edit' ? 'bg-ds-primary text-ds-on-primary' : 'bg-ds-surface text-ds-fg-body'}`}>Edit</button>
+                <button type="button" onClick={() => setMode('preview')} className={`px-2 py-0.5 ${mode === 'preview' ? 'bg-ds-primary text-ds-on-primary' : 'bg-ds-surface text-ds-fg-body'}`}>Preview</button>
               </div>
             </div>
           </div>
@@ -304,8 +307,8 @@ function ArtifactEditor({
               onChange={(e) => setForm({ ...form, content: e.target.value })}
               placeholder="# Document title&#10;&#10;Write the artifact here…" />
           ) : (
-            <div className="min-h-[14rem] rounded-lg border border-gray-200 p-3">
-              {form.content ? <GovernanceDocumentMarkdown content={form.content} /> : <p className="text-sm text-gray-400">Nothing to preview.</p>}
+            <div className="min-h-[14rem] rounded-ds-card border border-ds-border p-3">
+              {form.content ? <GovernanceDocumentMarkdown content={form.content} /> : <p className="text-[13px] text-ds-fg-muted">Nothing to preview.</p>}
             </div>
           )}
         </div>

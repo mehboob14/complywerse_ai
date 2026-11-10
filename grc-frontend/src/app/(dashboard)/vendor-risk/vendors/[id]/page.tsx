@@ -1,314 +1,207 @@
 ﻿'use client';
 
-// A vendor's record: the header (who it is, its tier, status and grade, what can be done), the exit card while an offboarding is open,
-// six tabs kept in `?tab=` (the old twelve map onto them, and the deep links ?stage=, ?finding= and ?engagement= still work), and a
-// 20rem column of facts beside every tab but the Lifecycle. The tabs are components of their own (`_tabs/`); the page owns the vendor,
-// the engagement picked, and the dialogs the header opens.
-import { useEffect, useRef, useState, type ComponentType, type KeyboardEvent, type ReactNode } from 'react';
-import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { clsx } from 'clsx';
-import { BadgeCheck, Copy, FileText, Layers, LogOut, Pencil, UserPlus, Users } from 'lucide-react';
-import { vendorRiskApi } from '@/lib/api';
-import { useToast } from '@/components/ui/ToastProvider';
+// A supplier's record. This file is only the host: it reads the vendor (and, with it, the engagements, the exit and the contacts: the four reads of the first paint), draws the head, the
+// "Next up" strip, the tabs and the "At a glance" card, and opens the dialogs the head offers. Each tab's body is a chunk of its own, loaded when the tab is first opened (`TabPanel lazy`),
+// and the heavy dialogs load when first used. Reads that only decorate the page (the logo, who is next, the two tab counts) wait until the first paint is out.
+// The address holds the tab (`?tab=`, the twelve older keys still land on the tab that holds their content now), a stage (`?stage=`), a finding (`?finding=`, which beats a stage), an
+// engagement (`?engagement=`), the tiering dialog (`?tier=`) and a request (`?request=`); a tab click drops the ones that act once.
+import { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
+import { useParams } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
+import { Button, EmptyState, ErrorState, Notice, Skeleton, SkeletonLines, TabPanel, Tabs, useAddressState } from '@/components/ui/ds';
+import { errorMessage } from '@/components/ui/ds/reportOutcome';
 import { usePermissions } from '@/hooks/usePermissions';
-import {
-  BTN, BTN_PRIMARY, DetailHeader, EmptyState, ErrorState, GradePill, Skeleton, StatusPill, TONE, TierBadge, fmt, tones, useUrlParams,
-  type Tone,
-} from '../../_ui';
-import VendorLogo from '../../_lib/VendorLogo';
+import { text } from '@/lib/addressState';
 import { engagementsKey, useEngagements } from '../../_lib/engagementsApi';
 import { useOffboarding } from '../../_lib/offboardingApi';
 import type { SupplierContact } from '../../_lib/portalApi';
-import { TPRM_QUERY_OPTS } from '../../_lib/tprmQuery';
-import {
-  TABS, classificationTone, findingFrom, isTiered, metaParts, openScopes, pickEngagement, recordHref, targetTiered, tabFor, tierHref,
-  tierTarget, webHost, webHref, type TabKey,
-} from '../../_lib/vendorRecordModel';
-import VendorFormDialog from '../_components/VendorFormDialog';
-import ActionsMenu, { type MenuItem } from './_record/ActionsMenu';
-import ContactDialog from './_record/ContactDialog';
-import RightColumn from './_record/RightColumn';
-import AssessmentsTab from './_tabs/AssessmentsTab';
-import FindingsTab from './_tabs/FindingsTab';
-import LifecycleTab from './_tabs/LifecycleTab';
-import MonitoringTab from './_tabs/MonitoringTab';
+import { BACK, recordTabs, showsPicker, tabPatch } from '../../_lib/recordShellModel';
+import { findingFrom, isTiered, openScopes, pickEngagement, tabFor, targetTiered, tierTarget } from '../../_lib/vendorRecordModel';
+import AtAGlance from './_record/AtAGlance';
+import EngagementPicker from './_record/EngagementPicker';
+import NextUpStrip from './_record/NextUpStrip';
+import RecordHead from './_record/RecordHead';
+import { failed, statusOf, useAfterPaint, useNextUp, useTabCounts, useVendorRecord } from './_record/recordData';
 import OverviewTab from './_tabs/OverviewTab';
-import PaperworkTab from './_tabs/PaperworkTab';
 import type { TabProps } from './_tabs/tabProps';
-import { EngagementForm, WorstOfNote } from './_tpra/EngagementsPanel';
+import { EngagementForm } from './_tpra/EngagementsPanel';
 import OffboardingPanel, { StartOffboardingDialog } from './_tpra/OffboardingPanel';
 
-const TAB_COMPONENT: Record<TabKey, ComponentType<TabProps>> = {
-  overview: OverviewTab, lifecycle: LifecycleTab, assessments: AssessmentsTab, findings: FindingsTab, paperwork: PaperworkTab, monitoring: MonitoringTab,
-};
+const TabLoading = () => <div className="pt-[16px]"><SkeletonLines lines={6} label="Loading this tab" /></div>;
+const lazyTab = (load: () => Promise<{ default: React.ComponentType<TabProps> }>) => dynamic(load, { ssr: false, loading: TabLoading });
+const LifecycleTab = lazyTab(() => import('./_tabs/LifecycleTab'));
+const AssessmentsTab = lazyTab(() => import('./_tabs/AssessmentsTab'));
+const FindingsTab = lazyTab(() => import('./_tabs/FindingsTab'));
+const PaperworkTab = lazyTab(() => import('./_tabs/PaperworkTab'));
+const MonitoringTab = lazyTab(() => import('./_tabs/MonitoringTab'));
+const VendorFormDialog = dynamic(() => import('../_components/VendorFormDialog'), { ssr: false });
+const ContactDialog = dynamic(() => import('./_record/ContactDialog'), { ssr: false });
 
-/** A small badge for a fact about the vendor ("Holds personal data", "Restricted"): a tone's tint, no dot. */
-function Badge({ tone, children }: { tone: Tone; children: ReactNode }) {
-  const c = TONE[tone];
+const BODY = { lifecycle: LifecycleTab, assessments: AssessmentsTab, findings: FindingsTab, paperwork: PaperworkTab, monitoring: MonitoringTab } as const;
+
+const SCHEMA = { tab: text(), stage: text(), finding: text(), engagement: text(), tier: text(), request: text() };
+
+function Loading() {
   return (
-    <span className="inline-flex items-center whitespace-nowrap rounded-md border px-2 py-[3px] text-[11px] font-semibold leading-none" style={{ background: c.tint, color: c.text, borderColor: c.border }}>
-      {children}
-    </span>
+    <div aria-busy="true" className="flex flex-col gap-[16px]">
+      <Skeleton className="h-[16px] w-[80px]" />
+      <Skeleton className="h-[28px] w-[40%]" />
+      <Skeleton className="h-[32px] w-[60%]" />
+      <Skeleton className="h-[44px] w-full" />
+      <Skeleton className="h-[32px] w-full" />
+      <SkeletonLines lines={8} label="Loading the supplier" />
+    </div>
   );
 }
 
-const statusOf = (e: unknown) => (e as { response?: { status?: number } })?.response?.status;
-
-export default function VendorDetailPage() {
+export default function VendorRecordPage() {
   const params = useParams();
-  const router = useRouter();
-  const url = useUrlParams();
-  const qc = useQueryClient();
-  const { toast } = useToast();
-  const { hasPermission } = usePermissions();
   const vendorId = Number(params.id);
+  const qc = useQueryClient();
+  const { hasPermission } = usePermissions();
   const canEdit = hasPermission('vendor_risk:vendors:edit') || hasPermission('erm:risks:edit');
   const canTier = hasPermission('vendor_risk:assessments:edit') || hasPermission('erm:risks:edit');
 
-  const vendorQuery = useQuery({
-    queryKey: ['vendor', vendorId],
-    queryFn: async () => (await vendorRiskApi.getVendor(vendorId)).data as Record<string, any>,
-    enabled: !!vendorId,
-    retry: (n, e) => statusOf(e) !== 404 && n < 1,
-  });
+  const vendorQuery = useVendorRecord(vendorId);
   const vendor = vendorQuery.data;
   const engagements = useEngagements(vendorId);
   const offboarding = useOffboarding(vendorId);
 
-  // The address says which tab, which stage or finding, and which engagement.
-  const rawTab = url.get('tab');
-  const stage = url.get('stage');
-  const findingId = findingFrom(url.get('finding'));
-  const tab = tabFor({ tab: rawTab, stage, finding: url.get('finding') });
+  const [address, set] = useAddressState(SCHEMA);
+  const tab = tabFor({ tab: address.tab, stage: address.stage, finding: address.finding });
   const items = engagements.data?.items;
-  const engagementId = pickEngagement(items, Number(url.get('engagement')) || null);
+  const engagementId = pickEngagement(items, Number(address.engagement) || null);
 
   // An old ?tab= key is rewritten to the tab that holds its content now.
   useEffect(() => {
-    if (rawTab && rawTab !== tab) url.set({ tab });
-  }, [rawTab, tab, url]);
+    if (address.tab && address.tab !== tab) set({ tab });
+  }, [address.tab, tab, set]);
+
+  // An archived supplier has no engagements, contacts, steps or findings to read (the server answers "not found"): nothing is asked for them.
+  const archived = !!vendor?.archived_at;
+  const late = useAfterPaint(!!vendor);
+  const next = useNextUp(vendorId, engagementId, late && !archived);
+  const counts = useTabCounts(vendorId, engagementId, late && !archived);
 
   const [editing, setEditing] = useState(false);
   const [addingEngagement, setAddingEngagement] = useState(false);
   const [contact, setContact] = useState<SupplierContact | 'new' | null>(null);
   const [startingExit, setStartingExit] = useState(false);
+  const [vatRequest, setVatRequest] = useState(0);
 
-  // "VAT check" is a card on the Overview: go there, then bring it into view once it is drawn.
-  const [wantVat, setWantVat] = useState(false);
-  useEffect(() => {
-    if (!wantVat || tab !== 'overview') return undefined;
-    const timer = setTimeout(() => {
-      document.getElementById('vendor-vat-check')?.scrollIntoView({ block: 'center' });
-      document.getElementById('vendor-vat-input')?.focus({ preventScroll: true });
-      setWantVat(false);
-    }, 150);
-    return () => clearTimeout(timer);
-  }, [wantVat, tab]);
-
-  const tabRefs = useRef<Partial<Record<TabKey, HTMLButtonElement | null>>>({});
-  // A tab click drops the one-shot deep links (a stage, a finding, a request, the tiering popup) so they do not fire again.
-  const select = (key: TabKey) => url.set({ tab: key, stage: null, finding: null, tier: null, request: null });
-  const onTabKey = (e: KeyboardEvent) => {
-    const at = TABS.findIndex((t) => t.key === tab);
-    let next = at;
-    if (e.key === 'ArrowRight') next = (at + 1) % TABS.length;
-    else if (e.key === 'ArrowLeft') next = (at - 1 + TABS.length) % TABS.length;
-    else if (e.key === 'Home') next = 0;
-    else if (e.key === 'End') next = TABS.length - 1;
-    else return;
-    e.preventDefault();
-    select(TABS[next].key);
-    tabRefs.current[TABS[next].key]?.focus();
-  };
+  useEffect(() => { document.title = vendor ? `${vendor.name} · Supplier` : 'Supplier'; }, [vendor]);
 
   const refresh = () => {
-    qc.invalidateQueries({ queryKey: ['vendor', vendorId] });
-    qc.invalidateQueries({ queryKey: engagementsKey(vendorId) });
-    qc.invalidateQueries({ queryKey: ['tpra-lifecycle', vendorId] });
+    void qc.invalidateQueries({ queryKey: ['vendor', vendorId] });
+    void qc.invalidateQueries({ queryKey: engagementsKey(vendorId) });
+    void qc.invalidateQueries({ queryKey: ['tpra-lifecycle', vendorId] });
   };
 
-  if (vendorQuery.isLoading) {
-    return (
-      <div className="mx-auto max-w-7xl space-y-4" aria-busy="true">
-        <Skeleton className="h-6 w-40" />
-        <Skeleton className="h-16 w-2/3" />
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-72 w-full" />
-      </div>
-    );
-  }
   if (!vendor) {
+    if (vendorQuery.isPending) return <Loading />;
+    const gone = !vendorId || statusOf(vendorQuery.error) === 404;
     return (
-      <div className="mx-auto max-w-2xl py-10">
-        {!vendorId || statusOf(vendorQuery.error) === 404 ? (
-          <EmptyState
-            title="This vendor is not here"
-            hint="It may have been archived, or the link may be wrong."
-            action={<Link href="/vendor-risk/vendors" className={BTN}>Back to the register</Link>}
-          />
+      <div className="mx-auto flex max-w-[640px] flex-col gap-[16px] py-[24px]">
+        {gone ? (
+          <EmptyState kind="firstUse" title="This supplier is not here" description="It may have been archived, or the link may be wrong." action={<Button href={BACK.href} variant="primary">Back to vendors</Button>} />
         ) : (
-          <ErrorState title="Couldn't load this vendor" onRetry={() => vendorQuery.refetch()} />
+          <>
+            <ErrorState title="Couldn’t load this supplier" message={errorMessage(vendorQuery.error)} onRetry={() => { void vendorQuery.refetch(); }} />
+            <div><Button href={BACK.href}>Back to vendors</Button></div>
+          </>
         )}
       </div>
     );
   }
 
-  const tiered = isTiered(vendor);
   const supplier = engagements.data?.supplier;
-  const closing = !!vendor.archived_at || !!offboarding.data?.started;
-  // The picker is on the Lifecycle and Assessments tabs: only there is the engagement picked on purpose (elsewhere "Tier engagement" and
-  // "Start offboarding" are for the vendor, and the first engagement still to be tiered).
-  const pickerTab = tab === 'lifecycle' || tab === 'assessments';
-  const picked = pickerTab ? engagementId : null;
+  const tiered = isTiered(vendor);
+  const closing = archived || !!offboarding.data?.started;
+  // The picker is on the Lifecycle and Assessments tabs: only there is the engagement picked on purpose (elsewhere "Tier engagement" is for the vendor, and for the first engagement still to be tiered).
+  const picker = showsPicker(tab, openScopes(items).length);
+  const picked = tab === 'lifecycle' || tab === 'assessments' ? engagementId : null;
   const target = tierTarget(items, picked);
-  const several = openScopes(items).length > 1;
-  const website = webHref(vendor.website);
-  const meta = metaParts(vendor);
-  const Current = TAB_COMPONENT[tab];
-  const tabProps: TabProps = { vendorId, engagementId, onEngagementChange: (id) => url.set({ engagement: id == null ? null : String(id) }), vendor, stage, findingId, onChanged: refresh };
+  const engagementsFailed = failed(engagements);
+  const readFailed = engagementsFailed || failed(offboarding);
 
-  const copyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(`${window.location.origin}${recordHref(vendorId)}`);
-      toast({ type: 'success', title: 'Link copied' });
-    } catch {
-      toast({ type: 'error', title: 'Could not copy the link' });
-    }
+  const tabProps: TabProps = {
+    vendorId, engagementId, vendor, stage: address.stage || null, findingId: findingFrom(address.finding), vatRequest,
+    onEngagementChange: (id) => set({ engagement: id == null ? '' : String(id) }),
+    onChanged: refresh,
   };
-
-  const menu: MenuItem[] = [
-    { key: 'tier', label: targetTiered(items, target) ? 'Re-tier engagement' : 'Tier engagement', icon: Layers, onSelect: () => router.push(tierHref(vendorId, target)), hidden: !canTier || closing },
-    { key: 'engagement', label: 'Add engagement', icon: Users, onSelect: () => setAddingEngagement(true), hidden: !canEdit || !engagements.data || !!vendor.archived_at },
-    { key: 'contact', label: 'Add contact', icon: UserPlus, onSelect: () => setContact('new'), hidden: !canEdit },
-    { key: 'summary', label: 'Summary report', icon: FileText, onSelect: () => router.push(`/vendor-risk/vendors/${vendorId}/summary`) },
-    { key: 'vat', label: 'VAT check', icon: BadgeCheck, onSelect: () => { setWantVat(true); if (tab !== 'overview') select('overview'); } },
-    { key: 'copy', label: 'Copy link', icon: Copy, onSelect: copyLink },
-    { key: 'offboard', label: 'Start offboarding', icon: LogOut, danger: true, onSelect: () => setStartingExit(true), hidden: !canEdit || closing || !offboarding.data },
-  ];
 
   return (
-    <div className="mx-auto max-w-7xl space-y-5">
-      <DetailHeader
-        backHref="/vendor-risk/vendors"
-        backLabel="Back to register"
-        logo={<VendorLogo vendorId={vendor.id} name={vendor.name} size={48} />}
-        title={vendor.name}
-        chips={(
-          <>
-            <span className="inline-flex items-center">
-              <TierBadge tier={tiered ? vendor.tier : null} suffix="tier" />
-              <WorstOfNote vendorId={vendorId} />
-            </span>
-            {vendor.status && <StatusPill tone={tones.lifecycle(vendor.status)}>{fmt.status(vendor.status)}</StatusPill>}
-            {vendor.archived_at && <StatusPill tone="neutral">Archived</StatusPill>}
-            {supplier?.rating_grade && (
-              <span title={supplier.residual_risk_score != null ? `Residual score ${Math.round(supplier.residual_risk_score * 10) / 10}` : undefined}>
-                <GradePill grade={supplier.rating_grade} prefix="Grade" />
-              </span>
-            )}
-            {vendor.holds_personal_data === true && <Badge tone="warning">Holds personal data</Badge>}
-            {vendor.data_classification && <Badge tone={classificationTone(vendor.data_classification)}>{fmt.status(vendor.data_classification)}</Badge>}
-          </>
-        )}
-        meta={(meta.length > 0 || website) ? (
-          <>
-            {meta.join(' · ')}
-            {website && (
-              <>
-                {meta.length > 0 ? ' · ' : ''}
-                <a href={website} target="_blank" rel="noopener noreferrer" className="rounded-sm font-medium text-[#0f766e] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]">
-                  {webHost(vendor.website)}
-                </a>
-              </>
-            )}
-          </>
-        ) : undefined}
-        actions={(
-          <>
-            {canTier && !tiered && !closing && tab !== 'lifecycle' && (
-              <Link href={tierHref(vendorId, target)} className={BTN_PRIMARY}>Tier engagement</Link>
-            )}
-            {canEdit && (
-              <button type="button" onClick={() => setEditing(true)} className={BTN}>
-                <Pencil aria-hidden className="h-4 w-4" strokeWidth={1.75} /> Edit
-              </button>
-            )}
-            <ActionsMenu items={menu} />
-          </>
-        )}
+    <div className="flex flex-col gap-[16px]">
+      <RecordHead
+        vendor={vendor}
+        vendorId={vendorId}
+        grade={supplier?.rating_grade ?? null}
+        onLifecycleTab={tab === 'lifecycle'}
+        a={{
+          canEdit, canTier, tiered, closing, archived, target, targetTiered: targetTiered(items, target),
+          canAddEngagement: !!engagements.data, canStartExit: !!offboarding.data,
+          onEdit: () => setEditing(true), onAddEngagement: () => setAddingEngagement(true), onAddContact: () => setContact('new'), onStartExit: () => setStartingExit(true),
+          onVat: () => { setVatRequest((n) => n + 1); if (tab !== 'overview') set(tabPatch('overview')); },
+        }}
       />
 
-      <OffboardingPanel vendorId={vendorId} exitOnly />
-
-      <div className="border-b border-[#d5dbe1]">
-        <nav role="tablist" aria-label="Vendor record sections" className="flex gap-6 overflow-x-auto" onKeyDown={onTabKey}>
-          {TABS.map((t) => {
-            const selected = tab === t.key;
-            return (
-              <button
-                key={t.key}
-                id={`vendor-tab-${t.key}`}
-                ref={(el) => { tabRefs.current[t.key] = el; }}
-                role="tab"
-                type="button"
-                aria-selected={selected}
-                aria-controls={`vendor-tabpanel-${t.key}`}
-                tabIndex={selected ? 0 : -1}
-                onClick={() => select(t.key)}
-                className={clsx(
-                  'whitespace-nowrap border-b-2 px-1 pb-3 pt-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e] focus-visible:ring-offset-1',
-                  selected ? 'border-[#0f766e] text-[#0f766e]' : 'border-transparent text-[#586472] hover:text-[#1f2933]',
-                )}
-              >
-                {t.label}
-              </button>
-            );
-          })}
-        </nav>
-      </div>
-
-      {pickerTab && several && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg bg-[#f3f6f8] px-3 py-2">
-          <label htmlFor="vendor-engagement" className="text-[13px] font-medium leading-5 text-[#26323d]">Engagement</label>
-          <select
-            id="vendor-engagement"
-            value={engagementId ?? ''}
-            onChange={(e) => url.set({ engagement: e.target.value || null })}
-            className="h-9 min-w-[14rem] rounded-lg border border-[#c3ccd5] bg-[#fff] px-3 text-sm text-[#1f2933] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]"
-          >
-            {openScopes(items).map((e) => (
-              <option key={e.id ?? 'general'} value={e.is_general ? '' : (e.id as number)}>
-                {e.name}{' · '}{isTiered(e) ? fmt.status(e.tier) : 'Not tiered'}
-              </option>
-            ))}
-          </select>
-        </div>
+      {vendorQuery.isError && (
+        <Notice tone="warning" title="Couldn’t refresh this supplier" action={<Button onClick={() => { void vendorQuery.refetch(); }}>Retry</Button>}>
+          What you see may be out of date.
+        </Notice>
+      )}
+      {readFailed && (
+        <Notice
+          tone="warning"
+          title={engagementsFailed ? 'Couldn’t read the engagements' : 'Couldn’t read the exit status'}
+          action={<Button onClick={() => { void (engagementsFailed ? engagements.refetch() : offboarding.refetch()); }}>Retry</Button>}
+        >
+          {engagementsFailed ? 'The tier, grade and review date below may be incomplete.' : 'Whether an exit is under way may not be shown.'}
+        </Notice>
       )}
 
-      <div className={tab === 'lifecycle' ? undefined : 'grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]'}>
-        <div role="tabpanel" id={`vendor-tabpanel-${tab}`} aria-labelledby={`vendor-tab-${tab}`} tabIndex={0} className="min-w-0 focus:outline-none">
-          <Current {...tabProps} />
+      {archived && (
+        <Notice tone="info" title="This supplier is archived">
+          Its engagements, contacts and lifecycle are kept but cannot be opened until it is restored from the register’s Archived view.
+        </Notice>
+      )}
+      <OffboardingPanel vendorId={vendorId} exitOnly />
+      <NextUpStrip vendor={vendor} items={items} next={next} archived={archived} />
+
+      <div className="grid items-start gap-[16px] xl:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="min-w-0">
+          <Tabs tabs={recordTabs(counts)} value={tab} onChange={(key) => set(tabPatch(key))} ariaLabel="Supplier sections" countFormat="exact">
+            {picker && items && (
+              <div className="pt-[12px]">
+                <EngagementPicker items={items} value={engagementId} onChange={(id) => set({ engagement: id == null ? '' : String(id) })} />
+              </div>
+            )}
+            <TabPanel tabKey="overview"><div className="pt-[16px]"><OverviewTab {...tabProps} /></div></TabPanel>
+            {(Object.keys(BODY) as Array<keyof typeof BODY>).map((key) => {
+              const Tab = BODY[key];
+              return <TabPanel key={key} tabKey={key} lazy><div className="pt-[16px]"><Tab {...tabProps} /></div></TabPanel>;
+            })}
+          </Tabs>
         </div>
-        {tab !== 'lifecycle' && (
-          <RightColumn
-            vendorId={vendorId}
-            vendor={vendor}
-            engagementId={engagementId}
-            engagements={engagements.data}
-            canEdit={canEdit}
-            onAddContact={() => setContact('new')}
-            onEditContact={setContact}
-          />
-        )}
+        <AtAGlance
+          vendorId={vendorId}
+          vendor={vendor}
+          engagementId={engagementId}
+          engagements={engagements.data}
+          engagementsFailed={engagementsFailed}
+          onRetryEngagements={() => { void engagements.refetch(); }}
+          canEdit={canEdit && !archived}
+          archived={archived}
+          late={late}
+          onAddContact={() => setContact('new')}
+          onEditContact={setContact}
+        />
       </div>
 
       {editing && <VendorFormDialog open mode="edit" vendor={vendor} onClose={() => setEditing(false)} />}
-      {addingEngagement && engagements.data && (
-        <EngagementForm vendorId={vendorId} engagement={null} list={engagements.data} onClose={() => setAddingEngagement(false)} />
-      )}
-      <ContactDialog vendorId={vendorId} contact={contact} onClose={() => setContact(null)} />
+      {addingEngagement && engagements.data && <EngagementForm vendorId={vendorId} engagement={null} list={engagements.data} onClose={() => setAddingEngagement(false)} />}
+      {contact !== null && <ContactDialog vendorId={vendorId} contact={contact} onClose={() => setContact(null)} />}
       <StartOffboardingDialog vendorId={vendorId} open={startingExit} onClose={() => setStartingExit(false)} engagementId={picked} />
     </div>
   );

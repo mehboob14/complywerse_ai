@@ -6,17 +6,18 @@
 // (has_owner + has_data_classification): the stage's checks say which is missing.
 
 import { useEffect, useState } from 'react';
+import { ErrorState } from '@/components/ui/ds';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { usePeople } from '../../../_lib/portfolioApi';
 import { Loader2, Save } from 'lucide-react';
 import { vendorRiskApi } from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
-import { usePeople } from '../../../_lib/actions/shared';
 import IntakeForm from '../../../_lib/intake/IntakeForm';
 
 const inputCls =
-  'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500';
-const labelCls = 'mb-1 block text-xs font-medium text-gray-700';
+  'w-full rounded-ds-card border border-ds-border-strong bg-ds-surface px-3 py-2 text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-primary focus-visible:border-ds-primary';
+const labelCls = 'mb-1 block text-[12px] font-medium text-ds-fg-body';
 
 const DATA_ACCESS_LEVELS = [
   { value: 'none', label: 'None' },
@@ -39,10 +40,10 @@ export default function IntakePanel({ vendorId, onChanged }: { vendorId: number;
     onChanged?.();
   };
   return (
-    <div className="space-y-4">
+    <div className="space-y-[16px]">
       <IntakeForm vendorId={vendorId} layout="panel" onSaved={refresh} />
-      <details className="rounded-lg border border-gray-200 p-3">
-        <summary className="cursor-pointer text-xs font-medium text-gray-700">Profile fields (data access, services, locations)</summary>
+      <details className="rounded-ds-card border border-ds-border p-3">
+        <summary className="cursor-pointer text-[12px] font-medium text-ds-fg-body">Profile fields (data access, services, locations)</summary>
         <div className="mt-3"><ProfileFields vendorId={vendorId} onChanged={refresh} /></div>
       </details>
     </div>
@@ -55,13 +56,12 @@ function ProfileFields({ vendorId, onChanged }: { vendorId: number; onChanged?: 
   const { hasPermission } = usePermissions();
   const canEdit = hasPermission('vendor_risk:vendors:edit') || hasPermission('erm:risks:edit');
 
-  const { data: vendor, isLoading } = useQuery({
+  const { data: vendor, isLoading, isError, refetch } = useQuery({
     queryKey: ['vendor-intake', vendorId],
     queryFn: async () => (await vendorRiskApi.getVendor(vendorId)).data as Record<string, unknown>,
   });
 
-  // the module's own list of people (any signed-in person may read it): the administrators' user list needs a right most analysts do not hold, and showed them "User 12"
-  const users = usePeople();
+  const users = usePeople();           // everyone who signs in here, from the module's own read (the admin user list needs admin rights)
 
   const [form, setForm] = useState({
     owner_id: '' as number | '' , data_access_level: 'none', data_types_accessed: '',
@@ -113,18 +113,19 @@ function ProfileFields({ vendorId, onChanged }: { vendorId: number; onChanged?: 
   });
 
   if (isLoading) {
-    return <div className="flex items-center gap-2 py-6 text-sm text-gray-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading vendor…</div>;
+    return <div className="flex items-center gap-2 py-[24px] text-[13px] text-ds-fg-muted"><Loader2 className="h-4 w-4 animate-spin" /> Loading vendor…</div>;
   }
+  if (isError) return <ErrorState compact title="Couldn’t load the vendor’s details" onRetry={() => { void refetch(); }} />;
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    <div className="space-y-[16px]">
+      <div className="grid grid-cols-1 gap-[12px] sm:grid-cols-2">
         <div>
           <label className={labelCls}>Business owner</label>
           <select className={inputCls} value={form.owner_id} disabled={!canEdit}
             onChange={(e) => setForm({ ...form, owner_id: e.target.value ? Number(e.target.value) : '' })}>
             <option value="">Unassigned</option>
-            {(users || []).map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+            {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
           </select>
         </div>
         <div>
@@ -137,21 +138,21 @@ function ProfileFields({ vendorId, onChanged }: { vendorId: number; onChanged?: 
       </div>
 
       <div>
-        <label className={labelCls}>Data types accessed <span className="text-gray-400">(comma-separated)</span></label>
+        <label className={labelCls}>Data types accessed <span className="text-ds-fg-muted">(comma-separated)</span></label>
         <input className={inputCls} value={form.data_types_accessed} disabled={!canEdit}
           onChange={(e) => setForm({ ...form, data_types_accessed: e.target.value })}
           placeholder="PII, cardholder data, health records" />
       </div>
       <div>
-        <label className={labelCls}>Systems &amp; services in scope <span className="text-gray-400">(comma-separated)</span></label>
+        <label className={labelCls}>Systems &amp; services in scope <span className="text-ds-fg-muted">(comma-separated)</span></label>
         <input className={inputCls} value={form.services_provided} disabled={!canEdit}
           onChange={(e) => setForm({ ...form, services_provided: e.target.value })}
           placeholder="Cloud hosting, payment processing" />
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-[12px] sm:grid-cols-2">
         <div>
-          <label className={labelCls}>Geographic locations <span className="text-gray-400">(comma-separated)</span></label>
+          <label className={labelCls}>Geographic locations <span className="text-ds-fg-muted">(comma-separated)</span></label>
           <input className={inputCls} value={form.geographic_locations} disabled={!canEdit}
             onChange={(e) => setForm({ ...form, geographic_locations: e.target.value })} placeholder="US, EU" />
         </div>
@@ -162,7 +163,7 @@ function ProfileFields({ vendorId, onChanged }: { vendorId: number; onChanged?: 
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-[12px] sm:grid-cols-3">
         <div>
           <label className={labelCls}>Vendor type</label>
           <input className={inputCls} value={form.vendor_type} disabled={!canEdit}
@@ -180,7 +181,7 @@ function ProfileFields({ vendorId, onChanged }: { vendorId: number; onChanged?: 
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-[12px] sm:grid-cols-2">
         <div>
           <label className={labelCls}>Primary contact</label>
           <input className={inputCls} value={form.primary_contact_name} disabled={!canEdit}
@@ -202,7 +203,7 @@ function ProfileFields({ vendorId, onChanged }: { vendorId: number; onChanged?: 
       {canEdit && (
         <div className="flex justify-end">
           <button onClick={() => save.mutate()} disabled={save.isPending}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">
+            className="inline-flex items-center gap-1.5 rounded-ds-card bg-ds-primary px-[16px] py-2 text-[13px] font-medium text-ds-on-primary hover:bg-ds-primary-hover disabled:opacity-50">
             {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save intake
           </button>
         </div>

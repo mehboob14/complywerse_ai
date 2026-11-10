@@ -4,7 +4,8 @@
 // Each blocking check on the current stage has a button to where it is cleared. Colours are inline hex: the platform CSS repaints
 // slate/green/amber utilities inside the shell.
 import { AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
-import { BTN, TONE } from '@/app/(dashboard)/vendor-risk/_ui';
+import { BTN } from '../_record/btn';
+import { TONE } from '@/lib/status';
 import { FIX_LABEL, openChecks, orderChecks, type Check, type Fix } from '../../../_lib/lifecycleLogic';
 
 function Row({ check, canFix, onFix }: { check: Check; canFix: boolean; onFix: (fix: Fix) => void }) {
@@ -17,9 +18,9 @@ function Row({ check, canFix, onFix }: { check: Check; canFix: boolean; onFix: (
     <li className="flex items-start gap-2.5 py-2">
       <span className="mt-0.5 shrink-0">{icon}</span>
       <div className="min-w-0 flex-1">
-        <p className="text-[13px] leading-5 text-[#1f2933]">{check.text}</p>
-        {check.met === false && check.detail && <p className="text-[12px] leading-4 text-[#64707e]">{check.detail}</p>}
-        {check.met === null && <p className="text-[12px] leading-4 text-[#64707e]">Not checked automatically</p>}
+        <p className="text-[13px] leading-5 text-ds-fg">{check.text}</p>
+        {check.met === false && check.detail && <p className="text-[12px] leading-4 text-ds-fg-muted">{check.detail}</p>}
+        {check.met === null && <p className="text-[12px] leading-4 text-ds-fg-muted">Not checked automatically</p>}
       </div>
       {check.met === false && check.fix && canFix && (
         <button type="button" className={`${BTN} !h-8 !px-2.5 !text-[13px]`} onClick={() => onFix(check.fix as Fix)}>
@@ -37,12 +38,12 @@ export default function CheckList({ checks, isCurrent, canFix, onFix }: {
   canFix: boolean;
   onFix: (fix: Fix) => void;
 }) {
-  if (!isCurrent) return <p className="text-[13px] leading-5 text-[#64707e]">Checked when this stage starts.</p>;
+  if (!isCurrent) return <p className="text-[13px] leading-5 text-ds-fg-muted">Checked when this stage starts.</p>;
   if (!checks || checks.length === 0) return null;
   const open = openChecks(checks);
   return (
     <div>
-      <h4 className="text-[13px] font-semibold leading-5" style={{ color: open ? TONE.warning.text : '#26323d' }}>
+      <h4 className="text-[13px] font-[600] leading-5" style={{ color: open ? TONE.warning.text : '#26323d' }}>
         {open ? `${open} to clear` : 'Checks'}
       </h4>
       <ul className="mt-0.5 divide-y divide-[#eef1f4]">

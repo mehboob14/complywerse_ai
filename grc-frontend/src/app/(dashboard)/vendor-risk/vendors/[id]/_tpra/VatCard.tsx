@@ -8,7 +8,9 @@ import { useMutation } from '@tanstack/react-query';
 import { BadgeCheck, Loader2, XCircle } from 'lucide-react';
 import { vendorLeaksApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
-import { BTN, TONE, fmt } from '../../../_ui';
+import { BTN } from '../_record/btn';
+import { TONE } from '@/lib/status';
+import { fmt } from '../../../_ui/fmt';
 import { FIELD } from '../../_components/formStyles';
 
 interface Check { valid: boolean; name: string | null; address: string | null; checked_at: string; name_matches?: boolean | null }
@@ -37,20 +39,20 @@ export default function VatCard({ vendorId, vatNumber, check, onChecked }: {
           </button>
         </form>
       )}
-      {error && <p role="alert" className="mt-2 text-[13px] leading-5 text-[#c01741]">{error}</p>}
+      {error && <p role="alert" className="mt-2 text-[13px] leading-5 text-ds-danger">{error}</p>}
       {check ? (
-        <div className="mt-3 rounded-lg border px-3 py-2.5" style={{ background: tone.tint, borderColor: tone.border }}>
-          <p className="flex items-center gap-1.5 text-[13px] font-semibold leading-5" style={{ color: tone.text }}>
+        <div className="mt-3 rounded-ds-card border px-3 py-2.5" style={{ background: tone.tint, borderColor: tone.border }}>
+          <p className="flex items-center gap-1.5 text-[13px] font-[600] leading-5" style={{ color: tone.text }}>
             {check.valid ? <BadgeCheck aria-hidden className="h-4 w-4" /> : <XCircle aria-hidden className="h-4 w-4" />}
             {vatNumber} is {check.valid ? 'registered' : 'not registered'}
           </p>
-          {check.name && <p className="mt-0.5 text-[13px] leading-5 text-[#26323d]">Registered to {check.name}{check.address ? `, ${check.address}` : ''}</p>}
+          {check.name && <p className="mt-0.5 text-[13px] leading-5 text-ds-fg-body">Registered to {check.name}{check.address ? `, ${check.address}` : ''}</p>}
           {check.name_matches === false && (
             <p className="mt-0.5 text-[13px] font-medium leading-5" style={{ color: TONE.warning.text }}>That is not this vendor&apos;s name: check it is the right company.</p>
           )}
-          <p className="mt-0.5 text-[12px] leading-4 text-[#64707e]">Checked {fmt.date(check.checked_at)}</p>
+          <p className="mt-0.5 text-[12px] leading-4 text-ds-fg-muted">Checked {fmt.date(check.checked_at)}</p>
         </div>
-      ) : !canEdit && <p className="text-[13px] leading-5 text-[#64707e]">Not checked yet.</p>}
+      ) : !canEdit && <p className="text-[13px] leading-5 text-ds-fg-muted">Not checked yet.</p>}
     </div>
   );
 }

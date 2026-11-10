@@ -9,9 +9,13 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Sparkles, ArrowRight, Calculator, AlertTriangle } from 'lucide-react';
-import { BTN, BTN_PRIMARY, Panel, TierBadge } from '@/app/(dashboard)/vendor-risk/_ui';
+import { BTN, BTN_PRIMARY } from '../_record/btn';
+import { TierBadge } from '../_record/recordUi';
+import RecordPanel from '../_record/RecordPanel';
 import { tpraApi } from '@/lib/api';
-import { RightSlidePanel } from '@/components/ui';
+import { ErrorState, Sheet, SkeletonLines } from '@/components/ui/ds';
+import { errorMessage } from '@/components/ui/ds/reportOutcome';
+import { ActivityBody } from '../_record/Activity';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -42,13 +46,6 @@ import TieringDialog from './TieringDialog';
 import { LifecycleChart, TierHalf } from './LifecycleStrip';
 import { ReasonDialog, SendBackDialog } from './StageDialogs';
 import { EngagementFacts } from './EngagementsPanel';
-
-interface AuditEntry {
-  id: number; entity: string; entity_id: number | null; action: string;
-  actor_id: number | null; actor_name: string | null;
-  from_value: string | null; to_value: string | null; reason: string | null;
-  assessment_id: number | null; created_at: string;
-}
 
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 
@@ -83,13 +80,6 @@ export default function TpraLifecycle({
   const [reassessOpen, setReassessOpen] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
   const [tiering, setTiering] = useState(false);
-
-  // Per-vendor audit timeline (TPRM-010) — loaded on demand.
-  const { data: audit } = useQuery({
-    queryKey: ['tpra-vendor-audit', vendorId],
-    queryFn: async () => (await tpraApi.getVendorAudit(vendorId)).data as { items: AuditEntry[] },
-    enabled: activityOpen,
-  });
 
   const { data, isLoading, error } = useLifecycle(vendorId, engagementId);
   const { data: scopes } = useEngagements(vendorId);
@@ -211,28 +201,17 @@ export default function TpraLifecycle({
     />
   );
 
-  if (isLoading) {
-    return <div className="flex items-center gap-2 py-12 text-[13px] text-[#64707e]"><Loader2 className="h-4 w-4 animate-spin" /> Loading lifecycle…</div>;
-  }
-  if (error) {
-    return (
-      <div className="flex h-48 flex-col items-center justify-center text-[#c01741]">
-        <AlertTriangle className="mb-2 h-7 w-7" />
-        <p className="text-[13px]">Failed to load the lifecycle.</p>
-        <button type="button" onClick={() => qc.invalidateQueries({ queryKey: lifecycleKey(vendorId, engagementId) })}
-          className="mt-2 text-[13px] font-medium text-[#0f766e] hover:underline">Retry</button>
-      </div>
-    );
-  }
+  if (isLoading) return <SkeletonLines lines={8} label="Loading the lifecycle" />;
+  if (error) return <ErrorState title="Couldn’t load the lifecycle" message={errorMessage(error)} onRetry={() => { void qc.invalidateQueries({ queryKey: lifecycleKey(vendorId, engagementId) }); }} />;
 
   // No assessment yet → tier it (which starts the lifecycle) or just start it.
   if (!assessment) {
     return (
-      <div className="space-y-3">
-        <div className="rounded-xl border border-dashed border-[#c3ccd5] bg-[#f6f8fa] p-8 text-center">
-          <Sparkles aria-hidden className="mx-auto mb-2 h-7 w-7 text-[#0f766e]" />
-          <p className="text-[15px] font-semibold text-[#1f2933]">No lifecycle yet</p>
-          <p className="mx-auto mt-1 max-w-sm text-[13px] leading-5 text-[#586472]">{scopeName} has not been tiered.</p>
+      <div className="space-y-[12px]">
+        <div className="rounded-ds-card border border-dashed border-ds-border-strong bg-ds-surface-subtle p-[32px] text-center">
+          <Sparkles aria-hidden className="mx-auto mb-2 h-7 w-7 text-ds-primary-text" />
+          <p className="text-[15px] font-[600] text-ds-fg">No lifecycle yet</p>
+          <p className="mx-auto mt-1 max-w-sm text-[13px] leading-5 text-ds-fg-muted">{scopeName} has not been tiered.</p>
           {canRunEngines && (
             <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
               <button type="button" className={BTN_PRIMARY} onClick={() => setTiering(true)}><Calculator aria-hidden className="h-4 w-4" /> Tier engagement</button>
@@ -265,16 +244,16 @@ export default function TpraLifecycle({
   ] : (canSendBack && viewing ? [{ key: 'back', label: 'Send back here…', onClick: () => setSendBackOpen(true) }] : []);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-[16px]">
       {/* The strip: where the work is, and the tier */}
-      <section className="grid gap-x-8 gap-y-5 rounded-xl border border-[#d5dbe1] bg-[#fff] p-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+      <section className="grid gap-x-8 gap-y-5 rounded-ds-card border border-ds-border bg-ds-surface p-[16px] lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <LifecycleChart stages={stages} current={current} checks={gate?.checks} cycle={assessment.version_no} selected={selectedKey}
           onSelect={setSelected} />
         <TierHalf tier={assessment.inherent_tier} score={assessment.inherent_score} policy={policy} canTier={canRunEngines}
           blockedWhy={data?.retier_blocked} onTier={() => setTiering(true)} onOpenTiering={() => setSelected('tiering')} />
       </section>
 
-      <div className="grid items-start overflow-hidden rounded-xl border border-[#d5dbe1] bg-[#fff] lg:grid-cols-[15rem_minmax(0,1fr)]">
+      <div className="grid items-start overflow-hidden rounded-ds-card border border-ds-border bg-ds-surface lg:grid-cols-[15rem_minmax(0,1fr)]">
         <StageRail stages={stages} current={current} selected={selectedKey} openChecks={open} tier={assessment.inherent_tier}
           onSelect={setSelected} />
         {selMeta && (
@@ -314,34 +293,9 @@ export default function TpraLifecycle({
         title="New reassessment" description={`Opens a fresh review of ${scopeName}.`} cta="Open reassessment"
         onSubmit={(reason) => reassessMut.mutate(reason)} />
 
-      {/* Per-vendor activity timeline (TPRM-010) */}
-      <RightSlidePanel isOpen={activityOpen} onClose={() => setActivityOpen(false)} title="Activity" width="w-full max-w-lg">
-        <div className="space-y-2">
-          {!audit ? (
-            <div className="flex items-center gap-2 py-6 text-sm text-gray-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
-          ) : audit.items.length === 0 ? (
-            <p className="py-6 text-sm text-gray-400">No recorded activity yet.</p>
-          ) : (
-            <ol className="relative space-y-3 border-l border-gray-200 pl-4">
-              {audit.items.map((a) => (
-                <li key={a.id} className="relative">
-                  <span className="absolute -left-[21px] top-1 h-2 w-2 rounded-full bg-primary-400 ring-2 ring-white" />
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium capitalize text-slate-600">{a.action}</span>
-                    <span className="text-xs font-medium text-slate-800 capitalize">{a.entity.replace('_', ' ')}{a.entity_id ? ` #${a.entity_id}` : ''}</span>
-                  </div>
-                  {(a.to_value || a.reason) && (
-                    <p className="mt-0.5 text-[11px] text-gray-500">{a.to_value ? `→ ${a.to_value}` : ''}{a.to_value && a.reason ? ' · ' : ''}{a.reason || ''}</p>
-                  )}
-                  <p className="mt-0.5 text-[10px] text-gray-400">
-                    {a.actor_name || (a.actor_id ? `User ${a.actor_id}` : 'System')} · {a.created_at ? new Date(a.created_at).toLocaleString() : ''}
-                  </p>
-                </li>
-              ))}
-            </ol>
-          )}
-        </div>
-      </RightSlidePanel>
+      <Sheet open={activityOpen} onClose={() => setActivityOpen(false)} title="Activity" subtitle="Who changed what on this supplier, newest first.">
+        {activityOpen && <ActivityBody vendorId={vendorId} />}
+      </Sheet>
     </div>
   );
 }
@@ -363,11 +317,11 @@ function StageBody({
         : <IntakePanel vendorId={vendorId} onChanged={onChanged} />;
     case 'tiering':
       return (
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#e1e6eb] bg-[#f6f8fa] p-3">
+        <div className="space-y-[12px]">
+          <div className="flex flex-wrap items-center justify-between gap-[12px] rounded-ds-card border border-ds-border bg-ds-surface-subtle p-3">
             <div className="flex items-center gap-2.5">
               <TierBadge tier={assessment.inherent_tier} />
-              <p className="text-[13px] text-[#586472]">
+              <p className="text-[13px] text-ds-fg-muted">
                 {assessment.inherent_tier ? `Score ${assessment.inherent_score ?? '—'}` : 'Not computed yet.'}
               </p>
             </div>
@@ -387,9 +341,9 @@ function StageBody({
       );
     case 'scoring':
       return (
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#e1e6eb] bg-[#f6f8fa] p-3">
-            <p className="flex items-center gap-1.5 text-[13px] font-medium text-[#26323d]">
+        <div className="space-y-[12px]">
+          <div className="flex flex-wrap items-center justify-between gap-[12px] rounded-ds-card border border-ds-border bg-ds-surface-subtle p-3">
+            <p className="flex items-center gap-1.5 text-[13px] font-medium text-ds-fg-body">
               Residual risk <InfoTip text="Scores the answers into a rating for each domain. A failed critical control raises a blocking finding." label="About scoring" />
             </p>
             {canRunEngines && (
@@ -403,7 +357,7 @@ function StageBody({
       );
     case 'dd_planning':
       return (
-        <div className="space-y-3">
+        <div className="space-y-[12px]">
           <TierRequirementsPanel vendorId={vendorId} assessmentId={assessmentId} canEdit={canRunEngines}
             onRunTiering={onTier} tieringBusy={false} onChanged={onChanged} />
           <PlanningPanel vendorId={vendorId} assessmentId={assessmentId} assessment={assessment} engagementId={engagement?.id ?? null} />
@@ -425,10 +379,10 @@ function StageBody({
       return <SignalsPanel vendorId={vendorId} />;
     case 'reassessment':
       return (
-        <div className="space-y-4">
+        <div className="space-y-[16px]">
           {onReassess && (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#e1e6eb] bg-[#f6f8fa] p-3">
-              <p className="flex items-center gap-1.5 text-[13px] font-medium text-[#26323d]">
+            <div className="flex flex-wrap items-center justify-between gap-[12px] rounded-ds-card border border-ds-border bg-ds-surface-subtle p-3">
+              <p className="flex items-center gap-1.5 text-[13px] font-medium text-ds-fg-body">
                 Next review <InfoTip text="Starts a new cycle and settles this one." label="About the next review" />
               </p>
               <button type="button" className={BTN} onClick={onReassess}>New reassessment</button>

@@ -6,7 +6,11 @@
 import { useId, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Upload } from 'lucide-react';
-import { BTN, BTN_PRIMARY, Dialog, ErrorState, Panel, Skeleton, TONE } from '@/app/(dashboard)/vendor-risk/_ui';
+import { BTN, BTN_PRIMARY } from '../_record/btn';
+import { Dialog } from '../_record/recordUi';
+import RecordPanel from '../_record/RecordPanel';
+import { ErrorState, Skeleton } from '@/components/ui/ds';
+import { TONE } from '@/lib/status';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -30,7 +34,7 @@ function Section({ title, info, children }: { title: string; info?: string; chil
   return (
     <section aria-labelledby={id}>
       <div className="mb-2 flex items-center gap-1.5 px-1">
-        <h2 id={id} className="text-[15px] font-semibold leading-6 text-[#1f2933]">{title}</h2>
+        <h2 id={id} className="text-[15px] font-[600] leading-6 text-ds-fg">{title}</h2>
         {info && <InfoTip text={info} label={`About ${title}`} />}
       </div>
       {children}
@@ -95,20 +99,20 @@ export default function AssessmentsTab({ vendorId, engagementId, onChanged }: Ta
     body = <ErrorState title="Couldn't load the assessments" message={apiErrorText(cards.error, 'Try again in a moment.')} onRetry={() => cards.refetch()} />;
   } else {
     body = (
-      <div className="space-y-3">
-        {scope.closed && <p className="text-[13px] leading-5 text-[#64707e]">{scope.closed}</p>}
+      <div className="space-y-[12px]">
+        {scope.closed && <p className="text-[13px] leading-5 text-ds-fg-muted">{scope.closed}</p>}
         {!scope.tiered && items.length === 0 && (
-          <p className="text-[13px] leading-5 text-[#586472]">Tier the engagement first. The tier sets which questions apply.</p>
+          <p className="text-[13px] leading-5 text-ds-fg-muted">Tier the engagement first. The tier sets which questions apply.</p>
         )}
         {scope.tiered && noContact && (
-          <div className="rounded-lg border p-3.5" style={{ background: TONE.warning.tint, borderColor: TONE.warning.border }}>
-            <p className="flex items-center gap-1.5 text-[13px] font-semibold" style={{ color: TONE.warning.text }}>
+          <div className="rounded-ds-card border p-3.5" style={{ background: TONE.warning.tint, borderColor: TONE.warning.border }}>
+            <p className="flex items-center gap-1.5 text-[13px] font-[600]" style={{ color: TONE.warning.text }}>
               <AlertTriangle aria-hidden className="h-4 w-4 shrink-0" /> No contact to send to
             </p>
-            <p className="mt-1 text-[13px] leading-5 text-[#586472]">Add a vendor contact with an email address first.</p>
+            <p className="mt-1 text-[13px] leading-5 text-ds-fg-muted">Add a vendor contact with an email address first.</p>
           </div>
         )}
-        {scope.tiered && !noContact && items.length === 0 && <p className="text-[13px] leading-5 text-[#64707e]">No questionnaires sent yet.</p>}
+        {scope.tiered && !noContact && items.length === 0 && <p className="text-[13px] leading-5 text-ds-fg-muted">No questionnaires sent yet.</p>}
         {items.length > 0 && (
           <ul className="space-y-2">
             {items.map((c) => <li key={c.id}><AssessmentCard card={c} onOpen={() => setOpenId(c.id)} /></li>)}
@@ -119,8 +123,8 @@ export default function AssessmentsTab({ vendorId, engagementId, onChanged }: Ta
   }
 
   return (
-    <div className="space-y-5">
-      <Panel
+    <div className="space-y-[20px]">
+      <RecordPanel
         title="Assessments"
         count={items.length || undefined}
         description={engagement?.name ?? 'General'}
@@ -138,17 +142,17 @@ export default function AssessmentsTab({ vendorId, engagementId, onChanged }: Ta
         ) : undefined}
       >
         {body}
-      </Panel>
+      </RecordPanel>
 
       <Section title="Requests & messages" info="Documents and answers asked of the vendor, and what has been said to it. The vendor answers in its portal.">
         <PortalPanel vendorId={vendorId} sections={['requests', 'messages']} />
       </Section>
 
-      <details className="rounded-xl border border-[#d5dbe1] bg-[#fff]" onToggle={(e) => setMore((e.currentTarget as HTMLDetailsElement).open)}>
-        <summary className="cursor-pointer rounded-xl px-5 py-3.5 text-[15px] font-semibold leading-6 text-[#1f2933] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]">
+      <details className="rounded-ds-card border border-ds-border bg-ds-surface" onToggle={(e) => setMore((e.currentTarget as HTMLDetailsElement).open)}>
+        <summary className="cursor-pointer rounded-ds-card px-[20px] py-3.5 text-[15px] font-[600] leading-6 text-ds-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-primary">
           Contacts and links
         </summary>
-        <div className="px-5 pb-5">{more && <PortalPanel vendorId={vendorId} sections={['contacts', 'links']} />}</div>
+        <div className="px-[20px] pb-5">{more && <PortalPanel vendorId={vendorId} sections={['contacts', 'links']} />}</div>
       </details>
 
       <Section title="Exposure">
@@ -190,8 +194,8 @@ export default function AssessmentsTab({ vendorId, engagementId, onChanged }: Ta
         )}
       >
         <form id="reassess-form" onSubmit={(e) => { e.preventDefault(); reassess.mutate(); }}>
-          <label htmlFor="reassess-why" className="mb-1 flex items-center gap-1 text-[13px] font-medium text-[#26323d]">
-            Why <span className="font-normal text-[#64707e]">(optional)</span>
+          <label htmlFor="reassess-why" className="mb-1 flex items-center gap-1 text-[13px] font-medium text-ds-fg-body">
+            Why <span className="font-normal text-ds-fg-muted">(optional)</span>
             <InfoTip text="Opens the next review. The current one is kept as history, and its questionnaires stay here." label="About reassessing" />
           </label>
           <textarea
@@ -200,7 +204,7 @@ export default function AssessmentsTab({ vendorId, engagementId, onChanged }: Ta
             maxLength={2000}
             value={why}
             onChange={(e) => setWhy(e.target.value)}
-            className="w-full rounded-lg border border-[#c3ccd5] bg-[#fff] px-2.5 py-2 text-sm text-[#1f2933] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]"
+            className="w-full rounded-ds-card border border-ds-border-strong bg-ds-surface px-2.5 py-2 text-[13px] text-ds-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-primary"
           />
         </form>
       </Dialog>

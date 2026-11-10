@@ -10,7 +10,12 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
 import { apiErrorText } from '@/lib/apiError';
 import { vendorRiskApi } from '@/lib/api';
-import { BTN, BTN_PRIMARY, Dialog, EmptyState, ErrorState, Panel, SeverityChip, Skeleton, StatusPill, fmt, type Tone } from '../../../_ui';
+import { BTN, BTN_PRIMARY } from './btn';
+import { Dialog, EmptyState, SeverityChip, StatusPill } from './recordUi';
+import RecordPanel from './RecordPanel';
+import { ErrorState, Skeleton } from '@/components/ui/ds';
+import { type Tone } from '@/lib/status';
+import { fmt } from '../../../_ui/fmt';
 import { TPRM_QUERY_OPTS } from '../../../_lib/tprmQuery';
 import { localToServer } from '../../../_lib/vendorRecordModel';
 import { AREA, FIELD, HINT, LABEL } from '../../_components/formStyles';
@@ -22,8 +27,8 @@ interface Incident {
 
 const SEVERITIES = ['critical', 'high', 'medium', 'low'];
 const STATUS_TONE: Record<string, Tone> = { open: 'danger', investigating: 'warning', resolved: 'success', closed: 'neutral' };
-const TH = 'whitespace-nowrap px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-[#64707e]';
-const TD = 'px-3 py-2.5 align-top text-[13px] leading-5 text-[#26323d]';
+const TH = 'whitespace-nowrap px-3 py-2 text-left text-[12px] font-[600] uppercase tracking-wide text-ds-fg-muted';
+const TD = 'px-3 py-2.5 align-top text-[13px] leading-5 text-ds-fg-body';
 const incidentsKey = (vendorId: number) => ['vendor-incidents', vendorId] as const;
 
 export default function IncidentsPanel({ vendorId }: { vendorId: number }) {
@@ -42,7 +47,7 @@ export default function IncidentsPanel({ vendorId }: { vendorId: number }) {
   const rows = data ?? [];
 
   return (
-    <Panel
+    <RecordPanel
       title="Incidents"
       count={rows.length || undefined}
       info="A critical incident opens an Issue of its own, linked from its row."
@@ -58,21 +63,21 @@ export default function IncidentsPanel({ vendorId }: { vendorId: number }) {
         <div className="-mx-5 overflow-x-auto" tabIndex={0} role="region" aria-label="Table of incidents">
           <table className="min-w-full">
             <thead>
-              <tr className="border-y border-[#e1e6eb] bg-[#f7f9fa]">
+              <tr className="border-y border-ds-border bg-ds-surface-subtle">
                 {['Incident', 'Severity', 'Status', 'Occurred', 'Resolved'].map((h) => <th key={h} scope="col" className={TH}>{h}</th>)}
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#e1e6eb]">
+            <tbody className="divide-y divide-ds-border">
               {rows.map((inc) => (
                 <tr key={inc.id}>
                   <td className={TD}>
-                    <span className="font-medium text-[#1f2933]">{inc.title}</span>
+                    <span className="font-medium text-ds-fg">{inc.title}</span>
                     {inc.linked_issue_id && (
-                      <Link href={`/issues/${inc.linked_issue_id}`} className="ml-2 inline-flex items-center gap-0.5 text-[12px] font-medium text-[#0f766e] hover:underline">
-                        Issue #{inc.linked_issue_id} <ArrowUpRight aria-hidden className="h-3 w-3" strokeWidth={1.75} />
+                      <Link href={`/issues/${inc.linked_issue_id}`} className="ml-2 inline-flex items-center gap-0.5 text-[12px] font-medium text-ds-primary-text hover:underline">
+                        Open the issue <ArrowUpRight aria-hidden className="h-3 w-3" strokeWidth={1.75} />
                       </Link>
                     )}
-                    {inc.description && <span className="line-clamp-2 block text-[12px] leading-4 text-[#64707e]">{inc.description}</span>}
+                    {inc.description && <span className="line-clamp-2 block text-[12px] leading-4 text-ds-fg-muted">{inc.description}</span>}
                   </td>
                   <td className={TD}><SeverityChip severity={inc.severity} solid={false} /></td>
                   <td className={TD}><StatusPill tone={STATUS_TONE[String(inc.status).toLowerCase()] ?? 'neutral'} variant="inline">{fmt.status(inc.status)}</StatusPill></td>
@@ -85,7 +90,7 @@ export default function IncidentsPanel({ vendorId }: { vendorId: number }) {
         </div>
       )}
       <RecordDialog vendorId={vendorId} open={adding} onClose={() => setAdding(false)} />
-    </Panel>
+    </RecordPanel>
   );
 }
 
@@ -130,12 +135,12 @@ function RecordDialog({ vendorId, open, onClose }: { vendorId: number; open: boo
         </>
       )}
     >
-      <form id={form} className="space-y-3.5" onSubmit={(e) => { e.preventDefault(); if (ready && !record.isPending) record.mutate(); }}>
+      <form id={form} className="space-y-[14px]" onSubmit={(e) => { e.preventDefault(); if (ready && !record.isPending) record.mutate(); }}>
         <div>
           <label htmlFor={`${form}-title`} className={LABEL}>What happened</label>
           <input id={`${form}-title`} data-autofocus required maxLength={255} className={FIELD} value={f.title} onChange={(e) => set({ title: e.target.value })} />
         </div>
-        <div className="grid gap-3.5 sm:grid-cols-2">
+        <div className="grid gap-[14px] sm:grid-cols-2">
           <div>
             <label htmlFor={`${form}-severity`} className={LABEL}>Severity</label>
             <select id={`${form}-severity`} className={FIELD} value={f.severity} onChange={(e) => set({ severity: e.target.value })}>

@@ -6,7 +6,8 @@
 import Link from 'next/link';
 import { useMutation } from '@tanstack/react-query';
 import { Bell } from 'lucide-react';
-import { BTN, TONE } from '@/app/(dashboard)/vendor-risk/_ui';
+import { BTN } from '../_record/btn';
+import { TONE } from '@/lib/status';
 import { useToast } from '@/components/ui/ToastProvider';
 import { apiErrorText, lifecycleApi, useNextStage, type NextRole } from '../../../_lib/lifecycleApi';
 
@@ -37,11 +38,11 @@ export default function NextBar({ vendorId, engagementId, stage, ready, canNotif
   const missing = data.roles.filter((r) => r.missing);
   const approvers = data.anyone_who_can_approve;
   return (
-    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg border border-[#d5dbe1] bg-[#f6f8fa] px-3.5 py-2.5">
-      <div className="min-w-0 text-[13px] leading-5 text-[#26323d]">
-        <span className="mr-2 text-[11px] font-bold tracking-wider text-[#64707e]">NEXT</span>
-        <span className="font-semibold">{data.stage_label}</span>
-        {held.length > 0 && <> goes to {held.map((r, i) => <span key={r.key}>{i > 0 && ', '}{names(r)} <span className="text-[#64707e]">({r.label})</span></span>)}</>}
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-ds-card border border-ds-border bg-ds-surface-subtle px-3.5 py-2.5">
+      <div className="min-w-0 text-[13px] leading-5 text-ds-fg-body">
+        <span className="mr-2 text-[12px] font-[700] tracking-wider text-ds-fg-muted">NEXT</span>
+        <span className="font-[600]">{data.stage_label}</span>
+        {held.length > 0 && <> goes to {held.map((r, i) => <span key={r.key}>{i > 0 && ', '}{names(r)} <span className="text-ds-fg-muted">({r.label})</span></span>)}</>}
         {held.length === 0 && approvers && ' goes to anyone who can approve vendors, other than the business owner and whoever submits it'}
         {missing.map((r) => (
           <span key={r.key} className="ml-2 font-medium" style={{ color: TONE.warning.text }}>No {r.label} on the roster</span>

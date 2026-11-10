@@ -98,8 +98,10 @@ const under = (path: string, href: string): boolean => path === href || path.sta
 
 /** A record's page is the row with `:id` for its number (`/vendor-risk/intake/12` is the row `/vendor-risk/intake/:id`). */
 const asRow = (path: string): string => path.replace(/\/\d+(?=\/|$)/g, '/:id');
+/** A vendor's record (`/vendor-risk/vendors/<id>`, not its summary) is a page of this model that no row of HEAD can name (the id is the address's): it draws its own head (vendor-record). */
+const RECORD = /^\/vendor-risk\/vendors\/\d+$/;
 
-export const headOf = (pathname: string): HeadBy => HEAD[clean(pathname)] ?? HEAD[asRow(clean(pathname))] ?? 'legacy';
+export const headOf = (pathname: string): HeadBy => HEAD[clean(pathname)] ?? HEAD[asRow(clean(pathname))] ?? (RECORD.test(clean(pathname)) ? 'page' : 'legacy');
 
 // ── which entry is on ────────────────────────────────────────────────────────────────────────────────────────────────────
 

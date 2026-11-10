@@ -1,4 +1,5 @@
 // Static metadata + style helpers for the TPRA lifecycle UI.
+import { formatDate } from '../../../../../../lib/format.ts';
 import type { StageStatus } from './types';
 
 export interface StageRaci {
@@ -44,7 +45,7 @@ const STAGE_DEFS: Array<Omit<StageMetaDef, 'accountable' | 'artifact'>> = [
     inputs: ['Business sponsor request', 'Service description & spend estimate', 'Data types and systems the vendor will touch'],
     activities: ['Register the vendor and assign a business owner', 'Define exactly what data and systems are in scope', 'Check for an existing or duplicate relationship', 'Draft an initial data classification'],
     raci: { R: ['Business owner'], A: ['TPRM lead'], C: ['Procurement'], I: ['Security'] },
-    artifacts: ['Intake form', 'Vendor record (VND-ID)'],
+    artifacts: ['Intake form', 'Vendor record'],
     exitCriteria: 'A vendor record exists with a named owner, a defined service scope, and a draft data classification.',
     domains: ['cybersecurity', 'data_privacy', 'compliance', 'legal'],
   },
@@ -212,12 +213,12 @@ export function rosterKeyForRaciLabel(label: string): string | null {
 // ── Style helpers (match the existing vendor-risk soft-tone tier badges) ─────
 export function tierBadge(tier?: string | null): string {
   const styles: Record<string, string> = {
-    critical: 'bg-rose-50 text-rose-700 border-rose-200',
-    high: 'bg-orange-50 text-orange-700 border-orange-200',
-    medium: 'bg-amber-50 text-amber-700 border-amber-200',
-    low: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    critical: 'bg-ds-danger-soft text-ds-danger border-ds-danger-border',
+    high: 'bg-ds-warning-soft text-ds-warning border-ds-border-strong',
+    medium: 'bg-ds-warning-soft text-ds-warning border-ds-border-strong',
+    low: 'bg-ds-success-soft text-ds-success border-ds-border-strong',
   };
-  return styles[(tier || '').toLowerCase()] || 'bg-slate-100 text-slate-600 border-slate-200';
+  return styles[(tier || '').toLowerCase()] || 'bg-ds-surface-hover text-ds-fg-body border-ds-border';
 }
 
 export function severityBadge(sev?: string | null): string {
@@ -227,15 +228,15 @@ export function severityBadge(sev?: string | null): string {
 export function stageStatusStyle(status: StageStatus): { dot: string; text: string; ring: string } {
   switch (status) {
     case 'complete':
-      return { dot: 'bg-emerald-500', text: 'text-emerald-700', ring: 'ring-emerald-200' };
+      return { dot: 'bg-ds-success', text: 'text-ds-success', ring: 'ring-ds-border-strong' };
     case 'in_progress':
-      return { dot: 'bg-primary-500', text: 'text-primary-700', ring: 'ring-primary-300' };
+      return { dot: 'bg-ds-primary', text: 'text-ds-primary-text', ring: 'ring-ds-border-strong' };
     case 'blocked':
-      return { dot: 'bg-rose-500', text: 'text-rose-700', ring: 'ring-rose-200' };
+      return { dot: 'bg-ds-danger', text: 'text-ds-danger', ring: 'ring-ds-danger-border' };
     case 'skipped':
-      return { dot: 'bg-slate-400', text: 'text-slate-500', ring: 'ring-slate-200' };
+      return { dot: 'bg-ds-fg-muted', text: 'text-ds-fg-muted', ring: 'ring-ds-border' };
     default:
-      return { dot: 'bg-slate-300', text: 'text-slate-400', ring: 'ring-slate-200' };
+      return { dot: 'bg-ds-border-strong', text: 'text-ds-fg-muted', ring: 'ring-ds-border' };
   }
 }
 
@@ -257,11 +258,4 @@ export const RECOMMENDATION_LABEL: Record<string, string> = {
   escalate_or_reject: 'Escalate or reject',
 };
 
-export function fmtDate(d?: string | null): string {
-  if (!d) return '—';
-  try {
-    return new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-  } catch {
-    return '—';
-  }
-}
+export const fmtDate = (d?: string | null): string => formatDate(d);

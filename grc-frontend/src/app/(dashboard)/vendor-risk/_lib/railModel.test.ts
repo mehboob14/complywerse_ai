@@ -89,7 +89,8 @@ test('HEAD: a page that draws its head draws the page head of the kit; a page th
   }
   assert.equal(headOf('/vendor-risk/vendors?tier=high'), 'page');
   assert.equal(headOf('/vendor-risk'), 'page');
-  assert.equal(headOf('/vendor-risk/vendors/12'), 'legacy');
+  assert.equal(headOf('/vendor-risk/vendors/12'), 'page', 'the record draws its own head (vendor-record, RecordHead.tsx)');
+  assert.equal(headOf('/vendor-risk/vendors/12/summary'), 'legacy');
   assert.equal(headOf('/vendor-risk/alerts'), 'legacy', 'a forward draws nothing');
   for (const path of ['/vendor-risk/monitoring', '/vendor-risk/security', '/vendor-risk/dependencies']) assert.equal(headOf(path), 'page', `${path}: the page draws its head and the strip`);
   assert.equal(headOf('/vendor-risk/intake'), 'page');
