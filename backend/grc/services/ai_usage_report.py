@@ -33,7 +33,7 @@ _PALETTE = ["#C2542E", "#0E5A46", "#2E5EAA", "#7A5CA8", "#C79A2A", "#55606B", "#
 _MODULE_LABELS = {
     "erm": "Enterprise Risk Management",
     "risks": "Risk Management",
-    "governance": "Policy Management",
+    "governance": "Governance",
     "compliance": "Compliance",
     "compliance_plugins": "Compliance Plugins",
     "control_library": "Control Library",

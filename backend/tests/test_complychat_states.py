@@ -82,6 +82,9 @@ def world(monkeypatch, tmp_path):
     monkeypatch.setattr(chat, "get_user_tenants", lambda user, db: [1])
     monkeypatch.setattr("grc.modules.governance.permissions.can_read_library", lambda db, user: True)
     monkeypatch.setattr(chat, "SQL_AGENT_ENABLED", True)
+    for name in ("detect_query_type", "generate_sql_query", "validate_sql", "format_query_results", "get_fallback_data_for_question",
+                "generate_answer_from_fallback_data", "fetch_table_schema_from_db", "load_full_database_schema", "drop_secret_columns", "NO_USABLE_DATA_TITLE"):
+        monkeypatch.setattr(chat, name, getattr(agent, name))      # the router binds these when it is first imported: another test file may have imported it where the agent did not load
     monkeypatch.setattr(chat, "validate_columns_in_sql", lambda sql: {"valid": True, "errors": [], "fixed_sql": None})
     monkeypatch.setattr(chat, "get_qdrant_service", lambda: None)
     monkeypatch.setattr(chat, "CHAT_UPLOAD_ROOT", tmp_path / "uploads")
