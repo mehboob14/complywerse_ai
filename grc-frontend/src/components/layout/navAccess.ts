@@ -192,7 +192,7 @@ export const navigation: NavEntry[] = [
     // Issue Register; the other items keep their own permission gates.
     requiredModules: ['frameworks', 'compliance', 'issue_management'],
     items: [
-      { name: 'Portal', href: '/auditor-portal', icon: Gavel, requiredPermissions: ['compliance:frameworks:*'] },
+      { name: 'Overview', href: '/auditor-portal', icon: LayoutDashboard, requiredPermissions: ['compliance:frameworks:*'] },
       { name: 'Internal Audit', href: '/auditor-portal/internal-audit', icon: ClipboardCheck, requiredPermissions: ['compliance:assessments:*'] },
       { name: 'Statutory Audit', href: '/auditor-portal/statutory-audit', icon: ScrollText, requiredPermissions: ['compliance:assessments:*'] },
       // Audit Services' register — the client's monthly issue workbook, validated and reported.

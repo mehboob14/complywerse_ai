@@ -83,10 +83,10 @@ test('every entry lights on its own page, and on the pages under it unless it is
   }
 });
 
-test('every Overview (and the dashboard) lights on its own page only, but Assessments: /assessments/<framework> is its own family', () => {
+test('every Overview (and the dashboard) lights on its own page only, but Assessments (/assessments/<framework>) and the Auditor Portal (/auditor-portal/<journey>) are families of their own', () => {
   const overviews = leaves.filter((l) => l.name === 'Overview' || l.name === 'Performance Overview');
   assert.ok(overviews.length >= 6, 'the Overview entries are there (Business Continuity is one leaf now, with no Overview of its own)');
-  for (const l of overviews) assert.equal(!!l.exact, l.href !== '/assessments', `${l.name} (${l.href})`);
+  for (const l of overviews) assert.equal(!!l.exact, l.href !== '/assessments' && l.href !== '/auditor-portal', `${l.name} (${l.href})`);
 });
 
 // The pages of an area that have no entry of their own lit its Overview before the Overview became exact (Phase 1 changes nothing outside
@@ -104,10 +104,11 @@ const OVERVIEW_PAGES: Array<[string, string]> = [
   ['/compliance/assessments/approvals', '/compliance'],
   ['/compliance/statements', '/compliance'],
   ['/assessments/1', '/assessments'],
+  ['/auditor-portal/7', '/auditor-portal'],
 ];
 
-test('the 12 pages with no entry of their own still light their area\'s Overview', () => {
-  assert.equal(OVERVIEW_PAGES.length, 12);
+test('the 13 pages with no entry of their own still light their area\'s Overview', () => {
+  assert.equal(OVERVIEW_PAGES.length, 13);
   for (const [path, want] of OVERVIEW_PAGES) assert.equal(activeNavHref(path, navigation), want, path);
 });
 
