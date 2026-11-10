@@ -129,5 +129,6 @@ test('the drawer\'s words: a feed date is read as a day, and a history line says
   assert.equal(historyWords({ action: 'triage', from: 'acknowledged', to: 'investigating' }), 'Acknowledged → Investigating');
   assert.equal(historyWords({ action: 'triage', from: null, to: 'confirmed' }), 'New → Confirmed');
   assert.equal(historyWords({ action: 'research', from: null, to: null }), 'Researched by AI');
+  assert.equal(historyWords({ action: 'create', from: null, to: null }), 'Recorded');
   assert.equal(historyWords({ action: 'something_new', from: null, to: null }), 'Something new');
 });

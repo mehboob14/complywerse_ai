@@ -132,12 +132,8 @@ export function AlertDrawer({ row, nav, canEdit, canRaise }: { row: AlertRow | n
             )}
 
             <FactList min={150}>
-              <Fact label="Supplier">
-                <span className="inline-flex flex-wrap items-center gap-[6px]">
-                  <Link href={`/vendor-risk/vendors/${row.vendor.id}`} className={LINK}>{row.vendor.name}<ArrowUpRight aria-hidden size={12} className="ml-[2px] inline" /></Link>
-                  {row.vendor.tier && <StatusPill size="sm" {...statusPill(vendorTier, row.vendor.tier)} />}
-                </span>
-              </Fact>
+              <Fact label="Supplier"><Link href={`/vendor-risk/vendors/${row.vendor.id}`} className={LINK}>{row.vendor.name}<ArrowUpRight aria-hidden size={12} className="ml-[2px] inline" /></Link></Fact>
+              <Fact label="Supplier tier" empty="Not tiered">{row.vendor.tier ? <StatusPill size="sm" {...statusPill(vendorTier, row.vendor.tier)} /> : null}</Fact>
               <Fact label="Happened">{formatDate(row.occurred_at)}</Fact>
               <Fact label="Source" empty="Entered by hand">{row.source}</Fact>
               <Fact label="With" empty="Nobody yet">{row.owner?.name}</Fact>

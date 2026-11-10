@@ -93,12 +93,12 @@ export default function RatingsRegister({ label, head }: { label: string; head: 
       notices={a ? (
         <>
           {!a.enabled && (
-            <Notice tone="warning" title="Scheduled scans are off" action={<Link href="/vendor-risk/settings" className={LINK}>Open Settings</Link>}>
+            <Notice tone="warning" title="Scheduled scans are off" action={<Button variant="link" href="/vendor-risk/settings">Open Settings</Button>}>
               Until they are turned on, a supplier is scanned only when someone asks from its Outside-in tab.
             </Notice>
           )}
           {!a.shodan && (
-            <Notice tone="info" title="Exposed services and known vulnerabilities are not included" action={<Link href="/admin/connectors" className={LINK}>Open Connectors</Link>}>
+            <Notice tone="info" title="Exposed services and known vulnerabilities are not included" action={<Button variant="link" href="/admin/connectors">Open Connectors</Button>}>
               Add a Shodan key to include them. UpGuard, SecurityScorecard and BitSight connect there too.
             </Notice>
           )}

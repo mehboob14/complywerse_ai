@@ -185,7 +185,7 @@ export function seenOn(raw: string | null | undefined): string | null {
 }
 
 const WORDS: Record<string, string> = {
-  research: 'Researched by AI', update: 'Updated', dismiss: 'Dismissed: nothing to act on', raise_finding: 'Raised as a finding', verify: 'Verified from outside', reject: 'Ruled out as not about this supplier',
+  create: 'Recorded', research: 'Researched by AI', update: 'Updated', dismiss: 'Dismissed: nothing to act on', raise_finding: 'Raised as a finding', verify: 'Verified from outside', reject: 'Ruled out as not about this supplier',
 };
 /** One line of a signal's history in words: "New → Investigating", "Researched by AI". */
 export function historyWords(h: { action: string; from: string | null; to: string | null }): string {
