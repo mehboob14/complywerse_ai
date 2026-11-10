@@ -112,6 +112,13 @@ test('the conversation is a labelled log that keyboard users can scroll, the box
   for (const f of FILES) for (const m of Array.from(read(f).matchAll(/<IconButton\b[^>]*>/g))) assert.match(m[0], /label=/, `${f}: ${m[0]}`);
 });
 
+test('no bare <p>, <td> or <th>: the shell gives a bare one 11.5px and dark text (measured on the composer\'s footer), so each names its size and colour', () => {
+  for (const f of FILES.filter((x) => x.endsWith('.tsx'))) {
+    const code = read(f).replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:'"`])\/\/[^\n]*/g, '$1');
+    for (const m of Array.from(code.matchAll(/<(p|td|th)(\s[^>]*)?>/g))) assert.match(m[2] ?? '', /className=/, `${f}: ${m[0].slice(0, 60)}`);
+  }
+});
+
 test('a scroller that holds screen-reader-only words is positioned, so they cannot make the whole window scroll (measured: a 6-answer chat grew the document to 4,246px)', () => {
   assert.match(read('_chat/ChatPage.tsx'), /className="relative min-h-0 flex-1 overflow-y-auto/);
   assert.match(read('_chat/Composer.tsx'), /<div className="relative border-t border-ds-border/);

@@ -120,9 +120,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
         )}
       </form>
       <div className="mt-[6px] flex flex-wrap justify-between gap-x-[16px] gap-y-[2px] text-ds-label text-ds-fg-muted">
-        <p>Comply Agent can make mistakes. Chats are saved in this browser only.</p>
+        <p className="text-ds-label text-ds-fg-muted">Comply Agent can make mistakes. Chats are saved in this browser only.</p>
         {/* what can be attached: said here from a tablet up, and always to a screen reader (the attach button is described by it); a phone learns it when a file is refused */}
-        <p id="complychat-upload-help" className="sr-only sm:not-sr-only">{UPLOAD_HELP}</p>
+        <p id="complychat-upload-help" className="sr-only text-ds-label text-ds-fg-muted sm:not-sr-only">{UPLOAD_HELP}</p>
       </div>
     </div>
   );
