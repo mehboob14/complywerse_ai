@@ -4846,7 +4846,7 @@ export const adminApi = {
         total_tokens: number;
         estimated_cost_usd: number;
       }>;
-    }>('/admin/ai-usage/overview', { params }),
+    }>('/admin/ai-usage/tracing/overview', { params }),
   getAiUsageRuns: (params?: { start?: string; end?: string; limit?: number; offset?: number; feature?: string }) =>
     apiClient.get<{
       configured: boolean;

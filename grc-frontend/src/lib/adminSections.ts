@@ -112,31 +112,31 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
   }),
   // ---- AI ----
   S({
-    id: 'ai-governance', label: 'AI governance', group: 'ai', url: '/admin/ai-governance', ownHeading: false,
+    id: 'ai-governance', label: 'AI governance', group: 'ai', url: '/admin/ai-governance', ownHeading: true,
     rights: ['admin:ai_governance:view', 'admin:ai_governance:payloads'],
     keywords: ['AI Governance', 'AI inventory'],
   }),
   S({
-    id: 'ai-usage', label: 'AI usage', group: 'ai', url: '/admin/ai-usage', ownHeading: false,
+    id: 'ai-usage', label: 'AI usage', group: 'ai', url: '/admin/ai-usage', ownHeading: true,
     paths: ['/admin/usage'],
     rights: ['admin:users:view', 'admin:organization:view', 'admin:organization:edit'],
     keywords: ['Token usage', 'Usage Monitoring', 'AI cost', 'Budgets'],
   }),
   // ---- Automation ----
   S({
-    id: 'workflow', label: 'Workflow Engine', group: 'automation', url: '/workflow-engine', ownHeading: false, layout: 'full',
+    id: 'workflow', label: 'Workflow Engine', group: 'automation', url: '/workflow-engine', ownHeading: true, layout: 'full',
     rights: ['workflow_engine:definitions:view', 'workflow_engine:definitions:edit', 'workflow_engine:integrations:view', 'workflow_engine:executions:view'],
     tabs: [{ tab: 'workflow' }],
     keywords: ['Workflow Engine', 'Workflows', 'Automation rules', 'Triggers'],
   }),
   S({
-    id: 'scheduler', label: 'Scheduled jobs', group: 'automation', url: '/admin/scheduler', ownHeading: false,
+    id: 'scheduler', label: 'Scheduled jobs', group: 'automation', url: '/admin/scheduler', ownHeading: true,
     rights: ['admin:settings:view', 'admin:settings:edit'],
     keywords: ['Scheduler', 'Jobs', 'Run now'],
   }),
   // ---- Audit ----
   S({
-    id: 'audit-logs', label: 'Audit log', group: 'audit', url: '/admin/audit-logs', ownHeading: false,
+    id: 'audit-logs', label: 'Audit log', group: 'audit', url: '/admin/audit-logs', ownHeading: true,
     rights: ['admin:audit_logs:view'],
     tabs: [{ tab: 'audit' }],
     keywords: ['Audit Logs', 'Activity', 'Who changed'],

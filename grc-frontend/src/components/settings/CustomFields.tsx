@@ -219,7 +219,7 @@ export function CustomFieldInputs({ moduleKey, fields, values, onChange }: {
                   );
                 })}
                 {f.depends_on && choicesFor(f).length === 0 && (
-                  <p className="text-[11px] text-slate-400">
+                  <p className="text-[12px] text-slate-400">
                     {values[f.depends_on]
                       ? 'No options for this choice.'
                       : `Select ${fields.find((p) => p.key === f.depends_on)?.label || 'the parent'} first.`}
@@ -243,7 +243,7 @@ export function CustomFieldInputs({ moduleKey, fields, values, onChange }: {
                 step={f.type === 'number' ? 'any' : undefined}
                 onChange={(e) => set(f.key, e.target.value)} />
             )}
-            {f.help && <p className="mt-0.5 text-[11px] text-slate-400">{f.help}</p>}
+            {f.help && <p className="mt-0.5 text-[12px] text-slate-400">{f.help}</p>}
           </div>
         );
       })}
@@ -256,7 +256,7 @@ function KeptValues({ settings, values }: { settings: ModuleSettings; values: Cu
   const kept = settings.fields.filter((f) => f.archived && !blank(values[f.key]));
   if (!kept.length) return null;
   return (
-    <p className="mt-3 text-[11px] text-slate-400">
+    <p className="mt-3 text-[12px] text-slate-400">
       Kept from removed fields: {kept.map((f) => {
         const v = values[f.key];
         return `${f.label}: ${Array.isArray(v) ? v.join(', ') : v === true ? 'Yes' : v === false ? 'No' : String(v)}`;
@@ -405,7 +405,7 @@ export function FieldsEditor({ moduleKey, settings }: { moduleKey: string; setti
           {dropdown && (
             <div className="mt-2 rounded-md bg-slate-50 p-2">
               <p className="mb-1.5 text-xs font-medium text-slate-700">Dropdown options</p>
-              <label className="mb-2 block text-[11px] text-slate-500">
+              <label className="mb-2 block text-[12px] text-slate-500">
                 Depends on
                 <select className={`${input} mt-0.5`} aria-label="Depends on" value={f.depends_on || ''}
                   onChange={(e) => patch(i, { depends_on: e.target.value || null, options: e.target.value ? [] : f.options })}>
@@ -414,14 +414,14 @@ export function FieldsEditor({ moduleKey, settings }: { moduleKey: string; setti
                 </select>
               </label>
               {f.depends_on && !parent && (
-                <p className="text-[11px] text-amber-700">That dropdown is no longer on the form. Pick another, or use one list.</p>
+                <p className="text-[12px] text-amber-700">That dropdown is no longer on the form. Pick another, or use one list.</p>
               )}
               {f.depends_on && parent && parentOptions.length === 0 && (
-                <p className="text-[11px] text-slate-500">Add options on {parent.label || 'that dropdown'} first. Each one gets its own list here.</p>
+                <p className="text-[12px] text-slate-500">Add options on {parent.label || 'that dropdown'} first. Each one gets its own list here.</p>
               )}
               {f.depends_on && parent && parentOptions.map((name) => (
                 <div key={name} className="mb-2 border-l-2 border-slate-200 pl-2">
-                  <p className="mb-1 text-[11px] font-medium text-slate-600">When {parent.label || 'it'} is {name}</p>
+                  <p className="mb-1 text-[12px] font-medium text-slate-600">When {parent.label || 'it'} is {name}</p>
                   <OptionRows options={f.groups?.[name] || []} placeholder={`Add option for ${name}`}
                     onChange={(kids) => patch(i, { groups: { ...(f.groups || {}), [name]: kids } })} />
                 </div>
@@ -449,7 +449,7 @@ export function FieldsEditor({ moduleKey, settings }: { moduleKey: string; setti
       </div>
       {save.isError && <ErrorLine text={errorText(save.error, 'Could not save the fields.')} />}
       {removed.length > 0 && (
-        <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
+        <p className="flex flex-wrap items-center gap-1.5 text-[12px] text-slate-400">
           Removed, values kept on records:
           {removed.map((f) => (
             <button key={f.key} type="button" title="Bring this field back"
@@ -505,7 +505,7 @@ export function ListsEditor({ moduleKey, settings }: { moduleKey: string; settin
           </button>
         ))}
       </div>
-      {list?.note && <p className="text-[11px] text-amber-700">{list.note}</p>}
+      {list?.note && <p className="text-[12px] text-amber-700">{list.note}</p>}
       <div className="space-y-1.5">
         {draft.map((o, i) => !o.archived && (
           <div key={o.value || `new-${i}`} className="space-y-1.5">
@@ -517,7 +517,7 @@ export function ListsEditor({ moduleKey, settings }: { moduleKey: string; settin
             </div>
             {list?.child_label && (
               <div className="ml-3 border-l-2 border-slate-200 pl-2">
-                <p className="mb-1 text-[11px] text-slate-500">{list.child_label} when {o.label || 'this'} is selected</p>
+                <p className="mb-1 text-[12px] text-slate-500">{list.child_label} when {o.label || 'this'} is selected</p>
                 <OptionRows options={o.children || []} placeholder={`Add ${list.child_label.toLowerCase()}`}
                   onChange={(children) => patch(i, { children })} />
               </div>
@@ -534,7 +534,7 @@ export function ListsEditor({ moduleKey, settings }: { moduleKey: string; settin
         </button>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
+        <p className="flex flex-wrap items-center gap-1.5 text-[12px] text-slate-400">
           {draft.some((o) => o.archived) && 'Removed, kept on records:'}
           {draft.map((o, i) => o.archived && (
             <button key={o.value} type="button" title="Bring this option back" onClick={() => patch(i, { archived: false })}
@@ -597,7 +597,7 @@ export function BuiltinEditor({ moduleKey, settings, onEditOptions }: {
                 <button type="button" onClick={onEditOptions} className="px-1 text-xs text-blue-700 hover:underline">Options</button>
               )}
               {f.locked ? (
-                <span className="px-1 text-[11px] text-slate-400" title="The record needs this field">Kept</span>
+                <span className="px-1 text-[12px] text-slate-400" title="The record needs this field">Kept</span>
               ) : (
                 <button type="button" title="Remove field" onClick={() => patch(f.key, { hidden: true })}
                   className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
@@ -607,7 +607,7 @@ export function BuiltinEditor({ moduleKey, settings, onEditOptions }: {
         </div>
       ))}
       <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-        <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
+        <p className="flex flex-wrap items-center gap-1.5 text-[12px] text-slate-400">
           {removed.length > 0 && 'Removed from the form:'}
           {removed.map((f) => (
             <button key={f.key} type="button" title="Bring this field back" onClick={() => patch(f.key, { hidden: false })}
@@ -641,7 +641,7 @@ export function CustomFieldsTabBar({ tab, onTab, settings }: {
         <button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => onTab(t)}
           className={`-mb-px border-b-2 px-3 py-1.5 text-xs font-medium ${tab === t ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>
           {t === 'details' ? 'Details' : 'Custom fields'}
-          {t === 'custom' && count > 0 && <span className="ml-1.5 rounded-full bg-slate-100 px-1.5 text-[10px] text-slate-600">{count}</span>}
+          {t === 'custom' && count > 0 && <span className="ml-1.5 rounded-full bg-slate-100 px-1.5 text-[12px] text-slate-600">{count}</span>}
         </button>
       ))}
     </div>
@@ -698,7 +698,7 @@ export function CustomFieldsTab({ moduleKey, values, onChange }: {
                 <FieldsEditor moduleKey={moduleKey} settings={settings} />
               </>
             )}
-          <p className="mt-3 text-[11px] text-slate-400">
+          <p className="mt-3 text-[12px] text-slate-400">
             Changes apply to every {record} in your organisation. Removing a field or option keeps what records already hold.
           </p>
         </div>
@@ -779,7 +779,7 @@ export function CustomValuesList({ moduleKey, values }: { moduleKey: string; val
     <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
       {shown.map((f) => (
         <div key={f.key} className="min-w-0">
-          <dt className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+          <dt className="text-[12px] font-medium uppercase tracking-wide text-slate-500">
             {f.label}{f.archived && <span className="ml-1 normal-case text-slate-400">(removed)</span>}
           </dt>
           <dd className="whitespace-pre-wrap break-words text-sm text-slate-800">{show(f, values?.[f.key])}</dd>

@@ -60,11 +60,11 @@ export function SidebarTree<T extends TreeItem>({ items, query = '', expanded = 
           onClick={() => setOpen((prev) => ({ ...prev, [group.id]: !prev[group.id] }))}
           aria-expanded={isOpen}
           className={`flex w-full items-center gap-1 rounded text-left hover:bg-slate-50 ${dense ? 'px-1.5 py-1' : 'px-2 py-1.5'} ${
-            depth === 0 ? 'text-xs font-semibold text-slate-800' : 'text-[11px] font-medium text-slate-600'}`}
+            depth === 0 ? 'text-xs font-semibold text-slate-800' : 'text-[12px] font-medium text-slate-600'}`}
         >
           {isOpen ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
           <span className="flex-1 truncate">{group.name}</span>
-          <span className="text-[10px] font-normal text-slate-400">{group.count}</span>
+          <span className="text-[12px] font-normal text-slate-400">{group.count}</span>
         </button>
         {isOpen && (
           <div className={`space-y-0.5 border-l border-slate-100 ${dense ? 'ml-1.5 pl-1' : 'ml-2.5 pl-1.5'}`}>

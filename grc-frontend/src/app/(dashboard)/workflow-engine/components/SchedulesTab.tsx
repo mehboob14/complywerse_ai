@@ -3,6 +3,9 @@
 import { Calendar, Copy, Globe, Plus, Trash2, ToggleLeft, ToggleRight, Webhook, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { workflowEngineApi } from '@/lib/api';
+import { formatDateTime } from '@/lib/format';
+import { ErrorState, useNotify } from '@/components/ui/ds';
+import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { WorkflowDefinition } from './types';
 
 type Schedule = {
@@ -29,8 +32,7 @@ type WebhookEndpoint = {
 };
 
 function formatDate(iso?: string): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleString();
+  return formatDateTime(iso);
 }
 
 type Tab = 'schedules' | 'webhooks';
@@ -40,6 +42,9 @@ export function SchedulesTab({ definitions }: { definitions: WorkflowDefinition[
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [webhooks, setWebhooks] = useState<WebhookEndpoint[]>([]);
   const [loading, setLoading] = useState(true);
+  const notify = useNotify();
+  const [error, setError] = useState<{ message: string; retry: boolean } | null>(null);
+  const copy = (text: string) => { navigator.clipboard.writeText(text).then(() => notify.success('Copied'), () => notify.error('Copying was blocked by the browser. Select the text and copy it by hand.')); };
   const [showCreateSchedule, setShowCreateSchedule] = useState(false);
   const [showCreateWebhook, setShowCreateWebhook] = useState(false);
 
@@ -64,6 +69,7 @@ export function SchedulesTab({ definitions }: { definitions: WorkflowDefinition[
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const [schedRes, webhookRes] = await Promise.all([
         workflowEngineApi.integrations.listSchedules(),
@@ -71,9 +77,10 @@ export function SchedulesTab({ definitions }: { definitions: WorkflowDefinition[
       ]);
       setSchedules(schedRes.data || []);
       setWebhooks(webhookRes.data || []);
-    } catch {
+    } catch (e) {
       setSchedules([]);
       setWebhooks([]);
+      setError({ message: errorMessage(e, 'The schedules and webhooks could not be loaded.'), retry: canRetry(e) });
     } finally {
       setLoading(false);
     }
@@ -96,9 +103,10 @@ export function SchedulesTab({ definitions }: { definitions: WorkflowDefinition[
       setNewSchedDef('');
       setNewSchedCron('0 9 * * 1');
       setNewSchedLabel('');
+      notify.success('Schedule created');
       await load();
     } catch (e) {
-      console.error('Create schedule error:', e);
+      notify.error(e, { title: "The schedule wasn't created", fallback: 'Check the timing and try again.' });
     } finally {
       setSaving(false);
     }
@@ -116,9 +124,10 @@ export function SchedulesTab({ definitions }: { definitions: WorkflowDefinition[
       setNewToken(res.data?.token || null);
       setNewWebhookName('');
       setNewWebhookEvent('');
+      notify.success('Webhook created');
       await load();
     } catch (e) {
-      console.error('Create webhook error:', e);
+      notify.error(e, { title: "The webhook wasn't created", fallback: 'Try again.' });
     } finally {
       setSaving(false);
     }
@@ -162,11 +171,11 @@ export function SchedulesTab({ definitions }: { definitions: WorkflowDefinition[
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-sm font-bold text-green-800 mb-1">Webhook Created!</p>
-                <p className="text-[11px] text-green-700 mb-2">Copy this token now — it will not be shown again.</p>
+                <p className="text-[12px] text-green-700 mb-2">Copy this token now — it will not be shown again.</p>
                 <div className="flex items-center gap-2 bg-white border border-green-300 rounded-lg px-3 py-1.5">
                   <code className="text-xs font-mono text-gray-800 break-all">{newToken}</code>
                   <button
-                    onClick={() => { navigator.clipboard.writeText(newToken); }}
+                    onClick={() => copy(newToken)}
                     className="shrink-0 p-1 hover:bg-green-100 rounded"
                     title="Copy token"
                   >
@@ -194,7 +203,7 @@ export function SchedulesTab({ definitions }: { definitions: WorkflowDefinition[
                 </div>
                 <div className="space-y-3">
                   <div>
-                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Workflow</label>
+                    <label className="text-[12px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Workflow</label>
                     <select
                       className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
                       value={newSchedDef}
@@ -207,13 +216,13 @@ export function SchedulesTab({ definitions }: { definitions: WorkflowDefinition[
                     </select>
                   </div>
                   <div>
-                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Frequency Preset</label>
+                    <label className="text-[12px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Frequency Preset</label>
                     <div className="flex flex-wrap gap-1.5 mb-2">
                       {CRON_PRESETS.map((p) => (
                         <button
                           key={p.value}
                           onClick={() => setNewSchedCron(p.value)}
-                          className={`text-[10px] px-2.5 py-1 rounded-full border transition-colors ${
+                          className={`text-[12px] px-2.5 py-1 rounded-full border transition-colors ${
                             newSchedCron === p.value
                               ? 'bg-blue-600 border-blue-600 text-white'
                               : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
@@ -223,7 +232,7 @@ export function SchedulesTab({ definitions }: { definitions: WorkflowDefinition[
                         </button>
                       ))}
                     </div>
-                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Cron Expression</label>
+                    <label className="text-[12px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Cron Expression</label>
                     <input
                       className="w-full text-xs font-mono border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
                       value={newSchedCron}
@@ -232,7 +241,7 @@ export function SchedulesTab({ definitions }: { definitions: WorkflowDefinition[
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Label (optional)</label>
+                    <label className="text-[12px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Label (optional)</label>
                     <input
                       className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
                       value={newSchedLabel}
@@ -252,36 +261,38 @@ export function SchedulesTab({ definitions }: { definitions: WorkflowDefinition[
             )}
 
             {loading ? (
-              <div className="text-center py-16 text-xs text-gray-400">Loading schedules...</div>
+              <div role="status" className="text-center py-16 text-xs text-gray-500">Loading schedules...</div>
+            ) : error ? (
+              <ErrorState title="Couldn't load the schedules" message={error.message} onRetry={error.retry ? () => { void load(); } : undefined} />
             ) : schedules.length === 0 ? (
               <div className="text-center py-16 text-xs text-gray-400">
                 <Calendar size={32} className="mx-auto mb-3 text-gray-200" />
-                <p className="font-medium">No schedules yet</p>
-                <p className="text-gray-300 mt-1">Create a schedule to run workflows automatically</p>
+                <p className="text-[13px] font-medium">No schedules yet</p>
+                <p className="text-[12px] text-gray-500 mt-1">Create a schedule to run workflows automatically</p>
               </div>
             ) : (
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-gray-100 bg-gray-50">
-                      <th className="text-left px-5 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Workflow</th>
-                      <th className="text-left px-5 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Schedule</th>
-                      <th className="text-left px-5 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Next Run</th>
-                      <th className="text-left px-5 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Last Run</th>
-                      <th className="text-center px-5 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Status</th>
+                      <th className="text-left px-5 py-2.5 text-[12px] font-semibold text-gray-500 uppercase tracking-wide">Workflow</th>
+                      <th className="text-left px-5 py-2.5 text-[12px] font-semibold text-gray-500 uppercase tracking-wide">Schedule</th>
+                      <th className="text-left px-5 py-2.5 text-[12px] font-semibold text-gray-500 uppercase tracking-wide">Next Run</th>
+                      <th className="text-left px-5 py-2.5 text-[12px] font-semibold text-gray-500 uppercase tracking-wide">Last Run</th>
+                      <th className="text-center px-5 py-2.5 text-[12px] font-semibold text-gray-500 uppercase tracking-wide">Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {schedules.map((s) => (
                       <tr key={s.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                        <td className="px-5 py-3 font-medium text-gray-800">{s.workflow_name || `Workflow #${s.workflow_definition_id}`}</td>
-                        <td className="px-5 py-3 font-mono text-gray-600 text-[10px]">{s.cron_expression || `Every ${s.interval_minutes}m`}</td>
-                        <td className="px-5 py-3 text-gray-500">{formatDate(s.next_run_at)}</td>
-                        <td className="px-5 py-3 text-gray-500">{formatDate(s.last_run_at)}</td>
-                        <td className="px-5 py-3 text-center">
+                        <td className="text-[12px] px-5 py-3 font-medium text-gray-800">{s.workflow_name || `Workflow #${s.workflow_definition_id}`}</td>
+                        <td className="text-[12px] px-5 py-3 font-mono text-gray-600 text-[12px]">{s.cron_expression || `Every ${s.interval_minutes}m`}</td>
+                        <td className="text-[12px] px-5 py-3 text-gray-500">{formatDate(s.next_run_at)}</td>
+                        <td className="text-[12px] px-5 py-3 text-gray-500">{formatDate(s.last_run_at)}</td>
+                        <td className="text-[12px] px-5 py-3 text-center">
                           {s.is_active
-                            ? <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">Active</span>
-                            : <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-semibold">Paused</span>
+                            ? <span className="text-[12px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">Active</span>
+                            : <span className="text-[12px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-semibold">Paused</span>
                           }
                         </td>
                       </tr>
@@ -306,7 +317,7 @@ export function SchedulesTab({ definitions }: { definitions: WorkflowDefinition[
                 </div>
                 <div className="space-y-3">
                   <div>
-                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Name</label>
+                    <label className="text-[12px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Name</label>
                     <input
                       className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
                       value={newWebhookName}
@@ -315,7 +326,7 @@ export function SchedulesTab({ definitions }: { definitions: WorkflowDefinition[
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Trigger Event</label>
+                    <label className="text-[12px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Trigger Event</label>
                     <input
                       className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
                       value={newWebhookEvent}
@@ -335,35 +346,37 @@ export function SchedulesTab({ definitions }: { definitions: WorkflowDefinition[
             )}
 
             {loading ? (
-              <div className="text-center py-16 text-xs text-gray-400">Loading webhooks...</div>
+              <div role="status" className="text-center py-16 text-xs text-gray-500">Loading webhooks...</div>
+            ) : error ? (
+              <ErrorState title="Couldn't load the webhooks" message={error.message} onRetry={error.retry ? () => { void load(); } : undefined} />
             ) : webhooks.length === 0 ? (
               <div className="text-center py-16 text-xs text-gray-400">
                 <Globe size={32} className="mx-auto mb-3 text-gray-200" />
-                <p className="font-medium">No webhooks yet</p>
-                <p className="text-gray-300 mt-1">Create a webhook to trigger workflows from external systems</p>
+                <p className="text-[13px] font-medium">No webhooks yet</p>
+                <p className="text-[12px] text-gray-500 mt-1">Create a webhook to trigger workflows from external systems</p>
               </div>
             ) : (
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-gray-100 bg-gray-50">
-                      <th className="text-left px-5 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Name</th>
-                      <th className="text-left px-5 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Event</th>
-                      <th className="text-left px-5 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Token</th>
-                      <th className="text-left px-5 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Last Triggered</th>
-                      <th className="text-center px-5 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Status</th>
+                      <th className="text-left px-5 py-2.5 text-[12px] font-semibold text-gray-500 uppercase tracking-wide">Name</th>
+                      <th className="text-left px-5 py-2.5 text-[12px] font-semibold text-gray-500 uppercase tracking-wide">Event</th>
+                      <th className="text-left px-5 py-2.5 text-[12px] font-semibold text-gray-500 uppercase tracking-wide">Token</th>
+                      <th className="text-left px-5 py-2.5 text-[12px] font-semibold text-gray-500 uppercase tracking-wide">Last Triggered</th>
+                      <th className="text-center px-5 py-2.5 text-[12px] font-semibold text-gray-500 uppercase tracking-wide">Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {webhooks.map((w) => (
                       <tr key={w.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                        <td className="px-5 py-3 font-medium text-gray-800">{w.name}</td>
-                        <td className="px-5 py-3 font-mono text-gray-600 text-[10px]">{w.event_name}</td>
-                        <td className="px-5 py-3">
+                        <td className="text-[12px] px-5 py-3 font-medium text-gray-800">{w.name}</td>
+                        <td className="text-[12px] px-5 py-3 font-mono text-gray-600 text-[12px]">{w.event_name}</td>
+                        <td className="text-[12px] px-5 py-3">
                           <div className="flex items-center gap-1.5">
-                            <span className="font-mono text-[10px] text-gray-500">{w.token.substring(0, 16)}...</span>
+                            <span className="font-mono text-[12px] text-gray-500">{w.token.substring(0, 16)}...</span>
                             <button
-                              onClick={() => navigator.clipboard.writeText(w.token)}
+                              onClick={() => copy(w.token)}
                               title="Copy token"
                               className="p-0.5 hover:bg-gray-200 rounded"
                             >
@@ -371,11 +384,11 @@ export function SchedulesTab({ definitions }: { definitions: WorkflowDefinition[
                             </button>
                           </div>
                         </td>
-                        <td className="px-5 py-3 text-gray-500">{formatDate(w.last_triggered_at)}</td>
-                        <td className="px-5 py-3 text-center">
+                        <td className="text-[12px] px-5 py-3 text-gray-500">{formatDate(w.last_triggered_at)}</td>
+                        <td className="text-[12px] px-5 py-3 text-center">
                           {w.is_active
-                            ? <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">Active</span>
-                            : <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-semibold">Inactive</span>
+                            ? <span className="text-[12px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">Active</span>
+                            : <span className="text-[12px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-semibold">Inactive</span>
                           }
                         </td>
                       </tr>

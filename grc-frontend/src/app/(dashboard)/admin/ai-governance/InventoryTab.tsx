@@ -1,48 +1,51 @@
 'use client';
 
+// AI governance > Features: everything in the product that can call AI, what it uses AI for and how its data is handled, by module. A search and three quick views. The
+// facts on each row are chips with words (never colour alone): when the feature fires, how much data may leave, and what is limited, reused or not yet checked.
 import { useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
-import { LEVEL_TONE, fmtNumber, fmtWhen } from './format';
+import { statusPill } from '@/lib/status';
+import { protectionLevel } from '@/lib/statuses/adminAuditAi';
+import { Button, EmptyState, FilterChips, SectionCard, StatusPill, TextInput, type FilterChip } from '@/components/ui/ds';
+import { fmtNumber, fmtWhen } from './format';
 import type { Inventory, UseCaseRow } from './types';
 
-const TRIGGER_FILTERS = [
+const FILTERS = [
   { key: 'all', label: 'All' },
   { key: 'own', label: 'Fire on their own' },
   { key: 'used', label: 'Used in this period' },
 ] as const;
+type FilterKey = (typeof FILTERS)[number]['key'];
 
-function Chip({ children, tone = 'border-slate-300 text-slate-700', title }: { children: React.ReactNode; tone?: string; title?: string }) {
-  return <span title={title} className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${tone}`}>{children}</span>;
+function Chip({ children, tone = 'neutral', title }: { children: React.ReactNode; tone?: 'neutral' | 'warning' | 'danger' | 'progress'; title?: string }) {
+  const cls = { neutral: 'border-ds-border-strong text-ds-fg-body', warning: 'border-ds-warning text-ds-warning', danger: 'border-ds-danger-border text-ds-danger', progress: 'border-ds-primary text-ds-primary-text' }[tone];
+  return <span title={title} className={`inline-flex items-center rounded-full border px-[8px] py-[1px] text-ds-label ${cls}`}>{children}</span>;
 }
 
 function Row({ u, onOpen }: { u: UseCaseRow; onOpen: (id: string) => void }) {
   return (
-    <li className="px-4 py-3">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <li className="px-[16px] py-[12px]">
+      <div className="flex flex-wrap items-start justify-between gap-[12px]">
         <div className="min-w-0 max-w-2xl">
-          <div className="font-medium text-slate-900">{u.label}</div>
-          <p className="mt-0.5 text-sm text-slate-700">{u.value}</p>
-          <p className="mt-0.5 text-xs text-slate-700">{u.surface}</p>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            <Chip tone={u.trigger === 'click' ? undefined : 'border-amber-300 text-amber-900'} title="When this feature calls AI">{u.trigger_label}</Chip>
-            <Chip tone={LEVEL_TONE[u.level]} title={u.level_meaning}>{u.level} · {u.level_meaning}</Chip>
-            {u.field_policy && <Chip tone="border-primary-300 text-primary-800" title="Only the fields this feature needs are read from the record">Fields limited</Chip>}
-            {u.cache_hours > 0 && <Chip tone="border-primary-300 text-primary-800" title="Asked again exactly as before, the answer is reused instead of calling the AI again">Repeats reused for {u.cache_hours >= 48 ? `${Math.round(u.cache_hours / 24)} days` : `${u.cache_hours} h`}</Chip>}
-            {u.tier !== 'standard' && <Chip tone="border-slate-300 text-slate-700" title={u.tier === 'light' ? 'Short, structured work: runs on the lighter model when one is set' : 'Long documents judged where a wrong answer costs most: runs on the stronger model when one is set'}>{u.tier === 'light' ? 'Light model' : 'Deep model'}</Chip>}
-            {!u.guarded && <Chip tone="border-rose-300 text-rose-800" title="This path is not covered by the request check yet">Not yet checked</Chip>}
-            {u.modality === 'vision' && <Chip tone="border-rose-300 text-rose-800" title="Pictures are refused">Pictures refused</Chip>}
+          <div className="text-ds-body font-[600] text-ds-fg">{u.label}</div>
+          <p className="m-0 mt-[2px] text-ds-body text-ds-fg-body">{u.value}</p>
+          <p className="m-0 mt-[2px] text-ds-label text-ds-fg-muted">{u.surface}</p>
+          <div className="mt-[8px] flex flex-wrap items-center gap-[6px]">
+            <Chip tone={u.trigger === 'click' ? 'neutral' : 'warning'} title="When this feature calls AI">{u.trigger_label}</Chip>
+            <span title={u.level_meaning}><StatusPill size="sm" {...statusPill(protectionLevel, u.level)} label={`${u.level} · ${u.level_meaning}`} /></span>
+            {u.field_policy && <Chip tone="progress" title="Only the fields this feature needs are read from the record">Fields limited</Chip>}
+            {u.cache_hours > 0 && <Chip tone="progress" title="Asked again exactly as before, the answer is reused instead of calling the AI again">Repeats reused for {u.cache_hours >= 48 ? `${Math.round(u.cache_hours / 24)} days` : `${u.cache_hours} h`}</Chip>}
+            {u.tier !== 'standard' && <Chip title={u.tier === 'light' ? 'Short, structured work: runs on the lighter AI when one is set' : 'Long documents judged where a wrong answer costs most: runs on the stronger AI when one is set'}>{u.tier === 'light' ? 'Light AI' : 'Deep AI'}</Chip>}
+            {!u.guarded && <Chip tone="danger" title="This path is not covered by the request check yet">Not yet checked</Chip>}
+            {u.modality === 'vision' && <Chip tone="danger" title="Pictures are refused">Pictures refused</Chip>}
           </div>
         </div>
-        <div className="shrink-0 text-right text-sm">
-          <div className="tabular-nums text-slate-900">{fmtNumber(u.calls)} {u.calls === 1 ? 'call' : 'calls'}</div>
-          <div className="text-xs text-slate-700">
+        <div className="shrink-0 text-right">
+          <div className="text-ds-body tabular-nums text-ds-fg">{fmtNumber(u.calls)} {u.calls === 1 ? 'call' : 'calls'}</div>
+          <div className="text-ds-label text-ds-fg-muted">
             {u.blocked ? `${fmtNumber(u.blocked)} blocked · ` : ''}{u.failed ? `${fmtNumber(u.failed)} failed · ` : ''}last used {u.last_used ? fmtWhen(u.last_used) : 'never'}
           </div>
-          {u.calls > 0 && (
-            <button type="button" onClick={() => onOpen(u.id)} className="mt-1 text-xs font-medium text-primary-700 hover:underline">
-              View calls
-            </button>
-          )}
+          {u.calls > 0 && <Button size="sm" variant="link" onClick={() => onOpen(u.id)} aria-label={`View the calls of ${u.label}`}>View calls</Button>}
         </div>
       </div>
     </li>
@@ -51,7 +54,7 @@ function Row({ u, onOpen }: { u: UseCaseRow; onOpen: (id: string) => void }) {
 
 export default function InventoryTab({ data, days, onOpenUseCase }: { data: Inventory; days: number; onOpenUseCase: (id: string) => void }) {
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<(typeof TRIGGER_FILTERS)[number]['key']>('all');
+  const [filter, setFilter] = useState<FilterKey>('all');
 
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -68,51 +71,24 @@ export default function InventoryTab({ data, days, onOpenUseCase }: { data: Inve
   }, [data, query, filter]);
 
   const shown = groups.reduce((n, g) => n + g.use_cases.length, 0);
+  const chips: FilterChip[] = FILTERS.map((f) => ({ key: f.key, label: f.label, active: filter === f.key }));
   return (
-    <div className="space-y-4">
-      <p className="max-w-3xl text-sm text-slate-700">
-        Everything in the product that can call AI, what it uses it for, and how its data is handled. Calls are for the last {days} days.
-        Nothing here can be switched off: protection applies to every feature.
-      </p>
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="relative">
-          <span className="sr-only">Search features</span>
-          <Search className="pointer-events-none absolute left-2.5 top-2.5 text-slate-500" size={14} aria-hidden />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search features"
-            className="w-64 rounded-md border border-slate-300 py-2 pl-8 pr-3 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-          />
-        </label>
-        <div className="flex gap-1.5" role="group" aria-label="Show">
-          {TRIGGER_FILTERS.map((f) => (
-            <button
-              key={f.key}
-              type="button"
-              aria-pressed={filter === f.key}
-              onClick={() => setFilter(f.key)}
-              className={`rounded-full border px-3 py-1 text-xs font-medium ${filter === f.key ? 'border-primary-500 bg-primary-50 text-primary-800' : 'border-slate-300 text-slate-700 hover:border-slate-400'}`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-        <span className="text-xs text-slate-700">{shown} of {data.total} features</span>
+    <div className="flex flex-col gap-[16px]">
+      <div className="flex flex-wrap items-center gap-[12px]">
+        <TextInput aria-label="Search features" placeholder="Search features" className="w-[260px]" leftAdornment={<Search aria-hidden size={14} />} value={query} onChange={(e) => setQuery(e.target.value)} />
+        <FilterChips label="Show" chips={chips} onToggle={(key) => setFilter(key as FilterKey)} />
+        <span className="text-ds-body text-ds-fg-muted">{shown} of {data.total} features · calls for the last {days} days</span>
       </div>
 
-      {groups.length === 0 && <p className="py-8 text-center text-sm text-slate-700">No feature matches.</p>}
+      {groups.length === 0 && <EmptyState kind="noMatches" title="No feature matches" onClearFilters={() => { setQuery(''); setFilter('all'); }} />}
       {groups.map((g) => (
-        <section key={g.module} aria-label={g.label}>
-          <h3 className="mb-1.5 text-sm font-semibold text-slate-900">{g.label} <span className="font-normal text-slate-700">· {g.use_cases.length}</span></h3>
-          <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+        <SectionCard key={g.module} id={`module-${g.module}`} title={g.label} meta={`${g.use_cases.length}`}>
+          <ul className="-mx-[16px] -mb-[16px] mt-0 list-none divide-y divide-ds-border border-t border-ds-border p-0">
             {g.use_cases.map((u) => <Row key={u.id} u={u} onOpen={onOpenUseCase} />)}
           </ul>
-        </section>
+        </SectionCard>
       ))}
-      {data.unclassified > 0 && (
-        <p className="text-xs text-slate-700">{fmtNumber(data.unclassified)} older calls in this period could not be matched to a feature.</p>
-      )}
+      {data.unclassified > 0 && <p className="m-0 text-ds-label text-ds-fg-muted">{fmtNumber(data.unclassified)} older calls in this period could not be matched to a feature.</p>}
     </div>
   );
 }

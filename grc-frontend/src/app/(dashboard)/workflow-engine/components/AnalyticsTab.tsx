@@ -3,6 +3,9 @@
 import { Activity, AlertTriangle, CheckCircle, Clock, RefreshCw, TrendingUp, Zap } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { workflowEngineApi } from '@/lib/api';
+import { formatDateTime } from '@/lib/format';
+import { ErrorState } from '@/components/ui/ds';
+import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { AnalyticsOverview, BottleneckItem, LiveInstance } from './types';
 
 function formatDuration(seconds: number): string {
@@ -12,7 +15,7 @@ function formatDuration(seconds: number): string {
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString();
+  return formatDateTime(iso);
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -25,7 +28,7 @@ function StatusBadge({ status }: { status: string }) {
     pending: 'bg-gray-100 text-gray-600',
   };
   return (
-    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${map[status] || 'bg-gray-100 text-gray-600'}`}>
+    <span className={`text-[12px] font-semibold px-2 py-0.5 rounded-full ${map[status] || 'bg-gray-100 text-gray-600'}`}>
       {status.replace(/_/g, ' ')}
     </span>
   );
@@ -41,9 +44,12 @@ export function AnalyticsTab() {
   const [loading, setLoading] = useState(true);
   const [liveLoading, setLiveLoading] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  // a failed load is said (and can be retried), never shown as zero runs
+  const [error, setError] = useState<{ message: string; retry: boolean } | null>(null);
 
   const loadOverview = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const [ovRes, btRes] = await Promise.all([
         workflowEngineApi.analytics.overview(),
@@ -52,8 +58,8 @@ export function AnalyticsTab() {
       setOverview(ovRes.data || {});
       const btData = btRes.data;
       setBottlenecks(Array.isArray(btData) ? btData : (btData?.bottlenecks || btData?.items || []));
-    } catch {
-      // silently fail
+    } catch (e) {
+      setError({ message: errorMessage(e, 'The analytics could not be loaded.'), retry: canRetry(e) });
     } finally {
       setLoading(false);
     }
@@ -61,13 +67,14 @@ export function AnalyticsTab() {
 
   const loadLive = useCallback(async () => {
     setLiveLoading(true);
+    setError(null);
     try {
       const res = await workflowEngineApi.analytics.liveStatus();
       const liveData = res.data;
       setLiveInstances(Array.isArray(liveData) ? liveData : (liveData?.instances || liveData?.items || []));
       setLastRefresh(new Date());
-    } catch {
-      // silently fail
+    } catch (e) {
+      setError({ message: errorMessage(e, 'The live runs could not be loaded.'), retry: canRetry(e) });
     } finally {
       setLiveLoading(false);
     }
@@ -125,7 +132,8 @@ export function AnalyticsTab() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-5">
-        {tab === 'overview' && (
+        {error && <ErrorState title="Couldn't load the analytics" message={error.message} onRetry={error.retry ? () => { void (tab === 'overview' ? loadOverview() : loadLive()); } : undefined} />}
+        {!error && tab === 'overview' && (
           <div className="space-y-6">
             {/* Stat cards */}
             <div className="grid grid-cols-3 lg:grid-cols-6 gap-3">
@@ -135,7 +143,7 @@ export function AnalyticsTab() {
                     <s.icon size={16} className={s.color} />
                   </div>
                   <div className={`text-xl font-bold ${s.color}`}>{s.value}</div>
-                  <div className="text-[10px] text-gray-500 text-center font-medium">{s.label}</div>
+                  <div className="text-[12px] text-gray-500 text-center font-medium">{s.label}</div>
                 </div>
               ))}
             </div>
@@ -145,7 +153,7 @@ export function AnalyticsTab() {
               <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-bold text-gray-800">Step Bottlenecks</h3>
-                  <p className="text-[11px] text-gray-400">Slowest steps by average duration</p>
+                  <p className="text-[12px] text-gray-400">Slowest steps by average duration</p>
                 </div>
               </div>
               {loading ? (
@@ -160,19 +168,19 @@ export function AnalyticsTab() {
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="border-b border-gray-100 bg-gray-50">
-                        <th className="text-left px-5 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Step</th>
-                        <th className="text-left px-5 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Type</th>
-                        <th className="text-right px-5 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Avg Duration</th>
-                        <th className="text-right px-5 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Instances</th>
+                        <th className="text-left px-5 py-2.5 text-[12px] font-semibold text-gray-500 uppercase tracking-wide">Step</th>
+                        <th className="text-left px-5 py-2.5 text-[12px] font-semibold text-gray-500 uppercase tracking-wide">Type</th>
+                        <th className="text-right px-5 py-2.5 text-[12px] font-semibold text-gray-500 uppercase tracking-wide">Avg Duration</th>
+                        <th className="text-right px-5 py-2.5 text-[12px] font-semibold text-gray-500 uppercase tracking-wide">Instances</th>
                       </tr>
                     </thead>
                     <tbody>
                       {bottlenecks.map((b, i) => (
                         <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                          <td className="px-5 py-2.5 font-medium text-gray-800">{b.node_key.replace(/_/g, ' ')}</td>
-                          <td className="px-5 py-2.5 text-gray-500">{b.node_type}</td>
-                          <td className="px-5 py-2.5 text-right font-semibold text-orange-600">{formatDuration(b.avg_duration_seconds)}</td>
-                          <td className="px-5 py-2.5 text-right text-gray-600">{b.instance_count}</td>
+                          <td className="text-[12px] px-5 py-2.5 font-medium text-gray-800">{b.node_key.replace(/_/g, ' ')}</td>
+                          <td className="text-[12px] px-5 py-2.5 text-gray-500">{b.node_type}</td>
+                          <td className="text-[12px] px-5 py-2.5 text-right font-semibold text-orange-600">{formatDuration(b.avg_duration_seconds)}</td>
+                          <td className="text-[12px] px-5 py-2.5 text-right text-gray-600">{b.instance_count}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -183,14 +191,14 @@ export function AnalyticsTab() {
           </div>
         )}
 
-        {tab === 'live' && (
+        {!error && tab === 'live' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-bold text-gray-800">Active Workflow Instances</h3>
-                <p className="text-[11px] text-gray-400">Last updated: {lastRefresh.toLocaleTimeString()} · Auto-refreshes every 30s</p>
+                <p className="text-[12px] text-gray-400">Last updated: {formatDateTime(lastRefresh)} · Auto-refreshes every 30s</p>
               </div>
-              <span className="text-[10px] bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full font-semibold">
+              <span className="text-[12px] bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full font-semibold">
                 {liveInstances.filter(i => i.status === 'running').length} Running
               </span>
             </div>
@@ -207,34 +215,34 @@ export function AnalyticsTab() {
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-gray-100 bg-gray-50">
-                      <th className="text-left px-5 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Workflow</th>
-                      <th className="text-left px-5 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Status</th>
-                      <th className="text-left px-5 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Current Step</th>
-                      <th className="text-left px-5 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Started</th>
-                      <th className="text-left px-5 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">SLA</th>
+                      <th className="text-left px-5 py-2.5 text-[12px] font-semibold text-gray-500 uppercase tracking-wide">Workflow</th>
+                      <th className="text-left px-5 py-2.5 text-[12px] font-semibold text-gray-500 uppercase tracking-wide">Status</th>
+                      <th className="text-left px-5 py-2.5 text-[12px] font-semibold text-gray-500 uppercase tracking-wide">Current Step</th>
+                      <th className="text-left px-5 py-2.5 text-[12px] font-semibold text-gray-500 uppercase tracking-wide">Started</th>
+                      <th className="text-left px-5 py-2.5 text-[12px] font-semibold text-gray-500 uppercase tracking-wide">SLA</th>
                     </tr>
                   </thead>
                   <tbody>
                     {liveInstances.map((inst) => (
                       <tr key={inst.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                        <td className="px-5 py-3 font-medium text-gray-800">
+                        <td className="text-[12px] px-5 py-3 font-medium text-gray-800">
                           {inst.workflow_name || `Instance #${inst.id}`}
                         </td>
-                        <td className="px-5 py-3">
+                        <td className="text-[12px] px-5 py-3">
                           <StatusBadge status={inst.status} />
                         </td>
-                        <td className="px-5 py-3 text-gray-500">
+                        <td className="text-[12px] px-5 py-3 text-gray-500">
                           {inst.current_node_key ? inst.current_node_key.replace(/_/g, ' ') : '—'}
                         </td>
-                        <td className="px-5 py-3 text-gray-500">{formatDate(inst.started_at)}</td>
-                        <td className="px-5 py-3">
+                        <td className="text-[12px] px-5 py-3 text-gray-500">{formatDate(inst.started_at)}</td>
+                        <td className="text-[12px] px-5 py-3">
                           {inst.is_overdue ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-semibold">
+                            <span className="inline-flex items-center gap-1 text-[12px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-semibold">
                               <AlertTriangle size={9} />
                               Overdue
                             </span>
                           ) : (
-                            <span className="text-[10px] text-green-600">On track</span>
+                            <span className="text-[12px] text-green-600">On track</span>
                           )}
                         </td>
                       </tr>

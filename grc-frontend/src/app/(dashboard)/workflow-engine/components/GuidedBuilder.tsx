@@ -24,6 +24,9 @@ import {
   PlayCircle, StopCircle, Loader2, Search, AlertTriangle, Check, FileText,
 } from 'lucide-react';
 import { workflowEngineApi } from '@/lib/api';
+import { ErrorState, Sheet, useNotify } from '@/components/ui/ds';
+import { errorMessage } from '@/components/ui/ds/reportOutcome';
+import { triggerWords } from '../workflowModel';
 import {
   formatNodeLabel,
   inferTriggerEventFromActionName,
@@ -215,6 +218,10 @@ export default function GuidedBuilder({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const notify = useNotify();
+  // the first load failing (the catalog, or the workflow being opened) is a state of its own with a Retry, not a blank builder under a banner
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -240,6 +247,7 @@ export default function GuidedBuilder({
     let cancelled = false;
     (async () => {
       setLoading(true);
+      setLoadError(null);
       try {
         const [catRes, schemaRes, rolesRes, usersRes] = await Promise.all([
           workflowEngineApi.catalog.nodeTypes(),
@@ -281,14 +289,14 @@ export default function GuidedBuilder({
           hydrateFromDefinition(defRes.data as Record<string, unknown>);
         }
       } catch (e) {
-        if (!cancelled) setError(extractErr(e));
+        if (!cancelled) setLoadError(errorMessage(e, 'The builder could not be loaded.'));
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [definitionId]);
+  }, [definitionId, attempt]);
 
   // ─── Round-trip: rebuild guided state from a saved definition's nodes ──────
   const hydrateFromDefinition = useCallback((def: Record<string, unknown>) => {
@@ -480,12 +488,13 @@ export default function GuidedBuilder({
         : await workflowEngineApi.definitions.create(payload);
       const id = (res.data as { id?: number })?.id ?? definitionId ?? undefined;
       if (id) onSaved?.(id);
+      notify.success('Workflow saved');
     } catch (e) {
-      setError('Save failed: ' + extractErr(e));
+      setError('Not saved. ' + errorMessage(e, 'Try again.'));
     } finally {
       setSaving(false);
     }
-  }, [buildPayload, definitionId, triggers.length, onSaved]);
+  }, [buildPayload, definitionId, triggers.length, onSaved, notify]);
 
   // Functions that can start a workflow, and the platform's named events
   // (manual/schedule/webhook excluded), both in sidebar order from the catalog.
@@ -502,13 +511,16 @@ export default function GuidedBuilder({
   const triggerDomains = useMemo(() => triggers.map((t) => t.domain), [triggers]);
 
   if (loading) {
-    return <div className="flex h-full items-center justify-center text-sm text-slate-500"><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading builder…</div>;
+    return <div role="status" className="flex min-h-[240px] items-center justify-center text-sm text-slate-500"><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading builder…</div>;
+  }
+  if (loadError) {
+    return <div className="p-[16px]"><ErrorState title="Couldn't open the builder" message={loadError} onRetry={() => setAttempt((a) => a + 1)} /></div>;
   }
 
   return (
-    <div className="flex h-full flex-col bg-slate-50">
-      {/* Header */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-4 py-2.5">
+    <div className="flex flex-col bg-slate-50">
+      {/* Header (stays in view while a long workflow scrolls) */}
+      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-4 py-2.5">
         <input
           value={name} onChange={(e) => setName(e.target.value)} placeholder="Workflow name…"
           className="min-w-[220px] flex-1 rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
@@ -525,7 +537,7 @@ export default function GuidedBuilder({
       </div>
 
       {error && (
-        <div className="flex items-center gap-2 border-b border-rose-200 bg-rose-50 px-4 py-2 text-xs text-rose-700">
+        <div role="alert" className="flex items-center gap-2 border-b border-rose-200 bg-rose-50 px-4 py-2 text-xs text-rose-700">
           <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" /> {error}
         </div>
       )}
@@ -542,7 +554,7 @@ export default function GuidedBuilder({
               <div className="mb-1 flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-slate-800">{t.label}</p>
-                  <p className="text-[11px] text-slate-500">{placeOf.get(t.key) || [t.module, t.submodule].filter(Boolean).join(' / ')} · fires on <code className="text-blue-700">{t.triggerEvent}</code></p>
+                  <p className="text-[12px] text-slate-500">{placeOf.get(t.key) || [t.module, t.submodule].filter(Boolean).join(' / ')} · starts when <span className="text-blue-700">{triggerWords(t.triggerEvent)}</span></p>
                 </div>
                 <button onClick={() => removeTrigger(t.uid)} className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
               </div>
@@ -620,7 +632,7 @@ export default function GuidedBuilder({
               <div className="space-y-3">
                 {triggers.map((t) => (
                   <div key={t.uid} className="rounded-md border border-violet-100 bg-white p-2.5">
-                    <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-violet-700">{t.label} <span className="text-slate-400">· {t.domain}</span></p>
+                    <p className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-violet-700">{t.label} <span className="text-slate-400">· {t.domain}</span></p>
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                       {escalationFieldsForDomain(t.domain).map((f) => (
                         <Field key={f.name} label={f.label}>
@@ -658,7 +670,7 @@ function ShellAnchor({ icon, label, hint, tone }: { icon: React.ReactNode; label
   const c = tone === 'blue' ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-300 bg-slate-100 text-slate-600';
   return (
     <div className={`mx-auto flex w-40 items-center justify-center gap-2 rounded-full border px-4 py-1.5 text-sm font-semibold ${c}`}>
-      {icon} {label} <span className="text-[10px] font-normal opacity-60">{hint}</span>
+      {icon} {label} <span className="text-[12px] font-normal opacity-60">{hint}</span>
     </div>
   );
 }
@@ -672,7 +684,7 @@ function Zone({ title, subtitle, icon, children }: { title: string; subtitle: st
         {icon}
         <div>
           <p className="text-sm font-semibold text-slate-800">{title}</p>
-          <p className="text-[11px] text-slate-500">{subtitle}</p>
+          <p className="text-[12px] text-slate-500">{subtitle}</p>
         </div>
       </div>
       <div className="space-y-2">{children}</div>
@@ -682,7 +694,7 @@ function Zone({ title, subtitle, icon, children }: { title: string; subtitle: st
 function Field({ label, full, children }: { label: string; full?: boolean; children: React.ReactNode }) {
   return (
     <div className={full ? 'sm:col-span-2' : ''}>
-      <label className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-slate-500">{label}</label>
+      <label className="mb-0.5 block text-[12px] font-medium uppercase tracking-wide text-slate-500">{label}</label>
       {children}
     </div>
   );
@@ -691,7 +703,7 @@ function Field({ label, full, children }: { label: string; full?: boolean; child
 // ── Recipient multi-select (roles + users) ──────────────────────────────────
 function RecipientChip({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-800">
+    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[12px] font-medium text-emerald-800">
       <span className="max-w-[130px] truncate">{label}</span>
       <button type="button" onClick={onRemove} className="hover:text-emerald-950"><X className="h-2.5 w-2.5" /></button>
     </span>
@@ -703,7 +715,7 @@ function RecipientRow({ label, sub, checked, onClick }: { label: string; sub?: s
       <span className={`flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center rounded border ${checked ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-300'}`}>
         {checked && <Check className="h-2.5 w-2.5" />}
       </span>
-      <span className="min-w-0 flex-1 truncate">{label}{sub ? <span className="ml-1 text-[10px] text-slate-400">{sub}</span> : null}</span>
+      <span className="min-w-0 flex-1 truncate">{label}{sub ? <span className="ml-1 text-[12px] text-slate-400">{sub}</span> : null}</span>
     </button>
   );
 }
@@ -743,15 +755,15 @@ function RecipientPicker({ roleChoices, userChoices, roleIds, userIds, onChange 
             </div>
           </div>
           <div className="max-h-48 overflow-y-auto p-1">
-            <p className="px-2 pt-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Roles</p>
-            {fRoles.length === 0 && <p className="px-2 py-1 text-[11px] text-slate-400">No roles</p>}
+            <p className="px-2 pt-1 text-[12px] font-semibold uppercase tracking-wide text-slate-400">Roles</p>
+            {fRoles.length === 0 && <p className="px-2 py-1 text-[12px] text-slate-400">No roles</p>}
             {fRoles.map((r) => <RecipientRow key={`r${r.id}`} label={r.name} checked={roleIds.includes(r.id)} onClick={() => toggleRole(r.id)} />)}
-            <p className="px-2 pt-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Users</p>
-            {fUsers.length === 0 && <p className="px-2 py-1 text-[11px] text-slate-400">No users</p>}
+            <p className="px-2 pt-2 text-[12px] font-semibold uppercase tracking-wide text-slate-400">Users</p>
+            {fUsers.length === 0 && <p className="px-2 py-1 text-[12px] text-slate-400">No users</p>}
             {fUsers.map((u) => <RecipientRow key={`u${u.id}`} label={u.label} sub={u.email} checked={userIds.includes(u.id)} onClick={() => toggleUser(u.id)} />)}
           </div>
           <div className="border-t border-slate-100 p-1.5 text-right">
-            <button type="button" onClick={() => setOpen(false)} className="rounded bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-200">Done</button>
+            <button type="button" onClick={() => setOpen(false)} className="rounded bg-slate-100 px-2 py-1 text-[12px] font-medium text-slate-600 hover:bg-slate-200">Done</button>
           </div>
         </div>
       )}
@@ -770,27 +782,27 @@ function MessageEditor({ value, domains, onChange }: {
     <div className="space-y-1">
       <div className="flex flex-wrap items-center gap-1">
         <div className="relative">
-          <button type="button" onClick={() => setTplOpen((o) => !o)} className="inline-flex items-center gap-1 rounded border border-emerald-300 bg-white px-2 py-0.5 text-[11px] font-medium text-emerald-700 hover:bg-emerald-50">
+          <button type="button" onClick={() => setTplOpen((o) => !o)} className="inline-flex items-center gap-1 rounded border border-emerald-300 bg-white px-2 py-0.5 text-[12px] font-medium text-emerald-700 hover:bg-emerald-50">
             <FileText className="h-3 w-3" /> Templates <ChevronDown className={`h-3 w-3 transition-transform ${tplOpen ? 'rotate-180' : ''}`} />
           </button>
           {tplOpen && (
             <div className="absolute z-30 mt-1 max-h-60 w-72 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg">
               {templates.map((t) => (
                 <button key={t.name} type="button" onClick={() => { onChange(t.text); setTplOpen(false); }} className="block w-full border-b border-slate-50 px-2 py-1.5 text-left last:border-0 hover:bg-emerald-50">
-                  <span className="block text-[11px] font-medium text-slate-700">{t.name}</span>
-                  <span className="mt-0.5 block truncate text-[10px] text-slate-400">{t.text}</span>
+                  <span className="block text-[12px] font-medium text-slate-700">{t.name}</span>
+                  <span className="mt-0.5 block truncate text-[12px] text-slate-400">{t.text}</span>
                 </button>
               ))}
             </div>
           )}
         </div>
-        <span className="text-[10px] text-slate-400">Insert:</span>
+        <span className="text-[12px] text-slate-400">Insert:</span>
         {TEMPLATE_PLACEHOLDERS.map((p) => (
-          <button key={p.token} type="button" title={p.label} onClick={() => insert(p.token)} className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600 hover:bg-slate-200">{p.token}</button>
+          <button key={p.token} type="button" title={p.label} onClick={() => insert(p.token)} className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] text-slate-600 hover:bg-slate-200">{p.token}</button>
         ))}
       </div>
       <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={3} className="w-full rounded border border-slate-300 px-2 py-1 text-xs" placeholder={'e.g. A risk "{{title}}" was {{action}} — please review.'} />
-      <p className="text-[10px] text-slate-400">Placeholders like <code className="text-slate-500">{'{{title}}'}</code> are filled with live values when the workflow runs.</p>
+      <p className="text-[12px] text-slate-400">Placeholders like <code className="text-slate-500">{'{{title}}'}</code> are filled with live values when the workflow runs.</p>
     </div>
   );
 }
@@ -799,7 +811,7 @@ function MessageEditor({ value, domains, onChange }: {
 function ParamFields({ fields, value, onChange, roleOptions }: {
   fields: NodeParamField[]; value: Record<string, unknown>; onChange: (f: string, v: unknown) => void; roleOptions: string[];
 }) {
-  if (!fields.length) return <p className="text-[11px] text-slate-400">No configuration — fires whenever this happens.</p>;
+  if (!fields.length) return <p className="text-[12px] text-slate-400">No configuration — fires whenever this happens.</p>;
   return (
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
       {fields.map((f) => (
@@ -872,49 +884,45 @@ function TriggerPicker({ functions, events, onPickCrud, onPickEvent, onClose }: 
     <button key={key} onClick={onPick} className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-blue-50 hover:text-blue-700">
       <Zap className={`h-3 w-3 flex-shrink-0 ${color}`} />
       <span className="flex-1 truncate">{label}</span>
-      {code && <code className="text-[10px] text-slate-400">{code}</code>}
+      {code && <code className="text-[12px] text-slate-400">{code}</code>}
     </button>
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 sm:p-10" onClick={onClose}>
-      <div className="flex max-h-full w-full max-w-lg flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-          <h3 className="text-sm font-semibold text-slate-900">Add a trigger</h3>
-          <button onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button>
-        </div>
-        <div className="space-y-2 border-b border-slate-100 p-3">
+    <Sheet open onClose={onClose} width="md" title="Add a trigger" initialFocus="input[type=search], input">
+      <div className="flex flex-col gap-2">
+        <div className="space-y-2 border-b border-slate-100 pb-3">
           <div className="flex gap-1 rounded-lg bg-slate-50 p-1">
             {tabBtn('events', `Platform events${events.length ? '' : ' (0)'}`)}
             {tabBtn('actions', 'Create / Update / Delete')}
           </div>
           <div className="flex items-center gap-2 rounded-md border border-slate-300 px-2">
             <Search className="h-3.5 w-3.5 text-slate-400" />
-            <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={tab === 'events' ? 'Search platform events…' : 'Search platform functions…'} className="w-full py-1.5 text-sm focus:outline-none" />
+            <input aria-label="Search triggers" value={q} onChange={(e) => setQ(e.target.value)} placeholder={tab === 'events' ? 'Search platform events…' : 'Search platform functions…'} className="w-full py-1.5 text-sm focus:outline-none" />
           </div>
-          <p className="text-[11px] text-slate-400">
+          <p className="text-[12px] text-slate-500">
             {tab === 'events'
               ? 'Events the platform raises (created, completed, approvals, SLA breaches, expiries), listed as the sidebar lists its pages. Any one starts the workflow.'
               : 'Records being created, edited or deleted, listed as the sidebar lists its pages. Each maps 1:1 to a system event.'}
           </p>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-2">
+        <div className="min-h-0 flex-1 overflow-y-auto">
           {tab === 'events' ? (
             events.length === 0 ? (
-              <p className="px-3 py-6 text-center text-xs text-slate-400">No platform events available.</p>
+              <p className="px-3 py-6 text-center text-xs text-slate-500">No platform events available.</p>
             ) : (
               <SidebarTree items={events} query={q} renderItem={(it) =>
-                row(it.key, it.label || formatNodeLabel(it.key), it.key, 'text-amber-500', () => onPickEvent(it))} />
+                row(it.key, it.label || formatNodeLabel(it.key), null, 'text-amber-500', () => onPickEvent(it))} />
             )
           ) : (
             <SidebarTree items={functions} query={q} renderItem={(it) =>
               row(it.key, it.label || formatNodeLabel(it.key.split('.').pop() || it.key),
-                inferTriggerEventFromActionName(it.key), 'text-blue-500', () => onPickCrud(it))} />
+                null, 'text-blue-500', () => onPickCrud(it))} />
           )}
         </div>
       </div>
-    </div>
+    </Sheet>
   );
 }
 
