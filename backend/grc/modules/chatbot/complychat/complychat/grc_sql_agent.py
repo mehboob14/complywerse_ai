@@ -208,7 +208,7 @@ def _deterministic_format_query_results(results: list, question: str, total_coun
         f"Found **{found}** item(s) for: \"{question.strip()}\".\n\n"
     )
 
-    table = "| " + " | ".join(columns) + " |\n"
+    table = "| " + " | ".join(str(col).replace("_", " ").strip().capitalize() for col in columns) + " |\n"      # "Created by", not created_by
     table += "|" + "|".join(["---" for _ in columns]) + "|\n"
     for row in shown:
         values = []

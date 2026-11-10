@@ -33,11 +33,12 @@ const COMPONENTS: Components = {
       <table className="min-w-full border-collapse text-left">{children}</table>
     </div>
   ),
-  thead: ({ children }) => <thead className="bg-ds-surface-hover">{children}</thead>,
+  thead: ({ children }) => <thead>{children}</thead>,
   tbody: ({ children }) => <tbody>{children}</tbody>,
   tr: ({ children }) => <tr className="border-b border-ds-border last:border-b-0">{children}</tr>,
-  th: ({ children }) => <th className="whitespace-nowrap px-[10px] py-[8px] text-left text-ds-label font-[600] text-ds-fg">{children}</th>,
-  td: ({ children }) => <td className="min-w-[96px] max-w-[320px] px-[10px] py-[8px] align-top text-ds-body text-ds-fg-body [overflow-wrap:anywhere]">{children}</td>,
+  // the kit's Th and Td write their size, colour and fill with `!` (the shell's rules for table cells win over a plain class): so do these
+  th: ({ children }) => <th scope="col" className="whitespace-nowrap border-b !border-ds-border !bg-ds-surface-subtle px-[10px] text-left align-middle !text-ds-label !text-ds-fg-muted [&&]:!py-[8px]">{children}</th>,
+  td: ({ children }) => <td className="min-w-[96px] max-w-[320px] px-[10px] align-top !text-ds-body !text-ds-fg-body [overflow-wrap:anywhere] [&&]:!py-[8px]">{children}</td>,
 };
 
 function Anchor({ href, children }: { href?: string; children?: ReactNode }) {

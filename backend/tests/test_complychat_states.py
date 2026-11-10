@@ -259,6 +259,7 @@ def test_a_failed_summary_falls_back_to_the_plain_table_without_ids(monkeypatch)
     rows = [{"id": 9, "tenant_id": 1, "title": "Phishing", "created_at": "2026-01-01"}]
     answer = agent.format_query_results(rows, "list risks", "SELECT 1", total_count=1)
     assert "Phishing" in answer and "tenant_id" not in answer and "created_at" not in answer
+    assert "| Title |" in answer, "column names read as words, not as column keys"
 
 
 # ── a deleted chat takes its files out of the vector store ──────────────────────────────────────────────────────────────────

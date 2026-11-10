@@ -1,6 +1,6 @@
 // node --test "src/lib/navPages/complychat.test.ts"
 // Comply Agent in the navigation registry: the one page of the folder has exactly one entry, no sidebar leaf (the top bar opens it), the right the page checks,
-// and it draws the kit's head from its chat component, so the top bar names nothing and the name is on screen once.
+// and it draws the kit's head from its chat component, so the top bar names only the section and the name is on screen once.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -32,7 +32,7 @@ test('the entry says where it opens from, and the page checks the right the regi
 
 test('the page draws the kit head, so the entry is flagged and the top bar names nothing; the head says the entry\'s name', () => {
   assert.equal(routeFor('/complychat')?.ownHeading, true);
-  assert.equal(ownHeadingSection('/complychat'), '', 'its section is its own name');
+  assert.equal(ownHeadingSection('/complychat'), 'AI assistant', 'the top bar names the section, the page names itself');
   const chat = read('_chat/ChatPage.tsx');
   assert.match(chat, /<PageHeader[\s\S]{0,80}variant="page"/);
   assert.match(chat, /title="Comply Agent"/);
