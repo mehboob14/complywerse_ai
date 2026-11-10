@@ -270,3 +270,42 @@ def test_a_request_is_decided_once_and_approved_is_final(db, as_user):
         assert r.status_code == 400, call
     assert as_user(TEAM).post(f"/vendors/{approved}/intake/review").status_code == 400
     assert db.get(Vendor, approved).intake_status == "approved"
+
+
+# ── a page of the requests, a queue order, counts that stay whole ────────────
+
+def test_the_requests_come_in_pages_with_a_total_and_without_a_limit_as_before(db, as_user):
+    ids = [_submitted(as_user, f"Request {n:02d}") for n in range(5)]
+    team = as_user(TEAM)
+    everything = team.get("/intake/requests").json()
+    assert len(everything["items"]) == 5 and everything["total"] == 5 and everything["limit"] is None
+    page = team.get("/intake/requests", params={"limit": 2}).json()
+    again = team.get("/intake/requests", params={"limit": 2, "skip": 2}).json()
+    last = team.get("/intake/requests", params={"limit": 2, "skip": 4}).json()
+    assert [len(p["items"]) for p in (page, again, last)] == [2, 2, 1]
+    assert all(p["total"] == 5 and p["counts"]["submitted"] == 5 for p in (page, again, last))
+    assert sorted(i["id"] for p in (page, again, last) for i in p["items"]) == sorted(ids)      # every request once, none twice
+    assert team.get("/intake/requests", params={"limit": 0}).status_code == 422
+
+
+def test_several_statuses_at_once_and_the_queue_puts_the_urgent_first_then_the_longest_wait(db, as_user):
+    early = _submitted(as_user, "Early Normal")
+    urgent = _submitted(as_user, "Urgent One", urgency="high")
+    late = _submitted(as_user, "Late Normal")
+    draft = as_user(REQUESTER).post("/intake/requests", json={"name": "Still A Draft", "urgency": "low"}).json()["id"]
+    team = as_user(TEAM)
+    got = team.get("/intake/requests", params={"statuses": "submitted,draft", "sort": "queue"}).json()
+    assert [i["id"] for i in got["items"]] == [urgent, early, late, draft]                  # high, then normal oldest first, then low
+    assert got["total"] == 4 and got["counts"]["submitted"] == 3 and got["counts"]["draft"] == 1
+    only = team.get("/intake/requests", params={"statuses": "draft"}).json()
+    assert [i["id"] for i in only["items"]] == [draft] and only["total"] == 1
+    assert only["counts"]["submitted"] == 3                                                # counts are what the search leaves, not the filter
+
+
+def test_a_search_with_a_percent_or_underscore_matches_those_characters_only(db, as_user):
+    plain = _submitted(as_user, "Plain Co")
+    odd = _submitted(as_user, "Fifty%_Off Ltd")
+    team = as_user(TEAM)
+    assert [i["id"] for i in team.get("/intake/requests", params={"search": "%"}).json()["items"]] == [odd]
+    assert [i["id"] for i in team.get("/intake/requests", params={"search": "y_O"}).json()["items"]] == []
+    assert {i["id"] for i in team.get("/intake/requests", params={"search": "co"}).json()["items"]} == {plain}
