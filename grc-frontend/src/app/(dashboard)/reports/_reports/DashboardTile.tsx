@@ -11,6 +11,7 @@ import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, ArrowUpRight, Lock, RotateCw } from 'lucide-react';
 import { Button, IconButton, SkeletonLines, Table, TBody, Td, Th, THead, Tr } from '@/components/ui/ds';
 import { EMPTY, formatCount } from '@/lib/format';
+import { tileState } from '@/lib/statuses/reports';
 import type { ChartKind, ColumnDef, ReportSpec, Row } from './types';
 import { datasetByKey, DATASETS } from './datasets';
 import { fetchLinkageCatalog } from './linkages';
@@ -109,7 +110,7 @@ export default function DashboardTileCard({
     [spec, plan.cols],
   );
 
-  const title = (tile.title || '').trim() || spec?.name || 'Untitled report';
+  const title = (tile.title || '').trim() || (spec ? spec.name || 'Untitled report' : tileState.label('missing'));
   const loading = loadingSpecs || (open && !!spec && (catalogQuery.isPending || rowsQuery.isPending));
   const listFailed = !spec && specsFailed;
   const problem = tileProblem({ loading, hasReport: !!spec || listFailed, moduleKnown: !!dataset || listFailed, moduleOpen: open || listFailed, failed: rowsQuery.isError || listFailed });
