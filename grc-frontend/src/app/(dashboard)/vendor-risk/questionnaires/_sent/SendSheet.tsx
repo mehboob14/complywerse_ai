@@ -72,7 +72,7 @@ export function SendSheet({ open, templates, templateId, onClose }: { open: bool
   const templateOptions: ListOption[] = sendable.map((t) => ({ value: String(t.id), label: t.name, description: plural(t.question_count, 'question', 'questions') }));
   const vendorOptions: ListOption[] = vendorChoices(vendors.data?.items ?? []);
   const note = vendors.data ? pickerNote(vendors.data.total, vendors.data.items.length) : null;
-  const dirty = open && !sent && (form.vendor !== '' || form.email !== '' || form.name !== '' || (!!form.template && form.template !== String(templateId ?? '')));
+  const dirty = open && !sent && (form.vendor !== '' || form.email !== '' || form.name !== '' || form.due !== FRESH.due || form.expires !== FRESH.expires || form.template !== (templateId ? String(templateId) : ''));
 
   const send = useReportedMutation({
     mutationFn: async () => (await vendorRiskApi.sendQuestionnaire({

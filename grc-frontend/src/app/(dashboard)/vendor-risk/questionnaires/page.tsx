@@ -54,7 +54,7 @@ export default function QuestionnairesPage() {
   const items = templates.data?.items;
   const tiering = new URLSearchParams(search).get('purpose') === 'tiering';
 
-  const meta = tab === 'library' ? (items ? libraryHead(items) : undefined)
+  const meta = tab === 'library' ? (items && !tiering ? libraryHead(items) : undefined)
     : tab === 'sent' ? (sent.data ? headLine(sent.data.items, new Date()) : undefined)
       : (shared.data ? sharedHead(shared.data.items) : undefined);
   const actions = tab === 'library' ? (rights.create && !tiering ? <Button variant="primary" leftIcon={<Plus aria-hidden />} onClick={() => setCreating(true)}>New questionnaire</Button> : null)

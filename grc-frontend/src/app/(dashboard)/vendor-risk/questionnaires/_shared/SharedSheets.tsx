@@ -39,10 +39,7 @@ export function PublishSheet({ open, onClose }: { open: boolean; onClose: () => 
   useEffect(() => { if (open) { setVendor(null); setProblem(null); } }, [open]);
 
   const publish = useReportedMutation({
-    mutationFn: async () => {
-      if (!chosen?.active_assessment_id) throw new Error('This supplier has no active assessment to publish.');
-      return (await tpraApi.publishShared(chosen.active_assessment_id)).data;
-    },
+    mutationFn: async (assessmentId: number) => (await tpraApi.publishShared(assessmentId)).data,
     success: () => `Shared: ${chosen?.name ?? 'the assessment'}`,
     failure: "Couldn't share the assessment",
     toast: 'success',
@@ -67,7 +64,16 @@ export function PublishSheet({ open, onClose }: { open: boolean; onClose: () => 
         </div>
       )}
     >
-      <form id={`${uid}-form`} className="flex flex-col gap-[16px]" onSubmit={(e) => { e.preventDefault(); if (vendor && !publish.isPending) { setProblem(null); publish.mutate(); } }}>
+      <form
+        id={`${uid}-form`} className="flex flex-col gap-[16px]"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (publish.isPending) return;
+          if (!chosen?.active_assessment_id) { setProblem('Choose a supplier that has an active assessment.'); return; }
+          setProblem(null);
+          publish.mutate(chosen.active_assessment_id);
+        }}
+      >
         <FormError title="Couldn't share the assessment" error={problem} />
         <SupplierField open={open} value={vendor} onChange={setVendor} hint="Only suppliers with an active assessment can be published." />
       </form>
@@ -86,11 +92,8 @@ export function ImportSheet({ open, onClose }: { open: boolean; onClose: () => v
   useEffect(() => { if (open) { setTarget(null); setToken(''); setPasted(''); setProblem(null); } }, [open]);
 
   const run = useReportedMutation({
-    mutationFn: async () => {
-      const plan = importPlan({ target: chosen?.active_assessment_id ?? null, token, pasted });
-      if (!plan.ok) throw new Error(plan.problem);
-      return (await tpraApi.importShared(chosen?.active_assessment_id as number, plan.body)).data as { responses: number; note: string };
-    },
+    mutationFn: async (v: { assessmentId: number; body: { share_token?: string; package?: Record<string, unknown> } }) =>
+      (await tpraApi.importShared(v.assessmentId, v.body)).data as { responses: number; note: string },
     success: (d) => ({ title: `Imported ${d.responses} ${d.responses === 1 ? 'answer' : 'answers'}`, message: d.note }),
     failure: "Couldn't import the answers",
     toast: 'success',
@@ -111,11 +114,18 @@ export function ImportSheet({ open, onClose }: { open: boolean; onClose: () => v
       footer={(
         <div className="flex flex-wrap justify-end gap-[8px]">
           <Button onClick={onClose}>Cancel</Button>
-          <Button type="submit" form={`${uid}-form`} variant="primary" loading={run.isPending} disabled={!target}>Import and pre-fill</Button>
+          <Button type="submit" form={`${uid}-form`} variant="primary" loading={run.isPending}>Import and pre-fill</Button>
         </div>
       )}
     >
-      <form id={`${uid}-form`} className="flex flex-col gap-[16px]" onSubmit={(e) => { e.preventDefault(); if (target && !run.isPending) { setProblem(null); run.mutate(); } }}>
+      <form id={`${uid}-form`} className="flex flex-col gap-[16px]" onSubmit={(e) => {
+        e.preventDefault();
+        if (run.isPending) return;
+        const plan = importPlan({ target: chosen?.active_assessment_id ?? null, token, pasted });        // what is missing is said here, in words, before anything is sent
+        if (!plan.ok) { setProblem(plan.problem); return; }
+        setProblem(null);
+        run.mutate({ assessmentId: chosen?.active_assessment_id as number, body: plan.body });
+      }}>
         <FormError title="Couldn't import the answers" error={problem} />
         <SupplierField open={open} value={target} onChange={setTarget} hint="The supplier whose active assessment gets the answers." />
         <FormField label="Share token" optional hint="From a shared assessment of this organisation. It wins over a pasted package.">

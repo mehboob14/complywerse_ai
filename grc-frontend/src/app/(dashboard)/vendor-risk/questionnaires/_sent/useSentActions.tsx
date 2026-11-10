@@ -15,7 +15,7 @@ import { SENT_REFRESH } from './sentApi';
 export const questionnaireLink = (token: string): string => `${typeof window === 'undefined' ? '' : window.location.origin}/vendor-risk/questionnaires/${token}`;
 
 async function copyText(text: string): Promise<void> {
-  if (typeof navigator === 'undefined' || !navigator.clipboard) throw new Error("This browser would not let the page copy. Open the questionnaire's details to copy the link from there.");
+  if (typeof navigator === 'undefined' || !navigator.clipboard) throw new Error('no clipboard');        // the person is told by the mutation's `fallback`: a plain Error carries no server words
   await navigator.clipboard.writeText(text);
 }
 
@@ -25,11 +25,12 @@ export function useSentActions(): { run: (action: SentAction, row: SentRow) => v
   const copyOwn = useReportedMutation({
     mutationFn: async (r: SentRow) => {
       const token = (await questionnairesApi.sentOne(r.id)).data.token;
-      if (!token) throw new Error('This questionnaire has no link of its own. Send a new link to give the contact one.');
+      if (!token) throw new Error('no link of its own');
       await copyText(questionnaireLink(token));
     },
     success: 'Link copied',
     failure: "Couldn't copy the link",
+    fallback: "This questionnaire's link could not be copied from here. Open its details to copy it, or send a new link.",         // a plain Error carries no server words: this is what is said
   });
   const copyContact = useReportedMutation({
     // a questionnaire on personal links has no link of its own: a fresh one for its contact, opening at this questionnaire
@@ -39,6 +40,7 @@ export function useSentActions(): { run: (action: SentAction, row: SentRow) => v
     },
     success: "The contact's link was copied",
     failure: "Couldn't make a link",
+    fallback: "The contact's link could not be made or copied. Try again.",
   });
   const resend = useReportedMutation({
     mutationFn: async (r: SentRow) => {

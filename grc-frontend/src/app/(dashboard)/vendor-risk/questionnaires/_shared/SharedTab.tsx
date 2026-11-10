@@ -22,11 +22,12 @@ export default function SharedTab({ list, rights, onPublish }: { list: UseQueryR
 
   const copy = useReportedMutation({
     mutationFn: async (r: SharedRow) => {
-      if (typeof navigator === 'undefined' || !navigator.clipboard) throw new Error('This browser would not let the page copy.');
+      if (typeof navigator === 'undefined' || !navigator.clipboard) throw new Error('no clipboard');
       await navigator.clipboard.writeText(r.share_token);
     },
     success: (_d, r) => `Share token copied for ${supplierText(r)}`,
     failure: "Couldn't copy the share token",
+    fallback: 'This browser would not let the page copy. Download the package instead.',
   });
   const download = useReportedMutation({
     mutationFn: async (r: SharedRow) => {
