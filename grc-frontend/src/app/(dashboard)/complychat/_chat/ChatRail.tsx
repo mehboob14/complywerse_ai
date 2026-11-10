@@ -38,7 +38,7 @@ export function ChatRail({ chats, activeId, onSelect, onRename, onDelete }: Rail
         {groups.map((group) => (
           <section key={group.label} aria-label={group.label} className="mb-[12px] last:mb-0">
             <h2 className="px-[8px] pb-[4px] !text-ds-label !font-medium !text-ds-fg-muted">{group.label}</h2>
-            <ul className="grid gap-[2px]">
+            <ul className="grid grid-cols-[minmax(0,1fr)] gap-[2px]">
               {group.items.map((c) => {
                 const active = c.id === activeId;
                 const items: MenuItem[] = [
@@ -68,7 +68,7 @@ export function ChatRail({ chats, activeId, onSelect, onRename, onDelete }: Rail
                         type="button"
                         aria-current={active ? 'true' : undefined}
                         onClick={() => onSelect(c.id)}
-                        className="flex min-h-ds-control min-w-0 flex-1 flex-col items-start rounded-ds-control px-[10px] py-[6px] text-left focus-visible:outline-none focus-visible:shadow-ds-ring"
+                        className="flex min-h-ds-control min-w-0 flex-1 flex-col items-start overflow-hidden rounded-ds-control px-[10px] py-[6px] text-left focus-visible:outline-none focus-visible:shadow-ds-ring"
                       >
                         <span className={clsx('w-full truncate text-ds-body', active ? 'font-[600] text-ds-primary-text' : 'font-medium text-ds-fg')}>{c.title}</span>
                         <span className="text-ds-label text-ds-fg-muted">{messageCount(c)}</span>

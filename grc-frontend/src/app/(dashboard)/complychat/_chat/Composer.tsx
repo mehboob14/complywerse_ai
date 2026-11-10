@@ -68,7 +68,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   };
 
   return (
-    <div className="border-t border-ds-border bg-ds-surface px-[12px] pb-[10px] pt-[10px]">
+    <div className="relative border-t border-ds-border bg-ds-surface px-[12px] pb-[10px] pt-[10px]">
       {attached.length > 0 && (
         <ul aria-label="Files in this chat" className="mb-[8px] flex flex-wrap gap-[6px]">
           {attached.map((f) => (
@@ -99,7 +99,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
       <form onSubmit={submit} className="flex items-end gap-[8px]">
         <input ref={picker} type="file" multiple accept={ACCEPT_ATTR} className="sr-only" tabIndex={-1} aria-hidden onChange={pick} />
-        <IconButton label="Attach files" variant="secondary" disabled={files.length >= MAX_PENDING || busy} onClick={() => picker.current?.click()}><Paperclip /></IconButton>
+        <IconButton label="Attach files" variant="secondary" aria-describedby="complychat-upload-help" disabled={files.length >= MAX_PENDING || busy} onClick={() => picker.current?.click()}><Paperclip /></IconButton>
         <div className="min-w-0 flex-1">
           <label htmlFor="complychat-message" className="sr-only">Message to Comply Agent</label>
           <textarea
@@ -109,7 +109,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
             rows={1}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={onKeyDown}
-            placeholder="Ask about controls, evidence, risks or your documents"
+            placeholder="Ask a question"
             className="block max-h-[40vh] min-h-ds-control w-full resize-none rounded-ds-control border border-ds-border-control bg-ds-surface px-[12px] py-[6px] text-ds-body text-ds-fg placeholder:text-ds-fg-muted focus-visible:outline-none focus-visible:shadow-ds-ring"
           />
         </div>
@@ -119,8 +119,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
           <Button type="submit" variant="primary" leftIcon={<Send aria-hidden />} loading={uploading} disabled={!canSend && !uploading}>Send</Button>
         )}
       </form>
-      <p className="mt-[6px] text-ds-label text-ds-fg-muted">{UPLOAD_HELP}</p>
-      <p className="mt-[2px] text-ds-label text-ds-fg-muted">Comply Agent can make mistakes: check important answers against the source. Chats are saved in this browser only.</p>
+      <div className="mt-[6px] flex flex-wrap justify-between gap-x-[16px] gap-y-[2px] text-ds-label text-ds-fg-muted">
+        <p>Comply Agent can make mistakes. Chats are saved in this browser only.</p>
+        {/* what can be attached: said here from a tablet up, and always to a screen reader (the attach button is described by it); a phone learns it when a file is refused */}
+        <p id="complychat-upload-help" className="sr-only sm:not-sr-only">{UPLOAD_HELP}</p>
+      </div>
     </div>
   );
 });

@@ -87,8 +87,7 @@ export function ChatPage() {
   }, [select]);
 
   const remove = useCallback(async (id: string) => {
-    await chat.remove(id);
-    composer.current?.focus();
+    if (await chat.remove(id)) composer.current?.focus();            // a cancelled question leaves focus where the dialog returned it
   }, [chat]);
 
   const copy = useCallback((text: string) => {
@@ -110,7 +109,7 @@ export function ChatPage() {
   const lost = chat.note.droppedChats;
 
   return (
-    <div className="flex h-[calc(100vh-4.75rem)] min-h-[440px] flex-col gap-[12px] supports-[height:100dvh]:h-[calc(100dvh-4.75rem)]">
+    <div className="flex h-[calc(100vh-5.5rem)] min-h-[440px] flex-col gap-[12px] supports-[height:100dvh]:h-[calc(100dvh-5.5rem)]">
       <PageHeader
         variant="page"
         title="Comply Agent"
@@ -139,7 +138,8 @@ export function ChatPage() {
             aria-relevant="additions text"
             aria-label="Messages"
             tabIndex={0}
-            className="min-h-0 flex-1 overflow-y-auto px-[12px] py-[14px] focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--ds-focus)]"
+            // relative: the screen-reader-only words inside are absolutely positioned; without a positioned scroller they sit where the page puts them and make the whole window scroll
+            className="relative min-h-0 flex-1 overflow-y-auto px-[12px] py-[14px] focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--ds-focus)]"
           >
             {!ready ? (
               <SkeletonLines lines={4} label="Loading your chats" />
@@ -170,7 +170,7 @@ export function ChatPage() {
                 </ul>
               </div>
             ) : (
-              <ol className="grid gap-[14px]">
+              <ol className="grid grid-cols-[minmax(0,1fr)] gap-[14px]">
                 {messages.map((m) => (
                   <MessageView key={m.id} message={m} busy={chat.busy} moreLoading={chat.moreFor === m.id} actions={actions} />
                 ))}

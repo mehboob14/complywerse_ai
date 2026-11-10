@@ -26,7 +26,7 @@ export function SourceCards({ sources }: { sources: readonly ChatSource[] | unde
         <Chevron aria-hidden className="h-[16px] w-[16px]" strokeWidth={1.75} />
         {sourcesLabel(views.length)}
       </button>
-      <ul id={id} className={open ? 'mt-[8px] grid gap-2' : 'hidden'}>
+      <ul id={id} className={open ? 'mt-[8px] grid grid-cols-[minmax(0,1fr)] gap-2' : 'hidden'}>
         {views.map((v) => (
           <li key={v.key} className="rounded-ds-control border border-ds-border bg-ds-surface-subtle px-[12px] py-[8px]">
             <div className="flex flex-wrap items-center gap-x-[8px] gap-y-[2px]">

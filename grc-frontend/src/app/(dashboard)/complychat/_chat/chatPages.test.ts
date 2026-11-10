@@ -112,6 +112,13 @@ test('the conversation is a labelled log that keyboard users can scroll, the box
   for (const f of FILES) for (const m of Array.from(read(f).matchAll(/<IconButton\b[^>]*>/g))) assert.match(m[0], /label=/, `${f}: ${m[0]}`);
 });
 
+test('a scroller that holds screen-reader-only words is positioned, so they cannot make the whole window scroll (measured: a 6-answer chat grew the document to 4,246px)', () => {
+  assert.match(read('_chat/ChatPage.tsx'), /className="relative min-h-0 flex-1 overflow-y-auto/);
+  assert.match(read('_chat/Composer.tsx'), /<div className="relative border-t border-ds-border/);
+  assert.match(read('_chat/MessageView.tsx'), /sr-only/);
+  assert.match(read('_chat/ChatPage.tsx'), /h-\[calc\(100vh-5\.5rem\)\]/, 'the page is as high as the shell leaves room for (the top bar is 47px, <main> pads 20px twice)');
+});
+
 test('the Cyber Assurance copy is untouched and the chats still use its keys', () => {
   assert.match(read('_chat/chatStore.ts'), /'complychat\.conversations\.v2'/);
   assert.match(read('_chat/chatStore.ts'), /'complychat\.activeConversation\.v2'/);

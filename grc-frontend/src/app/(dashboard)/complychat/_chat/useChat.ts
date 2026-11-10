@@ -104,22 +104,25 @@ export function useChat({ confirm, notify }: { confirm: (o: ConfirmOptions) => P
     }
   }, [commit, select, startNew]);
 
-  const removeNow = useCallback(async (id: string) => {
+  /** true when the chat is gone */
+  const removeNow = useCallback(async (id: string): Promise<boolean> => {
     const chat = chatsRef.current.find((c) => c.id === id);
-    if (!chat) return;
+    if (!chat) return false;
     if (flight?.conversationId === id) controlRef.current?.stop();
     const hadFiles = (chat.attachments?.length ?? 0) > 0;
     const result = await clearHistory(id);
     if (!result.ok && hadFiles) {                  // the files are still on the server: the chat stays so the delete can be tried again
       notify.error(result.failure.message, { title: "Couldn't delete this chat", retry: result.failure.retry ? () => void removeNow(id) : undefined });
-      return;
+      return false;
     }
     dropChat(id);
+    return true;
   }, [flight, notify, dropChat]);
 
-  const remove = useCallback(async (id: string) => {
+  /** asks first when the chat holds anything; true when the chat is gone (false: kept, cancelled or the delete failed) */
+  const remove = useCallback(async (id: string): Promise<boolean> => {
     const chat = chatsRef.current.find((c) => c.id === id);
-    if (!chat) return;
+    if (!chat) return false;
     const hasContent = chat.messages.length > 0 || (chat.attachments?.length ?? 0) > 0;
     if (hasContent) {
       const files = (chat.attachments?.length ?? 0) > 0;
@@ -129,9 +132,9 @@ export function useChat({ confirm, notify }: { confirm: (o: ConfirmOptions) => P
         confirmLabel: 'Delete chat',
         tone: 'danger',
       });
-      if (!ok) return;
+      if (!ok) return false;
     }
-    await removeNow(id);
+    return removeNow(id);
   }, [confirm, removeNow]);
 
   // ── one request, whatever started it ──
