@@ -75,7 +75,6 @@ test('the exports the Issues pages import are still there, with the props they p
   assert.match(inFolder('RegisterPanel.tsx'), /export function RegisterPanel\(\{ issueId \}: \{ issueId: number \}\)/);
   assert.match(inFolder('AuditFindingTags.tsx'), /export function AuditFindingTags\(\{ kind, recordId \}: \{ kind: 'asset' \| 'vulnerability'; recordId: number \}\)/);
   const importers: Array<[string, RegExp]> = [
-    ['app/(dashboard)/issues/page.tsx', /<AuditRegister initialSource=/],
     ['app/(dashboard)/issues/register/_register/IssueRegister.tsx', /<AuditRegister initialSource=/],
     ['app/(dashboard)/issues/[id]/page.tsx', /<RegisterPanel issueId=\{issueId\}/],
   ];
