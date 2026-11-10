@@ -27,11 +27,11 @@ export function AuditFindingTags({ kind, recordId }: { kind: 'asset' | 'vulnerab
       <div style={{ padding: '8px 14px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
         {data.map((t) => (
           <Link key={t.issue_id} href={`/issues/${t.issue_id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-            <span style={{ display: 'inline-flex', borderRadius: 999, padding: '2px 8px', fontSize: 10.5, fontWeight: 600, background: '#FDF1E7', color: '#9A4A10' }}>
+            <span style={{ display: 'inline-flex', borderRadius: 999, padding: '2px 8px', fontSize: 12, fontWeight: 600, background: '#FDF1E7', color: '#9A4A10' }}>
               Audit finding: {t.reference || `#${t.issue_id}`}
             </span>
-            <div style={{ fontSize: 11.5, color: '#3A4653', marginTop: 3 }}>{t.title}</div>
-            <div style={{ fontSize: 10.5, color: '#8A95A1' }}>
+            <div style={{ fontSize: 12, color: '#3A4653', marginTop: 3 }}>{t.title}</div>
+            <div style={{ fontSize: 12, color: '#8A95A1' }}>
               {[t.report, (t.workflow_state || '').replace(/_/g, ' ')].filter(Boolean).join(' · ')}
             </div>
           </Link>

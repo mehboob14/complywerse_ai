@@ -7,7 +7,7 @@ export const LEAVES: Record<string, RouteExtra> = {
   '/auditor-portal': { title: 'Auditor Portal Overview', keywords: ['Certification journeys', 'Audit readiness', 'Review queue', 'Files to review'], ownHeading: true },
   '/auditor-portal/internal-audit': { keywords: ['Internal audits', 'Audit master'], ownHeading: true },
   '/auditor-portal/statutory-audit': { keywords: ['Regulator requirements', 'Audit observations'], ownHeading: true },
-  '/auditor-portal/issue-register': { keywords: ['Audit register', 'Audit Services register'] },
+  '/auditor-portal/issue-register': { keywords: ['Audit register', 'Audit Services register', 'Findings', 'Validation queue', 'Extension requests', 'Monthly workbook'], ownHeading: true },
 };
 
 export const PAGES: PageSpec[] = [

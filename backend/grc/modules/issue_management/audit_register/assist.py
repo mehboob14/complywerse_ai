@@ -311,7 +311,8 @@ def suggest(db: Session, tenant_id: int, template_key: str, values: Dict[str, An
             shown = names.get(value, f"User #{value}") if fields[name]["kind"] == "user" else str(value)
             suggestions.append({"field": name, "label": fields[name]["label"], "display": shown, **out[name]})
     return {"suggestions": suggestions, "dropped": sorted(set(dropped)), "notice": notice,
-            "model": get_openai_model() if asked and notice is None else None}
+            # page-facing payloads never name the model (AGENTS rule 5): "AI" says it was asked, as the key always said
+            "model": "AI" if asked and notice is None else None}
 
 
 def _prompt(db: Session, tenant_id: int, spec: Dict[str, Any], fields: Dict[str, Dict[str, Any]],
