@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic';
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Pencil } from 'lucide-react';
 import { PageHeader } from '@/components/ui';
 import {
@@ -37,7 +37,7 @@ import { linkedTotal } from './_linked/linkedModel';
 import { EditPanel } from './_overview/EditPanel';
 import { OverviewTab } from './_overview/OverviewTab';
 import { TimelineTab } from './_timeline/TimelineTab';
-import { REFRESH, failureWords, useIssue, useIssueActions, useIssueActivity, useRegisterProfile } from './workspaceData';
+import { REFRESH, failureWords, issueKey, useIssue, useIssueActions, useIssueActivity, useRegisterProfile } from './workspaceData';
 
 const TABS = ['overview', 'actions', 'linked', 'discussion', 'timeline', 'register'] as const;
 type Tab = (typeof TABS)[number];
@@ -48,6 +48,7 @@ export default function IssuePage() {
   const { hasPermission } = usePermissions();
   const canEdit = hasPermission('issue_management:issues:edit');
   const { confirm, confirmDialog } = useConfirm();
+  const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [asking, setAsking] = useState<IssueStep | null>(null);
   const now = useMemo(() => new Date(), []);
@@ -76,6 +77,7 @@ export default function IssuePage() {
     failure: "Couldn't change the issue",
     invalidate: REFRESH,
     onSuccess: () => setAsking(null),
+    onError: () => { void qc.invalidateQueries({ queryKey: issueKey(issueId) }); },     // the issue may have moved on under this screen: read it again so the next step offered is the right one
   });
   const run = async (s: IssueStep) => {
     if (!issue) return;
@@ -153,7 +155,7 @@ export default function IssuePage() {
             {canEdit && <Button size="sm" aria-label={assignee ? 'Change who it is assigned to' : 'Assign this issue'} onClick={() => setEditing(true)}>{assignee ? 'Change' : 'Assign'}</Button>}
           </span>
         </Fact>
-        <Fact label="Owner">{personName(issue.owner) ? <PersonChip name={personName(issue.owner)} /> : null}</Fact>
+        <Fact label="Owner" empty={canEdit ? 'Not set' : undefined}>{personName(issue.owner) ? <PersonChip name={personName(issue.owner)} /> : null}</Fact>
         <Fact label="Reported by">{personName(issue.reporter) ? <PersonChip name={personName(issue.reporter)} /> : null}</Fact>
         <Fact label="Target date">{issue.target_closure_date ? formatDate(issue.target_closure_date) : null}</Fact>
         <Fact label="Type">{issue.issue_type ? issueType.label(issue.issue_type) : null}</Fact>
@@ -162,23 +164,23 @@ export default function IssuePage() {
 
       <Tabs tabs={tabs} value={shown} onChange={setTab} ariaLabel="Issue sections" countFormat="exact">
         <TabPanel tabKey="overview">
-          <OverviewTab issue={issue} events={events} canEdit={canEdit} onEdit={() => setEditing(true)} onTimeline={() => setTab('timeline')} />
+          <div className="pt-[16px]"><OverviewTab issue={issue} events={events} canEdit={canEdit} onEdit={() => setEditing(true)} onTimeline={() => setTab('timeline')} /></div>
         </TabPanel>
         <TabPanel tabKey="actions" lazy>
-          <ActionsTab issue={issue} actions={actions} canEdit={canEdit} />
+          <div className="pt-[16px]"><ActionsTab issue={issue} actions={actions} canEdit={canEdit} /></div>
         </TabPanel>
         <TabPanel tabKey="linked" lazy>
-          <LinkedTab issue={issue} canEdit={canEdit} />
+          <div className="pt-[16px]"><LinkedTab issue={issue} canEdit={canEdit} /></div>
         </TabPanel>
         <TabPanel tabKey="discussion" lazy>
-          <DiscussionTab issue={issue} canEdit={canEdit} />
+          <div className="pt-[16px]"><DiscussionTab issue={issue} canEdit={canEdit} /></div>
         </TabPanel>
         <TabPanel tabKey="timeline" lazy>
-          <TimelineTab events={events} />
+          <div className="pt-[16px]"><TimelineTab events={events} /></div>
         </TabPanel>
         {hasRegisterTab && (
           <TabPanel tabKey="register" lazy>
-            <RegisterPanel issueId={issueId} />
+            <div className="pt-[16px]"><RegisterPanel issueId={issueId} /></div>
           </TabPanel>
         )}
       </Tabs>

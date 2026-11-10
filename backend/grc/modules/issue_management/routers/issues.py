@@ -734,7 +734,8 @@ def transition_issue(
     issue = _get_issue_or_404(issue_id, current_user, db)
     current_state = issue.workflow_state or "new"
     if target not in ALLOWED_TRANSITIONS.get(current_state, set()):
-        raise HTTPException(status_code=400, detail=f"Invalid transition {current_state} → {target}")
+        # said in words (the state keys have underscores): this is what a screen that was open while somebody else moved the issue shows
+        raise HTTPException(status_code=400, detail=f"Invalid transition {current_state.replace('_', ' ')} → {target.replace('_', ' ')}: the issue has moved on, reload it to see where it is.")
 
     if target == "closed":
         # a closure is a formal act: the same notes, approver and stamps as `/close` (the body keeps `to_state`, which the workflow trigger reads)
