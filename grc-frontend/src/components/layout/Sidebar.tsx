@@ -10,6 +10,7 @@ import { ChevronRight, Menu, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { clsx } from 'clsx';
 import { apiClient } from '@/lib/api';
+import { adminActiveHref } from '@/lib/adminSections';
 import { focusIsElsewhere } from '@/components/ui/dialogFocus';
 import { useDialogFocus } from '@/components/ui/useDialogFocus';
 import { lockBodyScroll } from '@/components/ui/scrollLock';
@@ -33,8 +34,8 @@ const ICON_BUTTON = 'flex items-center justify-center rounded-lg text-[var(--sid
 
 /** The off-canvas menu: a modal drawer over the page (focus moves in and is kept in, Escape or a press on the dim area closes it and focus
  *  goes back to the button that opened it, the page behind does not scroll). Following a link closes it (Sidebar). */
-function MenuDrawer({ open, onClose, nav, activeHref, isAdmin }: {
-  open: boolean; onClose: () => void; nav: NavEntry[]; activeHref: string | undefined; isAdmin: boolean;
+function MenuDrawer({ open, onClose, nav, activeHref, adminHref, isAdmin }: {
+  open: boolean; onClose: () => void; nav: NavEntry[]; activeHref: string | undefined; adminHref: string | undefined; isAdmin: boolean;
 }) {
   const [render, setRender] = useState(open);
   const [show, setShow] = useState(false);
@@ -103,7 +104,7 @@ function MenuDrawer({ open, onClose, nav, activeHref, isAdmin }: {
           <FullTree entries={nav} activeHref={activeHref} animated={false} touch onNavigate={onClose} />
           {isAdmin && (
             <div className="border-t border-[var(--sidebar-hover-bg)] pt-2">
-              <NavGroupSection group={ADMIN_GROUP} activeHref={undefined} animated={false} touch onNavigate={onClose} />
+              <NavGroupSection group={ADMIN_GROUP} activeHref={adminHref} animated={false} touch onNavigate={onClose} />
             </div>
           )}
         </nav>
@@ -229,7 +230,7 @@ export default function Sidebar() {
       )}
 
       {mode !== 'full' && (
-        <MenuDrawer open={menuOpen} onClose={closeMenu} nav={filteredNavigation} activeHref={activeHref} isAdmin={loaded && access.isAdmin} />
+        <MenuDrawer open={menuOpen} onClose={closeMenu} nav={filteredNavigation} activeHref={activeHref} adminHref={adminActiveHref(pathname)} isAdmin={loaded && access.isAdmin} />
       )}
     </>
   );
