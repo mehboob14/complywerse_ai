@@ -57,7 +57,7 @@ function SourceTable({ caption, columns, rows, total = true, onCell }: {
   onCell?: (source: string, rowKey: string) => void;      // a count opens the findings behind it
 }) {
   const count = (n: number, source: string, row: string, label: string, children: React.ReactNode) => (onCell && n > 0
-    ? <Button variant="link" className={NUM} aria-label={`Show the ${formatCount(n)} in the register: ${label}`} onClick={() => onCell(source, row)}>{children}</Button>
+    ? <Button variant="link" className={`${NUM} min-w-[44px] justify-end`} aria-label={`Show the ${formatCount(n)} in the register: ${label}`} onClick={() => onCell(source, row)}>{children}</Button>
     : children);
   return (
     <TableFrame aria-label={caption}>
