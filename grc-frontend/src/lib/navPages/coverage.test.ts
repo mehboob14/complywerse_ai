@@ -259,7 +259,8 @@ test('ownHeading is on exactly the pages that draw the kit head (PageHeader vari
     '/erm/analytics/scenario', '/erm/risks', '/erm/risk-assessments', '/erm/risk-assessments/ai-risk-assessment',
     '/admin/organization',                        // Administration > Organisation: the Organisation Profile component draws the head (Company is its first stage)
     '/admin/users', '/admin/roles', '/users',      // Administration > People & access: the Users register (also the page behind the user menu's Users) and the Roles register draw theirs from a component
-    '/reports', '/reports/dashboards'];           // Reports: the library (_library/ReportsLibrary) and the dashboards (_library/dashboards/DashboardsPage) draw theirs
+    '/reports', '/reports/dashboards',            // Reports: the library (_library/ReportsLibrary) and the dashboards (_library/dashboards/DashboardsPage) draw theirs
+    '/reports/trends', '/reports/analytics'];     // Reports: the Trends board (_trends/TrendsPage) and the Analytics launcher (_analytics/AnalyticsPage) draw theirs (rpt-trends-analytics)
   const DOCUMENTS_AREA_STRIP = ['/governance/documents/attestation', '/governance/documents/studio', '/governance/documents/overview', '/governance/exceptions', '/governance/reviews', '/governance/settings'];
   const drawing = pages.filter((p) => /<PageHeader[\s\S]{0,60}variant="page"/.test(read(p.file))).map((p) => p.route).sort();
   const flagged = routes.filter((e) => e.ownHeading).map((e) => e.path).sort();

@@ -196,3 +196,43 @@ def read_trend(db: Session, tenant_ids: List[int], metric: str, days: int = 180,
                     MetricSnapshot.as_of_date >= cutoff)
             .order_by(MetricSnapshot.as_of_date.asc()).all())
     return [{"date": r.as_of_date.isoformat(), "value": r.value} for r in rows]
+
+
+def read_trends(db: Session, tenant_ids: List[int], metrics: List[str], days: int = 180,
+                dimension: str = "overall", dimension_value: str = "all") -> dict:
+    """The overall series of MANY metrics in one query: {metric: [{date, value}, ...]} oldest first.
+    Every metric asked for is a key (an empty list when it has no snapshot), so a caller never needs a second read per metric."""
+    from ..models import MetricSnapshot
+    out: dict = {m: [] for m in metrics}
+    if not metrics:
+        return out
+    cutoff = date.today() - timedelta(days=days)
+    rows = (db.query(MetricSnapshot)
+            .filter(MetricSnapshot.tenant_id.in_(tenant_ids),
+                    MetricSnapshot.metric.in_(list(metrics)),
+                    MetricSnapshot.dimension == dimension,
+                    MetricSnapshot.dimension_value == dimension_value,
+                    MetricSnapshot.as_of_date >= cutoff)
+            .order_by(MetricSnapshot.as_of_date.asc()).all())
+    for r in rows:
+        out[r.metric].append({"date": r.as_of_date.isoformat(), "value": r.value})
+    return out
+
+
+def read_trend_slices(db: Session, tenant_ids: List[int], metric: str, days: int, dimension: str) -> dict:
+    """Every slice of a dimensional metric in one query: {dimension_value: [{date, value}, ...]} oldest first
+    (a metric broken down by severity or by framework, one series per value)."""
+    from ..models import MetricSnapshot
+    cutoff = date.today() - timedelta(days=days)
+    rows = (db.query(MetricSnapshot)
+            .filter(MetricSnapshot.tenant_id.in_(tenant_ids),
+                    MetricSnapshot.metric == metric,
+                    MetricSnapshot.dimension == dimension,
+                    MetricSnapshot.as_of_date >= cutoff)
+            .order_by(MetricSnapshot.as_of_date.asc()).all())
+    out: dict = {}
+    for r in rows:
+        if r.dimension_value is None:
+            continue
+        out.setdefault(r.dimension_value, []).append({"date": r.as_of_date.isoformat(), "value": r.value})
+    return out

@@ -56,7 +56,7 @@ test('/reports/saved is a forward for ever: a server redirect to the library, th
 
 test('the pages that draw the kit head are flagged, the others are not, and the head says the entry\'s name', () => {
   const flagged = routes.filter((e) => e.area === 'reports' && e.ownHeading).map((e) => e.path).sort();
-  assert.deepEqual(flagged, ['/reports', '/reports/dashboards']);
+  assert.deepEqual(flagged, ['/reports', '/reports/analytics', '/reports/dashboards', '/reports/trends']);
   const library = readFileSync(`${APP}(dashboard)/reports/_library/ReportsLibrary.tsx`, 'utf8');
   const dashboards = readFileSync(`${APP}(dashboard)/reports/_library/dashboards/DashboardsPage.tsx`, 'utf8');
   for (const [file, title] of [[library, 'Reports'], [dashboards, 'Dashboards']] as const) {
@@ -66,7 +66,7 @@ test('the pages that draw the kit head are flagged, the others are not, and the 
   }
   assert.equal(routeFor('/reports/dashboards')?.label, 'Dashboards', 'the head and the registry say the same');
   assert.equal(ownHeadingSection('/reports/dashboards'), 'Reports', 'the top bar names the section only');
-  for (const path of ['/reports/builder', '/reports/trends', '/reports/print', '/reports/analytics']) assert.equal(ownHeadingSection(path), undefined, `${path} does not draw the kit head yet`);
+  for (const path of ['/reports/builder', '/reports/print']) assert.equal(ownHeadingSection(path), undefined, `${path} does not draw the kit head yet`);
 });
 
 test('the strip offers each tab to the people its page lets in: the strip\'s rights are the page\'s rights', () => {

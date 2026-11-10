@@ -1249,12 +1249,20 @@ def _series_stats(points: List[dict], mdef, target, warn) -> Dict[str, Any]:
     }
 
 
-def _metric_meta(mdef, target, warn, critical) -> Dict[str, Any]:
+def _is_customized(mdef, targets: Dict[tuple, MetricTarget],
+                   dimension: str = "overall", dimension_value: str = "all") -> bool:
+    """True when the tenant has overridden this metric's target (the same lookup _effective_target makes)."""
+    return (mdef.key, dimension, dimension_value) in targets or (mdef.key, "overall", "all") in targets
+
+
+def _metric_meta(mdef, target, warn, critical, customized: bool = False) -> Dict[str, Any]:
     return {
         "key": mdef.key, "label": mdef.label, "module": mdef.module,
         "module_label": metric_catalog.MODULE_LABELS.get(mdef.module, mdef.module),
         "unit": mdef.unit, "direction": mdef.direction, "dimension": mdef.dimension,
         "definition": mdef.definition, "target": target, "warn": warn, "critical": critical,
+        # additive: whether the tenant changed the target, and what "Reset to default" goes back to
+        "customized": customized, "default_target": mdef.target, "default_warn": mdef.warn,
     }
 
 
@@ -1269,7 +1277,7 @@ def trends_catalog(db: Session = Depends(get_db), user=Depends(require_auth)) ->
         if not any(_satisfies(granted, r) for r in m.permissions):
             continue
         t, w, c = _effective_target(m, targets)
-        metrics_out.append(_metric_meta(m, t, w, c))
+        metrics_out.append(_metric_meta(m, t, w, c, _is_customized(m, targets)))
     modules = [{"key": k, "label": metric_catalog.MODULE_LABELS[k]}
                for k in metric_catalog.MODULE_ORDER
                if any(x["module"] == k for x in metrics_out)]
@@ -1287,13 +1295,14 @@ def trends_overview(days: int = 180, db: Session = Depends(get_db),
     metric_snapshots.ensure_table(db)
     granted = _user_perm_names(user, db)
     targets = _targets_map(db, tenant_id)
+    allowed = [m for m in metric_catalog.METRICS if any(_satisfies(granted, r) for r in m.permissions)]
+    # one read for every metric the caller may see (it was one read per metric: 31 round trips for the board)
+    series = metric_snapshots.read_trends(db, tids, [m.key for m in allowed], days)
     cards = []
-    for m in metric_catalog.METRICS:
-        if not any(_satisfies(granted, r) for r in m.permissions):
-            continue
-        points = metric_snapshots.read_trend(db, tids, m.key, days)
+    for m in allowed:
+        points = series.get(m.key, [])
         t, w, c = _effective_target(m, targets)
-        card = _metric_meta(m, t, w, c)
+        card = _metric_meta(m, t, w, c, _is_customized(m, targets))
         card.update(_series_stats(points, m, t, w))
         card["points"] = points
         cards.append(card)
@@ -1316,7 +1325,7 @@ def trends_series(metric: str, days: int = 180, dimension: str = "overall",
     points = metric_snapshots.read_trend(db, [tenant_id], metric, days, dimension, dimension_value)
     targets = _targets_map(db, tenant_id)
     t, w, c = _effective_target(m, targets, dimension, dimension_value)
-    out = _metric_meta(m, t, w, c)
+    out = _metric_meta(m, t, w, c, _is_customized(m, targets, dimension, dimension_value))
     out.update(_series_stats(points, m, t, w))
     out["points"] = points
     out["dimension_value"] = dimension_value
@@ -1338,14 +1347,9 @@ def trends_breakdown(metric: str, days: int = 180, db: Session = Depends(get_db)
     days = max(7, min(days, 730))
     tenant_id = _tenant_id(user, db)
     metric_snapshots.ensure_table(db)
-    cutoff = date.today() - timedelta(days=days)
-    values = [r[0] for r in (
-        db.query(MetricSnapshot.dimension_value)
-        .filter(MetricSnapshot.tenant_id == tenant_id, MetricSnapshot.metric == metric,
-                MetricSnapshot.dimension == m.dimension, MetricSnapshot.as_of_date >= cutoff)
-        .distinct().all()) if r[0] is not None]
-    series = [{"key": dv, "points": metric_snapshots.read_trend(db, [tenant_id], metric, days, m.dimension, dv)}
-              for dv in sorted(values)]
+    # one read for every slice (it was one distinct-values query and then one read per slice)
+    slices = metric_snapshots.read_trend_slices(db, [tenant_id], metric, days, m.dimension)
+    series = [{"key": dv, "points": slices[dv]} for dv in sorted(slices)]
     return {"metric": metric, "dimension": m.dimension, "label": m.label, "unit": m.unit, "series": series}
 
 
@@ -1436,18 +1440,31 @@ def metabase_status(
         bind = db.get_bind()
         engine = getattr(bind, "engine", bind)
         from sqlalchemy import text as _text
-        rows = engine.connect().execute(
-            _text(
-                "SELECT table_name FROM information_schema.views "
-                "WHERE table_schema = 'public' AND table_name LIKE 'reporting_%'"
-            )
-        ).fetchall()
+        # `with`: the connection goes back to the pool (it used to be left open on every call)
+        with engine.connect() as conn:
+            rows = conn.execute(
+                _text(
+                    "SELECT table_name FROM information_schema.views "
+                    "WHERE table_schema = 'public' AND table_name LIKE 'reporting_%'"
+                )
+            ).fetchall()
         views_ok = [r[0] for r in rows]
     except Exception:
         views_ok = []
 
+    configured = metabase_sso.metabase_enabled()
+    can_embed = metabase_sso.static_embed_configured()
     return {
-        "configured": metabase_sso.metabase_enabled(),
+        # additive, in the words a person reads (the page shows these and none of the keys below): the old keys stay for the Administration page
+        "ready": configured,
+        "can_embed": can_embed,
+        "headline": "Connected" if configured else "Not set up yet",
+        "detail": (
+            "Open the analytics tool, or start from one of the ready-made dashboards below."
+            if configured else
+            "Advanced analytics has not been set up for your organisation. Ask your administrator to set it up."
+        ),
+        "configured": configured,
         "site_url": metabase_sso.metabase_site_url() or None,
         "embed_enabled": metabase_sso.metabase_embed_enabled(),
         "jwt_sso": metabase_sso.jwt_sso_configured(),
