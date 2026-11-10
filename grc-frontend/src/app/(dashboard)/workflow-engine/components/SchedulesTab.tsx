@@ -267,8 +267,8 @@ export function SchedulesTab({ definitions }: { definitions: WorkflowDefinition[
             ) : schedules.length === 0 ? (
               <div className="text-center py-16 text-xs text-gray-400">
                 <Calendar size={32} className="mx-auto mb-3 text-gray-200" />
-                <p className="font-medium">No schedules yet</p>
-                <p className="text-gray-300 mt-1">Create a schedule to run workflows automatically</p>
+                <p className="text-[13px] font-medium">No schedules yet</p>
+                <p className="text-[12px] text-gray-500 mt-1">Create a schedule to run workflows automatically</p>
               </div>
             ) : (
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -285,11 +285,11 @@ export function SchedulesTab({ definitions }: { definitions: WorkflowDefinition[
                   <tbody>
                     {schedules.map((s) => (
                       <tr key={s.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                        <td className="px-5 py-3 font-medium text-gray-800">{s.workflow_name || `Workflow #${s.workflow_definition_id}`}</td>
-                        <td className="px-5 py-3 font-mono text-gray-600 text-[12px]">{s.cron_expression || `Every ${s.interval_minutes}m`}</td>
-                        <td className="px-5 py-3 text-gray-500">{formatDate(s.next_run_at)}</td>
-                        <td className="px-5 py-3 text-gray-500">{formatDate(s.last_run_at)}</td>
-                        <td className="px-5 py-3 text-center">
+                        <td className="text-[12px] px-5 py-3 font-medium text-gray-800">{s.workflow_name || `Workflow #${s.workflow_definition_id}`}</td>
+                        <td className="text-[12px] px-5 py-3 font-mono text-gray-600 text-[12px]">{s.cron_expression || `Every ${s.interval_minutes}m`}</td>
+                        <td className="text-[12px] px-5 py-3 text-gray-500">{formatDate(s.next_run_at)}</td>
+                        <td className="text-[12px] px-5 py-3 text-gray-500">{formatDate(s.last_run_at)}</td>
+                        <td className="text-[12px] px-5 py-3 text-center">
                           {s.is_active
                             ? <span className="text-[12px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">Active</span>
                             : <span className="text-[12px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-semibold">Paused</span>
@@ -352,8 +352,8 @@ export function SchedulesTab({ definitions }: { definitions: WorkflowDefinition[
             ) : webhooks.length === 0 ? (
               <div className="text-center py-16 text-xs text-gray-400">
                 <Globe size={32} className="mx-auto mb-3 text-gray-200" />
-                <p className="font-medium">No webhooks yet</p>
-                <p className="text-gray-300 mt-1">Create a webhook to trigger workflows from external systems</p>
+                <p className="text-[13px] font-medium">No webhooks yet</p>
+                <p className="text-[12px] text-gray-500 mt-1">Create a webhook to trigger workflows from external systems</p>
               </div>
             ) : (
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -370,9 +370,9 @@ export function SchedulesTab({ definitions }: { definitions: WorkflowDefinition[
                   <tbody>
                     {webhooks.map((w) => (
                       <tr key={w.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                        <td className="px-5 py-3 font-medium text-gray-800">{w.name}</td>
-                        <td className="px-5 py-3 font-mono text-gray-600 text-[12px]">{w.event_name}</td>
-                        <td className="px-5 py-3">
+                        <td className="text-[12px] px-5 py-3 font-medium text-gray-800">{w.name}</td>
+                        <td className="text-[12px] px-5 py-3 font-mono text-gray-600 text-[12px]">{w.event_name}</td>
+                        <td className="text-[12px] px-5 py-3">
                           <div className="flex items-center gap-1.5">
                             <span className="font-mono text-[12px] text-gray-500">{w.token.substring(0, 16)}...</span>
                             <button
@@ -384,8 +384,8 @@ export function SchedulesTab({ definitions }: { definitions: WorkflowDefinition[
                             </button>
                           </div>
                         </td>
-                        <td className="px-5 py-3 text-gray-500">{formatDate(w.last_triggered_at)}</td>
-                        <td className="px-5 py-3 text-center">
+                        <td className="text-[12px] px-5 py-3 text-gray-500">{formatDate(w.last_triggered_at)}</td>
+                        <td className="text-[12px] px-5 py-3 text-center">
                           {w.is_active
                             ? <span className="text-[12px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">Active</span>
                             : <span className="text-[12px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-semibold">Inactive</span>

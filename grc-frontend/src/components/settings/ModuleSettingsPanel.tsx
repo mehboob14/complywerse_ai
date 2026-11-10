@@ -158,33 +158,33 @@ export default function ModuleSettingsPanel({ moduleKey }: { moduleKey: string }
             <table className="w-full min-w-[820px] text-sm">
               <thead>
                 <tr className="border-b border-slate-200 text-left text-[12px] uppercase tracking-wide text-slate-500">
-                  <th className="py-1.5 pr-3">Label</th>
-                  <th className="py-1.5 pr-3">Key</th>
-                  <th className="py-1.5 pr-3">Colour</th>
-                  <th className="py-1.5 pr-3">Closes the record</th>
-                  <th className="py-1.5 pr-3">SLA clock</th>
-                  <th className="py-1.5 pr-3">Escalate after (days past due)</th>
-                  <th className="py-1.5" />
+                  <th className="text-[12px] py-1.5 pr-3">Label</th>
+                  <th className="text-[12px] py-1.5 pr-3">Key</th>
+                  <th className="text-[12px] py-1.5 pr-3">Colour</th>
+                  <th className="text-[12px] py-1.5 pr-3">Closes the record</th>
+                  <th className="text-[12px] py-1.5 pr-3">SLA clock</th>
+                  <th className="text-[12px] py-1.5 pr-3">Escalate after (days past due)</th>
+                  <th className="text-[12px] py-1.5" />
                 </tr>
               </thead>
               <tbody>
                 {statuses.map((s, i) => (
                   <tr key={`${s.key}-${i}`} className="border-b border-slate-100">
-                    <td className="py-1.5 pr-3">
+                    <td className="text-[13px] py-1.5 pr-3">
                       <input className={input} value={s.label} onChange={(e) => patchStatus(i, { label: e.target.value })} />
                     </td>
-                    <td className="py-1.5 pr-3">
+                    <td className="text-[13px] py-1.5 pr-3">
                       <code className={`rounded px-1.5 py-0.5 text-xs ${TONE_CLS[s.tone] || TONE_CLS.slate}`}>{s.key}</code>
                     </td>
-                    <td className="py-1.5 pr-3">
+                    <td className="text-[13px] py-1.5 pr-3">
                       <select className={input} value={s.tone} onChange={(e) => patchStatus(i, { tone: e.target.value })}>
                         {TONES.map((t) => <option key={t} value={t}>{t}</option>)}
                       </select>
                     </td>
-                    <td className="py-1.5 pr-3">
+                    <td className="text-[13px] py-1.5 pr-3">
                       <input type="checkbox" checked={s.terminal} onChange={(e) => patchStatus(i, { terminal: e.target.checked })} />
                     </td>
-                    <td className="py-1.5 pr-3">
+                    <td className="text-[13px] py-1.5 pr-3">
                       {s.terminal ? <span className="text-xs text-slate-400">Stops</span> : (
                         <select className={input} value={s.clock || 'runs'}
                           onChange={(e) => patchStatus(i, { clock: e.target.value as 'runs' | 'paused' })}>
@@ -193,12 +193,12 @@ export default function ModuleSettingsPanel({ moduleKey }: { moduleKey: string }
                         </select>
                       )}
                     </td>
-                    <td className="py-1.5 pr-3">
+                    <td className="text-[13px] py-1.5 pr-3">
                       <input type="number" min={0} className={input} placeholder="SLA default"
                         value={s.escalate_after_days ?? ''}
                         onChange={(e) => patchStatus(i, { escalate_after_days: days(e.target.value) })} />
                     </td>
-                    <td className="py-1.5 text-right">
+                    <td className="text-[13px] py-1.5 text-right">
                       <button type="button" title="Remove this level"
                         onClick={() => setDraft({ ...draft, statuses: statuses.filter((_, j) => j !== i) })}
                         className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600">
@@ -253,10 +253,10 @@ export default function ModuleSettingsPanel({ moduleKey }: { moduleKey: string }
             <table className="w-full min-w-[560px] text-sm">
               <thead>
                 <tr className="border-b border-slate-200 text-left text-[12px] uppercase tracking-wide text-slate-500">
-                  <th className="py-1.5 pr-3">{driver === 'priority' ? 'Priority' : dropdownFields.find((f) => `field:${f.key}` === driver)?.label || 'Value'}</th>
-                  <th className="py-1.5 pr-3">Days to resolve</th>
-                  <th className="py-1.5 pr-3">Remind before due</th>
-                  <th className="py-1.5 pr-3">Escalate after (days past due)</th>
+                  <th className="text-[12px] py-1.5 pr-3">{driver === 'priority' ? 'Priority' : dropdownFields.find((f) => `field:${f.key}` === driver)?.label || 'Value'}</th>
+                  <th className="text-[12px] py-1.5 pr-3">Days to resolve</th>
+                  <th className="text-[12px] py-1.5 pr-3">Remind before due</th>
+                  <th className="text-[12px] py-1.5 pr-3">Escalate after (days past due)</th>
                 </tr>
               </thead>
               <tbody>
@@ -264,16 +264,16 @@ export default function ModuleSettingsPanel({ moduleKey }: { moduleKey: string }
                   const t = targetOf(value);
                   return (
                     <tr key={value} className="border-b border-slate-100">
-                      <td className="py-1.5 pr-3 font-medium capitalize text-slate-700">{value}</td>
-                      <td className="py-1.5 pr-3">
+                      <td className="text-[13px] py-1.5 pr-3 font-medium capitalize text-slate-700">{value}</td>
+                      <td className="text-[13px] py-1.5 pr-3">
                         <input type="number" min={0} className={input} placeholder={driver === 'priority' ? '' : 'no SLA'} value={t.days ?? ''}
                           onChange={(e) => patchTarget(value, { days: days(e.target.value) })} />
                       </td>
-                      <td className="py-1.5 pr-3">
+                      <td className="text-[13px] py-1.5 pr-3">
                         <input type="number" min={0} className={input} placeholder={`${sla.remind_before_due} (default)`}
                           value={t.notify_before ?? ''} onChange={(e) => patchTarget(value, { notify_before: days(e.target.value) })} />
                       </td>
-                      <td className="py-1.5 pr-3">
+                      <td className="text-[13px] py-1.5 pr-3">
                         <input type="number" min={0} className={input} placeholder={`${sla.escalate_after_days} (default)`}
                           value={t.escalate_after ?? ''} onChange={(e) => patchTarget(value, { escalate_after: days(e.target.value) })} />
                       </td>

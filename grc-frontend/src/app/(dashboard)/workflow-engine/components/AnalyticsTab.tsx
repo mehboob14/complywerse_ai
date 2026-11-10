@@ -177,10 +177,10 @@ export function AnalyticsTab() {
                     <tbody>
                       {bottlenecks.map((b, i) => (
                         <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                          <td className="px-5 py-2.5 font-medium text-gray-800">{b.node_key.replace(/_/g, ' ')}</td>
-                          <td className="px-5 py-2.5 text-gray-500">{b.node_type}</td>
-                          <td className="px-5 py-2.5 text-right font-semibold text-orange-600">{formatDuration(b.avg_duration_seconds)}</td>
-                          <td className="px-5 py-2.5 text-right text-gray-600">{b.instance_count}</td>
+                          <td className="text-[12px] px-5 py-2.5 font-medium text-gray-800">{b.node_key.replace(/_/g, ' ')}</td>
+                          <td className="text-[12px] px-5 py-2.5 text-gray-500">{b.node_type}</td>
+                          <td className="text-[12px] px-5 py-2.5 text-right font-semibold text-orange-600">{formatDuration(b.avg_duration_seconds)}</td>
+                          <td className="text-[12px] px-5 py-2.5 text-right text-gray-600">{b.instance_count}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -225,17 +225,17 @@ export function AnalyticsTab() {
                   <tbody>
                     {liveInstances.map((inst) => (
                       <tr key={inst.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                        <td className="px-5 py-3 font-medium text-gray-800">
+                        <td className="text-[12px] px-5 py-3 font-medium text-gray-800">
                           {inst.workflow_name || `Instance #${inst.id}`}
                         </td>
-                        <td className="px-5 py-3">
+                        <td className="text-[12px] px-5 py-3">
                           <StatusBadge status={inst.status} />
                         </td>
-                        <td className="px-5 py-3 text-gray-500">
+                        <td className="text-[12px] px-5 py-3 text-gray-500">
                           {inst.current_node_key ? inst.current_node_key.replace(/_/g, ' ') : '—'}
                         </td>
-                        <td className="px-5 py-3 text-gray-500">{formatDate(inst.started_at)}</td>
-                        <td className="px-5 py-3">
+                        <td className="text-[12px] px-5 py-3 text-gray-500">{formatDate(inst.started_at)}</td>
+                        <td className="text-[12px] px-5 py-3">
                           {inst.is_overdue ? (
                             <span className="inline-flex items-center gap-1 text-[12px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-semibold">
                               <AlertTriangle size={9} />

@@ -10,6 +10,10 @@ test('a job\'s key reads as a name', () => {
   assert.equal(jobName('feed-refresh'), 'Feed refresh');
   assert.equal(jobName('expiry_sweep'), 'Expiry sweep');
   assert.equal(jobName(''), 'Job');
+  assert.equal(jobName('tprm-daily-reminder-sweep'), 'TPRM daily reminder sweep', 'a known acronym stays in capitals');
+  assert.equal(jobName('vuln-enrichment-daily-refresh'), 'Vulnerability enrichment daily refresh');
+  assert.equal(jobName('exploitdb-weekly-refresh'), 'Exploit DB weekly refresh');
+  assert.equal(jobName('scf-attestation-daily-sweep'), 'SCF attestation daily sweep');
 });
 
 test('how often a job runs is said in the largest whole unit', () => {

@@ -25,7 +25,9 @@ function Block({ title, children }: { title: string; children: React.ReactNode }
 }
 
 const TEXT = 'whitespace-pre-wrap break-words rounded-ds-card border border-ds-border bg-ds-surface-hover p-[8px] text-[12px] leading-relaxed text-ds-fg';
-const CAPTION = 'm-0 mb-[2px] text-ds-label font-[600] uppercase tracking-wide text-ds-fg-muted';
+function Caption({ children }: { children: React.ReactNode }) {
+  return <p className="m-0 mb-[2px] text-ds-label font-[600] uppercase tracking-wide text-ds-fg-muted">{children}</p>;
+}
 
 /** Text with the guard's placeholders picked out, so it is plain what the AI saw instead of the real value. */
 function Marked({ text }: { text: string }) {
@@ -48,7 +50,7 @@ function PromptView({ request }: { request: string }) {
       <div className="flex flex-col gap-[8px]">
         {parsed.messages.map((m: any, i: number) => (
           <div key={i}>
-            <p className={CAPTION}>{m.role}</p>
+            <Caption>{m.role}</Caption>
             <div className={TEXT}><Marked text={typeof m.content === 'string' ? m.content : JSON.stringify(m.content, null, 2)} /></div>
           </div>
         ))}
@@ -58,8 +60,8 @@ function PromptView({ request }: { request: string }) {
   if (parsed && (parsed.instructions || parsed.input)) {
     return (
       <div className="flex flex-col gap-[8px]">
-        {parsed.instructions && <div><p className={CAPTION}>Instructions</p><div className={TEXT}><Marked text={String(parsed.instructions)} /></div></div>}
-        {parsed.input && <div><p className={CAPTION}>Input</p><div className={TEXT}><Marked text={typeof parsed.input === 'string' ? parsed.input : JSON.stringify(parsed.input, null, 2)} /></div></div>}
+        {parsed.instructions && <div><Caption>Instructions</Caption><div className={TEXT}><Marked text={String(parsed.instructions)} /></div></div>}
+        {parsed.input && <div><Caption>Input</Caption><div className={TEXT}><Marked text={typeof parsed.input === 'string' ? parsed.input : JSON.stringify(parsed.input, null, 2)} /></div></div>}
       </div>
     );
   }
@@ -157,11 +159,11 @@ export default function CallPanel({ id, onClose, onOpenUseCase }: { id: number |
             ) : revealed ? (
               <div className="flex flex-col gap-[12px]">
                 <div>
-                  <p className={CAPTION}>The request, exactly as it was sent{revealed.truncated ? ' (cut: too long to keep in full)' : ''}</p>
+                  <Caption>The request, exactly as it was sent{revealed.truncated ? ' (cut: too long to keep in full)' : ''}</Caption>
                   {revealed.request ? <PromptView request={revealed.request} /> : <p className="m-0 text-ds-body text-ds-fg-muted">Not kept.</p>}
                 </div>
                 <div>
-                  <p className={CAPTION}>The answer, as the AI wrote it (before the original values were put back)</p>
+                  <Caption>The answer, as the AI wrote it (before the original values were put back)</Caption>
                   <div className={TEXT}>{revealed.response ? <Marked text={revealed.response} /> : 'No answer was received.'}</div>
                 </div>
                 <p className="m-0 text-ds-label text-ds-fg-muted">Kept until {fmtWhen(revealed.expires_at)}, encrypted. Showing it is recorded in the audit log.</p>

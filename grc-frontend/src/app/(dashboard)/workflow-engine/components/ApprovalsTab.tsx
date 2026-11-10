@@ -131,8 +131,8 @@ export function ApprovalsTab() {
         ) : filtered.length === 0 ? (
           <div className="text-center py-16 text-xs text-gray-400">
             <UserCheck size={32} className="mx-auto mb-3 text-gray-200" />
-            <p className="font-medium">No {filter === 'pending' ? 'pending' : ''} approvals</p>
-            <p className="text-gray-300 mt-1">Workflow approval requests will appear here</p>
+            <p className="text-[13px] font-medium">No {filter === 'pending' ? 'pending' : ''} approvals</p>
+            <p className="text-[12px] text-gray-500 mt-1">Workflow approval requests will appear here</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -172,21 +172,21 @@ export function ApprovalsTab() {
                       )}
                     </div>
                     <div className="text-[12px] text-gray-500 space-y-0.5">
-                      {a.step_name && <p>Step: <span className="text-gray-700 font-medium">{a.step_name}</span></p>}
-                      {a.requested_by && <p>Requested by: <span className="text-gray-700">{a.requested_by}</span></p>}
-                      <p className="flex items-center gap-1">
-                        <Clock size={10} />
+                      {a.step_name && <p className="text-[12px]">Step: <span className="text-gray-700 font-medium">{a.step_name}</span></p>}
+                      {a.requested_by && <p className="text-[12px]">Requested by: <span className="text-gray-700">{a.requested_by}</span></p>}
+                      <p className="flex items-center gap-1 text-[12px]">
+                        <Clock size={12} />
                         Requested: {formatDate(a.requested_at)}
                       </p>
                       {a.due_at && (
-                        <p className={`flex items-center gap-1 ${isOverdue(a.due_at) ? 'text-red-500 font-semibold' : ''}`}>
-                          <Clock size={10} />
+                        <p className={`flex items-center gap-1 text-[12px] ${isOverdue(a.due_at) ? 'text-red-500 font-semibold' : ''}`}>
+                          <Clock size={12} />
                           Due: {formatDate(a.due_at)}
                         </p>
                       )}
                       {a.comment && (
-                        <p className="flex items-center gap-1 italic">
-                          <MessageSquare size={10} />
+                        <p className="flex items-center gap-1 text-[12px] italic">
+                          <MessageSquare size={12} />
                           &ldquo;{a.comment}&rdquo;
                         </p>
                       )}

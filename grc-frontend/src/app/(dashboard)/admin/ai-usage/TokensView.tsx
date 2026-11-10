@@ -16,7 +16,7 @@ import {
   Avatar, Button, EmptyState, ErrorState, Notice, ProgressBar, RegisterTable, SectionCard, SegmentedControl, SkeletonLines, StatTile, StatusPill, TextInput, useNotify, ChartFrame,
   type RegisterColumn,
 } from '@/components/ui/ds';
-import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
+import { canRetry, errorMessage, statusOf } from '@/components/ui/ds/reportOutcome';
 import { axisLabel, budgetBand, chartRows, fmtTokens, money, quotaTone, RANGES, rangeLabel, rangeStart, searchModules, stackTotals, trendOf, type RangeKey } from './usageModel';
 
 type Module = TokenUsageOverview['modules'][number];
@@ -81,6 +81,9 @@ export function TokensView({ range, onRange, onBudgets }: { range: RangeKey; onR
     }
   };
 
+  if (usage.isError && !data && statusOf(usage.error) === 403) {
+    return <EmptyState kind="firstUse" title="You can't see AI usage" description="Ask an administrator for the users view right." />;
+  }
   if (usage.isError && !data) {
     return <ErrorState title="Couldn't load the token usage" message={errorMessage(usage.error)} onRetry={canRetry(usage.error) ? () => { void refetch(); } : undefined} />;
   }

@@ -18,7 +18,7 @@ import {
   Button, EmptyState, Notice, Pager, PersonChip, RegisterTable, Select, StatusPill, TextInput, useAddressState, useNotify,
   type RegisterColumn,
 } from '@/components/ui/ds';
-import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
+import { canRetry, errorMessage, statusOf } from '@/components/ui/ds/reportOutcome';
 import { rowCountText } from '@/components/ui/ds/tableModel';
 import { AuditSheet } from './AuditSheet';
 import {
@@ -96,6 +96,15 @@ export default function AuditLogPage() {
     }
   };
 
+  if (statusOf(log.error) === 403) {                              // the server needs admin:audit_logs:view; a person without it gets a plain note, not a broken table
+    return (
+      <div className={PAGE}>
+        <PageHeader variant="page" title="Audit log" />
+        <EmptyState kind="firstUse" title="You can't see the audit log" description="Ask an administrator for the audit log view right." />
+      </div>
+    );
+  }
+
   const columns: RegisterColumn<AuditLogEntry>[] = [
     { key: 'when', header: 'When', card: 'meta', cell: (l) => <span className="whitespace-nowrap text-ds-body text-ds-fg">{formatDateTime(l.timestamp)}</span> },
     { key: 'who', header: 'Who', card: 'meta', cell: (l) => <PersonChip name={l.user_name} emptyLabel="Unknown person" /> },
@@ -170,8 +179,9 @@ export default function AuditLogPage() {
           The lists of modules and actions did not arrive. The log below is still complete.
         </Notice>
       )}
-      {log.isFetching && !log.isLoading && !log.isError && <p className="sr-only" role="status">Updating the audit log</p>}
+      {log.isFetching && !log.isLoading && !log.isError && <p className="sr-only text-ds-label" role="status">Updating the audit log</p>}
 
+      <div aria-busy={log.isFetching} className={log.isPlaceholderData ? 'opacity-60 transition-opacity' : undefined}>
       <RegisterTable
         caption="Audit log"
         columns={columns}
@@ -202,6 +212,7 @@ export default function AuditLogPage() {
           </div>
         ) : undefined}
       />
+      </div>
 
       <AuditSheet log={open} onClose={() => setOpen(null)} />
     </div>

@@ -14,10 +14,16 @@ export interface Job {
 }
 export interface Schedule { clock: { enabled: boolean; tick_seconds: number }; jobs: Job[] }
 
-/** "feed-refresh" -> "Feed refresh": the job's key in words. (The task's own name is a code name and is never shown.) */
+/** The words of a job key that are not read as plain words. */
+const WORDS: Record<string, string> = {
+  tprm: 'TPRM', scf: 'SCF', ai: 'AI', sla: 'SLA', cve: 'CVE', nvd: 'NVD', kev: 'KEV', epss: 'EPSS', cis: 'CIS', sso: 'SSO', api: 'API', vuln: 'Vulnerability', exploitdb: 'Exploit DB',
+};
+
+/** "feed-refresh" -> "Feed refresh", "tprm-daily-sweep" -> "TPRM daily sweep": the job's key in words. (The task's own name is a code name and is never shown.) */
 export function jobName(key: string): string {
-  const words = String(key || '').replace(/[-_]+/g, ' ').trim();
-  return words ? words.charAt(0).toUpperCase() + words.slice(1) : 'Job';
+  const words = String(key || '').split(/[-_\s]+/).filter(Boolean).map((w) => WORDS[w.toLowerCase()] ?? w.toLowerCase());
+  if (words.length === 0) return 'Job';
+  return words.map((w, i) => (i === 0 && w === w.toLowerCase() ? w.charAt(0).toUpperCase() + w.slice(1) : w)).join(' ');
 }
 
 /** "Hourly", "Daily", "Every 6 hours", "Every 2 days", "Every 15 min". */

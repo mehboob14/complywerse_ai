@@ -11,7 +11,7 @@ import { formatCount, formatDateTime, statusLabel } from '@/lib/format';
 import { statusPill } from '@/lib/status';
 import { aiCall } from '@/lib/statuses/adminAuditAi';
 import { Button, EmptyState, ErrorState, Fact, FactList, PersonChip, RegisterTable, Select, Sheet, SkeletonLines, StatusPill, useNotify, type RegisterColumn } from '@/components/ui/ds';
-import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
+import { canRetry, errorMessage, statusOf } from '@/components/ui/ds/reportOutcome';
 import { fmtTokens, money, PERSON_DAYS } from './usageModel';
 
 interface PersonRow { user_id?: number | null; username: string; calls: number; total_tokens: number; estimated_cost: number }
@@ -105,6 +105,7 @@ export function PeopleView({ person, onPerson }: { person: string; onPerson: (id
   });
   const rows = useMemo(() => list.data ?? [], [list.data]);
   const openId = Number(person);
+  if (statusOf(list.error) === 403) return <EmptyState kind="firstUse" title="You can't see AI use by person" description="Ask an administrator for the users view right." />;
   const columns: RegisterColumn<PersonRow>[] = [
     { key: 'person', header: 'Person', isRowHeader: true, cell: (r) => <PersonChip name={r.username} emptyLabel="System" /> },
     { key: 'calls', header: 'AI calls', align: 'right', card: 'meta', cell: (r) => formatCount(r.calls) },

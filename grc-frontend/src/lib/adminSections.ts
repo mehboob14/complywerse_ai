@@ -124,7 +124,7 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
   }),
   // ---- Automation ----
   S({
-    id: 'workflow', label: 'Workflow Engine', group: 'automation', url: '/workflow-engine', ownHeading: false, layout: 'full',
+    id: 'workflow', label: 'Workflow Engine', group: 'automation', url: '/workflow-engine', ownHeading: true, layout: 'full',
     rights: ['workflow_engine:definitions:view', 'workflow_engine:definitions:edit', 'workflow_engine:integrations:view', 'workflow_engine:executions:view'],
     tabs: [{ tab: 'workflow' }],
     keywords: ['Workflow Engine', 'Workflows', 'Automation rules', 'Triggers'],

@@ -12,7 +12,7 @@ import { formatCount, formatDateTime } from '@/lib/format';
 import { statusPill } from '@/lib/status';
 import { aiCall } from '@/lib/statuses/adminAuditAi';
 import { Button, EmptyState, ErrorState, Notice, RegisterTable, SectionCard, Select, SkeletonLines, StatTile, StatusPill, type RegisterColumn } from '@/components/ui/ds';
-import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
+import { canRetry, errorMessage, statusOf } from '@/components/ui/ds/reportOutcome';
 import { ACTIVITY_DAYS, ACTIVITY_OFF, fmtTokens, mayReadRunText, money, periodRange, runText, seconds } from './usageModel';
 
 type Overview = Awaited<ReturnType<typeof adminApi.getAiUsageOverview>>['data'];
@@ -44,6 +44,7 @@ export function ActivityView() {
   const [open, setOpen] = useState<string[]>([]);
   const o = overview.data;
 
+  if (statusOf(overview.error) === 403) return <EmptyState kind="firstUse" title="You can't see the activity" description="Ask an administrator for the organisation view right." />;
   if (overview.isError) return <ErrorState title="Couldn't load the activity" message={errorMessage(overview.error)} onRetry={canRetry(overview.error) ? () => { void overview.refetch(); } : undefined} />;
   if (overview.isLoading) return <SkeletonLines lines={6} label="Loading the activity" />;
   if (!o || !o.configured) return <EmptyState kind="firstUse" title={ACTIVITY_OFF.title} description={ACTIVITY_OFF.message} />;
