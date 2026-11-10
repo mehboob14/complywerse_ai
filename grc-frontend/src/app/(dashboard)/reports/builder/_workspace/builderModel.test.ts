@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  conditionText, drillNarrow, hasUnsaved, keyFacts, mergeAddedFields, newFieldCount, opLabel, picksFromVisible, savedShape, sortChoice, sortFromChoice, switchNeedsConfirm, toggleShortcut, toggleSort,
+  conditionText, drillNarrow, hasUnsaved, moduleLine, keyFacts, mergeAddedFields, newFieldCount, opLabel, picksFromVisible, savedShape, sortChoice, sortFromChoice, switchNeedsConfirm, toggleShortcut, toggleSort,
   togglePick, withoutCondition, workingSpec,
 } from './builderModel.ts';
 import { cellTone } from '../../_reports/cellTone.ts';
@@ -159,4 +159,9 @@ test('a dashboard click narrows a copy of an AND report to the clicked category;
   const one: ReportSpec = { ...or, rules: { logic: 'OR', conditions: [{ id: 'a', col: 'status', op: 'eq', value: 'Open' }] } };
   assert.equal(drillNarrow(one, 'category', 'Cyber').spec.rules.logic, 'AND', 'one active condition has no OR to preserve');
   assert.deepEqual(drillNarrow(and, null, null), { spec: and, refused: false });
+});
+
+test('the module line does not repeat a name the register already carries', () => {
+  assert.equal(moduleLine('Risk Management', 'Risk Register'), 'Risk Management · Risk Register');
+  assert.equal(moduleLine('Critical Tasks', 'Critical Tasks'), 'Critical Tasks');
 });

@@ -22,6 +22,7 @@ import { describeRules } from '../_reports/grid-utils';
 import { filterReportRows, loadReportRows, resolveReportColumns } from '../_reports/reportData';
 import { coverage } from '../_reports/rowCoverage';
 import { skippedFilterLines } from '../builder/_workspace/notices';
+import { moduleLine } from '../builder/_workspace/builderModel';
 import ReportDataTable from '../_reports/ReportDataTable';
 import type { ReportSpec } from '../_reports/types';
 import PermissionGuard from '@/components/ui/PermissionGuard';
@@ -98,7 +99,7 @@ function ReportPrintPage() {
   const generated = formatDateTime(new Date());
   const title = spec.name.trim() || `${dataset.label} report`;
   const facts: { label: string; value: string }[] = [
-    { label: 'Module', value: `${dataset.module} · ${dataset.label}` },
+    { label: 'Module', value: moduleLine(dataset.module, dataset.label) },
     { label: 'Rows', value: `${formatCount(filteredRows.length)}${filteredRows.length !== rows.length ? ` of ${formatCount(rows.length)}` : ''}${note?.partial ? `, ${note.short}` : ''}` },
     { label: 'Columns', value: visibleKeys.length ? visibleKeys.map(labelFor).join(', ') : '(none)' },
     { label: 'Filters', value: describeRules(cols, spec.rules) },

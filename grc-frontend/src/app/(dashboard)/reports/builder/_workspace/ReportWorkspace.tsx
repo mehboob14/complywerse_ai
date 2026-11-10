@@ -10,7 +10,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { FileSpreadsheet, FileText, FileType2, Printer, RotateCw } from 'lucide-react';
 import { Button, Notice, SegmentedControl, Sheet, useConfirm, useNotify, type MenuItem } from '@/components/ui/ds';
 import type { FilterRules, ReportDataset, ReportSpec } from '../../_reports/types';
-import { formatCount, formatDateTime } from '@/lib/format';
+import { formatCount, formatDateTime, truncate } from '@/lib/format';
 import { isActiveCondition, describeRules } from '../../_reports/grid-utils';
 import { measureLabel } from '../../_reports/aggregate-utils';
 import { newSpecId, persistSpec, putSpec } from '../../_reports/savedReports';
@@ -19,7 +19,7 @@ import CalcColumnPanel from '../../_reports/CalcColumnPanel';
 import { REPORTS_KEY } from '../../_library/keys';
 import { downloadWords, FORMAT_LABEL, type FileFormat } from '../../_library/fileModel';
 import { classifySync, failureWords } from '../../_library/syncModel';
-import { hasUnsaved, workingSpec } from './builderModel';
+import { hasUnsaved, moduleLine, workingSpec } from './builderModel';
 import { useReportRows } from './useReportRows';
 import { WorkspaceHead } from './WorkspaceHead';
 import { DefinitionRail } from './DefinitionRail';
@@ -110,7 +110,7 @@ export function ReportWorkspace({
       setSaved(next);
       setDeviceOnly(false);
       void qc.invalidateQueries({ queryKey: REPORTS_KEY });
-      notify.success(`“${next.name}” is saved`, { title: 'Report saved' });
+      notify.success(`“${truncate(next.name, 60).text}” is saved`, { title: 'Report saved' });
       onSaved(next);
       return true;
     } catch (e) {
@@ -131,7 +131,7 @@ export function ReportWorkspace({
       setDeviceOnly(where === 'local');
       void qc.invalidateQueries({ queryKey: REPORTS_KEY });
       if (where === 'local') notify.info('It will be sent to the server when it can be reached. The Reports list shows it as “This device only”.', { title: 'Kept on this device' });
-      else { notify.success(`“${next.name}” is saved`, { title: 'Report saved' }); onSaved(next); }
+      else { notify.success(`“${truncate(next.name, 60).text}” is saved`, { title: 'Report saved' }); onSaved(next); }
     } finally {
       setSaving(false);
     }
@@ -140,7 +140,7 @@ export function ReportWorkspace({
   const quickSavable = !!spec.id && !!spec.name.trim() && !forkOwn;
   const save = () => {
     if (quickSavable) { void commit(build({})); return; }
-    setSaveMode('save');
+    setSaveMode(forkOwn ? 'save-as' : 'save');            // someone else's report: the sheet says it saves a copy
     setFailure(null);
     setSheet('save');
   };
@@ -161,7 +161,7 @@ export function ReportWorkspace({
   const summary = data.summaryMode;
   const exportKeys = summary ? data.displayVisibleKeys : data.visibleKeys;
   const factLines = () => [
-    { label: 'Module', value: `${dataset.module} · ${dataset.label}` },
+    { label: 'Module', value: moduleLine(dataset.module, dataset.label) },
     { label: 'Generated', value: formatDateTime(new Date()) },
     { label: 'Rows', value: summary ? `${formatCount(data.displayRows.length)} summary ${data.displayRows.length === 1 ? 'group' : 'groups'}` : `${formatCount(data.filteredRows.length)}${data.filteredRows.length !== data.rows.length ? ` of ${formatCount(data.rows.length)}` : ''}` },
     { label: 'Columns', value: exportKeys.map((k) => data.displayCols.find((c) => c.key === k)?.label ?? k).join(', ') || '(none)' },
@@ -172,13 +172,14 @@ export function ReportWorkspace({
   ];
   const download = async (format: FileFormat) => {
     const name = spec.name.trim() || dataset.label;
+    const shown = truncate(name, 60).text;                                   // a long name does not fill the toast
     const cols = exportKeys.map((k) => data.displayCols.find((c) => c.key === k)).filter((c): c is NonNullable<typeof c> => !!c);
     if (cols.length === 0) { notify.warning('Add the columns the file should hold first.', { title: 'Nothing to download yet' }); return; }
     if (format === 'pdf') {
       // before anything is awaited: the new tab opens while the click is still the person's
       stashPrintSpec({ ...spec, name, visibleColumns: data.visibleKeys, includes: data.includes, view: 'table', dataset: dataset.key });
       window.open('/reports/print', '_blank', 'noopener');
-      const w = downloadWords(name, 'pdf', 0, data.partial);
+      const w = downloadWords(shown, 'pdf', 0, data.partial);
       notify.info(w.message, { title: w.title });
       return;
     }
@@ -188,8 +189,8 @@ export function ReportWorkspace({
       const rows = data.displayRows;
       if (format === 'csv') exportCSV(name, cols, rows);
       else if (format === 'excel') exportExcelMulti(name, [{ name: 'Report', cols, rows }, { name: 'Definition', aoa: [['Field', 'Value'], ...factLines().map((f) => [f.label, f.value])] }]);
-      else await exportWord(name, { title: name, subtitle: `${dataset.module} · ${dataset.label}`, facts: factLines() }, cols, rows);
-      const w = downloadWords(name, format, rows.length, data.partial);
+      else await exportWord(name, { title: name, subtitle: moduleLine(dataset.module, dataset.label), facts: factLines() }, cols, rows);
+      const w = downloadWords(shown, format, rows.length, data.partial);
       if (w.partial) notify.warning(w.message, { title: w.title }); else notify.success(w.message, { title: w.title });
     } catch (e) {
       notify.error(e, { title: `The ${FORMAT_LABEL[format]} file could not be made`, fallback: 'Try again in a moment.', retry: () => void download(format) });
@@ -227,7 +228,7 @@ export function ReportWorkspace({
       <WorkspaceHead
         name={spec.name}
         onName={(name) => patch({ name })}
-        moduleLine={dataset.module === dataset.label ? dataset.module : `${dataset.module} · ${dataset.label}`}
+        moduleLine={moduleLine(dataset.module, dataset.label)}
         shared={!!spec.shared}
         canShare={!forkOwn}
         onShare={() => patch({ shared: !spec.shared })}

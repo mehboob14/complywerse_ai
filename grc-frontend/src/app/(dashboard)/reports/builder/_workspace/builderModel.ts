@@ -6,6 +6,9 @@ import { emptySpec, type ColumnDef, type FilterRule, type FilterRules, type Repo
 import { EMPTY_TOKEN, decodeMultiValue, encodeMultiValue, isCountColumn } from '../../_reports/filter-utils.ts';
 import { isActiveCondition } from '../../_reports/grid-utils.ts';
 
+/** "Risk Management · Risk Register"; the module alone when the register carries its name ("Critical Tasks · Critical Tasks" reads as a stutter). */
+export const moduleLine = (module: string, label: string): string => (module === label ? module : `${module} · ${label}`);
+
 /* ── opening a report ───────────────────────────────────────────────────────────────────────────────────── */
 
 /** The state the workspace starts from: a saved report (or a blank one on a module) with every list the builder reads present. The body view always opens as the table (it was never saved). */

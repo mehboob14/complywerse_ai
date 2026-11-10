@@ -93,7 +93,7 @@ test('a download says what it wrote, says when the data is partial, and the PDF 
   const source = read('builder/_workspace/ReportWorkspace.tsx');
   const body = source.slice(source.indexOf('const download = async'));
   assert.ok(body.indexOf("window.open('/reports/print'") > 0 && body.indexOf("window.open('/reports/print'") < body.indexOf('await '), 'window.open comes first');
-  assert.match(source, /downloadWords\(name, format, rows\.length, data\.partial\)/);
+  assert.match(source, /downloadWords\(shown, format, rows\.length, data\.partial\)/);
   assert.match(source, /notify\.error\(e,/);
   assert.match(source, /retry: \(\) => void download\(format\)/);
   assert.match(source, /import\('\.\.\/\.\.\/_reports\/exporters'\)/, 'the spreadsheet and Word writers are fetched when one is asked for');

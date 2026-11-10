@@ -32,6 +32,7 @@ export function WorkspaceHead({
   const tone = status.tone === 'warning' ? 'text-ds-warning' : status.tone === 'success' ? 'text-ds-success' : 'text-ds-fg-muted';
   return (
     <header className="flex flex-wrap items-center gap-x-[12px] gap-y-[8px]">
+      <h1 className="sr-only">Report builder</h1>
       <Button href="/reports" variant="ghost" leftIcon={<ArrowLeft aria-hidden />} onClick={onBack}>Reports</Button>
       <div className="min-w-[220px] flex-1">
         <input
