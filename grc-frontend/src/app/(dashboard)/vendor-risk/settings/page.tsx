@@ -16,7 +16,7 @@ import { ErrorState, FormField, ReadOnlyNote, SaveBar, SectionCard, Select, Skel
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { oneOf } from '@/lib/addressState';
 import { usePermissions } from '@/hooks/usePermissions';
-import { routeFor } from '@/lib/navRegistry';
+import { titleFor } from '@/lib/navRegistry';
 import { tpraApi } from '@/lib/api';
 import { VendorTabs } from '../_lib/VendorNav';
 import { useLeaveGuard } from '../_lib/useLeaveGuard';
@@ -49,7 +49,7 @@ export default function VendorRiskSettingsPage() {
   const { confirm, confirmDialog } = useConfirm();
   const { hasPermission } = usePermissions();
   const canEdit = hasPermission('vendor_risk:config:edit') || hasPermission('erm:risks:edit');           // the server accepts either (rbac.require_write falls back to the risk-edit right)
-  const label = routeFor('/vendor-risk/settings')?.label ?? 'Third-party risk settings';
+  const label = titleFor('/vendor-risk/settings') ?? 'Third-party risk settings';
   const [{ section }, setAddress] = useAddressState(SCHEMA);
   const current = sectionOf(section);
 

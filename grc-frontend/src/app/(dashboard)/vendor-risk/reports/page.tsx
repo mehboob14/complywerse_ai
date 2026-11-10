@@ -5,7 +5,7 @@
 // reports (_reports/ReportsRegister); Generate a report is a Sheet (_reports/GenerateSheet) that the head's button, the empty state and `?generate=<kind>` (the old "Quarterly report" link) open.
 import { useEffect, useState } from 'react';
 import { PageHeader } from '@/components/ui';
-import { routeFor } from '@/lib/navRegistry';
+import { titleFor } from '@/lib/navRegistry';
 import { VendorTabs } from '../_lib/VendorNav';
 import GenerateSheet from './_reports/GenerateSheet';
 import ReportsRegister from './_reports/ReportsRegister';
@@ -15,7 +15,7 @@ import { rightsFrom } from './_reports/reportsModel';
 const INFO = 'The committee pack, the register of critical functions and contract obligations, a supplier’s evidence file and the ratings of the critical suppliers, generated from the programme’s own records. A kept report does not change afterwards. Approve a report before sharing it: an examiner’s link needs no sign-in, lasts up to 30 days and every view is logged.';
 
 export default function ReportsPage() {
-  const label = routeFor('/vendor-risk/reports')?.label ?? 'Reports';
+  const label = titleFor('/vendor-risk/reports') ?? 'Reports';
   const { hasPermission } = usePermissions();
   const rights = rightsFrom(hasPermission);
   const [generate, setGenerate] = useState(false);

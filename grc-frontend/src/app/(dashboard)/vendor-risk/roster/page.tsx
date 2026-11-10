@@ -10,7 +10,7 @@ import { InfoTip } from '@/components/ui/InfoTip';
 import { Button, Combobox, ErrorState, IconButton, PersonChip, ReadOnlyNote, SectionCard, SkeletonRows, useReportedMutation } from '@/components/ui/ds';
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { vendorOnboardingApi } from '@/lib/api';
-import { routeFor } from '@/lib/navRegistry';
+import { titleFor } from '@/lib/navRegistry';
 import { VendorTabs } from '../_lib/VendorNav';
 import { peopleKey } from '../_lib/portfolioApi';
 import { rosterApi, rosterKey } from '../_lib/rosterApi';
@@ -24,7 +24,7 @@ export default function RosterPage() {
   // the people a seat can be given to: read here (not through usePeople) so a failed read is said, not shown as nobody to choose
   const peopleQ = useQuery<Person[]>({ queryKey: peopleKey, queryFn: async () => (await vendorOnboardingApi.people()).data, staleTime: 5 * 60_000 });
   const people = peopleQ.data ?? [];
-  const label = routeFor('/vendor-risk/roster')?.label ?? 'Roster';
+  const label = titleFor('/vendor-risk/roster') ?? 'Roster';
 
   const roster = useQuery({ queryKey: rosterKey, queryFn: async () => (await rosterApi.get()).data, ...TPRM_QUERY_OPTS });
   const change = useReportedMutation({

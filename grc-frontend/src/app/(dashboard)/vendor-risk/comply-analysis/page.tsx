@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { PageHeader } from '@/components/ui';
-import { routeFor } from '@/lib/navRegistry';
+import { titleFor } from '@/lib/navRegistry';
 import { VendorTabs } from '../_lib/VendorNav';
 import AnalysisRegister from './_analyses/AnalysisRegister';
 import { ImportSheet, NewAnalysisSheet } from './_analyses/Sheets';
@@ -14,7 +14,7 @@ import { ImportSheet, NewAnalysisSheet } from './_analyses/Sheets';
 const INFO = 'One loss scenario at one supplier, taken apart factor by factor: how often a threat acts, how often that becomes a loss, and what each loss costs. Every factor is a range; thousands of simulated years show what a year could cost.';
 
 export default function ComplyAnalysesPage() {
-  const label = routeFor('/vendor-risk/comply-analysis')?.label ?? 'Comply analyses';
+  const label = titleFor('/vendor-risk/comply-analysis') ?? 'Comply analyses';
   const params = useSearchParams();
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);

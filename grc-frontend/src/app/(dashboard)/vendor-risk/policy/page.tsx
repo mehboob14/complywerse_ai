@@ -12,7 +12,7 @@ import { PageHeader } from '@/components/ui';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { Button, ErrorState, ReadOnlyNote, SaveBar, SectionCard, Select, SkeletonRows, StatusPill, TextInput, useConfirm, useReportedMutation } from '@/components/ui/ds';
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
-import { routeFor } from '@/lib/navRegistry';
+import { titleFor } from '@/lib/navRegistry';
 import { statusPill } from '@/lib/status';
 import { vendorTier } from '@/lib/statuses/vendor';
 import { VendorTabs } from '../_lib/VendorNav';
@@ -57,7 +57,7 @@ function Toggle({ on, disabled, onClick, children }: { on: boolean; disabled: bo
 export default function PolicyPage() {
   const qc = useQueryClient();
   const { confirm, confirmDialog } = useConfirm();
-  const label = routeFor('/vendor-risk/policy')?.label ?? 'Policy';
+  const label = titleFor('/vendor-risk/policy') ?? 'Policy';
 
   const policyQuery = useQuery({ queryKey: policyKey, queryFn: async () => (await policyApi.get()).data, ...TPRM_QUERY_OPTS });
   // the reopen threshold is not on the policy: it stays in the tier policy of the program config (the same fetch Settings makes); it is SAVED with the policy now
