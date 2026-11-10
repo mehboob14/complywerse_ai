@@ -3,7 +3,7 @@
 // client feature it names. An entry that names no permission is an administrator's: it used to be shown to everyone. The one exception says so on the entry (`signedIn`): Needs my action,
 // the person's own queue, is shown to everyone who is signed in.
 import {
-  Activity, AlertCircle, AlertTriangle, BarChart3, Bookmark, Bot, Bug, Building2, CalendarClock, ClipboardCheck, ClipboardList,
+  Activity, AlertCircle, AlertTriangle, BarChart3, Bot, Bug, Building2, CalendarClock, ClipboardCheck, ClipboardList,
   Crosshair, FileSpreadsheet, FileText, FolderKanban, Gavel, GitPullRequest, Landmark, Layers, LayoutDashboard, LifeBuoy,
   Gauge, ListChecks, ListTodo, Radar, ScrollText, Server, ShieldAlert, ShieldCheck, Target, Users, Workflow, Zap,
   type LucideIcon,
@@ -199,16 +199,17 @@ export const navigation: NavEntry[] = [
       { name: 'Issue Register', href: '/auditor-portal/issue-register', icon: FileSpreadsheet, requiredPermissions: ['issue_management:issues:*'], requiredFeature: 'audit_register' },
     ],
   },
-  // Reports — Analytics (Metabase) is primary for cross-module authoring;
-  // Quick export keeps the native register builder for simple CSVs.
+  // Reports: the library of saved reports (the builder opens from it), the saved dashboards, the KPI trends and the Analytics launcher (Metabase, for cross-module authoring).
   {
     name: 'Reports',
     icon: BarChart3,
     rail: 'Reports',
     items: [
-      { name: 'Analytics', href: '/reports/analytics', icon: LayoutDashboard, activeMatch: '/reports/analytics', requiredPermissions: ['reports:analytics:*'] },
-      { name: 'Quick export', href: '/reports', icon: BarChart3, requiredPermissions: ['reports:reports:*'] },
-      { name: 'Saved exports', href: '/reports/saved', icon: Bookmark, requiredPermissions: ['reports:reports:*'] },
+      // /reports lights for the builder and the print page too (they sit under it); the three deeper leaves win on their own pages. /reports/saved is a server forward to /reports.
+      { name: 'Reports', href: '/reports', icon: BarChart3, requiredPermissions: ['reports:reports:*'] },
+      { name: 'Dashboards', href: '/reports/dashboards', icon: LayoutDashboard, requiredPermissions: ['reports:dashboards:*'] },
+      { name: 'Trends', href: '/reports/trends', icon: Activity, requiredPermissions: ['reports:reports:*', 'reports:dashboards:*', 'reports:analytics:*'] },
+      { name: 'Analytics', href: '/reports/analytics', icon: Gauge, requiredPermissions: ['reports:analytics:*'] },
     ],
   },
   // Issues moved into "Issue & Incident Management" (top-bar quick action removed in Header.tsx).
@@ -230,8 +231,6 @@ export function flattenLeaves(entries: NavEntry[]): NavItem[] {
 const PAGE_PERMISSIONS: Record<string, string[]> = {
   '/complychat': ['dashboard:ai_insights:view'],                          // Dashboard > Comply Agent
   '/users': ['admin:users:view'],                                         // Administration > User Management
-  '/reports/dashboards': ['reports:dashboards:*'],
-  '/reports/trends': ['reports:reports:*', 'reports:dashboards:*', 'reports:analytics:*'],
   '/reports/print': ['reports:reports:*'],
 };
 

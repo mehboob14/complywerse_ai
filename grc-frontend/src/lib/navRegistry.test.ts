@@ -477,6 +477,6 @@ test("the section of a page that draws its own heading: its group's name, nothin
 test("an own-heading page shows a section unless it is its module's top page: an area missing from SECTION cannot pass unnoticed", () => {
   for (const e of routes.filter((r) => r.ownHeading)) {
     const section = sectionOfEntry(e);
-    if (section === '') assert.ok(e.groups.length === 0 && !e.hidden && !e.parent, `${e.path} shows no section: only a module's top page may (its area '${e.area}' needs a name in SECTION, or a section override)`);
+    if (section === '') assert.ok((e.groups.length === 0 || e.groups[e.groups.length - 1].label === e.label) && !e.hidden && !e.parent, `${e.path} shows no section: only a module's top page may (its area '${e.area}' needs a name in SECTION, or a section override)`);
   }
 });

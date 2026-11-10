@@ -300,7 +300,7 @@ test('breadcrumbFor gives a sane trail for an example URL of every module', () =
   assert.deepEqual(labels('/automation/soc2-controls/coverage'), ['Controls Automation', 'Controls', 'Requirement coverage']);
   assert.deepEqual(labels('/issues/3'), ['Issue & Incident Management', 'Issues', 'Issue']);
   assert.deepEqual(labels('/auditor-portal/statutory-audit/6'), ['Auditor Portal', 'Statutory Audit', 'Audit observation']);
-  assert.deepEqual(labels('/reports/trends'), ['Reports', 'Quick export', 'Trends']);
+  assert.deepEqual(labels('/reports/trends'), ['Reports', 'Trends']);
   assert.deepEqual(labels('/admin/roles'), ['Administration', 'Roles & permissions']);
   assert.deepEqual(labels('/admin/users/4/usage'), ['Administration', 'Users', 'User usage']);
   assert.deepEqual(labels('/users'), ['Users']);

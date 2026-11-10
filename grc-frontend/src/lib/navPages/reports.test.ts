@@ -27,15 +27,16 @@ test('the folder holds seven pages and the registry has exactly one entry for ea
   for (const href of Object.keys(LEAVES)) assert.ok(pages.includes(href), `${href}: a leaf is a page`);
 });
 
-test('the builder and the dashboards hang under the library, and say where they open from', () => {
-  for (const path of ['/reports/builder', '/reports/dashboards', '/reports/trends', '/reports/print']) {
+test('the builder, the print view and the old saved address hang under the library, and say where they open from', () => {
+  for (const path of ['/reports/builder', '/reports/saved', '/reports/print']) {
     const spec = PAGES.find((p) => p.path === path);
     assert.equal(spec?.parent, '/reports', path);
     assert.equal(spec?.area, 'reports', path);
     assert.ok((spec?.hidden ?? '').length > 20, `${path}: where it opens from`);
   }
   assert.equal(routeFor('/reports/builder')?.label, 'Report builder');
-  assert.equal(routeFor('/reports/dashboards')?.label, 'Dashboards');
+  assert.equal(routeFor('/reports/dashboards')?.label, 'Dashboards', 'a leaf of the menu');
+  assert.equal(routeFor('/reports/trends')?.label, 'Trends', 'a leaf of the menu');
 });
 
 test('the builder needs what the library needs: it has no right of its own, so the registry gives it the library\'s, and its page guards itself with the library\'s', () => {

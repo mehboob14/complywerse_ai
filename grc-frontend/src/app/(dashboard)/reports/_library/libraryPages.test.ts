@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { findViolations } from '../../../../components/ui/ds/kitRules.ts';
 
 const REPORTS = fileURLToPath(new URL('../', import.meta.url));
-const read = (file: string) => readFileSync(`${REPORTS}${file}`, 'utf8');
+const read = (file: string) => readFileSync(`${REPORTS}${file}`, 'utf8').replace(/\r\n/g, '\n'); // a checkout with CRLF line ends reads the same
 const walk = (dir: string): string[] => (readdirSync(`${REPORTS}${dir}`, { recursive: true }) as string[]).map((f) => f.replace(/\\/g, '/')).filter((f) => /\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f)).map((f) => `${dir}/${f}`);
 
 /** The words a person can read in a source file (the reading of lib/uxContent.test.ts): JSX text and string literals that hold a space; comments are dropped first. */

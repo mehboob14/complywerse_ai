@@ -40,8 +40,8 @@ test('Cybersecurity Assurance and Reports show their entries to the rights that 
     QUEUE,
     ['Cybersecurity Assurance', ['Performance', 'IT Asset Discovery', 'IT Asset Inventory']],
   ]);
-  assert.deepEqual(sees(me(['reports:analytics:view'])), [QUEUE, ['Reports', ['Analytics']]]);
-  assert.deepEqual(sees(me(['reports:reports:export'])), [QUEUE, ['Reports', ['Quick export', 'Saved exports']]]);
+  assert.deepEqual(sees(me(['reports:analytics:view'])), [QUEUE, ['Reports', ['Trends', 'Analytics']]]);
+  assert.deepEqual(sees(me(['reports:reports:export'])), [QUEUE, ['Reports', ['Reports', 'Trends']]]);
 });
 
 test('nobody signed in sees nothing; a signed-in person with no permission sees only their own queue (a reviewer asked about a document has nothing else to open)', () => {
@@ -64,7 +64,7 @@ test('every entry names the permissions that open it, and its page guards itself
   for (const item of flattenLeaves(navigation)) {
     assert.ok(item.requiredPermissions?.length || item.signedIn, `${item.name} (${item.href}) would be shown to everyone`);
   }
-  for (const href of ['/cyber-assurance/dashboard', '/cyber-assurance/pentest', '/reports', '/reports/saved', '/reports/analytics',
+  for (const href of ['/cyber-assurance/dashboard', '/cyber-assurance/pentest', '/reports', '/reports/analytics',
     '/reports/dashboards', '/reports/trends', '/reports/print', '/users', '/complychat']) {
     assert.ok(navPermissions(href).length, href);
   }
