@@ -33,7 +33,7 @@ test('the report kinds and their labels are the ones the server writes', () => {
 test('a draft is waiting for someone, an approved report is good, a shared one is live; none rests on colour alone', () => {
   assert.equal(reportState.tone('draft'), 'pending');
   assert.equal(reportState.tone('approved'), 'success');
-  assert.equal(statusPill(reportState, 'shared').label, 'Shared with an examiner');
+  assert.equal(statusPill(reportState, 'shared').label, 'Shared', 'short enough for a narrow column; the drawer says it is an examiner link');
   assert.notEqual(analysisState.label('draft'), analysisState.label('final'));
 });
 

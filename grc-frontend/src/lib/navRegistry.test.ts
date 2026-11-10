@@ -140,6 +140,7 @@ test('a forward is another URL of an entry that is a page of its own, under the 
     ['/vendor-risk/alerts', '/vendor-risk/monitoring'],
     ['/vendor-risk/technology', '/vendor-risk/dependencies'],
     ['/vendor-risk/concentration', '/vendor-risk/dependencies'],
+    ['/vendor-risk/settings/emails', '/vendor-risk/settings'],
     ['/vendor-risk/settings/alert-rules', '/vendor-risk/policy'],
     ['/automation/scope', '/automation/soc2-controls'],
     ['/admin/access-reviews', '/compliance/access-reviews'],

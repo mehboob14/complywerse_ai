@@ -199,9 +199,10 @@ export function problemsOf(keys: readonly DraftKey[], draft: Draft, questions: r
   return out;
 }
 
-/** "every year", "every 3 months", "every 2 weeks", "every 45 days": a number of days in words. */
+/** "every day", "every year", "every 3 months", "every 2 weeks", "every 45 days": a number of days in words. */
 export function days(d: number): string {
   if (!d) return '—';
+  if (d === 1) return 'every day';
   if (d % 365 === 0) return d === 365 ? 'every year' : `every ${d / 365} years`;
   if (d % 30 === 0 && d < 365) return d === 30 ? 'every month' : `every ${d / 30} months`;
   if (d % 7 === 0 && d < 60) return d === 7 ? 'every week' : `every ${d / 7} weeks`;

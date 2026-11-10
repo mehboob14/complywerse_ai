@@ -82,9 +82,10 @@ export const PAGES: PageSpec[] = [
   { path: `${V}/vendors/:id`, label: 'Vendor', area: AREA, parent: `${V}/vendors`, hidden: 'opens from a Register row and from the vendor name on most pages of the module and of the Auditor Portal', ownHeading: true },
   { path: `${V}/vendors/:id/summary`, label: 'Vendor summary report', area: AREA, parent: `${V}/vendors`, hidden: 'opens from the vendor record\'s menu ("Summary report")' },
   { path: `${V}/assessments/:id`, label: 'Vendor assessment', area: AREA, parent: `${V}/vendors`, hidden: 'opens from a questionnaire sent to a vendor and from a vendor\'s assessment dialog' },
-  { path: `${V}/comply-analysis/:id`, label: 'Comply analysis', area: AREA, parent: `${V}/comply-analysis`, hidden: 'opens from a row of Comply analyses' },
-  { path: `${V}/reports/:id`, label: 'Vendor report', area: AREA, parent: `${V}/reports`, hidden: 'opens from a kept report in Reports, and straight after one is generated' },
-  { path: `${V}/settings/emails`, label: 'Emails', area: AREA, parent: `${V}/settings`, hidden: 'opens from Third-party risk settings (the emails link)', keywords: ['Vendor emails'] },
+  { path: `${V}/comply-analysis/:id`, label: 'Comply analysis', area: AREA, parent: `${V}/comply-analysis`, hidden: 'opens from a row of Comply analyses', ...heading(`${V}/comply-analysis/:id`) },
+  { path: `${V}/reports/:id`, label: 'Vendor report', area: AREA, parent: `${V}/reports`, hidden: 'opens from a kept report in Reports, and straight after one is generated', ...heading(`${V}/reports/:id`) },
+  // The Emails page is the Emails section of Settings: the old address forwards there (?section=emails).
+  { path: `${V}/settings/emails`, label: 'Third-party risk settings', area: AREA, aliasOf: `${V}/settings` },
   // The alert rules moved into the Policy page (its #alert-rules section); the old address forwards there.
   { path: `${V}/settings/alert-rules`, label: 'Policy', area: AREA, aliasOf: `${V}/policy` },
 ];

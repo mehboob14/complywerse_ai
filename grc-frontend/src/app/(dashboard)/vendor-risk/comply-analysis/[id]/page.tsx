@@ -1,310 +1,145 @@
 'use client';
 
-// One Comply analysis: its factors as ranges, where the prefilled ones came from,
-// and what thousands of simulated years say a year could cost.
-
+// One Comply analysis as a workspace: Result (what a year could cost), Factors (the scenario and every factor as a range) and Write-up (the AI's read for a committee), the tab in the address (?tab=). The
+// form is held here, so editing the factors and looking at the result do not lose it; one Save bar saves it and runs the analysis again (the server answers with the new result; a second person's save in
+// between is refused with a plain sentence, not overwritten); leaving with changes asks first. Mark final, the CSV and Delete are the head's. Every figure of the result is the server's.
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { clsx } from 'clsx';
-import { ArrowLeft, Download, Loader2, ShieldCheck, Sparkles, Trash2 } from 'lucide-react';
-import { vendorFairApi } from '@/lib/api';
-import { useToast } from '@/components/ui/ToastProvider';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Download, Trash2 } from 'lucide-react';
+import { PageHeader } from '@/components/ui';
+import { Button, ErrorState, Menu, SaveBar, SkeletonLines, StatusPill, TabPanel, Tabs, useConfirm, useReportedMutation, useTabParam, type MenuItem } from '@/components/ui/ds';
+import { canRetry, errorMessage, statusOf } from '@/components/ui/ds/reportOutcome';
 import { usePermissions } from '@/hooks/usePermissions';
-import { errText } from '../../_lib/intake/types';
-import {
-  EFFECT_LABEL, LEVEL_CLS, LossCurve, download, money, oneIn, pct, type FairAnalysis, type FairInputs, type Triple,
-} from '../../_lib/fair/shared';
+import { vendorFairApi } from '@/lib/api';
+import { statusPill } from '@/lib/status';
+import { EFFECT_WORDS, analysisCover, analysisRisk, analysisState } from '@/lib/statuses/vendorInsights';
+import { useLeaveGuard } from '../../_lib/useLeaveGuard';
+import { download } from '../../_lib/fair/shared';
+import { isDirty, metaOf, problems, saveBody, toText, type FactorText, type FairAnalysis, type Meta } from '../../_lib/fair/fairModel';
+import FactorsTab from './_workspace/FactorsTab';
+import ResultTab from './_workspace/ResultTab';
+import WriteUpTab from './_workspace/WriteUpTab';
+import { coverOf } from '../_analyses/analysisModel';
 
-type Row = { path: string; label: string; help: string; unit: 'events' | 'share' | 'money' };
-const GROUPS: Array<{ title: string; rows: Row[] }> = [
-  { title: 'How often it happens', rows: [
-    { path: 'tef', label: 'Threat events a year', help: 'Serious attempts against this supplier that could lead to a loss.', unit: 'events' },
-    { path: 'vulnerability', label: 'Chance an attempt becomes a loss', help: 'Vulnerability: how much of what is tried succeeds.', unit: 'share' },
-  ] },
-  { title: 'What each loss costs us', rows: [
-    { path: 'primary.response', label: 'Response', help: 'Investigation, notification, legal and recovery work.', unit: 'money' },
-    { path: 'primary.productivity', label: 'Productivity', help: 'Work that stops while the service or data is unavailable.', unit: 'money' },
-    { path: 'primary.replacement', label: 'Replacement', help: 'Records, systems or data to replace or make good.', unit: 'money' },
-  ] },
-  { title: 'When others react', rows: [
-    { path: 'secondary.probability', label: 'Chance regulators, customers or others react', help: 'Secondary loss event frequency, per loss.', unit: 'share' },
-    { path: 'secondary.fines', label: 'Fines and judgments', help: 'Penalties, settlements and damages.', unit: 'money' },
-    { path: 'secondary.reputation', label: 'Reputation', help: 'Customers lost or not won.', unit: 'money' },
-    { path: 'secondary.competitive', label: 'Competitive advantage', help: 'Value of information competitors gain.', unit: 'money' },
-  ] },
-];
+const KEYS = ['result', 'factors', 'writeup'] as const;
+type TabKey = (typeof KEYS)[number];
+const BACK = { href: '/vendor-risk/comply-analysis', label: 'Back to analyses' };
 
-function get(inputs: FairInputs, path: string): Triple {
-  return path.split('.').reduce((o: unknown, k) => (o as Record<string, unknown>)[k], inputs) as Triple;
-}
-
-function toText(inputs: FairInputs): Record<string, [string, string, string]> {
-  const out: Record<string, [string, string, string]> = {};
-  GROUPS.forEach((g) => g.rows.forEach((r) => {
-    const t = get(inputs, r.path);
-    out[r.path] = t.map((v) => String(r.unit === 'share' ? Math.round(v * 1000) / 10 : v)) as [string, string, string];
-  }));
-  return out;
-}
-
-function fromText(text: Record<string, [string, string, string]>, iterations: number): FairInputs {
-  const t = (path: string, share: boolean) => text[path].map((v) => (Number(v) || 0) / (share ? 100 : 1)) as Triple;
-  return {
-    tef: t('tef', false), vulnerability: t('vulnerability', true),
-    primary: { response: t('primary.response', false), productivity: t('primary.productivity', false), replacement: t('primary.replacement', false) },
-    secondary: { probability: t('secondary.probability', true), fines: t('secondary.fines', false), reputation: t('secondary.reputation', false),
-                 competitive: t('secondary.competitive', false) },
-    iterations,
-  };
-}
-
-export default function FairAnalysisPage() {
+export default function AnalysisPage() {
   const { id } = useParams<{ id: string }>();
   const analysisId = Number(id);
   const router = useRouter();
   const qc = useQueryClient();
-  const { toast } = useToast();
+  const { confirm, confirmDialog } = useConfirm();
   const { hasPermission } = usePermissions();
-  const canEdit = hasPermission('vendor_risk:assessments:edit') || hasPermission('erm:risks:edit');
-  const canDelete = hasPermission('vendor_risk:assessments:delete') || canEdit;
-  const { data: a, isLoading, isError } = useQuery<FairAnalysis>({
-    queryKey: ['tprm-fair', analysisId],
-    queryFn: async () => (await vendorFairApi.get(analysisId)).data,
-  });
-  const [text, setText] = useState<Record<string, [string, string, string]> | null>(null);
-  const [meta, setMeta] = useState({ name: '', scenario: '', asset: '', threat: '', cover: '' });
-  const metaOf = (x: FairAnalysis) => ({ name: x.name, scenario: x.scenario || '', asset: x.asset || '', threat: x.threat || '',
-    cover: x.insurance_cover == null ? '' : String(x.insurance_cover) });
+  const canEdit = hasPermission('vendor_risk:assessments:edit') || hasPermission('erm:risks:edit');             // the server's rule for changing an analysis
+  const canDelete = hasPermission('vendor_risk:assessments:delete') || hasPermission('erm:risks:edit');         // the server's rule for deleting one: assessments:edit alone is not enough
+  const [tab, setTab] = useTabParam<TabKey>('tab', KEYS, { fallback: 'result' });
+
+  const q = useQuery<FairAnalysis>({ queryKey: ['tprm-fair', analysisId], queryFn: async () => (await vendorFairApi.get(analysisId)).data });
+  const a = q.data;
+  const [text, setText] = useState<FactorText | null>(null);
+  const [meta, setMeta] = useState<Meta | null>(null);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [writeError, setWriteError] = useState<string | null>(null);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+  // the form is read from the analysis once, and again only when a NEW version of it arrives (our own save): a refetch of the same version never overwrites what is being typed
   useEffect(() => {
-    if (a?.inputs) {
-      setText(toText(a.inputs));
-      setMeta(metaOf(a));
-    }
-  }, [a]);
-  const dirty = useMemo(() => !!a?.inputs && !!text && (JSON.stringify(toText(a.inputs)) !== JSON.stringify(text)
-    || JSON.stringify(meta) !== JSON.stringify(metaOf(a))), [a, text, meta]);
-  const save = useMutation({
-    mutationFn: async (extra: Record<string, unknown> = {}) => (await vendorFairApi.update(analysisId, {
-      inputs: fromText(text!, a!.inputs!.iterations), name: meta.name, scenario: meta.scenario, asset: meta.asset, threat: meta.threat,
-      insurance_cover: meta.cover === '' ? null : Number(meta.cover), row_version: a!.row_version, ...extra,
-    })).data as FairAnalysis,
-    onSuccess: (r) => { qc.setQueryData(['tprm-fair', analysisId], r); qc.invalidateQueries({ queryKey: ['tprm-fair'] }); toast({ type: 'success', title: 'Saved and run again' }); },
-    onError: (e) => toast({ type: 'error', title: 'Not saved', message: errText(e, 'Try again.') }),
+    if (a?.inputs) { setText(toText(a.inputs)); setMeta(metaOf(a)); }
+  }, [a?.id, a?.row_version]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!savedAt) return undefined;
+    const t = window.setTimeout(() => setSavedAt(null), 4000);
+    return () => window.clearTimeout(t);
+  }, [savedAt]);
+  const dirty = useMemo(() => !!a && !!text && !!meta && isDirty(a, text, meta), [a, text, meta]);
+  const issues = text && meta ? problems(text, meta) : [];
+  useLeaveGuard(dirty, () => confirm({ title: 'Leave without saving?', message: 'The changes you made to this analysis have not been saved.', confirmLabel: 'Leave', cancelLabel: 'Stay', tone: 'danger' }));
+
+  const save = useReportedMutation({
+    mutationFn: async (extra: Record<string, unknown>) => (await vendorFairApi.update(analysisId, saveBody(a as FairAnalysis, text as FactorText, meta as Meta, extra))).data as FairAnalysis,
+    success: (_r, extra) => (extra.status ? (extra.status === 'final' ? 'Marked final' : 'Back to draft') : { title: 'Saved and run again', message: 'The result follows the new figures.' }),
+    failure: 'The analysis could not be saved.',
+    toast: 'success',                                                    // a refusal is said on the save bar, in the server's words
+    onSuccess: (r) => { qc.setQueryData(['tprm-fair', analysisId], r); void qc.invalidateQueries({ queryKey: ['tprm-fair'] }); setServerError(null); setSavedAt(Date.now()); },
+    onError: (e) => setServerError(statusOf(e) === 409 ? 'Someone else changed this analysis while you were editing it. Reload the page to see their version, then make your changes again.' : errorMessage(e, 'The analysis could not be saved. Try again.')),
   });
-  const writeUp = useMutation({
+  const writeUp = useReportedMutation({
     mutationFn: async () => (await vendorFairApi.writeUp(analysisId)).data as FairAnalysis,
-    onSuccess: (r) => { qc.setQueryData(['tprm-fair', analysisId], r); qc.invalidateQueries({ queryKey: ['tprm-fair'] }); },
-    onError: (e) => toast({ type: 'error', title: 'No write-up', message: errText(e, 'The AI could not write this up. Try again.') }),
+    success: 'The write-up is ready',
+    failure: 'The AI could not write this up.',
+    toast: 'success',
+    onSuccess: (r) => { qc.setQueryData(['tprm-fair', analysisId], r); void qc.invalidateQueries({ queryKey: ['tprm-fair'] }); setWriteError(null); },
+    onError: (e) => setWriteError(errorMessage(e, 'The AI could not write this up. Try again.')),
   });
-  const remove = useMutation({
+  const remove = useReportedMutation({
     mutationFn: () => vendorFairApi.remove(analysisId),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['tprm-fair'] }); router.push('/vendor-risk/comply-analysis'); },
+    success: 'Analysis deleted',
+    failure: 'The analysis could not be deleted.',
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ['tprm-fair'] }); router.push('/vendor-risk/comply-analysis'); },
   });
+  const exportOne = useReportedMutation({
+    mutationFn: async () => download((await vendorFairApi.exportOne(analysisId)).data as Blob, `${(a?.name ?? 'comply-analysis').replace(/[^\w\- ]+/g, '').trim() || 'comply-analysis'}.csv`),
+    failure: 'The CSV could not be downloaded.',
+    toast: 'errors',
+  });
+  const askDelete = async () => {
+    if (await confirm({ title: `Delete “${a?.name}”?`, message: 'The analysis and its result are removed. This cannot be undone.', confirmLabel: 'Delete the analysis', tone: 'danger' })) remove.mutate();
+  };
 
-  if (isLoading || (a && !text)) return <div className="flex items-center gap-2 py-10 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>;
-  if (isError || !a || !text) return <p className="text-sm text-rose-700">Could not load this analysis.</p>;
-  const r = a.result;
-  const input = 'w-full rounded-md border border-slate-300 px-2 py-1.5 text-right text-sm tabular-nums focus:border-primary-500 focus:outline-none disabled:bg-slate-50';
+  if (q.isLoading || (a && (!text || !meta))) {
+    return <div className="flex flex-col gap-[16px]"><PageHeader variant="page" title="Comply analysis" back={BACK} /><SkeletonLines lines={8} label="Loading the analysis" /></div>;
+  }
+  if (q.isError || !a || !text || !meta) {
+    const gone = statusOf(q.error) === 404;
+    return (
+      <div className="flex flex-col gap-[16px]">
+        <PageHeader variant="page" title="Comply analysis" back={BACK} />
+        <ErrorState title={gone ? 'This analysis could not be found' : 'Couldn’t load this analysis'} message={gone ? 'It may have been deleted.' : errorMessage(q.error)} onRetry={!gone && canRetry(q.error) ? () => { void q.refetch(); } : undefined} />
+      </div>
+    );
+  }
+  const more: MenuItem[] = [];
+  if (canDelete) more.push({ key: 'delete', label: 'Delete the analysis', icon: Trash2, danger: true, onSelect: () => { void askDelete(); } });
 
   return (
-    <div className="space-y-5">
-      <Link href="/vendor-risk/comply-analysis" className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700"><ArrowLeft className="h-3.5 w-3.5" /> All analyses</Link>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <input aria-label="Name" value={meta.name} onChange={(e) => setMeta({ ...meta, name: e.target.value })} disabled={!canEdit}
-            className="w-full max-w-xl rounded-md border border-transparent bg-transparent px-1 text-xl font-semibold text-slate-900 hover:border-slate-200 focus:border-primary-400 focus:outline-none" />
-          <p className="mt-0.5 px-1 text-sm text-slate-500">
-            <Link href={`/vendor-risk/vendors/${a.vendor.id}?tab=exposure`} className="text-primary-700 hover:underline">{a.vendor.name}</Link> · {EFFECT_LABEL[a.effect]}
-            {a.status === 'final' && <span className="ml-2 rounded-full border border-emerald-200 bg-emerald-50 px-1.5 text-[11px] text-emerald-800">final</span>}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={async () => download((await vendorFairApi.exportOne(a.id)).data as Blob, `${a.name}.csv`)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"><Download className="h-4 w-4" /> CSV</button>
-          {canEdit && (
-            <button type="button" onClick={() => save.mutate({ status: a.status === 'final' ? 'draft' : 'final' })} disabled={save.isPending || dirty}
-              title={dirty ? 'Save your changes first' : undefined}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-              {a.status === 'final' ? 'Back to draft' : 'Mark final'}
-            </button>
-          )}
-          {canDelete && (
-            <button type="button" onClick={() => { if (window.confirm('Delete this analysis?')) remove.mutate(); }} aria-label="Delete analysis"
-              className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 hover:bg-rose-50 hover:text-rose-700"><Trash2 className="h-4 w-4" /></button>
-          )}
-        </div>
-      </div>
-
-      <div className="grid gap-5 xl:grid-cols-5">
-        <form className="space-y-4 xl:col-span-2" onSubmit={(e) => { e.preventDefault(); save.mutate({}); }}>
-          <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
-            <label className="block text-xs font-medium text-slate-700">The scenario
-              <textarea rows={2} value={meta.scenario} onChange={(e) => setMeta({ ...meta, scenario: e.target.value })} disabled={!canEdit}
-                placeholder="e.g. An attacker takes payroll records from the supplier's platform"
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
-            </label>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="block text-xs font-medium text-slate-700">What is at risk
-                <input value={meta.asset} onChange={(e) => setMeta({ ...meta, asset: e.target.value })} disabled={!canEdit}
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
-              </label>
-              <label className="block text-xs font-medium text-slate-700">Who would act
-                <input value={meta.threat} onChange={(e) => setMeta({ ...meta, threat: e.target.value })} disabled={!canEdit}
-                  placeholder="e.g. Organised criminals" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
-              </label>
-            </div>
-            <label className="block text-xs font-medium text-slate-700">The supplier’s cyber insurance cover ({a.currency})
-              <input type="number" min={0} step="any" value={meta.cover} onChange={(e) => setMeta({ ...meta, cover: e.target.value })} disabled={!canEdit}
-                placeholder="Leave empty if not known" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm tabular-nums focus:border-primary-500 focus:outline-none" />
-              <span className="mt-0.5 block font-normal text-slate-400">From their insurance certificate. The result says how often a year’s loss would exceed it.</span>
-            </label>
-          </section>
-
-          {GROUPS.map((g) => (
-            <section key={g.title} className="rounded-xl border border-slate-200 bg-white p-4" aria-label={g.title}>
-              <div className="mb-2 grid grid-cols-[1fr_repeat(3,5.5rem)] items-end gap-2 text-[11px] uppercase tracking-wide text-slate-500">
-                <span className="font-semibold">{g.title}</span><span className="text-right">Least</span><span className="text-right">Likely</span><span className="text-right">Most</span>
-              </div>
-              <div className="space-y-2.5">
-                {g.rows.map((row) => (
-                  <div key={row.path} className="grid grid-cols-[1fr_repeat(3,5.5rem)] items-center gap-2">
-                    <div>
-                      <p className="text-sm text-slate-800">{row.label}{row.unit === 'share' ? ' (%)' : row.unit === 'money' ? ` (${a.currency})` : ''}</p>
-                      <p className="text-[11px] text-slate-400">{row.help}</p>
-                    </div>
-                    {[0, 1, 2].map((i) => (
-                      <input key={i} type="number" min={0} step="any" max={row.unit === 'share' ? 100 : undefined} className={input} disabled={!canEdit}
-                        aria-label={`${row.label}, ${['least', 'most likely', 'most'][i]}`} value={text[row.path][i]}
-                        onChange={(e) => setText({ ...text, [row.path]: text[row.path].map((v, j) => (j === i ? e.target.value : v)) as [string, string, string] })} />
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </section>
-          ))}
-
-          {!!a.notes?.length && (
-            <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <h3 className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Where the starting values came from</h3>
-              <ul className="ml-4 list-disc space-y-0.5 text-xs text-slate-600">{a.notes.map((n) => <li key={n}>{n}</li>)}</ul>
-            </section>
-          )}
-          {canEdit && (
-            <div className="sticky bottom-0 flex justify-end gap-2 bg-gradient-to-t from-white via-white py-2">
-              <button type="button" disabled={!dirty || save.isPending} onClick={() => { setText(toText(a.inputs!)); setMeta(metaOf(a)); }}
-                className="rounded-lg border border-slate-200 px-3.5 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50">Undo changes</button>
-              <button type="submit" disabled={!dirty || save.isPending}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">
-                {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Save and run
-              </button>
-            </div>
-          )}
-        </form>
-
-        <div className={clsx('space-y-4 xl:col-span-3', dirty && 'opacity-60')} aria-live="polite">
-          {r ? (
-            <>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <Tile label="Chance of a loss this year" value={pct(r.annual.chance)} note={`${r.lef.mean.toFixed(2)} losses a year on average`} />
-                <Tile label="Average year" value={money(r.annual.mean, a.currency)} note="Annualized loss exposure" />
-                <Tile label="One year in ten" value={money(r.annual.p90, a.currency)} />
-                <Tile label="One year in twenty" value={money(r.annual.p95, a.currency)} />
-                <Tile label="One year in a hundred" value={money(r.annual.p99, a.currency)} />
-                <Tile label="Least liability cap to accept" value={money(r.liability_cap, a.currency)} note="The one-in-twenty year, rounded up" strong />
-              </div>
-              <section className={clsx('rounded-xl border p-4', !r.cover ? 'border-slate-200 bg-white' : r.cover.covers_one_in_twenty ? 'border-emerald-200 bg-emerald-50/40' : 'border-amber-200 bg-amber-50/40')}
-                aria-labelledby="fair-cover">
-                <h2 id="fair-cover" className="flex items-center gap-2 text-sm font-semibold text-slate-900"><ShieldCheck className="h-4 w-4 text-slate-500" /> Insurance</h2>
-                {!r.cover ? (
-                  <p className="mt-1 text-sm text-slate-600">
-                    No cover recorded for this supplier. To pay for the one-in-twenty year, their cyber insurance should cover at least{' '}
-                    <b>{money(r.liability_cap, a.currency, false)}</b>.
-                  </p>
-                ) : (
-                  <p className="mt-1 text-sm text-slate-700">
-                    Their cover of <b>{money(r.cover.amount, a.currency, false)}</b> is exceeded in {oneIn(r.cover.chance_exceeded)}
-                    {' '}({pct(r.cover.chance_exceeded)} of simulated years).{' '}
-                    {r.cover.covers_one_in_twenty
-                      ? 'It pays for the one-in-twenty year.'
-                      : <>The one-in-twenty year is {money(r.annual.p95, a.currency, false)}: <b>{money(r.cover.gap_one_in_twenty, a.currency, false)} short</b>.</>}
-                  </p>
-                )}
-              </section>
-              <WriteUpCard a={a} canEdit={canEdit} busy={writeUp.isPending} dirty={dirty} onWrite={() => writeUp.mutate()} />
-              <section className="rounded-xl border border-slate-200 bg-white p-4" aria-labelledby="fair-lec">
-                <h2 id="fair-lec" className="text-sm font-semibold text-slate-900">How likely a year costs at least…</h2>
-                <p className="mb-2 text-xs text-slate-500">Loss exceedance curve from {r.iterations.toLocaleString()} simulated years.</p>
-                <LossCurve points={r.lec} currency={a.currency}
-                  marks={[{ loss: r.annual.p90, label: '1 in 10' }, { loss: r.annual.p95, label: '1 in 20' }]} />
-              </section>
-              <section className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
-                <p>A single loss costs {money(r.per_event.p10, a.currency)} to {money(r.per_event.p90, a.currency)} (80% of the time).</p>
-                <p className="mt-1">Of the average year, {money(r.split.primary, a.currency)} is our own cost and {money(r.split.secondary, a.currency)} comes from others
-                  reacting, which happens after {pct(r.split.secondary_share)} of losses.</p>
-                <p className="mt-2 text-xs text-slate-400">Every factor is a range drawn as a PERT distribution; losses arrive independently at the drawn rate. The same inputs always give the same numbers.</p>
-              </section>
-            </>
-          ) : <p className="text-sm text-slate-500">Save the inputs to run the analysis.</p>}
-          {dirty && <p className="text-xs text-amber-700">These results are for the saved inputs. Save and run to see yours.</p>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function WriteUpCard({ a, canEdit, busy, dirty, onWrite }: {
-  a: FairAnalysis; canEdit: boolean; busy: boolean; dirty: boolean; onWrite: () => void;
-}) {
-  const w = a.ai_review;
-  return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4" aria-labelledby="fair-writeup">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="fair-writeup" className="flex items-center gap-2 text-sm font-semibold text-slate-900"><Sparkles className="h-4 w-4 text-primary-600" /> What it means</h2>
-        {canEdit && (
-          <button type="button" onClick={onWrite} disabled={busy || dirty} title={dirty ? 'Save your changes first' : undefined}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-            {w ? 'Write it again' : 'Write it up with AI'}
-          </button>
+    <div className="flex min-w-0 flex-col gap-[16px] pb-[8px]">
+      <PageHeader
+        variant="page"
+        title={a.name}
+        back={BACK}
+        chips={(
+          <>
+            <StatusPill size="sm" {...statusPill(analysisState, a.status)} />
+            <StatusPill size="sm" {...statusPill(analysisCover, coverOf(a))} />
+            {a.risk_level && <StatusPill size="sm" {...statusPill(analysisRisk, a.risk_level)} />}
+          </>
         )}
-      </div>
-      {!w ? (
-        <p className="mt-1 text-sm text-slate-500">
-          The AI can turn these figures into a short read for a committee: a risk level, how far to trust the numbers, and what to do.
-        </p>
-      ) : (
-        <div className="mt-2 space-y-2 text-sm text-slate-700">
-          <p className="flex flex-wrap items-center gap-1.5">
-            <span className={clsx('rounded-full border px-2 py-0.5 text-xs font-semibold capitalize', LEVEL_CLS[w.risk_level])}>{w.risk_level} risk</span>
-            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-600">{w.confidence} confidence</span>
-            {a.ai_review_stale && <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs text-amber-800">Written before the latest changes</span>}
-          </p>
-          <p>{w.summary}</p>
-          {w.reasons.length > 0 && <ul className="ml-4 list-disc space-y-0.5 text-slate-600">{w.reasons.map((x) => <li key={x}>{x}</li>)}</ul>}
-          {w.actions.length > 0 && (
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">What to do</p>
-              <ul className="ml-4 list-disc space-y-0.5">{w.actions.map((x) => <li key={x}>{x}</li>)}</ul>
-            </div>
-          )}
-          {w.insurance && <p className="rounded-lg bg-slate-50 px-3 py-2 text-slate-600"><b className="font-medium text-slate-700">Insurance: </b>{w.insurance}</p>}
-          <p className="text-[11px] text-slate-400">
-            Written by AI from the figures above{w.by ? ` at ${w.by}'s request` : ''} on {new Date(w.at).toLocaleString('en-GB')}. Check it before relying on it.
-          </p>
-        </div>
-      )}
-    </section>
-  );
-}
-
-function Tile({ label, value, note, strong }: { label: string; value: string; note?: string; strong?: boolean }) {
-  return (
-    <div className={clsx('rounded-xl border bg-white p-4', strong ? 'border-primary-200 bg-primary-50/40' : 'border-slate-200')}>
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-slate-900">{value}</p>
-      {note && <p className="text-xs text-slate-500">{note}</p>}
+        meta={<>{a.vendor.name} · {EFFECT_WORDS[a.effect]}</>}
+        actions={(
+          <>
+            <Button leftIcon={<Download aria-hidden />} loading={exportOne.isPending} onClick={() => exportOne.mutate()}>CSV</Button>
+            {canEdit && (
+              <Button disabled={save.isPending || dirty} title={dirty ? 'Save your changes first' : undefined} onClick={() => save.mutate({ status: a.status === 'final' ? 'draft' : 'final' })}>
+                {a.status === 'final' ? 'Back to draft' : 'Mark final'}
+              </Button>
+            )}
+            {more.length > 0 && <Menu label="More actions" items={more} />}
+          </>
+        )}
+      />
+      <Tabs ariaLabel="Comply analysis" value={tab} onChange={setTab} tabs={[{ key: 'result', label: 'Result' }, { key: 'factors', label: 'Factors' }, { key: 'writeup', label: 'Write-up' }]}>
+        <TabPanel tabKey="result"><ResultTab a={a} stale={dirty} onFactors={() => setTab('factors')} /></TabPanel>
+        <TabPanel tabKey="factors"><FactorsTab a={a} text={text} meta={meta} canEdit={canEdit} onText={(next) => { setText(next); setServerError(null); }} onMeta={(next) => { setMeta(next); setServerError(null); }} /></TabPanel>
+        <TabPanel tabKey="writeup"><WriteUpTab a={a} canEdit={canEdit} busy={writeUp.isPending} dirty={dirty} error={writeError} onWrite={() => { setWriteError(null); writeUp.mutate(); }} /></TabPanel>
+      </Tabs>
+      <SaveBar
+        label="Save the analysis" saveLabel="Save and run" canEdit={canEdit} dirty={dirty} invalid={issues.length > 0} saving={save.isPending} justSaved={savedAt !== null && !dirty}
+        error={serverError ?? (dirty && issues.length > 0 ? `${issues[0].message}${issues.length > 1 ? ` (and ${issues.length - 1} more)` : ''}` : null)}
+        onSave={() => save.mutate({})} onDiscard={() => { setText(toText(a.inputs!)); setMeta(metaOf(a)); setServerError(null); }}
+      />
+      {confirmDialog}
     </div>
   );
 }

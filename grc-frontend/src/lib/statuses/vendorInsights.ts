@@ -32,11 +32,11 @@ export const analysisConfidence = defineStatuses('analysis confidence', {
   high: { tone: 'success', label: 'High confidence' },
 });
 
-/** Where a kept report stands: a draft until someone approves it, then approved, and shared while an examiner's link is live. A kept report is frozen whatever its state. */
+/** Where a kept report stands: a draft until someone approves it, then approved, and shared while an examiner's link is live (the drawer and the report's head say with whom: an examiner). A kept report is frozen whatever its state. */
 export const reportState = defineStatuses('kept report', {
   draft: { tone: 'pending', label: 'Draft' },
   approved: { tone: 'success', label: 'Approved' },
-  shared: { tone: 'progress', label: 'Shared with an examiner' },
+  shared: { tone: 'progress', label: 'Shared' },
 });
 
 /** What a report is (tpra/reports.py KINDS): a kind has no meaning to colour. The labels are the server's. */

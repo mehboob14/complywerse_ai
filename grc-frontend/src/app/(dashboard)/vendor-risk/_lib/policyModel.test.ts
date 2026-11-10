@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  DEFAULT_REOPEN, approverOptions, atDefaults, bandsBad, cadenceBad, isDirty, policyPatch, problems, reopenFrom, reopenPatch, standing, toDraft, toggled,
+  DEFAULT_REOPEN, approverOptions, savePatch, atDefaults, bandsBad, cadenceBad, isDirty, policyPatch, problems, reopenFrom, standing, toDraft, toggled,
   windowBad, withDefaults, type PolicyView,
 } from './policyModel.ts';
 
@@ -28,7 +28,7 @@ test('a draft is a copy: editing it never touches what was loaded', () => {
 
 test('nothing changed, nothing is sent', () => {
   assert.equal(policyPatch(saved(), saved()), null);
-  assert.equal(reopenPatch(saved(), saved()), null);
+  assert.equal(savePatch(saved(), saved()), null);
   assert.equal(isDirty(saved(), saved()), false);
 });
 
@@ -71,12 +71,12 @@ test('an approver role put back to "anyone" is a change to null, and an unchange
   assert.equal(policyPatch(was, was), null);
 });
 
-test('the reopen threshold is its own request to the program config, one entry per tier that changed', () => {
+test('the reopen thresholds that changed go in the save as `reassess_on`, one entry per tier, and none of it is a policy setting', () => {
   const draft = saved();
   draft.reopen.critical = 'high';
   draft.reopen.low = 'medium';
-  assert.deepEqual(reopenPatch(draft, saved()), { critical: { reassess_on: 'high' }, low: { reassess_on: 'medium' } });
-  assert.equal(policyPatch(draft, saved()), null);               // and nothing of it goes to the policy
+  assert.deepEqual(savePatch(draft, saved()), { reassess_on: { critical: 'high', low: 'medium' } });
+  assert.equal(policyPatch(draft, saved()), null);               // the policy part of the body has nothing of it
   assert.equal(isDirty(draft, saved()), true);
 });
 
@@ -162,4 +162,15 @@ test('the approver choices: anyone, each role, and a role the policy still names
   assert.equal(approverOptions(['Admin'], 'Admin').length, 2);
   assert.equal(standing(true), 'Tuned for this workspace');
   assert.equal(standing(false), 'On the shipped defaults');
+});
+
+test('Save is ONE request: the policy and the reopen thresholds go in the same body, only what changed', () => {
+  const draft = saved();
+  assert.equal(savePatch(draft, saved()), null);
+  draft.reopen.critical = 'high';
+  assert.deepEqual(savePatch(draft, saved()), { reassess_on: { critical: 'high' } }, 'a reopen change alone is still a save');
+  draft.cadence_days.critical = 90;
+  draft.approver_roles.high = 'CISO';
+  assert.deepEqual(savePatch(draft, saved()), { cadence_days: { critical: 90 }, approver_roles: { high: 'CISO' }, reassess_on: { critical: 'high' } });
+  assert.equal(isDirty(draft, saved()), true);
 });

@@ -117,3 +117,15 @@ test('SIDEBAR is the eight entries: the Overview lights on its own page, every o
   assert.equal(activeNavHref('/vendor-risk/questionnaires/abc/builder', nav), '/vendor-risk/questionnaires');
   assert.equal(activeNavHref('/vendor-risk/settings/emails', nav), '/vendor-risk/roster');
 });
+
+test('Insights and Setup draw their own heads: Risks (it was Risk 360), Comply analyses, Reports, Roster, Policy and Settings, and the two records of Insights, are page rows; the old name stays findable', () => {
+  for (const path of ['/vendor-risk/risk-360', '/vendor-risk/comply-analysis', '/vendor-risk/comply-analysis/5', '/vendor-risk/reports', '/vendor-risk/reports/7', '/vendor-risk/roster', '/vendor-risk/policy', '/vendor-risk/settings']) {
+    assert.equal(headOf(path), 'page', `${path}: the page draws its head and, under it, the strip of its entry`);
+  }
+  assert.deepEqual(tabsOf('/vendor-risk/reports/7').map((t) => t.name), ['Risks', 'Comply analyses', 'Reports', 'Exchange'], 'Exchange stays here until Questionnaires has its Shared tab (vendor-questionnaires removes this one row)');
+  assert.deepEqual(tabsOf('/vendor-risk/settings').map((t) => t.name), ['Roster', 'Policy', 'Settings']);
+  const risks = RAIL.find((e) => e.key === 'insights')?.tabs?.[0];
+  assert.equal(risks?.title, 'Third-party risks');
+  assert.ok((risks?.keywords ?? []).includes('Risk 360'), 'a search for "Risk 360" still finds the page');
+  assert.equal(entryOf('/vendor-risk/settings/emails')?.key, 'setup', 'the old Emails address belongs to Setup (it forwards to Settings)');
+});

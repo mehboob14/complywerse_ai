@@ -1,25 +1,21 @@
 'use client';
 
-// Alert rules, on the Policy page: what a verified monitoring alert sets off besides the two built-in rules, in the order they
-// run. Add, edit, switch on or off, and reorder; each change saves on its own. (Moved from settings/alert-rules, whose address
-// now leads here.)
-
+// Alert rules, on the Policy page: what a verified monitoring alert sets off besides the two built-in rules, in the order they run. Add, edit, switch on or off, and reorder; each change saves on its
+// own (the page's Save is not involved). The rule form is a Sheet (focus kept inside, Escape asks before it throws typing away); a failed save says so there, with the server's words.
 import Link from 'next/link';
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { clsx } from 'clsx';
-import { ArrowDown, ArrowUp, Loader2, Pencil, Plus } from 'lucide-react';
-import { InfoTip } from '@/components/ui/InfoTip';
-import { useToast } from '@/components/ui/ToastProvider';
+import { ArrowDown, ArrowUp, Pencil, Plus } from 'lucide-react';
+import { Button, Checkbox, ErrorState, FormField, IconButton, MultiSelect, SectionCard, Select, SkeletonRows, TextInput, EmptyState, useReportedMutation } from '@/components/ui/ds';
+import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
+import { Sheet } from '@/components/ui/ds';
 import { usePermissions } from '@/hooks/usePermissions';
-import { BTN, Panel } from '../_ui';
-import { errText } from '../_lib/intake/types';
 import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
 import {
-  alertRulesApi, alertRulesKey, type AlertAction, type AlertRule, type AlertRuleInput, type AlertRules, type BuiltinRule,
-  type Severity,
+  alertRulesApi, alertRulesKey, type AlertAction, type AlertRule, type AlertRuleInput, type AlertRules, type BuiltinRule, type Severity,
 } from '../_lib/alertRulesApi';
-import { TIERS, TIER_LABEL, TargetsPicker, fieldCls, targetLabel, type Directory } from '../settings/_ui';
+import { TIERS, TIER_LABEL, TargetsPicker, targetLabel, type Directory } from '../settings/_ui';
 
 const ACTION_HELP: Record<AlertAction, string> = {
   notify: 'The supplier’s owner and the people named hear at once, in the app and by email.',
@@ -69,115 +65,82 @@ function builtinSummary(b: BuiltinRule, directory?: Directory): string {
   return [...TIERS.map((t) => `${TIER_LABEL[t]} from ${b.reassess_on?.[t] || 'high'}`), 'a breach always'].join(' · ');
 }
 
-function Chips({ options, value, onChange, label }: {
-  options: Array<[string, string]>; value: string[]; onChange: (next: string[]) => void; label: string;
-}) {
-  return (
-    <div className="flex flex-wrap gap-1.5" role="group" aria-label={label}>
-      {options.map(([key, text]) => {
-        const on = value.includes(key);
-        return (
-          <button key={key} type="button" aria-pressed={on} onClick={() => onChange(on ? value.filter((v) => v !== key) : [...value, key])}
-            className={clsx('rounded-full border px-2.5 py-0.5 text-xs', on ? 'border-primary-400 bg-primary-50 text-primary-800' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50')}>
-            {text}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function RuleForm({ rule, data, directory, onDone }: {
-  rule: AlertRule | null; data: AlertRules; directory?: Directory; onDone: () => void;
-}) {
-  const qc = useQueryClient();
-  const { toast } = useToast();
-  const [d, setD] = useState<Draft>(toDraft(rule ?? undefined));
-  const set = (patch: Partial<Draft>) => setD((x) => ({ ...x, ...patch }));
-  const save = useMutation({
+function RuleSheet({ rule, data, directory, onClose }: { rule: AlertRule | null; data: AlertRules; directory?: Directory; onClose: () => void }) {
+  const initial = toDraft(rule ?? undefined);
+  const [d, setD] = useState<Draft>(initial);
+  const [error, setError] = useState<string | null>(null);
+  const set = (patch: Partial<Draft>) => { setError(null); setD((x) => ({ ...x, ...patch })); };
+  const dirty = JSON.stringify(d) !== JSON.stringify(initial);
+  const save = useReportedMutation({
     mutationFn: () => (rule ? alertRulesApi.update(rule.id, toInput(d)) : alertRulesApi.create(toInput(d))),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: alertRulesKey });
-      toast({ type: 'success', title: rule ? 'Rule saved' : 'Rule added' });
-      onDone();
-    },
-    onError: (e) => toast({ type: 'error', title: 'Not saved', message: errText(e, 'Try again.') }),
+    success: rule ? 'Rule saved' : 'Rule added',
+    failure: 'The rule could not be saved.',
+    invalidate: [alertRulesKey],
+    toast: 'success',
+    onSuccess: () => onClose(),
+    onError: (e) => setError(errorMessage(e, 'The rule could not be saved. Try again.')),
   });
   return (
-    <form className="space-y-3 rounded-xl border border-primary-100 bg-primary-50/40 p-4" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
-      <label className="block text-xs font-medium text-slate-600">
-        Name
-        <input className={clsx(fieldCls, 'mt-1')} value={d.name} onChange={(e) => set({ name: e.target.value })} maxLength={120} required
-          placeholder="e.g. Breaches on critical suppliers" />
-      </label>
-      <div>
-        <p className="mb-1 flex items-center gap-1 text-xs font-medium text-slate-600">
-          Does <InfoTip label="About what the rule does" text={ACTION_HELP[d.action]} />
-        </p>
-        <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="What the rule does">
-          {(Object.keys(data.actions) as AlertAction[]).map((a) => (
-            <button key={a} type="button" role="radio" aria-checked={d.action === a} onClick={() => set({ action: a })}
-              className={clsx('rounded-lg border px-3 py-2 text-left text-sm', d.action === a ? 'border-primary-500 bg-white text-primary-800 shadow-sm' : 'border-slate-200 bg-white/60 text-slate-600 hover:bg-white')}>
-              {data.actions[a]}
-            </button>
-          ))}
-        </div>
-      </div>
-      <label className="block text-xs font-medium text-slate-600">
-        From
-        <select className={clsx(fieldCls, 'mt-1 sm:w-48')} value={d.min_severity} onChange={(e) => set({ min_severity: e.target.value as Severity })}>
-          {data.severities.map((s) => <option key={s} value={s}>{sev(s)} and up</option>)}
-        </select>
-      </label>
-      <div>
-        <p className="mb-1 flex items-center gap-1 text-xs font-medium text-slate-600">
-          Tiers <InfoTip label="About tiers" text="None chosen: every tier. A supplier split into engagements matches on any open engagement’s tier." />
-        </p>
-        <Chips label="Tiers" options={TIERS.map((t): [string, string] => [t, TIER_LABEL[t]])} value={d.tiers}
-          onChange={(tiers) => set({ tiers })} />
-      </div>
-      <div>
-        <p className="mb-1 flex items-center gap-1 text-xs font-medium text-slate-600">
-          Alerts <InfoTip label="About alerts" text="None chosen: every kind of alert." />
-        </p>
-        <Chips label="Kinds of alert" options={Object.entries(data.kinds)} value={d.signal_kinds} onChange={(signal_kinds) => set({ signal_kinds })} />
-      </div>
-      {PEOPLE.includes(d.action) && (
-        <div>
-          <p className="mb-1 text-xs font-medium text-slate-600">{d.action === 'notify' ? 'Also tell' : 'For'}</p>
-          <TargetsPicker value={d.targets} onChange={(targets) => set({ targets })} directory={directory}
-            placeholder={d.action === 'notify' ? 'Add a role or a person…' : 'The owner, or choose…'} />
+    <Sheet
+      open onClose={onClose} width="md" dirty={dirty} title={rule ? 'Edit rule' : 'Add a rule'} subtitle="Acts on a verified monitoring alert, after the built-in rules."
+      footer={(
+        <div className="flex items-center justify-end gap-[8px]">
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" loading={save.isPending} disabled={!d.name.trim() || !dirty} onClick={() => save.mutate()}>{rule ? 'Save rule' : 'Add rule'}</Button>
         </div>
       )}
-      <div className="flex justify-end gap-2">
-        <button type="button" onClick={onDone} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
-        <button type="submit" disabled={save.isPending || !d.name.trim()}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">
-          {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {rule ? 'Save' : 'Add rule'}
-        </button>
-      </div>
-    </form>
+    >
+      <form className="flex flex-col gap-[16px]" onSubmit={(e) => { e.preventDefault(); if (d.name.trim() && dirty) save.mutate(); }}>
+        {error && <p role="alert" className="rounded-ds-control border border-ds-danger-border bg-ds-danger-soft px-[12px] py-[8px] text-ds-body text-ds-danger">{error}</p>}
+        <FormField label="Name" required>
+          <TextInput value={d.name} onChange={(e) => set({ name: e.target.value })} maxLength={120} placeholder="e.g. Breaches on critical suppliers" />
+        </FormField>
+        <FormField label="What it does" hint={ACTION_HELP[d.action]}>
+          <Select value={d.action} onChange={(e) => set({ action: e.target.value as AlertAction })}>
+            {(Object.keys(data.actions) as AlertAction[]).map((a) => <option key={a} value={a}>{data.actions[a]}</option>)}
+          </Select>
+        </FormField>
+        <FormField label="From severity">
+          <Select value={d.min_severity} onChange={(e) => set({ min_severity: e.target.value as Severity })}>
+            {data.severities.map((s) => <option key={s} value={s}>{sev(s)} and up</option>)}
+          </Select>
+        </FormField>
+        <FormField label="Tiers" info="None chosen: every tier. A supplier split into engagements matches on any open engagement’s tier.">
+          <MultiSelect label="Tiers" options={TIERS.map((t) => ({ value: t, label: TIER_LABEL[t] }))} value={d.tiers} onChange={(tiers) => set({ tiers })} placeholder="Every tier" />
+        </FormField>
+        <FormField label="Alerts" info="None chosen: every kind of alert.">
+          <MultiSelect label="Kinds of alert" options={Object.entries(data.kinds).map(([value, label]) => ({ value, label }))} value={d.signal_kinds} onChange={(signal_kinds) => set({ signal_kinds })} placeholder="Every alert" />
+        </FormField>
+        {PEOPLE.includes(d.action) && (
+          <div>
+            <p className="mb-[4px] text-ds-body font-[500] text-ds-fg">{d.action === 'notify' ? 'Also tell' : 'For'}</p>
+            <TargetsPicker value={d.targets} onChange={(targets) => set({ targets })} directory={directory} placeholder={d.action === 'notify' ? 'Add a role or a person…' : 'The owner, or choose…'} />
+          </div>
+        )}
+      </form>
+    </Sheet>
   );
 }
 
 export default function AlertRulesSection({ directory }: { directory?: Directory }) {
-  const qc = useQueryClient();
-  const { toast } = useToast();
   const { hasPermission } = usePermissions();
-  const canEdit = hasPermission('vendor_risk:config:edit') || hasPermission('erm:risks:edit');
+  const canEdit = hasPermission('vendor_risk:config:edit') || hasPermission('erm:risks:edit');       // the server accepts either (rbac.require_write falls back to the risk-edit right)
   const [editing, setEditing] = useState<AlertRule | 'new' | null>(null);
-  const { data, isLoading, isError } = useQuery({
-    queryKey: alertRulesKey,
-    queryFn: async () => (await alertRulesApi.list()).data,
-    ...TPRM_QUERY_OPTS,
-  });
-  const refresh = () => qc.invalidateQueries({ queryKey: alertRulesKey });
-  const fail = (e: unknown) => toast({ type: 'error', title: 'Not saved', message: errText(e, 'Try again.') });
-  const toggle = useMutation({
-    mutationFn: (r: AlertRule) => alertRulesApi.update(r.id, { enabled: !r.enabled }), onSuccess: refresh, onError: fail,
-  });
-  const reorder = useMutation({ mutationFn: (ids: number[]) => alertRulesApi.reorder(ids), onSuccess: refresh, onError: fail });
+  const list = useQuery({ queryKey: alertRulesKey, queryFn: async () => (await alertRulesApi.list()).data, ...TPRM_QUERY_OPTS });
+  const data = list.data;
   const rules = data?.items || [];
+  const toggle = useReportedMutation({
+    mutationFn: (r: AlertRule) => alertRulesApi.update(r.id, { enabled: !r.enabled }),
+    failure: 'The rule could not be changed.',
+    invalidate: [alertRulesKey],
+    toast: 'errors',
+  });
+  const reorder = useReportedMutation({
+    mutationFn: (ids: number[]) => alertRulesApi.reorder(ids),
+    failure: 'The order of the rules could not be changed.',
+    invalidate: [alertRulesKey],
+    toast: 'errors',
+  });
   const move = (index: number, by: number) => {
     const ids = rules.map((r) => r.id);
     [ids[index], ids[index + by]] = [ids[index + by], ids[index]];
@@ -185,64 +148,52 @@ export default function AlertRulesSection({ directory }: { directory?: Directory
   };
 
   return (
-    <Panel
+    <SectionCard
+      id="alert-rules-section"
       title="Alert rules"
-      info="A verified alert always runs the two built-in rules. Your rules run after them, top to bottom, and every one that matches acts."
-      action={canEdit && editing === null ? (
-        <button type="button" onClick={() => setEditing('new')} className={BTN}>
-          <Plus aria-hidden className="h-4 w-4" strokeWidth={1.75} /> Add rule
-        </button>
-      ) : undefined}
+      info="A verified alert always runs the two built-in rules. Your rules run after them, top to bottom, and every one that matches acts. Each change saves on its own."
+      actions={canEdit && data ? <Button leftIcon={<Plus aria-hidden />} onClick={() => setEditing('new')}>Add rule</Button> : undefined}
     >
-      {isLoading && <p className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</p>}
-      {isError && <p className="text-sm text-rose-700">Could not load the rules.</p>}
+      {list.isLoading && <SkeletonRows rows={3} columns={2} label="Loading the alert rules" />}
+      {list.isError && <ErrorState title="Couldn't load the alert rules" message={errorMessage(list.error)} onRetry={canRetry(list.error) ? () => { void list.refetch(); } : undefined} />}
       {data && (
-        <div className="space-y-4">
-          {editing !== null && (
-            <RuleForm key={editing === 'new' ? 'new' : editing.id} rule={editing === 'new' ? null : editing} data={data}
-              directory={directory} onDone={() => setEditing(null)} />
-          )}
+        <div className="flex flex-col gap-[16px]">
           <section aria-label="Built in">
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Built in</h3>
-            <ul className="space-y-2">
+            <h3 className="m-0 mb-[8px] !text-ds-label !font-[600] !text-ds-fg-muted">Built in</h3>
+            <ul className="m-0 flex list-none flex-col gap-[8px] p-0">
               {data.builtin.map((b) => (
-                <li key={b.key} className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-slate-900">{b.name}</p>
-                    <p className="text-xs text-slate-500">{builtinSummary(b, directory)}</p>
+                <li key={b.key} className="flex flex-wrap items-center gap-[12px] rounded-ds-card border border-ds-border bg-ds-surface px-[16px] py-[12px]">
+                  <div className="min-w-0 flex-1 basis-[14rem]">
+                    <p className="text-ds-body font-[600] text-ds-fg">{b.name}</p>
+                    <p className="text-ds-label text-ds-fg-muted">{builtinSummary(b, directory)}</p>
                   </div>
-                  {/* the reopen thresholds moved to this page; the reminders' emails are still Settings' */}
-                  <Link href={b.key === 'reopen' ? '#approvals' : b.settings} className="text-xs font-medium text-primary-700 hover:underline">Change</Link>
+                  {/* the reopen thresholds are on this page; the reminders' emails are Settings' */}
+                  <Link href={b.key === 'reopen' ? '#approvals' : b.settings} className="inline-flex min-h-ds-control items-center text-ds-body font-[500] text-ds-primary-text underline">Change</Link>
                 </li>
               ))}
             </ul>
           </section>
           <section aria-label="Your rules">
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Your rules ({rules.length})</h3>
+            <h3 className="m-0 mb-[8px] !text-ds-label !font-[600] !text-ds-fg-muted">Your rules ({rules.length})</h3>
             {rules.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">None yet.</p>
+              <div className="rounded-ds-card border border-dashed border-ds-border-strong">
+                <EmptyState kind="firstUse" bare title="No rules of your own yet" description="The two built-in rules run for every verified alert. Add one to tell more people or open a reassessment sooner." />
+              </div>
             ) : (
-              <ol className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
+              <ol className="m-0 flex list-none flex-col divide-y divide-ds-border rounded-ds-card border border-ds-border bg-ds-surface p-0">
                 {rules.map((r, i) => (
-                  <li key={r.id} className={clsx('flex flex-wrap items-center gap-3 px-4 py-3', !r.enabled && 'opacity-60')}>
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-medium text-slate-600">{i + 1}</span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-slate-900">
-                        {r.name} <span className="font-normal text-slate-500">· {data.actions[r.action]}</span>
-                      </p>
-                      <p className="text-xs text-slate-500">{summary(r, data, directory)}</p>
+                  <li key={r.id} className={clsx('flex flex-wrap items-center gap-[12px] px-[16px] py-[12px]', !r.enabled && 'bg-ds-surface-subtle')}>
+                    <span className="grid h-[24px] w-[24px] shrink-0 place-items-center rounded-full bg-ds-border text-ds-label font-[600] text-ds-fg-body" aria-hidden>{i + 1}</span>
+                    <div className="min-w-0 flex-1 basis-[14rem]">
+                      <p className="break-words text-ds-body font-[600] text-ds-fg">{r.name} <span className="font-normal text-ds-fg-muted">· {data.actions[r.action]}</span>{!r.enabled && <span className="ml-[6px] text-ds-label font-normal text-ds-fg-muted">(off)</span>}</p>
+                      <p className="text-ds-label text-ds-fg-muted">{summary(r, data, directory)}</p>
                     </div>
-                    <label className="flex items-center gap-1.5 text-xs text-slate-600">
-                      <input type="checkbox" checked={r.enabled} disabled={!canEdit || toggle.isPending} onChange={() => toggle.mutate(r)} /> On
-                    </label>
+                    <Checkbox label="On" aria-label={`${r.name} is on`} checked={r.enabled} disabled={!canEdit || toggle.isPending} onChange={() => toggle.mutate(r)} />
                     {canEdit && (
-                      <span className="flex items-center gap-0.5">
-                        <button type="button" aria-label={`Move ${r.name} up`} disabled={i === 0 || reorder.isPending} onClick={() => move(i, -1)}
-                          className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30"><ArrowUp className="h-3.5 w-3.5" /></button>
-                        <button type="button" aria-label={`Move ${r.name} down`} disabled={i === rules.length - 1 || reorder.isPending} onClick={() => move(i, 1)}
-                          className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30"><ArrowDown className="h-3.5 w-3.5" /></button>
-                        <button type="button" aria-label={`Edit ${r.name}`} onClick={() => setEditing(r)}
-                          className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><Pencil className="h-3.5 w-3.5" /></button>
+                      <span className="flex items-center gap-[2px]">
+                        <IconButton label={`Move ${r.name} up`} disabled={i === 0 || reorder.isPending} onClick={() => move(i, -1)}><ArrowUp aria-hidden /></IconButton>
+                        <IconButton label={`Move ${r.name} down`} disabled={i === rules.length - 1 || reorder.isPending} onClick={() => move(i, 1)}><ArrowDown aria-hidden /></IconButton>
+                        <IconButton label={`Edit ${r.name}`} onClick={() => setEditing(r)}><Pencil aria-hidden /></IconButton>
                       </span>
                     )}
                   </li>
@@ -252,6 +203,7 @@ export default function AlertRulesSection({ directory }: { directory?: Directory
           </section>
         </div>
       )}
-    </Panel>
+      {editing !== null && data && <RuleSheet key={editing === 'new' ? 'new' : editing.id} rule={editing === 'new' ? null : editing} data={data} directory={directory} onClose={() => setEditing(null)} />}
+    </SectionCard>
   );
 }

@@ -1,99 +1,99 @@
 'use client';
 
-// Roster: who the workflow asks and tells at each review stage, role by role. It grants nothing: rights stay with roles. Each
-// change saves at once (the server answers with the whole roster). Without the right to configure the module it is read-only.
-// The title is the module header's (layout).
-
-import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+// Setup > Roster: who the workflow asks and tells at each review stage, role by role. It grants nothing: rights stay with roles. Each change saves at once (the server answers with the whole roster).
+// Without the right to configure the module (the server says: `can_edit`) it is read-only and says so in words. A role with nobody on it says "Nobody assigned"; a read that failed says so with Retry
+// and never shows an empty roster.
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';
-import { useToast } from '@/components/ui/ToastProvider';
-import { ErrorState, Panel, PersonChip, Skeleton, TONE } from '../_ui';
-import { errText } from '../_lib/intake/types';
-import { usePeople } from '../_lib/portfolioApi';
+import { PageHeader } from '@/components/ui';
+import { InfoTip } from '@/components/ui/InfoTip';
+import { Button, Combobox, ErrorState, IconButton, PersonChip, ReadOnlyNote, SectionCard, SkeletonRows, useReportedMutation } from '@/components/ui/ds';
+import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
+import { vendorOnboardingApi } from '@/lib/api';
+import { routeFor } from '@/lib/navRegistry';
+import { VendorTabs } from '../_lib/VendorNav';
+import { peopleKey } from '../_lib/portfolioApi';
 import { rosterApi, rosterKey } from '../_lib/rosterApi';
 import { candidates, pickerLabel, type Person, type RosterRole } from '../_lib/rosterModel';
 import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
 
-const PICKER = 'h-8 max-w-[14rem] rounded-full border border-dashed border-[#c3ccd5] bg-[#fff] px-3 text-[13px] text-[#586472] hover:bg-[#f3f6f8] focus:border-[#0f766e] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]/30 disabled:cursor-not-allowed disabled:opacity-50';
+const INFO = 'Who the workflow asks and tells at each review stage. It grants no rights: those stay with roles.';
 
 export default function RosterPage() {
   const qc = useQueryClient();
-  const { toast } = useToast();
-  const people = usePeople();
-  const [busyRole, setBusyRole] = useState<string | null>(null);
+  // the people a seat can be given to: read here (not through usePeople) so a failed read is said, not shown as nobody to choose
+  const peopleQ = useQuery<Person[]>({ queryKey: peopleKey, queryFn: async () => (await vendorOnboardingApi.people()).data, staleTime: 5 * 60_000 });
+  const people = peopleQ.data ?? [];
+  const label = routeFor('/vendor-risk/roster')?.label ?? 'Roster';
 
-  const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: rosterKey,
-    queryFn: async () => (await rosterApi.get()).data,
-    ...TPRM_QUERY_OPTS,
+  const roster = useQuery({ queryKey: rosterKey, queryFn: async () => (await rosterApi.get()).data, ...TPRM_QUERY_OPTS });
+  const change = useReportedMutation({
+    mutationFn: async (a: { role: RosterRole; person: Person; add: boolean }) => (await (a.add ? rosterApi.add(a.role.key, a.person.id) : rosterApi.remove(a.role.key, a.person.id))).data,
+    success: (_next, a) => (a.add ? `${a.person.name} added to ${a.role.label}` : `${a.person.name} removed from ${a.role.label}`),
+    failure: 'The roster could not be changed.',
+    onSuccess: (next) => { qc.setQueryData(rosterKey, next); },
   });
 
-  const change = useMutation({
-    mutationFn: async (a: { role: RosterRole; person: Person; add: boolean }) =>
-      (await (a.add ? rosterApi.add(a.role.key, a.person.id) : rosterApi.remove(a.role.key, a.person.id))).data,
-    onMutate: (a) => setBusyRole(a.role.key),
-    onSuccess: (next, a) => {
-      qc.setQueryData(rosterKey, next);
-      toast({ type: 'success', title: a.add ? `${a.person.name} added to ${a.role.label}` : `${a.person.name} removed from ${a.role.label}` });
-    },
-    onError: (e) => toast({ type: 'error', title: 'Not saved', message: errText(e, 'Try again.') }),
-    onSettled: () => setBusyRole(null),
-  });
+  const busyRole = change.isPending ? change.variables?.role.key : null;                    // the role being changed is not changed twice at once
 
-  if (isLoading) return <div className="space-y-3" aria-busy="true" aria-label="Loading the roster">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-16 rounded-xl" />)}</div>;
-  if (isError || !data) return <ErrorState title="Couldn't load the roster" message={errText(error, 'Try again in a moment.')} onRetry={() => refetch()} />;
+  const head = <><PageHeader variant="page" title={label} info={INFO} meta={roster.data && !roster.data.can_edit ? <ReadOnlyNote>View only <InfoTip text="Only people who may configure Vendor Risk can change the roster." label="Why the roster is view only" /></ReadOnlyNote> : undefined} /><VendorTabs /></>;
 
-  const canEdit = data.can_edit;
+  if (roster.isLoading) return <div className="flex flex-col gap-[16px]">{head}<SkeletonRows rows={4} columns={2} label="Loading the roster" /></div>;
+  if (roster.isError || !roster.data) {
+    return <div className="flex flex-col gap-[16px]">{head}<ErrorState title="Couldn't load the roster" message={errorMessage(roster.error)} onRetry={canRetry(roster.error) ? () => { void roster.refetch(); } : undefined} /></div>;
+  }
+  const canEdit = roster.data.can_edit;
+
   return (
-    <div className="max-w-4xl space-y-4">
-      {!canEdit && (
-        <p className="rounded-lg px-3 py-2 text-[13px] leading-5" style={{ background: TONE.warning.tint, color: TONE.warning.text }}>
-          View only. Changing the roster needs the vendor_risk:config:edit permission.
-        </p>
-      )}
-      <Panel title="Roster" info="Who the workflow asks and tells at each review stage. It grants no rights: those stay with roles.">
-        <ul className="divide-y divide-[#eef1f4]">
-          {data.roles.map((role) => {
+    <div className="flex min-w-0 flex-col gap-[16px]">
+      {head}
+      <SectionCard id="roster" title="Roles" meta={`${roster.data.roles.length} roles`}>
+        <ul className="m-0 flex list-none flex-col divide-y divide-ds-border p-0">
+          {roster.data.roles.map((role) => {
             const free = candidates(people, role.members);
             const busy = busyRole === role.key;
             return (
-              <li key={role.key} className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:gap-6">
-                <div className="sm:w-60 sm:shrink-0">
-                  <h3 className="text-[14px] font-semibold leading-5 text-[#1f2933]">{role.label}</h3>
-                  {role.hint && <p className="text-[13px] leading-5 text-[#586472]">{role.hint}</p>}
+              <li key={role.key} className="flex flex-col gap-[12px] py-[12px] first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:gap-[24px]">
+                <div className="sm:w-[240px] sm:shrink-0">
+                  <h3 className="m-0 !text-ds-body !font-[600] !text-ds-fg">{role.label}</h3>
+                  {role.hint && <p className="text-ds-body text-ds-fg-muted">{role.hint}</p>}
                 </div>
-                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                  {role.members.length === 0 && <span className="text-[13px] leading-5 text-[#64707e]">Nobody assigned</span>}
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-[8px]">
+                  {role.members.length === 0 && <span className="text-ds-body text-ds-fg-muted">Nobody assigned</span>}
                   {role.members.map((m) => (
-                    <span key={m.user_id} className="inline-flex items-center gap-1 rounded-full border border-[#d5dbe1] bg-[#f8fafb] py-1 pl-1.5 pr-1.5">
-                      <PersonChip name={m.name} size="sm" />
+                    <span key={m.user_id} className="inline-flex min-h-ds-control items-center gap-[4px] rounded-full border border-ds-border bg-ds-surface-subtle py-[2px] pl-[8px] pr-[2px]">
+                      <PersonChip name={m.name} size={24} />
                       {canEdit && (
-                        <button type="button" disabled={busy} aria-label={`Remove ${m.name} from ${role.label}`} title="Remove"
-                          onClick={() => change.mutate({ role, person: { id: m.user_id, name: m.name }, add: false })}
-                          className="grid h-5 w-5 place-items-center rounded-full text-[#64707e] hover:bg-[#e1e6eb] hover:text-[#1f2933] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e] disabled:opacity-50">
-                          <X aria-hidden className="h-3 w-3" strokeWidth={2.25} />
-                        </button>
+                        <IconButton label={`Remove ${m.name} from ${role.label}`} disabled={busy} onClick={() => change.mutate({ role, person: { id: m.user_id, name: m.name }, add: false })}>
+                          <X aria-hidden />
+                        </IconButton>
                       )}
                     </span>
                   ))}
-                  {canEdit && free.length > 0 && (
-                    // ponytail: a native select; a searchable picker once a workspace has hundreds of people
-                    <select value="" disabled={busy} aria-label={`${pickerLabel(role.members)} ${role.label}`} className={PICKER}
-                      onChange={(e) => {
-                        const person = free.find((p) => String(p.id) === e.target.value);
+                  {canEdit && peopleQ.isError && (
+                    <Button variant="link" onClick={() => { void peopleQ.refetch(); }}>The list of people could not be loaded. Retry</Button>
+                  )}
+                  {canEdit && !peopleQ.isError && free.length > 0 && (
+                    <Combobox
+                      label={`${pickerLabel(role.members)} ${role.label}`}
+                      placeholder={pickerLabel(role.members)}
+                      value={null}
+                      disabled={busy}
+                      className="!w-[220px]"
+                      options={free.map((p) => ({ value: String(p.id), label: p.name }))}
+                      searchPlaceholder="Search people"
+                      onChange={(v) => {
+                        const person = free.find((p) => String(p.id) === v);
                         if (person) change.mutate({ role, person, add: true });
-                      }}>
-                      <option value="">{pickerLabel(role.members)}</option>
-                      {free.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
+                      }}
+                    />
                   )}
                 </div>
               </li>
             );
           })}
         </ul>
-      </Panel>
+      </SectionCard>
     </div>
   );
 }

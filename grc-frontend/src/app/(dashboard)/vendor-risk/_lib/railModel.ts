@@ -52,7 +52,7 @@ export const RAIL: RailEntry[] = [
     { name: 'Dependencies', href: `${V}/dependencies`, keywords: ['Technology', 'Technology stack', 'Concentration', 'Concentration risk', 'Shared platforms', 'Subprocessors', 'Fourth parties'] },
   ] },
   { key: 'insights', name: 'Insights', href: `${V}/risk-360`, tabs: [
-    { name: 'Risk 360°', href: `${V}/risk-360`, keywords: ['Risk 360', 'Insights'] },
+    { name: 'Risks', href: `${V}/risk-360`, title: 'Third-party risks', keywords: ['Risk 360', 'Risk 360°', 'Insights', 'Third-party risk register'] },
     { name: 'Comply analyses', href: `${V}/comply-analysis`, keywords: ['Comply analysis', 'FAIR'] },
     { name: 'Reports', href: `${V}/reports`, keywords: ['Vendor reports'] },
     { name: 'Exchange', href: `${V}/exchange`, title: 'Vendor Exchange' },
@@ -85,9 +85,15 @@ export const HEAD: Readonly<Record<string, HeadBy>> = {
   [`${V}/questionnaires`]: 'layout',
   [`${V}/monitoring`]: 'page',
   [`${V}/security`]: 'page',
+  [`${V}/risk-360`]: 'page',
+  [`${V}/comply-analysis`]: 'page',
+  [`${V}/comply-analysis/:id`]: 'page',
+  [`${V}/reports`]: 'page',
+  [`${V}/reports/:id`]: 'page',
   [`${V}/dependencies`]: 'page',
-  [`${V}/roster`]: 'layout',
-  [`${V}/policy`]: 'layout',
+  [`${V}/roster`]: 'page',
+  [`${V}/policy`]: 'page',
+  [`${V}/settings`]: 'page',
 };
 
 /** The pages whose head carries the module's two ways to bring a vendor in (Request vendor, Add vendor) when the layout draws it. */

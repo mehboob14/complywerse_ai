@@ -144,5 +144,5 @@ test('evidence types in use are the built-in ones not hidden, renamed, plus your
 });
 
 test('a number of days is said as a rhythm', () => {
-  assert.deepEqual([0, 7, 14, 30, 90, 365, 730, 45].map(days), ['—', 'every week', 'every 2 weeks', 'every month', 'every 3 months', 'every year', 'every 2 years', 'every 45 days']);
+  assert.deepEqual([0, 1, 7, 14, 30, 90, 365, 730, 45].map(days), ['—', 'every day', 'every week', 'every 2 weeks', 'every month', 'every 3 months', 'every year', 'every 2 years', 'every 45 days']);
 });
