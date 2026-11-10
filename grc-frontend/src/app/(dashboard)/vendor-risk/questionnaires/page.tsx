@@ -1,250 +1,92 @@
 'use client';
 
-// Questionnaires: the ones asked about a supplier to set its tier (the onboarding questions, kept in Settings) and the ones the
-// supplier answers (due diligence), each opening in its own builder. Archived ones are hidden until asked for.
-import { useMemo, useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Archive, ArchiveRestore, ClipboardList, Copy, DollarSign, Eye, FileCheck, FileText, Lock, Pencil, Plus, Send, Settings, Shield, Star,
-  Trash2, type LucideIcon,
-} from 'lucide-react';
-import { SearchInput } from '@/components/ui';
-import { useToast } from '@/components/ui/ToastProvider';
-import { usePermissions } from '@/hooks/usePermissions';
-import { apiErrorText } from '@/lib/apiError';
-import { RowActionsMenu, type RowAction } from '@/app/(dashboard)/governance/documents/_workspace/RowActionsMenu';
-import {
-  Dialog, EmptyState, ErrorState, SegmentedControl, Skeleton, StatusPill, TierBadge, useUrlParams, fmt, BTN, BTN_DANGER, BTN_PRIMARY,
-} from '@/app/(dashboard)/vendor-risk/_ui';
-import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
-import { builderHref, questionnairesApi, templatesKey } from '../_lib/questionnairesApi';
-import type { Template } from '../_lib/questionnaires/types';
-import { NewQuestionnaireDialog, type Purpose } from './_parts/NewQuestionnaireDialog';
-import { PreviewDialog } from './_parts/PreviewDialog';
-import { SendDialog } from './_parts/SendDialog';
-import { SentQuestionnaires } from './_parts/SentQuestionnaires';
-import { SettingsDialog } from './_parts/SettingsDialog';
-import { categoryLabel } from './_parts/categories';
-import { Check, Chip } from './_parts/ui';
+// Questionnaires: what a supplier is asked, what it was sent, and what is reused. One page, three tabs in the address (?tab=): the Library (the questionnaires you can send, as cards or a list; the Tiering view is
+// the onboarding questions, edited in Settings), Sent (everything sent to a supplier, as the facet explorer, with its answers in a drawer) and Shared (the Vendor Exchange, which used to be a page under
+// Insights: publish a completed assessment, import one by token or package). The page draws the head and the strip; each tab owns its own state and is drawn only while it is open. The builder is
+// /questionnaires/<id>/builder. The old Exchange address forwards here with its query.
+import { useEffect, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { Download, Plus, Send, Share2 } from 'lucide-react';
+import { PageHeader } from '@/components/ui';
+import { Button, TabPanel, Tabs, type TabItem } from '@/components/ui/ds';
+import { routeFor } from '@/lib/navRegistry';
+import { TAB_KEYS, TAB_LABEL, libraryHead, tabHref, tabOf, type TabKey } from '../_lib/questionnaires/hubModel';
+import { headLine } from '../_lib/questionnaires/sentModel';
+import { sharedHead } from '../_lib/questionnaires/sharedModel';
+import { NewQuestionnaireSheet } from './_forms/NewQuestionnaireSheet';
+import { useRights } from './_forms/useRights';
+import { LibraryTab } from './_library/LibraryTab';
+import { useTemplates } from './_library/useTemplates';
+import { SendSheet } from './_sent/SendSheet';
+import SentTab from './_sent/SentTab';
+import { useSent, useShared } from './_sent/sentApi';
+import { ImportSheet, PublishSheet } from './_shared/SharedSheets';
+import SharedTab from './_shared/SharedTab';
 
-const EXPLAINER: Record<Purpose, string> = {
-  tiering: 'Your team answers these about a supplier. The answers set its tier.',
-  due_diligence: 'Suppliers answer these in the portal. The answers set the residual score and raise findings.',
+const INFO: Record<TabKey, string> = {
+  library: 'The questionnaires you can send. Suppliers answer them in the portal; the answers set the residual score and raise findings.',
+  sent: 'Every questionnaire sent to a supplier: where it stands, what was answered and its link. Open one to read the answers.',
+  shared: 'Reuse a completed assessment: publish it once, share it by token, or export it as a package. Imported answers are re-scored with your own engine.',
 };
-
-const CATEGORY_ICON: Record<string, LucideIcon> = {
-  security: Shield, privacy: Lock, compliance: FileCheck, operational: Settings, financial: DollarSign, general: ClipboardList,
-};
-
-/** The rights the server checks (routers/questionnaires.py), each with its erm:risks:edit fallback. */
-function useRights() {
-  const { hasPermission } = usePermissions();
-  const erm = hasPermission('erm:risks:edit');
-  return {
-    create: hasPermission('vendor_risk:templates:create') || erm,
-    edit: hasPermission('vendor_risk:templates:edit') || erm,
-    remove: hasPermission('vendor_risk:templates:delete') || erm,
-    send: hasPermission('vendor_risk:assessments:create') || erm,
-    config: hasPermission('vendor_risk:config:edit') || erm,
-  };
-}
-
-function Card({ icon: Icon, title, href, version, meta, description, chips, footer, menu, muted }: {
-  icon: LucideIcon; title: string; href: string; version?: number | null; meta: string; description?: string | null;
-  chips?: React.ReactNode; footer?: React.ReactNode; menu?: React.ReactNode; muted?: boolean;
-}) {
-  return (
-    // an archived card is subdued with lighter fills and a quieter title, not with CSS opacity: 70% opacity takes the words below 4.5:1
-    <article className={`flex flex-col rounded-xl border p-4 ${muted ? 'border-[#e1e6eb] bg-[#f7f9fa]' : 'border-[#d5dbe1] bg-[#fff]'}`}>
-      <div className="flex items-start gap-3">
-        <span aria-hidden className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg ${muted ? 'bg-[#eef1f4] text-[#64707e]' : 'bg-[#e6f6f3] text-[#0f766e]'}`}><Icon className="h-5 w-5" strokeWidth={1.75} /></span>
-        <div className="min-w-0 flex-1">
-          <h3 className={`truncate text-[15px] font-semibold leading-5 ${muted ? 'text-[#4a5563]' : 'text-[#1f2933]'}`}>
-            <Link href={href} className="rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]">{title}</Link>
-            {version ? <span className="ml-1.5 align-middle text-[11px] font-medium text-[#64707e]" title="Questionnaires already sent keep the version they were sent on">v{version}</span> : null}
-          </h3>
-          <p className="text-[13px] leading-5 text-[#586472]">{meta}</p>
-        </div>
-        {menu}
-      </div>
-      <p className="mt-2 line-clamp-2 min-h-[2.5rem] text-[13px] leading-5 text-[#586472]">{description || ''}</p>
-      <div className="mt-3 flex flex-wrap items-center gap-2">{chips}</div>
-      {footer && <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[#eef1f4] pt-3">{footer}</div>}
-    </article>
-  );
-}
+const TABS: TabItem[] = TAB_KEYS.map((key) => ({ key, label: TAB_LABEL[key] }));
 
 export default function QuestionnairesPage() {
   const router = useRouter();
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
+  const pathname = usePathname() ?? '';
+  const search = useSearchParams()?.toString() ?? '';
+  const label = routeFor('/vendor-risk/questionnaires')?.label ?? 'Questionnaires';
   const rights = useRights();
-  const url = useUrlParams();
-  const purpose: Purpose = url.get('purpose') === 'tiering' ? 'tiering' : 'due_diligence';
-  const showArchived = url.get('archived') === '1';
-  const [search, setSearch] = useState('');
+
+  // the open tab is the address's; what the person picks shows at once and the address follows. A tab starts clean: it carries none of another tab's search or filters.
+  const [picked, setPicked] = useState<TabKey | null>(null);
+  useEffect(() => { setPicked(null); }, [search]);
+  const tab = picked ?? tabOf(search);
+  const select = (key: TabKey) => { setPicked(key); router.replace(tabHref(pathname, key), { scroll: false }); };
+
   const [creating, setCreating] = useState(false);
-  const [previewing, setPreviewing] = useState<Template | null>(null);
-  const [tiers, setTiers] = useState<Template | null>(null);
-  const [sending, setSending] = useState<Template | null>(null);
-  const [deleting, setDeleting] = useState<Template | null>(null);
+  const [sending, setSending] = useState<{ templateId: number | null } | null>(null);
+  const [publishing, setPublishing] = useState(false);
+  const [importing, setImporting] = useState(false);
 
-  const list = useQuery({
-    queryKey: [...templatesKey, 'all'],
-    queryFn: async () => (await questionnairesApi.list(true)).data.items,
-    placeholderData: keepPreviousData,
-    ...TPRM_QUERY_OPTS,
-  });
-  const onboarding = useQuery({
-    queryKey: ['tprm-onboarding-questions'],
-    queryFn: async () => (await questionnairesApi.onboardingQuestions()).data,
-    ...TPRM_QUERY_OPTS,
-  });
-  const templates = useMemo(() => list.data ?? [], [list.data]);
-  const live = templates.filter((t) => !t.archived_at);
-  const shown = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    return templates.filter((t) => (showArchived || !t.archived_at)
-      && (!term || t.name.toLowerCase().includes(term) || (t.category || '').toLowerCase().includes(term)));
-  }, [templates, showArchived, search]);
+  const templates = useTemplates();
+  const sent = useSent(tab === 'sent');
+  const shared = useShared(tab === 'shared');
+  const items = templates.data?.items;
+  const tiering = new URLSearchParams(search).get('purpose') === 'tiering';
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: templatesKey });
-  const failed = (title: string) => (e: unknown) => toast({ type: 'error', title, message: apiErrorText(e, 'Try again.') });
-  const archive = useMutation({
-    mutationFn: async (t: Template) => (await (t.archived_at ? questionnairesApi.restore(t.id) : questionnairesApi.archive(t.id))).data,
-    onSuccess: (t) => { refresh(); toast({ type: 'success', title: t.archived_at ? 'Archived' : 'Restored' }); },
-    onError: failed('Could not do that'),
-  });
-  const duplicate = useMutation({
-    mutationFn: async (t: Template) => (await questionnairesApi.duplicate(t.id)).data,
-    onSuccess: (copy) => { refresh(); toast({ type: 'success', title: 'Questionnaire copied' }); router.push(builderHref(copy.id)); },
-    onError: failed('Could not copy it'),
-  });
-  const remove = useMutation({
-    mutationFn: async (t: Template) => { await questionnairesApi.remove(t.id); },
-    onSuccess: () => { refresh(); setDeleting(null); toast({ type: 'success', title: 'Questionnaire deleted' }); },
-    onError: failed('Could not delete it'),
-  });
-
-  const setPurpose = (next: Purpose) => url.set({ purpose: next === 'due_diligence' ? null : next });
-  const questionCount = (onboarding.data?.sections ?? []).reduce((n, s) => n + s.questions.length, 0);
-
-  const actions = (t: Template): RowAction[] => [
-    { key: 'edit', label: rights.edit && !t.archived_at ? 'Edit' : 'Open', icon: Pencil, onClick: () => router.push(builderHref(t.id)) },
-    { key: 'preview', label: 'Preview', icon: Eye, onClick: () => setPreviewing(t), hidden: t.question_count === 0 },
-    { key: 'copy', label: 'Duplicate', icon: Copy, onClick: () => duplicate.mutate(t), hidden: !rights.create },
-    { key: 'default', label: 'Make default…', icon: Star, onClick: () => setTiers(t), hidden: !rights.edit || !!t.archived_at },
-    { key: 'archive', label: t.archived_at ? 'Restore' : 'Archive', icon: t.archived_at ? ArchiveRestore : Archive, onClick: () => archive.mutate(t), hidden: !rights.edit },
-    { key: 'delete', label: 'Delete', icon: Trash2, variant: 'danger', onClick: () => setDeleting(t), hidden: !rights.remove || t.used },
-  ];
+  const meta = tab === 'library' ? (items && !tiering ? libraryHead(items) : undefined)
+    : tab === 'sent' ? (sent.data ? headLine(sent.data.items, new Date()) : undefined)
+      : (shared.data ? sharedHead(shared.data.items) : undefined);
+  const actions = tab === 'library' ? (rights.create && !tiering ? <Button variant="primary" leftIcon={<Plus aria-hidden />} onClick={() => setCreating(true)}>New questionnaire</Button> : null)
+    : tab === 'sent' ? (rights.send ? <Button variant="primary" leftIcon={<Send aria-hidden />} onClick={() => setSending({ templateId: null })}>Send a questionnaire</Button> : null)
+      : (rights.resend ? (
+        <>
+          <Button leftIcon={<Download aria-hidden />} onClick={() => setImporting(true)}>Import</Button>
+          <Button variant="primary" leftIcon={<Share2 aria-hidden />} onClick={() => setPublishing(true)}>Publish</Button>
+        </>
+      ) : null);
 
   return (
-    <div className="space-y-4">
-      <h2 className="sr-only">Questionnaires</h2>
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
-          <SegmentedControl<Purpose>
-            ariaLabel="Kind of questionnaire"
-            value={purpose}
-            onChange={setPurpose}
-            options={[{ value: 'tiering', label: 'Tiering', count: 1 }, { value: 'due_diligence', label: 'Due diligence', count: live.length }]}
-          />
-          <p className="max-w-xl text-[13px] leading-5 text-[#586472]">{EXPLAINER[purpose]}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          {purpose === 'due_diligence' && (
-            <>
-              <div className="w-56"><SearchInput value={search} onChange={setSearch} placeholder="Search questionnaires" size="sm" aria-label="Search questionnaires" /></div>
-              <Check checked={showArchived} onChange={(on) => url.set({ archived: on ? '1' : null })}>Show archived</Check>
-            </>
-          )}
-          {rights.create && (
-            <button type="button" onClick={() => setCreating(true)} className={BTN_PRIMARY}><Plus aria-hidden className="h-4 w-4" /> New questionnaire</button>
-          )}
-        </div>
-      </div>
-
-      {purpose === 'tiering' ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          <Card
-            icon={ClipboardList}
-            title="Onboarding questions"
-            href="/vendor-risk/settings#questions"
-            meta={onboarding.data ? `${questionCount} questions · ${onboarding.data.sections.length} sections` : 'Loading…'}
-            description="Asked of whoever requests a supplier. Each answer adds to a tiering factor, and some can hold the tier at a minimum."
-            chips={<span className="inline-flex items-center gap-1 rounded bg-[#e6f6f3] px-1.5 py-0.5 text-[12px] font-medium leading-4 text-[#0f766e]"><Star aria-hidden className="h-3 w-3" /> Default</span>}
-            footer={<Link href="/vendor-risk/settings#questions" className={BTN}><Pencil aria-hidden className="h-4 w-4" /> Edit in Settings</Link>}
-          />
-        </div>
-      ) : list.isError && !list.data ? (
-        <ErrorState title="Couldn't load the questionnaires" message={apiErrorText(list.error, 'Try again.')} onRetry={() => list.refetch()} />
-      ) : list.isLoading && !list.data ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-48" />)}</div>
-      ) : shown.length === 0 ? (
-        <EmptyState
-          title="No questionnaires here yet"
-          hint={search ? 'Nothing matches the search.' : 'Start one from the library or build it question by question.'}
-          action={rights.create && !search ? <button type="button" onClick={() => setCreating(true)} className={BTN_PRIMARY}><Plus aria-hidden className="h-4 w-4" /> New questionnaire</button> : undefined}
-        />
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {shown.map((t) => (
-            <Card
-              key={t.id}
-              muted={!!t.archived_at}
-              icon={CATEGORY_ICON[(t.category || '').toLowerCase()] ?? FileText}
-              title={t.name}
-              href={builderHref(t.id)}
-              version={t.latest_version}
-              meta={`${t.question_count} questions · ${t.section_count} sections`}
-              description={t.description}
-              menu={<RowActionsMenu actions={actions(t)} />}
-              chips={(
-                <>
-                  {t.category && <Chip>{categoryLabel(t.category)}</Chip>}
-                  {t.default_tiers.map((tier) => <TierBadge key={tier} tier={tier} suffix="tier" />)}
-                  {t.archived_at && <StatusPill tone="warning">Archived</StatusPill>}
-                </>
-              )}
-              footer={(
-                <>
-                  {rights.send && !t.archived_at && t.question_count > 0
-                    ? <button type="button" onClick={() => setSending(t)} className={BTN}><Send aria-hidden className="h-4 w-4" /> Send to a vendor</button>
-                    : <span />}
-                  <span className="text-[12px] leading-4 text-[#64707e]">Updated {fmt.date(t.updated_at)}{t.updated_by_name ? ` · ${t.updated_by_name}` : ''}</span>
-                </>
-              )}
+    <div className="flex min-h-full flex-col gap-[16px]">
+      <PageHeader variant="page" title={label} info={INFO[tab]} meta={meta} actions={actions} />
+      <Tabs tabs={TABS} value={tab} onChange={select} ariaLabel="Questionnaires">
+        <TabPanel tabKey="library" className="pt-[16px]">
+          {tab === 'library' && (
+            <LibraryTab
+              templates={items ?? []} total={templates.data?.total} loading={templates.isLoading}
+              error={templates.isError ? templates.error : undefined} onRetry={() => { void templates.refetch(); }}
+              rights={rights} onSend={(t) => setSending({ templateId: t.id })} onNew={() => setCreating(true)}
             />
-          ))}
-        </div>
-      )}
+          )}
+        </TabPanel>
+        <TabPanel tabKey="sent" className="pt-[16px]">{tab === 'sent' && <SentTab list={sent} label={`${label}: sent`} rights={rights} onSend={() => setSending({ templateId: null })} />}</TabPanel>
+        <TabPanel tabKey="shared" className="pt-[16px]">{tab === 'shared' && <SharedTab list={shared} rights={rights} onPublish={() => setPublishing(true)} />}</TabPanel>
+      </Tabs>
 
-      {purpose === 'due_diligence' && <SentQuestionnaires templates={templates} />}
-
-      <NewQuestionnaireDialog open={creating} purpose={purpose} templates={templates} onClose={() => setCreating(false)} />
-      <PreviewDialog open={!!previewing} name={previewing?.name ?? ''} questions={previewing?.questions ?? []} onClose={() => setPreviewing(null)} />
-      {tiers && (
-        <SettingsDialog open template={tiers} canConfig={rights.config} onClose={() => setTiers(null)} onSaved={() => refresh()} />
-      )}
-      <SendDialog templateId={sending?.id ?? null} templateName={sending?.name ?? ''} onClose={() => setSending(null)} />
-      <Dialog
-        open={!!deleting}
-        onClose={() => setDeleting(null)}
-        title="Delete this questionnaire?"
-        description={deleting ? `“${deleting.name}” has never been sent, so nothing is recorded against it.` : undefined}
-        footer={(
-          <>
-            <button type="button" onClick={() => setDeleting(null)} className={BTN}>Cancel</button>
-            <button type="button" disabled={remove.isPending} onClick={() => deleting && remove.mutate(deleting)} className={BTN_DANGER}>
-              {remove.isPending ? 'Deleting…' : 'Delete questionnaire'}
-            </button>
-          </>
-        )}
-      >
-        <p className="text-sm leading-5 text-[#26323d]">This cannot be undone.</p>
-      </Dialog>
+      <NewQuestionnaireSheet open={creating} templates={items ?? []} onClose={() => setCreating(false)} />
+      <SendSheet open={!!sending} templates={items ?? []} templateId={sending?.templateId ?? null} onClose={() => setSending(null)} />
+      <PublishSheet open={publishing} onClose={() => setPublishing(false)} />
+      <ImportSheet open={importing} onClose={() => setImporting(false)} />
     </div>
   );
 }

@@ -72,13 +72,15 @@ export const PAGES: PageSpec[] = [
   { path: `${V}/alerts`, label: 'Monitoring', area: AREA, aliasOf: `${V}/monitoring` },
   { path: `${V}/technology`, label: 'Dependencies', area: AREA, aliasOf: `${V}/dependencies` },
   { path: `${V}/concentration`, label: 'Dependencies', area: AREA, aliasOf: `${V}/dependencies` },
+  // Questionnaires: the Vendor Exchange is the Shared tab of its page (vendor-questionnaires, 2026-11-10). The old address forwards there.
+  { path: `${V}/exchange`, label: 'Questionnaires', area: AREA, aliasOf: `${V}/questionnaires` },
 
   // ---- the entries and tabs the sidebar does not list (yet) ----
   ...ENTRIES.filter((p) => !listed.has(p.path)),
 
   // ---- pages that open from an entry or a tab ----
   { path: `${V}/intake/:id`, label: 'Vendor request', area: AREA, parent: `${V}/intake`, hidden: 'opens from an Intake row and from the request dialog once a request is filed', ...heading(`${V}/intake/:id`) },
-  { path: `${V}/questionnaires/:token/builder`, label: 'Questionnaire builder', area: AREA, parent: `${V}/questionnaires`, hidden: 'opens from a questionnaire (Edit or New) in Questionnaires' },
+  { path: `${V}/questionnaires/:token/builder`, label: 'Questionnaire builder', area: AREA, parent: `${V}/questionnaires`, hidden: 'opens from a questionnaire (Edit or New) in Questionnaires', ...heading(`${V}/questionnaires/:token/builder`) },
   { path: `${V}/vendors/:id`, label: 'Vendor', area: AREA, parent: `${V}/vendors`, hidden: 'opens from a Register row and from the vendor name on most pages of the module and of the Auditor Portal', ownHeading: true },
   { path: `${V}/vendors/:id/summary`, label: 'Vendor summary report', area: AREA, parent: `${V}/vendors`, hidden: 'opens from the vendor record\'s menu ("Summary report")' },
   { path: `${V}/assessments/:id`, label: 'Vendor assessment', area: AREA, parent: `${V}/vendors`, hidden: 'opens from a questionnaire sent to a vendor and from a vendor\'s assessment dialog' },

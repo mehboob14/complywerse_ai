@@ -45,7 +45,8 @@ export const RAIL: RailEntry[] = [
   ] },
   { key: 'intake', name: 'Intake', href: `${V}/intake`, count: 'intake_pending', waiting: 'pending', keywords: ['Vendor requests', 'Request vendor'] },
   { key: 'findings', name: 'Findings', href: `${V}/findings`, count: 'open_findings', waiting: 'open', keywords: ['Vendor findings', 'Remediation'] },
-  { key: 'questionnaires', name: 'Questionnaires', href: `${V}/questionnaires`, keywords: ['Questionnaire templates', 'Due diligence'] },
+  // One page with three tabs in its own address (?tab=): Library, Sent, Shared. The Vendor Exchange is the Shared tab now: its old address forwards there, and still lights this entry.
+  { key: 'questionnaires', name: 'Questionnaires', href: `${V}/questionnaires`, also: [`${V}/exchange`], keywords: ['Questionnaire templates', 'Due diligence', 'Sent questionnaires', 'Vendor Exchange', 'Exchange', 'Shared assessments', 'Reuse an assessment'] },
   { key: 'monitoring', name: 'Monitoring', href: `${V}/monitoring`, also: [`${V}/alerts`, `${V}/technology`, `${V}/concentration`], tabs: [
     { name: 'Alerts', href: `${V}/monitoring`, keywords: ['Signals', 'Monitoring signals', 'Breach alerts', 'Adverse media', 'Monitoring', 'Continuous monitoring'] },
     { name: 'Security ratings', href: `${V}/security`, keywords: ['Outside-in', 'Supplier ratings'] },
@@ -55,7 +56,6 @@ export const RAIL: RailEntry[] = [
     { name: 'Risk 360°', href: `${V}/risk-360`, keywords: ['Risk 360', 'Insights'] },
     { name: 'Comply analyses', href: `${V}/comply-analysis`, keywords: ['Comply analysis', 'FAIR'] },
     { name: 'Reports', href: `${V}/reports`, keywords: ['Vendor reports'] },
-    { name: 'Exchange', href: `${V}/exchange`, title: 'Vendor Exchange' },
   ] },
   { key: 'setup', name: 'Setup', href: `${V}/roster`, tabs: [
     { name: 'Roster', href: `${V}/roster`, keywords: ['Reviewers', 'Vendor roster'] },
@@ -82,7 +82,7 @@ export const HEAD: Readonly<Record<string, HeadBy>> = {
   [`${V}/intake`]: 'page',
   [`${V}/intake/:id`]: 'page',
   [`${V}/findings`]: 'page',
-  [`${V}/questionnaires`]: 'layout',
+  [`${V}/questionnaires`]: 'page',
   [`${V}/monitoring`]: 'page',
   [`${V}/security`]: 'page',
   [`${V}/dependencies`]: 'page',
@@ -100,8 +100,10 @@ const under = (path: string, href: string): boolean => path === href || path.sta
 const asRow = (path: string): string => path.replace(/\/\d+(?=\/|$)/g, '/:id');
 /** A vendor's record (`/vendor-risk/vendors/<id>`, not its summary) is a page of this model that no row of HEAD can name (the id is the address's): it draws its own head (vendor-record). */
 const RECORD = /^\/vendor-risk\/vendors\/\d+$/;
+/** The questionnaire builder (`/vendor-risk/questionnaires/<id>/builder`): its own head too (the page names the questionnaire, with a back link); the registry row is `:token`, the folder's name. */
+const BUILDER = /^\/vendor-risk\/questionnaires\/[^/]+\/builder$/;
 
-export const headOf = (pathname: string): HeadBy => HEAD[clean(pathname)] ?? HEAD[asRow(clean(pathname))] ?? (RECORD.test(clean(pathname)) ? 'page' : 'legacy');
+export const headOf = (pathname: string): HeadBy => HEAD[clean(pathname)] ?? HEAD[asRow(clean(pathname))] ?? (RECORD.test(clean(pathname)) || BUILDER.test(clean(pathname)) ? 'page' : 'legacy');
 
 // ── which entry is on ────────────────────────────────────────────────────────────────────────────────────────────────────
 
