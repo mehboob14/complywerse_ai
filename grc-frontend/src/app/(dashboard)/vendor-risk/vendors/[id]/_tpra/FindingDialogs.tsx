@@ -1,70 +1,43 @@
 'use client';
 
-// The dialogs of a finding: raise one, accept the risk, close it, reopen it (the kit's centred Dialog), and the two side panels that
-// were always there: share it with the vendor, and plan a remediation task by hand. Used by FindingCard, FindingsPanel and FindingsTab.
-
-import { useEffect, useId, useState, type ReactNode } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { BTN, BTN_PRIMARY, Dialog, fmt } from '@/app/(dashboard)/vendor-risk/_ui';
-import { InfoTip } from '@/components/ui/InfoTip';
-import { RightSlidePanel } from '@/components/ui';
-import { useToast } from '@/components/ui/ToastProvider';
-import { apiErrorText } from '@/lib/apiError';
+// The sheets of a finding: raise one, accept the risk, close it, reopen it, share it with the vendor, and plan a remediation task by hand. Used by the one finding card and the one finding list
+// (the register's drawer, the vendor record's Findings tab, the lifecycle's Findings stage). Rebuilt on the kit (vendor-intake-findings, 2026-11-10): each is a Sheet that asks before typed words
+// are thrown away; a failed save is said in the sheet, once, with what the server said and a Retry, and the confirmation is a toast. `FIELD`, `LABEL`, `Field` and `CheckCard` stay as they were
+// (findingFields.tsx): the Signals panel (another group's) draws its forms with them.
+import { useEffect, useId, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Button, Checkbox, FormError, FormField, Select, Sheet, Textarea, TextInput, useReportedMutation } from '@/components/ui/ds';
+import { formatDate } from '@/lib/format';
 import { acceptNeedsDate, closeNeeds, isoDay } from '../../../_lib/findingCardModel';
 import type { FindingRow, RaiseInput } from '../../../_lib/findingsApi';
+import { portalApi } from '../../../_lib/portalApi';
 import { requestsApi, sentNote } from '../../../_lib/requestsApi';
 import { DOMAIN_KEYS, DOMAIN_LABELS, SEVERITIES, TREATMENT_TYPES } from './constants';
-import { ContactSelect } from './PortalPanel';
-import { useUnsavedGuard } from './useUnsavedGuard';
 
-// Explicit hex: the platform CSS repaints slate/white and sizes bare form controls (PITFALLS 31, 100).
-export const FIELD = 'w-full rounded-lg border border-[#c3ccd5] bg-[#fff] px-2.5 py-2 text-sm text-[#1f2933] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]';
-export const LABEL = 'mb-1 flex items-center gap-1 text-[13px] font-medium text-[#26323d]';
-const OPTIONAL = <span className="font-normal text-[#64707e]">(optional)</span>;
+export { CheckCard, FIELD, Field, LABEL } from './findingFields';
 
-/** A labelled field; `tip` is the (i) that holds the explanation. */
-export function Field({ id, label, optional, tip, children }: { id: string; label: string; optional?: boolean; tip?: string; children: ReactNode }) {
+function Footer({ form, onClose, busy, disabled, go }: { form: string; onClose: () => void; busy: boolean; disabled: boolean; go: string }) {
   return (
-    <div>
-      <label htmlFor={id} className={LABEL}>
-        {label} {optional && OPTIONAL}
-        {tip && <InfoTip text={tip} label={`About ${label}`} />}
-      </label>
-      {children}
+    <div className="flex flex-wrap justify-end gap-[8px]">
+      <Button onClick={onClose}>Cancel</Button>
+      <Button type="submit" form={form} variant="primary" disabled={disabled} loading={busy}>{go}</Button>
     </div>
   );
 }
 
-/** A tick in a card: a choice that deserves a line of its own ("Holds the approval gate"). */
-export function CheckCard({ checked, onChange, title, note, disabled }: {
-  checked: boolean; onChange: (v: boolean) => void; title: string; note: string; disabled?: boolean;
-}) {
-  return (
-    <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-[#d5dbe1] bg-[#f7f9fa] px-3 py-2.5">
-      <input type="checkbox" className="mt-0.5 h-4 w-4 accent-[#0f766e]" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
-      <span>
-        <span className="block text-[13px] font-medium text-[#1f2933]">{title}</span>
-        <span className="block text-[12px] leading-4 text-[#586472]">{note}</span>
-      </span>
-    </label>
-  );
-}
-
-const Footer = ({ formId, onClose, busy, disabled, go }: { formId: string; onClose: () => void; busy: boolean; disabled: boolean; go: string }) => (
-  <>
-    <button type="button" className={BTN} onClick={onClose}>Cancel</button>
-    <button type="submit" form={formId} className={BTN_PRIMARY} disabled={busy || disabled}>{go}</button>
-  </>
-);
+const Subject = ({ finding }: { finding: Pick<FindingRow, 'title'> }) => <p className="text-ds-body text-ds-fg-muted">{finding.title || 'Untitled finding'}</p>;
 
 // ── raise ────────────────────────────────────────────────────────────────────
 
 const BLANK = { title: '', description: '', severity: 'medium', domain: 'cybersecurity', owner: '' as number | '', blocking: false, engagement: '' as number | '' };
 const blank = (engagement?: number | null): typeof BLANK => ({ ...BLANK, engagement: engagement ?? '' });
+const cap = (s: string): string => s[0].toUpperCase() + s.slice(1);
 
-export function RaiseFindingDialog({ open, onClose, onRaise, busy, people, engagements, defaultEngagementId }: {
+export function RaiseFindingDialog({ open, onClose, onRaise, busy, error, people, engagements, defaultEngagementId }: {
   open: boolean; onClose: () => void; busy: boolean;
   onRaise: (input: RaiseInput) => void;
+  /** why the last try failed (what the request threw), said in the sheet */
+  error?: unknown;
   people: Array<{ id: number; name: string }>;
   /** the vendor's other engagements; empty or left out: the finding is about the vendor itself */
   engagements?: Array<{ id: number; name: string }>;
@@ -75,67 +48,69 @@ export function RaiseFindingDialog({ open, onClose, onRaise, busy, people, engag
   useEffect(() => { if (!open) setForm(blank(defaultEngagementId)); }, [open, defaultEngagementId]);
   const set = <K extends keyof typeof BLANK>(key: K, value: (typeof BLANK)[K]) => setForm((f) => ({ ...f, [key]: value }));
   const about = engagements && engagements.length > 0;
+  const submit = () => {
+    if (!form.title.trim()) return;
+    onRaise({
+      title: form.title.trim(), description: form.description.trim() || undefined, severity: form.severity, domain: form.domain,
+      owner_id: form.owner === '' ? null : form.owner, is_blocking: form.blocking,
+      engagement_id: about && form.engagement !== '' ? form.engagement : undefined,
+    });
+  };
   return (
-    <Dialog open={open} onClose={onClose} title="Raise finding" size={600}
-      footer={<Footer formId={formId} onClose={onClose} busy={busy} disabled={!form.title.trim()} go={busy ? 'Raising…' : 'Raise finding'} />}>
-      <form id={formId} className="space-y-3.5" onSubmit={(e) => {
-        e.preventDefault();
-        if (!form.title.trim()) return;
-        onRaise({
-          title: form.title.trim(), description: form.description.trim() || undefined, severity: form.severity, domain: form.domain,
-          owner_id: form.owner === '' ? null : form.owner, is_blocking: form.blocking,
-          engagement_id: about && form.engagement !== '' ? form.engagement : undefined,
-        });
-      }}>
-        <Field id={`${formId}-title`} label="What is wrong">
-          <input id={`${formId}-title`} className={FIELD} value={form.title} maxLength={255} required data-autofocus
-            onChange={(e) => set('title', e.target.value)} />
-        </Field>
-        <Field id={`${formId}-detail`} label="Detail" optional>
-          <textarea id={`${formId}-detail`} className={FIELD} rows={3} maxLength={8000} value={form.description}
-            onChange={(e) => set('description', e.target.value)} />
-        </Field>
-        <div className="grid gap-3.5 sm:grid-cols-2">
-          <Field id={`${formId}-sev`} label="Severity" tip="The fix is due when the policy says for this severity.">
-            <select id={`${formId}-sev`} className={FIELD} value={form.severity} onChange={(e) => set('severity', e.target.value)}>
-              {SEVERITIES.map((s) => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
-            </select>
-          </Field>
-          <Field id={`${formId}-domain`} label="Domain">
-            <select id={`${formId}-domain`} className={FIELD} value={form.domain} onChange={(e) => set('domain', e.target.value)}>
+    <Sheet open={open} onClose={onClose} title="Raise finding" width="md" dirty={!busy && (form.title.trim() !== '' || form.description.trim() !== '')}
+      footer={<Footer form={formId} onClose={onClose} busy={busy} disabled={!form.title.trim()} go="Raise finding" />}>
+      <form id={formId} className="flex flex-col gap-[12px]" onSubmit={(e) => { e.preventDefault(); submit(); }}>
+        <FormError title="The finding could not be raised" error={error ?? null} onRetry={submit} />
+        <FormField label="What is wrong" required>
+          <TextInput maxLength={255} value={form.title} onChange={(e) => set('title', e.target.value)} />
+        </FormField>
+        <FormField label="Detail" optional>
+          <Textarea rows={3} maxLength={8000} value={form.description} onChange={(e) => set('description', e.target.value)} />
+        </FormField>
+        <div className="grid gap-[12px] sm:grid-cols-2">
+          <FormField label="Severity" info="The fix is due when the policy says for this severity.">
+            <Select value={form.severity} onChange={(e) => set('severity', e.target.value)}>
+              {SEVERITIES.map((s) => <option key={s} value={s}>{cap(s)}</option>)}
+            </Select>
+          </FormField>
+          <FormField label="Domain">
+            <Select value={form.domain} onChange={(e) => set('domain', e.target.value)}>
               {DOMAIN_KEYS.map((d) => <option key={d} value={d}>{DOMAIN_LABELS[d]}</option>)}
-            </select>
-          </Field>
-          <Field id={`${formId}-owner`} label="Owner" optional>
-            <select id={`${formId}-owner`} className={FIELD} value={form.owner} onChange={(e) => set('owner', e.target.value ? Number(e.target.value) : '')}>
+            </Select>
+          </FormField>
+          <FormField label="Owner" optional>
+            <Select value={form.owner} onChange={(e) => set('owner', e.target.value ? Number(e.target.value) : '')}>
               <option value="">Unassigned</option>
               {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          </Field>
+            </Select>
+          </FormField>
           {about && (
-            <Field id={`${formId}-for`} label="About" tip="The whole vendor, or one of its engagements.">
-              <select id={`${formId}-for`} className={FIELD} value={form.engagement} onChange={(e) => set('engagement', e.target.value ? Number(e.target.value) : '')}>
+            <FormField label="About" info="The whole vendor, or one of its engagements.">
+              <Select value={form.engagement} onChange={(e) => set('engagement', e.target.value ? Number(e.target.value) : '')}>
                 <option value="">The vendor (General)</option>
                 {engagements!.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
-              </select>
-            </Field>
+              </Select>
+            </FormField>
           )}
         </div>
-        <CheckCard checked={form.blocking} onChange={(v) => set('blocking', v)} title="Holds the approval gate"
-          note="The vendor cannot be approved until this is fixed, accepted or closed." />
+        <label className="flex cursor-pointer items-start gap-[8px] rounded-ds-card border border-ds-border bg-ds-surface-subtle p-[12px]">
+          <Checkbox checked={form.blocking} onChange={(e) => set('blocking', e.target.checked)} />
+          <span>
+            <span className="block text-ds-body font-[600] text-ds-fg">Holds the approval gate</span>
+            <span className="block text-ds-label text-ds-fg-muted">The vendor cannot be approved until this is fixed, accepted or closed.</span>
+          </span>
+        </label>
       </form>
-    </Dialog>
+    </Sheet>
   );
 }
 
 // ── accept, close, reopen ────────────────────────────────────────────────────
 
-type Subject = Pick<FindingRow, 'title' | 'severity'>;
+type Subj = Pick<FindingRow, 'title' | 'severity'>;
 
-const Heading = ({ f }: { f: Subject }) => <p className="mb-3 text-[13px] leading-5 text-[#586472]">{f.title || 'Untitled finding'}</p>;
-
-export function AcceptDialog({ open, onClose, finding, busy, onAccept }: {
-  open: boolean; onClose: () => void; finding: Subject; busy: boolean;
+export function AcceptDialog({ open, onClose, finding, busy, error, onAccept }: {
+  open: boolean; onClose: () => void; finding: Subj; busy: boolean; error?: unknown;
   onAccept: (input: { rationale: string; expiry?: string }) => void;
 }) {
   const formId = useId();
@@ -144,174 +119,153 @@ export function AcceptDialog({ open, onClose, finding, busy, onAccept }: {
   useEffect(() => { if (!open) { setUntil(''); setWhy(''); } }, [open]);
   const needsDate = acceptNeedsDate(finding.severity);
   const ready = !!why.trim() && (!needsDate || !!until);
+  const submit = () => { if (ready) onAccept({ rationale: why.trim(), expiry: until || undefined }); };
   return (
-    <Dialog open={open} onClose={onClose} title="Accept this risk?"
-      footer={<Footer formId={formId} onClose={onClose} busy={busy} disabled={!ready} go={busy ? 'Saving…' : until ? `Accept until ${fmt.date(until)}` : 'Accept risk'} />}>
-      <form id={formId} className="space-y-3.5" onSubmit={(e) => { e.preventDefault(); if (ready) onAccept({ rationale: why.trim(), expiry: until || undefined }); }}>
-        <Heading f={finding} />
-        <Field id={`${formId}-until`} label="Accepted until" optional={!needsDate}
-          tip={needsDate ? 'The finding reopens when this date passes. Required for a critical or high finding.' : 'The finding reopens when this date passes. Leave it empty to accept it with no end date.'}>
-          <input id={`${formId}-until`} type="date" className={FIELD} min={isoDay(1)} value={until} required={needsDate} data-autofocus
-            onChange={(e) => setUntil(e.target.value)} />
-        </Field>
-        <Field id={`${formId}-why`} label="Rationale" tip="Compensating controls and when to look again. It is recorded with your sign-off.">
-          <textarea id={`${formId}-why`} className={FIELD} rows={4} maxLength={4000} required value={why} onChange={(e) => setWhy(e.target.value)} />
-        </Field>
+    <Sheet open={open} onClose={onClose} title="Accept this risk?" width="sm" dirty={!busy && (why.trim() !== '' || until !== '')}
+      footer={<Footer form={formId} onClose={onClose} busy={busy} disabled={!ready} go={until ? `Accept until ${formatDate(until, { calendar: true })}` : 'Accept risk'} />}>
+      <form id={formId} className="flex flex-col gap-[12px]" onSubmit={(e) => { e.preventDefault(); submit(); }}>
+        <Subject finding={finding} />
+        <FormError title="The risk could not be accepted" error={error ?? null} onRetry={submit} />
+        <FormField label="Accepted until" required={needsDate} optional={!needsDate}
+          info={needsDate ? 'The finding reopens when this date passes. Required for a critical or high finding.' : 'The finding reopens when this date passes. Leave it empty to accept it with no end date.'}>
+          <TextInput type="date" min={isoDay(1)} value={until} onChange={(e) => setUntil(e.target.value)} />
+        </FormField>
+        <FormField label="Rationale" required info="Compensating controls and when to look again. It is recorded with your sign-off.">
+          <Textarea rows={4} maxLength={4000} value={why} onChange={(e) => setWhy(e.target.value)} />
+        </FormField>
       </form>
-    </Dialog>
+    </Sheet>
   );
 }
 
-export function CloseDialog({ open, onClose, finding, busy, onCloseFinding }: {
-  open: boolean; onClose: () => void; finding: Subject & Pick<FindingRow, 'is_blocking' | 'is_critical_control_fail' | 'fix_done'>; busy: boolean;
+export function CloseDialog({ open, onClose, finding, busy, error, onCloseFinding }: {
+  open: boolean; onClose: () => void; finding: Subj & Pick<FindingRow, 'is_blocking' | 'is_critical_control_fail' | 'fix_done'>; busy: boolean; error?: unknown;
   onCloseFinding: (note: string) => void;
 }) {
   const formId = useId();
   const [note, setNote] = useState('');
   useEffect(() => { if (!open) setNote(''); }, [open]);
   const needs = closeNeeds(finding);
+  const ready = !needs || !!note.trim();
+  const submit = () => { if (ready) onCloseFinding(note.trim()); };
   return (
-    <Dialog open={open} onClose={onClose} title="Close this finding?" description="Close only if fixed. To live with it, accept the risk."
-      footer={<Footer formId={formId} onClose={onClose} busy={busy} disabled={!!needs && !note.trim()} go={busy ? 'Closing…' : 'Close finding'} />}>
-      <form id={formId} onSubmit={(e) => { e.preventDefault(); if (!needs || note.trim()) onCloseFinding(note.trim()); }}>
-        <Heading f={finding} />
-        <Field id={`${formId}-note`} label="What was done" optional={!needs}>
-          <textarea id={`${formId}-note`} className={FIELD} rows={4} maxLength={4000} required={!!needs} value={note} data-autofocus
-            placeholder="MFA enabled on the admin console, screenshot received" onChange={(e) => setNote(e.target.value)} />
-        </Field>
-        {needs && <p className="mt-1 text-[12px] leading-4 text-[#586472]">{needs}</p>}
+    <Sheet open={open} onClose={onClose} title="Close this finding?" subtitle="Close only if fixed. To live with it, accept the risk." width="sm" dirty={!busy && note.trim() !== ''}
+      footer={<Footer form={formId} onClose={onClose} busy={busy} disabled={!ready} go="Close finding" />}>
+      <form id={formId} className="flex flex-col gap-[12px]" onSubmit={(e) => { e.preventDefault(); submit(); }}>
+        <Subject finding={finding} />
+        <FormError title="The finding could not be closed" error={error ?? null} onRetry={submit} />
+        <FormField label="What was done" required={!!needs} optional={!needs} hint={needs ?? undefined}>
+          <Textarea rows={4} maxLength={4000} value={note} placeholder="MFA enabled on the admin console, screenshot received" onChange={(e) => setNote(e.target.value)} />
+        </FormField>
       </form>
-    </Dialog>
+    </Sheet>
   );
 }
 
-export function ReopenDialog({ open, onClose, finding, busy, onReopen }: {
-  open: boolean; onClose: () => void; finding: Subject; busy: boolean; onReopen: (reason: string) => void;
+export function ReopenDialog({ open, onClose, finding, busy, error, onReopen }: {
+  open: boolean; onClose: () => void; finding: Pick<FindingRow, 'title'>; busy: boolean; error?: unknown; onReopen: (reason: string) => void;
 }) {
   const formId = useId();
   const [why, setWhy] = useState('');
   useEffect(() => { if (!open) setWhy(''); }, [open]);
+  const submit = () => { if (why.trim()) onReopen(why.trim()); };
   return (
-    <Dialog open={open} onClose={onClose} title="Reopen this finding?" description="It goes back on the open list and counts again."
-      footer={<Footer formId={formId} onClose={onClose} busy={busy} disabled={!why.trim()} go={busy ? 'Reopening…' : 'Reopen finding'} />}>
-      <form id={formId} onSubmit={(e) => { e.preventDefault(); if (why.trim()) onReopen(why.trim()); }}>
-        <Heading f={finding} />
-        <Field id={`${formId}-why`} label="Why">
-          <textarea id={`${formId}-why`} className={FIELD} rows={3} maxLength={4000} required value={why} data-autofocus
-            placeholder="The fix was rolled back in the last release" onChange={(e) => setWhy(e.target.value)} />
-        </Field>
+    <Sheet open={open} onClose={onClose} title="Reopen this finding?" subtitle="It goes back on the open list and counts again." width="sm" dirty={!busy && why.trim() !== ''}
+      footer={<Footer form={formId} onClose={onClose} busy={busy} disabled={!why.trim()} go="Reopen finding" />}>
+      <form id={formId} className="flex flex-col gap-[12px]" onSubmit={(e) => { e.preventDefault(); submit(); }}>
+        <Subject finding={finding} />
+        <FormError title="The finding could not be reopened" error={error ?? null} onRetry={submit} />
+        <FormField label="Why" required>
+          <Textarea rows={3} maxLength={4000} value={why} placeholder="The fix was rolled back in the last release" onChange={(e) => setWhy(e.target.value)} />
+        </FormField>
       </form>
-    </Dialog>
+    </Sheet>
   );
 }
 
-// ── share with the vendor, and plan a remediation task by hand (side panels, as they were) ──
+// ── share with the vendor, and plan a remediation task by hand ──────────────────────────────────────────────────────
 
-const inputCls =
-  'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500';
+function ContactChoice({ vendorId, value, onChange }: { vendorId: number; value: number | null; onChange: (id: number | null) => void }) {
+  const { data } = useQuery({ queryKey: ['tprm-contacts', vendorId, false], queryFn: async () => (await portalApi.contacts(vendorId, false)).data.items });
+  const reachable = (data || []).filter((c) => c.id !== null && c.email && c.portal_access && !c.archived_at);
+  return (
+    <Select value={value ?? ''} onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}>
+      <option value="">All contacts</option>
+      {reachable.map((c) => <option key={c.id} value={c.id as number}>{c.name}</option>)}
+    </Select>
+  );
+}
 
 export function ShareFindingPanel({ finding, onClose }: { finding: Pick<FindingRow, 'id' | 'vendor_id' | 'title' | 'description'>; onClose: () => void }) {
   const qc = useQueryClient();
-  const { toast } = useToast();
-  const [form, setForm] = useState({
-    title: finding.title || '', note: finding.description || '', due_date: isoDay(30), contact_id: null as number | null,
+  const formId = useId();
+  const [form, setForm] = useState({ title: finding.title || '', note: finding.description || '', due_date: isoDay(30), contact_id: null as number | null });
+  const [problem, setProblem] = useState<unknown>(null);
+  const touched = form.title !== (finding.title || '') || form.note !== (finding.description || '');
+  const share = useReportedMutation({
+    mutationFn: async () => (await requestsApi.shareFinding(finding.id, {
+      title: form.title.trim() || undefined, note: form.note.trim() || undefined, due_date: form.due_date, contact_id: form.contact_id,
+    })).data,
+    success: (made) => ({ title: 'Shared with the vendor', message: sentNote(made.sent).text }),
+    failure: 'Not shared',
+    toast: 'success',
+    onError: (e) => setProblem(e),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['tprm-supplier-requests', finding.vendor_id] }); onClose(); },
   });
-  useUnsavedGuard(form.title !== (finding.title || '') || form.note !== (finding.description || ''));
-  const share = useMutation({
-    mutationFn: () => requestsApi.shareFinding(finding.id, {
-      title: form.title.trim() || undefined, note: form.note.trim() || undefined, due_date: form.due_date,
-      contact_id: form.contact_id,
-    }),
-    onSuccess: (res) => {
-      qc.invalidateQueries({ queryKey: ['tprm-supplier-requests', finding.vendor_id] });
-      const sent = sentNote(res.data.sent);
-      toast({ type: sent.ok ? 'success' : 'warning', title: 'Shared with the vendor', message: sent.text });
-      onClose();
-    },
-    onError: (e) => toast({ type: 'error', title: 'Not shared', message: apiErrorText(e, 'Try again.') }),
-  });
+  const ready = !!form.title.trim() && !!form.due_date;
   return (
-    <RightSlidePanel isOpen onClose={onClose} title="Share with vendor" width="w-full max-w-lg"
-      footer={
-        <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-          <button form={`tpra-share-form-${finding.id}`} type="submit" disabled={share.isPending}
-            className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">
-            {share.isPending ? 'Sharing…' : 'Share'}
-          </button>
-        </div>
-      }>
-      <form id={`tpra-share-form-${finding.id}`} onSubmit={(e) => { e.preventDefault(); share.mutate(); }} className="space-y-4">
-        <div>
-          <label htmlFor={`share-title-${finding.id}`} className="mb-1 flex items-center gap-1 text-xs font-medium text-gray-700">
-            Title <InfoTip text="The vendor sees this title and the text below, and is asked for a plan, a date and evidence. Never the severity or scores." />
-          </label>
-          <input id={`share-title-${finding.id}`} className={inputCls} maxLength={255} required value={form.title}
-            onChange={(e) => setForm({ ...form, title: e.target.value })} />
-        </div>
-        <div>
-          <label htmlFor={`share-note-${finding.id}`} className="mb-1 block text-xs font-medium text-gray-700">What the vendor reads</label>
-          <textarea id={`share-note-${finding.id}`} className={inputCls} rows={5} maxLength={8000} value={form.note}
-            onChange={(e) => setForm({ ...form, note: e.target.value })} />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label htmlFor={`share-due-${finding.id}`} className="mb-1 block text-xs font-medium text-gray-700">Due</label>
-            <input id={`share-due-${finding.id}`} type="date" className={inputCls} required min={isoDay(0)} value={form.due_date}
-              onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
-          </div>
-          <div>
-            <label htmlFor={`share-to-${finding.id}`} className="mb-1 block text-xs font-medium text-gray-700">Send to</label>
-            <ContactSelect id={`share-to-${finding.id}`} vendorId={finding.vendor_id} value={form.contact_id}
-              onChange={(id) => setForm({ ...form, contact_id: id })} />
-          </div>
+    <Sheet open onClose={onClose} title="Share with vendor" width="md" dirty={touched && !share.isPending}
+      footer={<Footer form={formId} onClose={onClose} busy={share.isPending} disabled={!ready} go="Share" />}>
+      <form id={formId} className="flex flex-col gap-[12px]" onSubmit={(e) => { e.preventDefault(); if (ready) { setProblem(null); share.mutate(); } }}>
+        <FormError title="The finding could not be shared" error={problem} onRetry={() => { setProblem(null); share.mutate(); }} />
+        <FormField label="Title" required info="The vendor sees this title and the text below, and is asked for a plan, a date and evidence. Never the severity or scores.">
+          <TextInput maxLength={255} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+        </FormField>
+        <FormField label="What the vendor reads">
+          <Textarea rows={5} maxLength={8000} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+        </FormField>
+        <div className="grid gap-[12px] sm:grid-cols-2">
+          <FormField label="Due" required>
+            <TextInput type="date" min={isoDay(0)} value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
+          </FormField>
+          <FormField label="Send to">
+            <ContactChoice vendorId={finding.vendor_id} value={form.contact_id} onChange={(id) => setForm({ ...form, contact_id: id })} />
+          </FormField>
         </div>
       </form>
-    </RightSlidePanel>
+    </Sheet>
   );
 }
 
 export function AddRemediationPanel({
-  open, onClose, onSubmit, busy,
-}: { open: boolean; onClose: () => void; onSubmit: (p: Record<string, unknown>) => void; busy: boolean }) {
+  open, onClose, onSubmit, busy, error,
+}: { open: boolean; onClose: () => void; onSubmit: (p: Record<string, unknown>) => void; busy: boolean; error?: unknown }) {
+  const formId = useId();
   const [form, setForm] = useState({ title: '', plan: '', treatment_type: 'remediate', due_date: '' });
-  useUnsavedGuard(open && (!!form.title || !!form.plan));
+  useEffect(() => { if (!open) setForm({ title: '', plan: '', treatment_type: 'remediate', due_date: '' }); }, [open]);
+  const submit = () => { if (form.title.trim()) onSubmit({ ...form, title: form.title.trim(), due_date: form.due_date || undefined }); };
   return (
-    <RightSlidePanel isOpen={open} onClose={onClose} title="Add remediation task" width="w-full max-w-lg"
-      footer={
-        <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-          <button form="tpra-rem-form" type="submit" disabled={busy}
-            className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">
-            {busy ? 'Adding…' : 'Add task'}
-          </button>
+    <Sheet open={open} onClose={onClose} title="Add remediation task" width="md" dirty={!busy && (form.title.trim() !== '' || form.plan.trim() !== '')}
+      footer={<Footer form={formId} onClose={onClose} busy={busy} disabled={!form.title.trim()} go="Add task" />}>
+      <form id={formId} className="flex flex-col gap-[12px]" onSubmit={(e) => { e.preventDefault(); submit(); }}>
+        <FormError title="The task could not be added" error={error ?? null} onRetry={submit} />
+        <FormField label="Task" required>
+          <TextInput maxLength={255} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+        </FormField>
+        <div className="grid gap-[12px] sm:grid-cols-2">
+          <FormField label="Treatment">
+            <Select value={form.treatment_type} onChange={(e) => setForm({ ...form, treatment_type: e.target.value })}>
+              {TREATMENT_TYPES.map((t) => <option key={t} value={t}>{cap(t)}</option>)}
+            </Select>
+          </FormField>
+          <FormField label="Due date" optional>
+            <TextInput type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
+          </FormField>
         </div>
-      }>
-      <form id="tpra-rem-form" onSubmit={(e) => {
-        e.preventDefault();
-        onSubmit({ ...form, due_date: form.due_date || undefined });
-      }} className="space-y-4">
-        <div>
-          <label className="mb-1 block text-xs font-medium text-gray-700">Task</label>
-          <input className={inputCls} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-700">Treatment</label>
-            <select className={inputCls} value={form.treatment_type} onChange={(e) => setForm({ ...form, treatment_type: e.target.value })}>
-              {TREATMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-700">Due date</label>
-            <input type="date" className={inputCls} value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
-          </div>
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-medium text-gray-700">Plan</label>
-          <textarea className={inputCls} rows={3} value={form.plan} onChange={(e) => setForm({ ...form, plan: e.target.value })} />
-        </div>
+        <FormField label="Plan" optional>
+          <Textarea rows={3} value={form.plan} onChange={(e) => setForm({ ...form, plan: e.target.value })} />
+        </FormField>
       </form>
-    </RightSlidePanel>
+    </Sheet>
   );
 }

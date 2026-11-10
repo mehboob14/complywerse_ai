@@ -69,7 +69,7 @@ test('every address of the model is unique, and every tab and entry is a page of
 // ---- who draws a page's head ----
 
 const FILE = (route: string): string => {
-  const rest = route.replace(/^\/vendor-risk/, '').replace(/^\//, '');
+  const rest = route.replace(/^\/vendor-risk/, '').replace(/^\//, '').replace(/:([a-z]+)/g, '[$1]');
   return fileURLToPath(new URL(`../${rest ? `${rest}/` : ''}page.tsx`, import.meta.url));
 };
 
@@ -82,6 +82,10 @@ test('HEAD: a page that draws its head draws the page head of the kit; a page th
   assert.equal(headOf('/vendor-risk/vendors?tier=high'), 'layout');
   assert.equal(headOf('/vendor-risk'), 'page');
   assert.equal(headOf('/vendor-risk/vendors/12'), 'legacy');
+  assert.equal(headOf('/vendor-risk/intake'), 'page');
+  assert.equal(headOf('/vendor-risk/intake/12'), 'page', 'a request is the row /intake/:id');
+  assert.equal(headOf('/vendor-risk/intake/12?tab=x'), 'page');
+  assert.equal(headOf('/vendor-risk/findings'), 'page');
   assert.equal(headOf('/vendor-risk/alerts'), 'legacy');
   for (const path of WITH_ACTIONS) assert.equal(headOf(path), 'layout', `${path}: the buttons are drawn only by the layout head`);
 });

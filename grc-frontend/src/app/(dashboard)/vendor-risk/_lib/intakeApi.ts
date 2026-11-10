@@ -37,7 +37,12 @@ export interface RequestRow {
 
 export interface RequestListing {
   items: RequestRow[];
+  /** how many of each status the search and Mine leave, before the page's switch */
   counts: Record<RequestStatus, number>;
+  /** how many requests match the switch (all of them, not this page) */
+  total: number;
+  skip: number;
+  limit: number | null;
   can_create: boolean;
   can_review: boolean;
 }
@@ -57,7 +62,8 @@ export interface RequestFields { department: string | null; urgency: Urgency; en
 export const requestsKey = ['tprm-requests'] as const;
 
 export const intakeApi = {
-  list: (params: { scope: 'all' | 'mine'; search?: string }) =>
+  /** One page of one switch option (`statuses` is a comma list, `sort: 'queue'` the review team's order); without `limit` every request comes back. */
+  list: (params: Record<string, string | number | undefined>) =>
     apiClient.get<RequestListing>('/vendor-risk/intake/requests', { params }),
   /** The request is filed even when it may already be on record: `duplicates` says what it may be. */
   create: (body: NewRequest) =>

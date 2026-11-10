@@ -110,8 +110,9 @@ export function useVendorFindings(vendorId: number, removed = false) {
   });
 }
 
-/** After any change to a finding: every list that shows one, the lifecycle's gate, the findings shared with the supplier. */
+/** After any change to a finding: every list that shows one (the vendor's tab, the lifecycle's stage, the register), the lifecycle's gate, the findings shared with the supplier, and the figures
+ *  that count findings (the Overview, the work queue, the vendor list's next steps). The register and the Overview used to keep showing a closed finding for up to 30 seconds. */
 export function refreshFindings(qc: QueryClient) {
-  ['tprm-vendor-findings', 'tpra-findings', 'tpra-finding', 'tpra-lifecycle', 'tprm-supplier-requests'].forEach((k) =>
+  ['tprm-vendor-findings', 'tpra-findings', 'tpra-finding', 'tpra-lifecycle', 'tprm-supplier-requests', 'tprm-findings', 'tprm-dashboard', 'tprm-attention', 'vendors'].forEach((k) =>
     qc.invalidateQueries({ queryKey: [k] }));
 }

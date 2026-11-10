@@ -1,23 +1,29 @@
 'use client';
 
-// The intake questions, answered in place and saved as you type. Shared by the
-// request page and the lifecycle's intake stage. The likely tier is the server's
-// answer after each save, from the same rules tiering uses.
-
+// The intake questions, answered in place and saved as you type. Shared by the request page and the lifecycle's intake stage (`layout="panel"`). The likely tier is the server's answer after
+// each save, from the same rules tiering uses. Rebuilt on the kit (vendor-intake-findings, 2026-11-10) with the same exports and props: what the person types is saved after a short quiet
+// (900 ms) and when they leave; a refused value waits to be fixed, a dropped connection is retried; the people to pick are the module's own list (never the administrators' list), and a
+// person no longer on it reads "A former colleague", not a number.
 import { MutableRefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, Check, CheckCircle2, Loader2, X } from 'lucide-react';
 import { clsx } from 'clsx';
+import { Button, Checkbox, FormField, ProgressBar, SectionCard, SegmentedControl, Select, StatusPill, Textarea, TextInput } from '@/components/ui/ds';
+import { statusPill } from '@/lib/status';
+import { vendorTier } from '@/lib/statuses/vendor';
 import { vendorOnboardingApi } from '@/lib/api';
 import { TPRM_QUERY_OPTS } from '../tprmQuery';
 import { intakeApi, type RequestFields, type Urgency } from '../intakeApi';
-import {
-  Catalogue, FACTOR_LABELS, Factor, FactorKey, IntakePayload, IntakeVendor, Person, Preview, Question, TIER_CLS, errText,
-} from './types';
+import { personName } from '../peopleModel';
+import { Catalogue, FACTOR_LABELS, Factor, FactorKey, IntakePayload, IntakeVendor, Person, Preview, Question, errText } from './types';
 
 const SUPPLIER = 'supplier';
-const input = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-slate-50 disabled:text-slate-500';
-const LEVEL_TONE = ['bg-slate-600', 'bg-emerald-600', 'bg-amber-500', 'bg-orange-600', 'bg-red-600'];
+const LEVELS = ['none', 'low', 'moderate', 'high', 'severe'] as const;
+const LEVEL_WORD: Record<(typeof LEVELS)[number], string> = { none: 'None', low: 'Low', moderate: 'Moderate', high: 'High', severe: 'Severe' };
+// the choices that read as a button group: a ring on the chosen one (the kit's brand colours), never a colour alone
+const CHOICE = 'min-h-ds-control rounded-ds-control border px-[12px] py-[6px] text-left text-ds-body focus-visible:outline-none focus-visible:shadow-ds-ring disabled:cursor-default';
+const CHOSEN = 'border-ds-primary bg-ds-primary-soft font-[600] text-ds-primary-text';
+const UNCHOSEN = 'border-ds-border-strong bg-ds-surface text-ds-fg-body enabled:hover:bg-ds-surface-hover';
 
 type Patch = {
   answers: Record<string, unknown>; justifications: Record<string, string>; vendor: Partial<IntakeVendor>;
@@ -114,7 +120,7 @@ export default function IntakeForm({
                             vendor: { ...body.vendor, ...p.vendor }, request: { ...body.request, ...p.request } };
       }
       setSaveState('error');
-      setSaveError(errText(e, 'Could not save — check your connection'));
+      setSaveError(errText(e, 'Could not save. Check your connection.'));
     }
   }, [vendorId, qc]);
 
@@ -152,10 +158,10 @@ export default function IntakeForm({
     return map;
   }, [catalogue]);
 
-  if (isLoading || !catalogue || !vendor || !request) {
-    return <div className="flex items-center gap-2 py-8 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading the request…</div>;
+  if (isError || (!isLoading && !data)) return <p role="alert" className="text-ds-body text-ds-danger">Could not load this request.</p>;
+  if (isLoading || !catalogue || !vendor || !request || !data) {
+    return <div role="status" className="flex items-center gap-[8px] py-[32px] text-ds-body text-ds-fg-muted"><Loader2 aria-hidden className="h-[16px] w-[16px] animate-spin" /> Loading the request…</div>;
   }
-  if (isError || !data) return <p className="text-sm text-rose-700">Could not load this request.</p>;
 
   const editable = data.can_edit;
   const problems = data.problems;
@@ -168,21 +174,24 @@ export default function IntakeForm({
   };
 
   const nav = (
-    <nav className={clsx(layout === 'page' ? 'space-y-1' : 'flex flex-wrap gap-1.5')} aria-label="Request sections">
+    <nav className={clsx(layout === 'page' ? 'flex flex-col gap-[2px]' : 'flex flex-wrap gap-[6px]')} aria-label="Request sections">
       {tabs.map((t, i) => {
         const open = openIn(t.key);
         const active = section === t.key;
         return (
-          <button key={t.key} type="button" onClick={() => setSection(t.key)} aria-current={active ? 'step' : undefined}
-            className={clsx('flex items-center gap-2 rounded-lg text-left text-sm transition-colors',
-              layout === 'page' ? 'w-full px-3 py-2' : 'border px-3 py-1.5',
-              active ? 'bg-primary-50 font-medium text-primary-800 border-primary-200' : 'text-slate-600 hover:bg-slate-50 border-slate-200')}>
-            <span className={clsx('flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold',
-              open ? 'bg-slate-200 text-slate-700' : 'bg-emerald-100 text-emerald-700')}>
-              {open ? i + 1 : <Check className="h-3 w-3" />}
+          <button
+            key={t.key} type="button" onClick={() => setSection(t.key)} aria-current={active ? 'step' : undefined}
+            className={clsx(
+              'flex min-h-ds-control items-center gap-[8px] rounded-ds-control border px-[8px] py-[4px] text-left text-ds-body focus-visible:outline-none focus-visible:shadow-ds-ring',
+              layout === 'page' ? 'w-full' : '',
+              active ? 'border-ds-primary bg-ds-primary-soft font-[600] text-ds-primary-text' : 'border-transparent text-ds-fg-body hover:bg-ds-surface-hover',
+            )}
+          >
+            <span aria-hidden className={clsx('grid h-[20px] w-[20px] shrink-0 place-items-center rounded-full text-ds-label', open ? 'bg-ds-border text-ds-fg' : 'bg-ds-success-soft text-ds-success')}>
+              {open ? i + 1 : <Check className="h-[12px] w-[12px]" />}
             </span>
-            <span className="min-w-0 flex-1 truncate">{t.title}</span>
-            {open > 0 && <span className="text-[11px] text-slate-400">{open}</span>}
+            <span className="min-w-0 flex-1 break-words">{t.title}</span>
+            {open > 0 && <span className="text-ds-label text-ds-fg-muted"><span className="sr-only">Still needed: </span>{open}</span>}
           </button>
         );
       })}
@@ -190,24 +199,25 @@ export default function IntakeForm({
   );
 
   const saveBadge = (
-    <p className={clsx('flex items-center gap-1.5 text-xs', saveState === 'error' ? 'text-rose-700' : 'text-slate-400')} aria-live="polite">
-      {saveState === 'saving' && <><Loader2 className="h-3 w-3 animate-spin" /> Saving…</>}
-      {saveState === 'saved' && <><CheckCircle2 className="h-3 w-3 text-emerald-600" /> Saved</>}
-      {saveState === 'error' && <><AlertCircle className="h-3 w-3" /> {saveError}</>}
+    <p className={clsx('flex items-center gap-[6px] text-ds-label', saveState === 'error' ? 'text-ds-danger' : 'text-ds-fg-muted')} aria-live="polite">
+      {saveState === 'saving' && <><Loader2 aria-hidden className="h-[12px] w-[12px] animate-spin" /> Saving…</>}
+      {saveState === 'saved' && <><CheckCircle2 aria-hidden className="h-[12px] w-[12px] text-ds-success" /> Saved</>}
+      {saveState === 'error' && <><AlertCircle aria-hidden className="h-[12px] w-[12px]" /> {saveError}</>}
       {saveState === 'idle' && editable && 'Changes save as you type'}
-      {!editable && 'Read only — this request is with the review team'}
+      {!editable && 'Read only: this request is with the review team'}
     </p>
   );
 
+  const at = tabs.findIndex((t) => t.key === section);
   const body = (
-    <div className="min-w-0 space-y-5">
+    <div className="flex min-w-0 flex-col gap-[16px]">
       {section === SUPPLIER ? (
         <SupplierSection vendor={vendor} people={people} editable={editable} setField={setField} problems={problems}
           request={request} setAsked={setAsked} canReview={data.can_review} />
       ) : current ? (
-        <div className="space-y-4">
+        <div className="flex flex-col gap-[12px]">
           {current.can_answer === false && (
-            <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            <p className="rounded-ds-control bg-ds-surface-subtle px-[12px] py-[8px] text-ds-label text-ds-fg-muted">
               This section is answered by {current.answer?.length ? current.answer.join(' or ') : 'someone else'}; you can read it.
             </p>
           )}
@@ -219,38 +229,28 @@ export default function IntakeForm({
           ))}
         </div>
       ) : null}
-      <div className="flex items-center justify-between border-t border-slate-100 pt-3">
+      <div className="flex flex-wrap items-center justify-between gap-[8px] border-t border-ds-border pt-[12px]">
         {saveBadge}
-        {(() => {
-          const at = tabs.findIndex((t) => t.key === section);
-          return at < tabs.length - 1 ? (
-            <button type="button" onClick={() => setSection(tabs[at + 1].key)}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
-              Next: {tabs[at + 1].title}
-            </button>
-          ) : null;
-        })()}
+        {at >= 0 && at < tabs.length - 1 && <Button onClick={() => setSection(tabs[at + 1].key)}>Next: {tabs[at + 1].title}</Button>}
       </div>
     </div>
   );
 
   const side = (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-[12px]">
       <TierCard preview={data.preview} factors={catalogue.factors} />
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <h3 className="text-sm font-semibold text-slate-900">{problems.length ? `Still needed (${problems.length})` : 'Ready to submit'}</h3>
+      <div className="rounded-ds-card border border-ds-border bg-ds-surface p-[16px]">
+        <h3 className="!text-ds-body !font-[600] !text-ds-fg">{problems.length ? `Still needed (${problems.length})` : 'Ready to submit'}</h3>
         {problems.length === 0 ? (
-          <p className="mt-1 flex items-center gap-1.5 text-xs text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" /> Every question is answered.</p>
+          <p className="mt-[4px] flex items-center gap-[6px] text-ds-body text-ds-success"><CheckCircle2 aria-hidden className="h-[14px] w-[14px]" /> Every question is answered.</p>
         ) : (
-          <ul className="mt-2 space-y-1">
+          <ul className="m-0 mt-[8px] flex list-none flex-col gap-[2px] p-0">
             {problems.slice(0, 8).map((p) => (
               <li key={p.key}>
-                <button type="button" onClick={() => goTo(p.key)} className="text-left text-xs text-slate-600 hover:text-primary-700 hover:underline">
-                  {p.message}
-                </button>
+                <Button variant="link" size="sm" className="!h-auto !min-h-ds-control-sm w-full !justify-start !whitespace-normal !text-left" onClick={() => goTo(p.key)}>{p.message}</Button>
               </li>
             ))}
-            {problems.length > 8 && <li className="text-xs text-slate-400">and {problems.length - 8} more</li>}
+            {problems.length > 8 && <li className="text-ds-label text-ds-fg-muted">and {problems.length - 8} more</li>}
           </ul>
         )}
       </div>
@@ -258,16 +258,13 @@ export default function IntakeForm({
   );
 
   if (layout === 'panel') {
-    return <div className="space-y-4">{nav}{body}{side}</div>;
+    return <div className="flex flex-col gap-[12px]">{nav}{body}{side}</div>;
   }
   return (
-    <div className="grid gap-5 lg:grid-cols-[210px_minmax(0,1fr)_300px]">
-      <aside className="lg:sticky lg:top-4 lg:self-start">{nav}</aside>
-      <section className="rounded-xl border border-slate-200 bg-white p-5">
-        <h2 className="mb-4 text-base font-semibold text-slate-900">{tabs.find((t) => t.key === section)?.title}</h2>
-        {body}
-      </section>
-      <aside className="lg:sticky lg:top-4 lg:self-start">{side}</aside>
+    <div className="grid gap-[16px] lg:grid-cols-[210px_minmax(0,1fr)_300px]">
+      <aside className="lg:sticky lg:top-[16px] lg:self-start">{nav}</aside>
+      <SectionCard id="request-questions" title={tabs[Math.max(0, at)].title}>{body}</SectionCard>
+      <aside className="lg:sticky lg:top-[16px] lg:self-start">{side}</aside>
     </div>
   );
 }
@@ -279,97 +276,76 @@ export function QuestionRow({ q, value, reason, editable, minReason, problem, on
   onAnswer: (v: unknown) => void; onReason: (v: string) => void;
 }) {
   const text = value === null || value === undefined ? '' : String(value);
+  const wide = q.type === 'text' || q.type === 'choice' || q.type === 'multi_choice' || q.type === 'level';
   return (
-    <div id={`q-${q.key}`} className={clsx('rounded-lg border p-3', problem ? 'border-amber-200 bg-amber-50/40' : 'border-slate-200')}>
-      <p className="text-sm font-medium text-slate-800">
-        {q.label}{q.required && <span className="text-rose-600"> *</span>}
-      </p>
-      {q.help && <p className="mt-0.5 text-xs text-slate-500">{q.help}</p>}
-      <div className="mt-2">
-        {q.type === 'yes_no' && (
-          <Segmented value={text} disabled={!editable} onChange={onAnswer}
-            options={[{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }]} />
-        )}
-        {q.type === 'level' && (
-          <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={q.label}>
-            {['none', 'low', 'moderate', 'high', 'severe'].map((lvl, i) => (
-              <button key={lvl} type="button" role="radio" aria-checked={text === lvl} disabled={!editable}
-                onClick={() => onAnswer(lvl)}
-                className={clsx('rounded-md border px-3 py-1 text-xs font-medium capitalize transition-colors',
-                  text === lvl ? `${LEVEL_TONE[i]} border-transparent text-white` : 'border-slate-200 text-slate-600 hover:bg-slate-50')}>
-                {lvl}
-              </button>
-            ))}
-          </div>
-        )}
-        {q.type === 'choice' && (
-          <div className="grid gap-1.5 sm:grid-cols-2" role="radiogroup" aria-label={q.label}>
-            {(q.options || []).filter((o) => !o.archived || o.value === text).map((o) => (
-              <button key={o.value} type="button" role="radio" aria-checked={text === o.value} disabled={!editable}
-                onClick={() => onAnswer(o.value)}
-                className={clsx('rounded-lg border px-3 py-2 text-left text-sm transition-colors',
-                  text === o.value ? 'border-primary-500 bg-primary-50 text-primary-800' : 'border-slate-200 text-slate-700 hover:bg-slate-50')}>
-                {o.label}
-              </button>
-            ))}
-          </div>
-        )}
-        {q.type === 'multi_choice' && (() => {
-          const picked = Array.isArray(value) ? (value as string[]) : [];
-          return (
-            <div className="grid gap-1.5 sm:grid-cols-2" role="group" aria-label={q.label}>
-              {(q.options || []).filter((o) => !o.archived || picked.includes(o.value)).map((o) => (
-                <label key={o.value} className={clsx('flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors',
-                  picked.includes(o.value) ? 'border-primary-500 bg-primary-50 text-primary-800' : 'border-slate-200 text-slate-700 hover:bg-slate-50',
-                  !editable && 'cursor-default')}>
-                  <input type="checkbox" className="h-4 w-4" checked={picked.includes(o.value)} disabled={!editable}
-                    onChange={() => onAnswer(picked.includes(o.value) ? picked.filter((v) => v !== o.value) : [...picked, o.value])} />
-                  {o.label}
-                </label>
-              ))}
-            </div>
-          );
-        })()}
-        {q.type === 'number' && (
-          <input type="number" min={0} className={clsx(input, 'max-w-[220px]')} value={text} disabled={!editable}
-            onChange={(e) => onAnswer(e.target.value === '' ? null : Number(e.target.value))} />
-        )}
-        {q.type === 'date' && (
-          <input type="date" className={clsx(input, 'max-w-[220px]')} value={text} disabled={!editable}
-            onChange={(e) => onAnswer(e.target.value || null)} />
-        )}
-        {q.type === 'text' && (
-          <textarea rows={2} className={input} value={text} disabled={!editable} onChange={(e) => onAnswer(e.target.value)} />
-        )}
-      </div>
-      {q.justify && text === 'yes' && (
-        <div className="mt-2">
-          <label className="mb-1 block text-xs font-medium text-slate-600" htmlFor={`why-${q.key}`}>Why is this needed?</label>
-          <textarea id={`why-${q.key}`} rows={2} className={input} value={reason} disabled={!editable}
-            placeholder="One or two sentences for the reviewers" onChange={(e) => onReason(e.target.value)} />
-          {reason.trim().length < minReason && <p className="mt-0.5 text-[11px] text-slate-400">At least {minReason} characters.</p>}
-        </div>
+    <div id={`q-${q.key}`} className={clsx('rounded-ds-card border p-[12px]', problem ? 'border-ds-border-strong bg-ds-warning-soft' : 'border-ds-border')}>
+      {wide || q.type === 'yes_no' ? (
+        <fieldset className="m-0 min-w-0 border-0 p-0" disabled={false}>
+          <legend className="mb-[4px] p-0 text-ds-body font-[600] text-ds-fg">{q.label}{q.required && <span aria-hidden className="text-ds-danger"> *</span>}{q.required && <span className="sr-only"> (required)</span>}</legend>
+          {q.help && <p className="mb-[8px] text-ds-label text-ds-fg-muted">{q.help}</p>}
+          <Answer q={q} value={value} text={text} editable={editable} onAnswer={onAnswer} />
+        </fieldset>
+      ) : (
+        <FormField label={q.label} required={q.required} hint={q.help}>
+          <Answer q={q} value={value} text={text} editable={editable} onAnswer={onAnswer} />
+        </FormField>
       )}
-      {problem && <p className="mt-1.5 text-[11px] text-amber-800">{problem}</p>}
+      {q.justify && text === 'yes' && (
+        <FormField className="mt-[8px]" label="Why is this needed?" hint={reason.trim().length < minReason ? `At least ${minReason} characters.` : undefined}>
+          <Textarea rows={2} value={reason} disabled={!editable} placeholder="One or two sentences for the reviewers" onChange={(e) => onReason(e.target.value)} />
+        </FormField>
+      )}
+      {problem && <p className="mt-[8px] text-ds-label font-[500] text-ds-fg">{problem}</p>}
     </div>
   );
 }
 
-function Segmented({ value, options, disabled, onChange }: {
-  value: string; options: Array<{ value: string; label: string }>; disabled?: boolean; onChange: (v: string) => void;
-}) {
-  return (
-    <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5" role="radiogroup">
-      {options.map((o) => (
-        <button key={o.value} type="button" role="radio" aria-checked={value === o.value} disabled={disabled}
-          onClick={() => onChange(o.value)}
-          className={clsx('rounded-md px-4 py-1 text-sm font-medium transition-colors',
-            value === o.value ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-800')}>
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
+function Answer({ q, value, text, editable, onAnswer }: { q: Question; value: unknown; text: string; editable: boolean; onAnswer: (v: unknown) => void }) {
+  if (q.type === 'yes_no') {
+    return (
+      <SegmentedControl label={q.label} name={`q-${q.key}`} value={text} disabled={!editable} onChange={onAnswer}
+        options={[{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }]} />
+    );
+  }
+  if (q.type === 'level') {
+    return (
+      <div className="flex flex-wrap gap-[6px]" role="radiogroup" aria-label={q.label}>
+        {LEVELS.map((lvl) => (
+          <button key={lvl} type="button" role="radio" aria-checked={text === lvl} disabled={!editable} onClick={() => onAnswer(lvl)} className={clsx(CHOICE, text === lvl ? CHOSEN : UNCHOSEN)}>
+            {LEVEL_WORD[lvl]}
+          </button>
+        ))}
+      </div>
+    );
+  }
+  if (q.type === 'choice') {
+    return (
+      <div className="grid gap-[6px] sm:grid-cols-2" role="radiogroup" aria-label={q.label}>
+        {(q.options || []).filter((o) => !o.archived || o.value === text).map((o) => (
+          <button key={o.value} type="button" role="radio" aria-checked={text === o.value} disabled={!editable} onClick={() => onAnswer(o.value)} className={clsx(CHOICE, text === o.value ? CHOSEN : UNCHOSEN)}>
+            {o.label}
+          </button>
+        ))}
+      </div>
+    );
+  }
+  if (q.type === 'multi_choice') {
+    const picked = Array.isArray(value) ? (value as string[]) : [];
+    return (
+      <div className="grid gap-[6px] sm:grid-cols-2" role="group" aria-label={q.label}>
+        {(q.options || []).filter((o) => !o.archived || picked.includes(o.value)).map((o) => (
+          <label key={o.value} className={clsx('flex min-h-ds-control cursor-pointer items-center gap-[8px] rounded-ds-control border px-[12px] py-[6px] text-ds-body', picked.includes(o.value) ? CHOSEN : UNCHOSEN, !editable && 'cursor-default')}>
+            <Checkbox checked={picked.includes(o.value)} disabled={!editable}
+              onChange={() => onAnswer(picked.includes(o.value) ? picked.filter((v) => v !== o.value) : [...picked, o.value])} />
+            {o.label}
+          </label>
+        ))}
+      </div>
+    );
+  }
+  if (q.type === 'number') return <TextInput type="number" min={0} className="max-w-[220px]" value={text} disabled={!editable} onChange={(e) => onAnswer(e.target.value === '' ? null : Number(e.target.value))} />;
+  if (q.type === 'date') return <TextInput type="date" className="max-w-[220px]" value={text} disabled={!editable} onChange={(e) => onAnswer(e.target.value || null)} />;
+  return <Textarea rows={2} value={text} disabled={!editable} onChange={(e) => onAnswer(e.target.value)} />;
 }
 
 // ── the supplier and the people around it ────────────────────────────────────
@@ -381,81 +357,83 @@ function SupplierSection({ vendor, people, editable, setField, problems, request
   /** the review team may name the first engagement, which is made when the request is approved */
   canReview: boolean;
 }) {
-  const nameOf = (id: number) => people.find((p) => p.id === id)?.name || `User ${id}`;
-  const flag = (key: string) => problems.some((p) => p.key === key);
-  const field = (label: string, node: React.ReactNode, key?: string, required = false) => (
-    <label className="block" id={key ? `q-${key}` : undefined}>
-      <span className="mb-1 block text-xs font-medium text-slate-600">{label}{required && <span className="text-rose-600"> *</span>}</span>
-      {node}
-      {key && flag(key) && <span className="mt-0.5 block text-[11px] text-amber-800">{problems.find((p) => p.key === key)?.message}</span>}
-    </label>
-  );
+  const nameOf = (id: number) => personName(people, id);
+  const msg = (key: string) => problems.find((p) => p.key === key)?.message;
   return (
-    <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2">
-        {field('Supplier name', <input className={input} value={vendor.name || ''} disabled={!editable}
-          onChange={(e) => setField('name', e.target.value)} />, 'name', true)}
-        {field('Website', <input className={input} value={vendor.website || ''} disabled={!editable} placeholder="supplier.com"
-          onChange={(e) => setField('website', e.target.value || null)} />)}
-        {field('Business owner', (
-          <select className={input} value={vendor.owner_id ?? ''} disabled={!editable}
-            onChange={(e) => setField('owner_id', e.target.value ? Number(e.target.value) : null)}>
-            <option value="">Choose a person</option>
+    <div className="flex flex-col gap-[12px]">
+      <div className="grid gap-[12px] sm:grid-cols-2">
+        <FormField id="q-name" label="Supplier name" required error={msg('name')}>
+          <TextInput value={vendor.name || ''} disabled={!editable} onChange={(e) => setField('name', e.target.value)} />
+        </FormField>
+        <FormField label="Website">
+          <TextInput value={vendor.website || ''} disabled={!editable} placeholder="supplier.com" onChange={(e) => setField('website', e.target.value || null)} />
+        </FormField>
+        <FormField id="q-owner_id" label="Business owner" required error={msg('owner_id')}>
+          <Select value={vendor.owner_id ?? ''} disabled={!editable} placeholder="Choose a person" onChange={(e) => setField('owner_id', e.target.value ? Number(e.target.value) : null)}>
+            {vendor.owner_id != null && !people.some((p) => p.id === vendor.owner_id) && <option value={vendor.owner_id}>{nameOf(vendor.owner_id)}</option>}
             {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-        ), 'owner_id', true)}
-        {field('Industry', <input className={input} value={vendor.industry || ''} disabled={!editable}
-          onChange={(e) => setField('industry', e.target.value || null)} />)}
-        {field('Department', <input className={input} maxLength={120} value={request.department || ''} disabled={!editable}
-          placeholder="Who needs it" onChange={(e) => setAsked('department', e.target.value || null)} />)}
-        {field('Urgency', (
-          <select className={input} value={request.urgency} disabled={!editable}
-            onChange={(e) => setAsked('urgency', e.target.value as Urgency)}>
+          </Select>
+        </FormField>
+        <FormField label="Industry">
+          <TextInput value={vendor.industry || ''} disabled={!editable} onChange={(e) => setField('industry', e.target.value || null)} />
+        </FormField>
+        <FormField label="Department">
+          <TextInput maxLength={120} value={request.department || ''} disabled={!editable} placeholder="Who needs it" onChange={(e) => setAsked('department', e.target.value || null)} />
+        </FormField>
+        <FormField label="Urgency">
+          <Select value={request.urgency} disabled={!editable} onChange={(e) => setAsked('urgency', e.target.value as Urgency)}>
             <option value="low">Low: no fixed date</option>
             <option value="normal">Normal</option>
             <option value="high">High: blocked without it</option>
-          </select>
-        ))}
-        {canReview && field('First engagement', <input className={input} maxLength={255} value={request.engagement || ''} disabled={!editable}
-          placeholder="Optional: what we use them for" onChange={(e) => setAsked('engagement', e.target.value || null)} />)}
+          </Select>
+        </FormField>
+        {canReview && (
+          <FormField label="First engagement" optional>
+            <TextInput maxLength={255} value={request.engagement || ''} disabled={!editable} placeholder="What we use them for" onChange={(e) => setAsked('engagement', e.target.value || null)} />
+          </FormField>
+        )}
       </div>
       <div>
-        <span className="mb-1 block text-xs font-medium text-slate-600">Also looking after it</span>
-        <div className="flex flex-wrap items-center gap-1.5">
+        <p className="mb-[4px] text-ds-label text-ds-fg">Also looking after it</p>
+        <div className="flex flex-wrap items-center gap-[6px]">
+          {vendor.stakeholder_ids.length === 0 && !editable && <span className="text-ds-body text-ds-fg-muted">Nobody else</span>}
           {vendor.stakeholder_ids.map((id) => (
-            <span key={id} className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 py-0.5 pl-2.5 pr-1 text-xs text-slate-700">
+            <span key={id} className="inline-flex min-h-ds-control-sm items-center gap-[4px] rounded-full border border-ds-border bg-ds-surface-subtle py-[2px] pl-[10px] pr-[4px] text-ds-label text-ds-fg-body">
               {nameOf(id)}
               {editable && (
-                <button type="button" aria-label={`Remove ${nameOf(id)}`} className="rounded-full p-0.5 hover:bg-slate-200"
+                <button type="button" aria-label={`Remove ${nameOf(id)}`} className="grid h-[20px] w-[20px] place-items-center rounded-full hover:bg-ds-border focus-visible:outline-none focus-visible:shadow-ds-ring"
                   onClick={() => setField('stakeholder_ids', vendor.stakeholder_ids.filter((x) => x !== id))}>
-                  <X className="h-3 w-3" />
+                  <X aria-hidden className="h-[12px] w-[12px]" />
                 </button>
               )}
             </span>
           ))}
           {editable && (
-            <select className="rounded-lg border border-dashed border-slate-300 bg-white px-2 py-1 text-xs text-slate-600" value=""
+            <Select aria-label="Add a person who also looks after it" className="w-[200px]" value="" placeholder="+ Add a person"
               onChange={(e) => e.target.value && setField('stakeholder_ids', [...vendor.stakeholder_ids, Number(e.target.value)])}>
-              <option value="">+ Add a person</option>
-              {people.filter((p) => p.id !== vendor.owner_id && !vendor.stakeholder_ids.includes(p.id))
-                .map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
+              {people.filter((p) => p.id !== vendor.owner_id && !vendor.stakeholder_ids.includes(p.id)).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </Select>
           )}
         </div>
       </div>
-      {field('Also tell (email addresses)', <input className={input} value={vendor.notify_emails || ''} disabled={!editable}
-        placeholder="procurement@company.com, legal@company.com" onChange={(e) => setField('notify_emails', e.target.value)} />)}
-      <div className="grid gap-3 sm:grid-cols-3">
-        {field('Their contact', <input className={input} value={vendor.primary_contact_name || ''} disabled={!editable}
-          onChange={(e) => setField('primary_contact_name', e.target.value || null)} />)}
-        {field('Contact email', <input type="email" className={input} value={vendor.primary_contact_email || ''} disabled={!editable}
-          onChange={(e) => setField('primary_contact_email', e.target.value || null)} />)}
-        {field('Contact phone', <input className={input} value={vendor.primary_contact_phone || ''} disabled={!editable}
-          onChange={(e) => setField('primary_contact_phone', e.target.value || null)} />)}
+      <FormField label="Also tell (email addresses)">
+        <TextInput value={vendor.notify_emails || ''} disabled={!editable} placeholder="procurement@company.com, legal@company.com" onChange={(e) => setField('notify_emails', e.target.value)} />
+      </FormField>
+      <div className="grid gap-[12px] sm:grid-cols-3">
+        <FormField label="Their contact">
+          <TextInput value={vendor.primary_contact_name || ''} disabled={!editable} onChange={(e) => setField('primary_contact_name', e.target.value || null)} />
+        </FormField>
+        <FormField label="Contact email">
+          <TextInput type="email" value={vendor.primary_contact_email || ''} disabled={!editable} onChange={(e) => setField('primary_contact_email', e.target.value || null)} />
+        </FormField>
+        <FormField label="Contact phone">
+          <TextInput value={vendor.primary_contact_phone || ''} disabled={!editable} onChange={(e) => setField('primary_contact_phone', e.target.value || null)} />
+        </FormField>
       </div>
-      {field('Expected annual cost', <input type="number" min={0} className={clsx(input, 'max-w-[220px]')}
-        value={vendor.contract_value ?? ''} disabled={!editable}
-        onChange={(e) => setField('contract_value', e.target.value === '' ? null : Number(e.target.value))} />)}
+      <FormField label="Expected annual cost">
+        <TextInput type="number" min={0} className="max-w-[220px]" value={vendor.contract_value ?? ''} disabled={!editable}
+          onChange={(e) => setField('contract_value', e.target.value === '' ? null : Number(e.target.value))} />
+      </FormField>
     </div>
   );
 }
@@ -467,29 +445,21 @@ export function TierCard({ preview, title = 'Likely tier', factors }: { preview:
   const keys = (factors?.length ? factors.map((f) => f.key) : Object.keys(FACTOR_LABELS))
     .filter((k) => k in (preview.factors || {}) || k in FACTOR_LABELS) as FactorKey[];
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
-        <span className={clsx('rounded-full border px-2.5 py-0.5 text-xs font-semibold capitalize', TIER_CLS[preview.tier] || TIER_CLS.low)}>
-          {preview.tier}
-        </span>
+    <div className="rounded-ds-card border border-ds-border bg-ds-surface p-[16px]">
+      <div className="flex items-center justify-between gap-[8px]">
+        <h3 className="!text-ds-body !font-[600] !text-ds-fg">{title}</h3>
+        <StatusPill {...statusPill(vendorTier, preview.tier)} />
       </div>
-      <p className="mt-0.5 text-xs text-slate-500">Inherent risk {Math.round(preview.score)} / 100, from the answers so far.</p>
-      <ul className="mt-3 space-y-2.5">
+      <p className="mt-[2px] text-ds-label text-ds-fg-muted">Inherent risk {Math.round(preview.score)} / 100, from the answers so far.</p>
+      <ul className="m-0 mt-[12px] flex list-none flex-col gap-[12px] p-0">
         {keys.map((k) => {
           const value = preview.factors?.[k] ?? 0;
           const why = preview.reasons?.[k] || [];
           return (
             <li key={k}>
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-700">{named[k] || k}</span>
-                <span className="tabular-nums text-slate-500">{value} / 4</span>
-              </div>
-              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100">
-                <div className={clsx('h-full rounded-full', value >= 4 ? 'bg-red-500' : value >= 3 ? 'bg-orange-500' : value >= 2 ? 'bg-amber-400' : 'bg-emerald-500')}
-                  style={{ width: `${(value / 4) * 100}%` }} />
-              </div>
-              {why.length > 0 && <p className="mt-0.5 text-[11px] leading-snug text-slate-400">{why.join('; ')}</p>}
+              <p className="text-ds-label text-ds-fg-body">{named[k] || k}</p>
+              <ProgressBar label={named[k] || k} valueText={`${value} / 4`} value={(value / 4) * 100} tone={value >= 4 ? 'danger' : value >= 3 ? 'warning' : value >= 2 ? 'primary' : 'success'} />
+              {why.length > 0 && <p className="mt-[2px] text-ds-label text-ds-fg-muted">{why.join('; ')}</p>}
             </li>
           );
         })}

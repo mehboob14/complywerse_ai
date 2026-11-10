@@ -79,20 +79,24 @@ export const HEAD: Readonly<Record<string, HeadBy>> = {
   [`${V}/attention`]: 'page',
   [`${V}/actions`]: 'page',
   [`${V}/vendors`]: 'layout',
-  [`${V}/intake`]: 'layout',
-  [`${V}/findings`]: 'layout',
+  [`${V}/intake`]: 'page',
+  [`${V}/intake/:id`]: 'page',
+  [`${V}/findings`]: 'page',
   [`${V}/questionnaires`]: 'layout',
   [`${V}/roster`]: 'layout',
   [`${V}/policy`]: 'layout',
 };
 
 /** The pages whose head carries the module's two ways to bring a vendor in (Request vendor, Add vendor) when the layout draws it. */
-export const WITH_ACTIONS: readonly string[] = [`${V}/vendors`, `${V}/intake`];
+export const WITH_ACTIONS: readonly string[] = [`${V}/vendors`];                      // Intake draws <VendorActions /> in its own head since it became a 'page' (vendor-intake-findings)
 
 const clean = (pathname: string): string => (pathname || '').split(/[?#]/)[0].replace(/\/+$/, '') || '/';
 const under = (path: string, href: string): boolean => path === href || path.startsWith(`${href}/`);
 
-export const headOf = (pathname: string): HeadBy => HEAD[clean(pathname)] ?? 'legacy';
+/** A record's page is the row with `:id` for its number (`/vendor-risk/intake/12` is the row `/vendor-risk/intake/:id`). */
+const asRow = (path: string): string => path.replace(/\/\d+(?=\/|$)/g, '/:id');
+
+export const headOf = (pathname: string): HeadBy => HEAD[clean(pathname)] ?? HEAD[asRow(clean(pathname))] ?? 'legacy';
 
 // ── which entry is on ────────────────────────────────────────────────────────────────────────────────────────────────────
 
