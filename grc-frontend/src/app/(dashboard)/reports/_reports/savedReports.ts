@@ -1,18 +1,19 @@
 // Saved report definitions.
 //
-// Server-first (so reports can be shared with the team) with a localStorage
-// fallback, because the /reporting/reports endpoints only exist after the
-// backend is restarted. Until then the feature degrades to private, local
-// reports rather than breaking.
+// Server-first (so reports can be shared with the team) with a localStorage fallback for the one case it is meant for: the server could not be reached (or answered with a fault), so a report
+// the person just built is not lost. That copy is then sent again on the next list, and it is never invisible: every list says which items are on the server, which wait on this device and
+// which the server REFUSED (a refusal is recorded and not sent again until the person asks; it would be refused every time).
 //
-// Sync is CONTINUOUS and idempotent, not once: on every listSpecs, any local
-// spec the server doesn't yet have is re-pushed (the server upserts by slug, so
-// re-pushing never duplicates). This means a report saved locally during a
-// transient server blip is picked up automatically once the server recovers —
-// it is never silently orphaned.
+// Two ways to write, for two kinds of caller:
+//   persistSpec / removeSpec / duplicateSpec  the builder's: they never throw, they keep a local copy when the server did not take it, and say which ('server' | 'local'); a refusal is recorded.
+//   putSpec / dropSpec / retrySpec            the library's: they THROW when the server did not take it (the caller shows the failure and Retry), and keep no local shadow of a report that
+//                                             lives on the server (that copy was never shown and is lost on the next list).
+// What a failure means (unreachable, denied, refused) is syncModel.ts.
 
 import apiClient from '@/lib/api';
 import type { ReportSpec } from './types';
+import { classifySync, canSendAgain, syncStateOf, toResend, type SyncFailure, type SyncState } from '../_library/syncModel';
+import { clearRefused, markRefused, refusedMap } from '../_library/syncStore';
 
 const KEY = 'grc-report-specs';
 
@@ -71,43 +72,104 @@ export async function getSpec(id: string): Promise<{ spec: ReportSpec | null; so
   return { spec: local, source: 'local' };
 }
 
-export async function listSpecs(): Promise<{ specs: ReportSpec[]; source: SpecSource }> {
+export interface SpecList {
+  specs: ReportSpec[];
+  /** 'server' when the list was read from the server; 'local' when it could not be (then `failure` says why) */
+  source: SpecSource;
+  /** set when the server could not be read */
+  failure?: SyncFailure;
+  /** the slugs the server holds; any other spec in `specs` is only on this device */
+  onServer: string[];
+  /** the slugs the server refused, with the HTTP status (kept in this browser) */
+  refused: Record<string, number>;
+}
+
+/** The state of one spec of a list. */
+export const stateOf = (list: SpecList, id: string): SyncState => syncStateOf(id, new Set(list.onServer), list.refused);
+
+/** Every report the person can see (their own and the ones shared with them), plus the copies kept on this device. Copies the server does not have yet are sent now (it upserts by slug, so
+ *  sending again never duplicates); one the server refuses is recorded and left alone; one it cannot take for now stays on the device. */
+export async function listSpecsFull(): Promise<SpecList> {
   let serverSpecs: ReportSpec[];
   try {
     const { data } = await apiClient.get('/reporting/reports');
     serverSpecs = ((data?.reports || []) as ServerReport[]).map(toSpec);
-  } catch {
-    return { specs: loadLocal(), source: 'local' };   // server unreachable → local only
+  } catch (e) {
+    return { specs: loadLocal(), source: 'local', failure: classifySync(e), onServer: [], refused: refusedMap() };
   }
 
-  // Re-push any local specs the server doesn't have yet (idempotent upsert),
-  // then drop the ones that made it up. Anything that still fails stays local
-  // and is merged into the list so it's never invisible.
   const serverIds = new Set(serverSpecs.map((s) => s.id));
   const local = loadLocal();
-  const stillLocal: ReportSpec[] = [];
+  const send = new Set(toResend(local, serverIds, refusedMap()));
   for (const s of local) {
-    if (!s.id || serverIds.has(s.id)) continue;
+    if (!send.has(s.id)) continue;
     try {
       await apiClient.post('/reporting/reports', toBody(s));
-      const all = loadLocal().filter((x) => x.id !== s.id);  // synced → remove local copy
-      persistLocal(all);
-    } catch {
-      stillLocal.push(s);
+      deleteLocal(s.id);                                  // sent: the server's copy is the one that counts
+      clearRefused(s.id);
+      serverIds.add(s.id);
+    } catch (e) {
+      const failure = classifySync(e);
+      if (!canSendAgain(failure)) markRefused(s.id, failure.status);
     }
   }
-  return { specs: [...serverSpecs, ...stillLocal], source: 'server' };
+  const stillLocal = loadLocal().filter((s) => s.id && !serverIds.has(s.id));
+  return { specs: [...serverSpecs, ...stillLocal], source: 'server', onServer: Array.from(serverIds), refused: refusedMap() };
 }
+
+/** Same list, in the shape the builder has always read (it also carries the sync fields). */
+export const listSpecs = listSpecsFull;
 
 export async function persistSpec(spec: ReportSpec): Promise<SpecSource> {
   try {
     await apiClient.post('/reporting/reports', toBody(spec));
     deleteLocal(spec.id);   // don't leave a stale local shadow of a synced report
+    clearRefused(spec.id);
     return 'server';
-  } catch {
+  } catch (e) {
+    const failure = classifySync(e);
+    if (!canSendAgain(failure)) markRefused(spec.id, failure.status);   // the library shows it as "Not accepted" instead of looking saved
     saveLocal(spec);
     return 'local';
   }
+}
+
+/** Save a report on the server; throws when the server does not take it. No local copy is made. */
+export async function putSpec(spec: ReportSpec): Promise<void> {
+  await apiClient.post('/reporting/reports', toBody(spec));
+  deleteLocal(spec.id);
+  clearRefused(spec.id);
+}
+
+/** Delete a report on the server; throws when the server does not delete it. A report that is already gone (404) counts as deleted. */
+export async function dropSpec(id: string): Promise<void> {
+  try {
+    await apiClient.delete(`/reporting/reports/${encodeURIComponent(id)}`);
+  } catch (e) {
+    if (classifySync(e).status !== 404) throw e;
+  }
+  deleteLocal(id);
+  clearRefused(id);
+}
+
+/** Send the copy kept on this device to the server once, whatever was decided before; throws when the server does not take it (a refusal is recorded again). */
+export async function retrySpec(id: string): Promise<void> {
+  const copy = loadLocal().find((s) => s.id === id);
+  if (!copy) return;
+  clearRefused(id);
+  try {
+    await putSpec(copy);
+  } catch (e) {
+    const failure = classifySync(e);
+    if (!canSendAgain(failure)) markRefused(id, failure.status);
+    throw e;
+  }
+}
+
+/** Forget the copy kept on this device (the person gave up on it). */
+export function dropLocalSpec(id: string): void {
+  deleteLocal(id);
+  clearRefused(id);
 }
 
 /** Delete a report. Returns 'server' if the server confirmed the delete, else
@@ -121,6 +183,7 @@ export async function removeSpec(id: string): Promise<SpecSource> {
     /* server unreachable or not-yours — fall through to clear any local copy */
   }
   deleteLocal(id);
+  clearRefused(id);
   return source;
 }
 
