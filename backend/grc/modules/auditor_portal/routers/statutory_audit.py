@@ -8,17 +8,19 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
-from sqlalchemy import func, or_, text
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func, or_
+from sqlalchemy.orm import Session, selectinload
 
 from ....config import get_openai_api_key, get_openai_base_url, get_openai_model
 from ....models import (
+    AuditIssueProfile,
     AuditObservation,
     AuditObservationActivity,
     AuditObservationControlLink,
@@ -36,6 +38,7 @@ from ....models import (
 )
 from ....routers.auth_router import get_user_primary_tenant, get_user_tenants, refuse_imported_accounts, require_auth
 from ....services import evidence_review
+from ....services.ai_gateway.errors import AIBlocked
 from ....rich_audit import write_rich_audit_log
 
 logger = logging.getLogger(__name__)
@@ -57,16 +60,25 @@ _UPLOAD_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "uploads", "statutory-audit-evidence"
 )
 _ensured_engines: set[int] = set()
+_MODELS = (
+    AuditObservation,
+    AuditObservationEvidenceLink,
+    AuditObservationControlLink,
+    AuditObservationRiskLink,
+    AuditObservationIssueLink,
+    AuditObservationDocumentLink,
+    AuditObservationActivity,
+)
+HISTORY_LIMIT = 50                      # the latest changes a record carries; `history_total` says how many there are
+IMPORT_CHARACTERS = 14000               # what the AI import reads of a document (the rest is not read: the answer says so)
+IMPORT_PAGES = 20                       # ... and of a PDF
 
 
 def _get_openai_client():
-    """Build OpenAI client from env; return (client, error_message)."""
+    """Build OpenAI client from env; return (client, error_message). The message is for a person: no setting names, no vendor."""
     api_key = get_openai_api_key()
     if not api_key:
-        return None, (
-            "AI is not configured. Set OPENAI_API_KEY (or AI_INTEGRATIONS_OPENAI_API_KEY) "
-            "on the server, then try again."
-        )
+        return None, "AI is not available for this organisation yet. Ask an administrator to set it up, or register the observations by hand."
     try:
         from openai import OpenAI
 
@@ -76,47 +88,39 @@ def _get_openai_client():
             kwargs["base_url"] = base_url
         return OpenAI(**kwargs), None
     except Exception as e:
-        return None, f"Could not initialize the AI client: {e}"
+        logger.warning("statutory audit: the AI client could not start: %s", e)
+        return None, "AI could not be started. Try again in a moment, or register the observations by hand."
 
 
-def _ensure_category_column(db: Session) -> None:
-    """Additive column for existing deployments (create_all will not ALTER)."""
-    try:
-        db.execute(
-            text(
-                "ALTER TABLE grc_audit_observations "
-                "ADD COLUMN IF NOT EXISTS category VARCHAR(120)"
-            )
-        )
-        db.flush()
-    except Exception as e:  # pragma: no cover
-        try:
-            db.rollback()
-        except Exception:
-            pass
-        logger.warning("statutory audit category column ensure failed: %s", e)
-
-
-def _ensure_tables(db: Session) -> None:
-    """Create statutory-audit tables if missing. Tolerates orphaned PG types / races."""
+def _tables_ready(db: Session) -> bool:
+    """A read: every table of the module is there (asked once per engine). A GET never runs DDL, so a table that is missing reads as empty."""
     engine = db.get_bind()
     eid = id(engine)
     if eid in _ensured_engines:
-        _ensure_category_column(db)
-        return
+        return True
     try:
         from sqlalchemy import inspect as sa_inspect
 
         inspector = sa_inspect(engine)
-        for model in (
-            AuditObservation,
-            AuditObservationEvidenceLink,
-            AuditObservationControlLink,
-            AuditObservationRiskLink,
-            AuditObservationIssueLink,
-            AuditObservationDocumentLink,
-            AuditObservationActivity,
-        ):
+        if all(inspector.has_table(model.__table__.name) for model in _MODELS):
+            _ensured_engines.add(eid)
+            return True
+    except Exception as e:  # pragma: no cover
+        logger.warning("statutory audit table check failed: %s", e)
+    return False
+
+
+def _ensure_tables(db: Session) -> None:
+    """For a WRITE: create a missing table (tolerates orphaned PG types / races). The category column is not added here: it is in
+    `_COLUMN_ADDS` (modules/compliance/schema_migrations.py) and db.py, healed per tenant at startup, so no request runs an ALTER."""
+    if _tables_ready(db):
+        return
+    engine = db.get_bind()
+    try:
+        from sqlalchemy import inspect as sa_inspect
+
+        inspector = sa_inspect(engine)
+        for model in _MODELS:
             table = model.__table__
             if inspector.has_table(table.name):
                 continue
@@ -127,19 +131,11 @@ def _ensure_tables(db: Session) -> None:
                 if inspector.has_table(table.name):
                     continue
                 logger.warning("statutory audit create %s failed: %s", table.name, te)
-        _ensured_engines.add(eid)
-        _ensure_category_column(db)
+        fresh = sa_inspect(engine)
+        if all(fresh.has_table(model.__table__.name) for model in _MODELS):
+            _ensured_engines.add(id(engine))
     except Exception as e:  # pragma: no cover
         logger.warning("statutory audit table self-heal failed: %s", e)
-        # Still mark ensured if tables already exist so we don't retry forever.
-        try:
-            from sqlalchemy import inspect as sa_inspect
-
-            if sa_inspect(engine).has_table(AuditObservation.__tablename__):
-                _ensured_engines.add(eid)
-                _ensure_category_column(db)
-        except Exception:
-            pass
 
 
 def _tenant_ids(current_user: GRCUser, db: Session) -> List[int]:
@@ -179,16 +175,59 @@ def _log_activity(
     )
 
 
+def _names(db: Session, user_ids) -> Dict[int, str]:
+    """The names of a page's people in one query (the list asks it once, not twice per row)."""
+    ids = {int(i) for i in user_ids if i}
+    if not ids:
+        return {}
+    return {u.id: (u.display_name or u.email) for u in db.query(GRCUser).filter(GRCUser.id.in_(ids)).all()}
+
+
+def _mirrored(db: Session, obs_ids) -> Dict[int, int]:
+    """observation id -> the register finding it is a copy of. A regulator finding of the Issue Register is kept in Statutory Audit
+    (audit_register/crosslinks.py) and overwritten from the register on every sync, so a person must be told it is not theirs to edit."""
+    ids = [int(i) for i in obs_ids if i]
+    if not ids:
+        return {}
+    rows = (
+        db.query(AuditObservationIssueLink.observation_id, AuditObservationIssueLink.issue_id)
+        .join(AuditIssueProfile, AuditIssueProfile.issue_id == AuditObservationIssueLink.issue_id)
+        .filter(AuditObservationIssueLink.observation_id.in_(ids), AuditIssueProfile.source == "regulator")
+        .all()
+    )
+    return {obs_id: issue_id for obs_id, issue_id in rows}
+
+
+def _title_key(title: Optional[str]) -> str:
+    """How two titles are compared: case and spacing ignored."""
+    return " ".join(str(title or "").lower().split())
+
+
+_CODE = re.compile(r"^SAO-(\d+)$", re.IGNORECASE)
+
+
+def _highest_code_number(db: Session, tenant_id: int) -> int:
+    best = 0
+    for (code,) in db.query(AuditObservation.code).filter(
+        AuditObservation.tenant_id == tenant_id, AuditObservation.code.like("SAO-%")
+    ):
+        found = _CODE.match((code or "").strip())
+        if found:
+            best = max(best, int(found.group(1)))
+    return best
+
+
 def _next_code(db: Session, tenant_id: int, *, seq: Optional[int] = None) -> str:
+    """SAO-nnn from the highest number in use + 1, never from a count: after a delete a count would hand out a live code again.
+    (No unique constraint backs it: two people registering in the same instant could still collide; adding one is DDL on a live table.)"""
     if seq is None:
-        count = (
-            db.query(func.count(AuditObservation.id))
-            .filter(AuditObservation.tenant_id == tenant_id)
-            .scalar()
-            or 0
-        )
-        seq = count + 1
+        seq = _highest_code_number(db, tenant_id) + 1
     return f"SAO-{seq:03d}"
+
+
+def _short(text_: Optional[str], limit: int = 120) -> str:
+    text_ = " ".join(str(text_ or "").split())
+    return text_ if len(text_) <= limit else text_[: limit - 1].rstrip() + "…"
 
 
 def _get_obs(obs_id: int, tenant_ids: List[int], db: Session) -> AuditObservation:
@@ -231,7 +270,13 @@ def _check_status(settings: dict, value: str) -> str:
 
 
 def serialize_observation(db: Session, obs: AuditObservation, *, with_links: bool = False,
-                          settings: Optional[dict] = None) -> dict:
+                          settings: Optional[dict] = None, names: Optional[Dict[int, str]] = None,
+                          mirror: Optional[Dict[int, int]] = None) -> dict:
+    """`names` and `mirror` are the page's answers (the list asks them once for every row); left out, they are asked for this one record."""
+    if names is None:
+        names = _names(db, [obs.owner_id, obs.created_by])
+    if mirror is None:
+        mirror = _mirrored(db, [obs.id])
     data = {
         "id": obs.id,
         "code": obs.code,
@@ -249,9 +294,12 @@ def serialize_observation(db: Session, obs: AuditObservation, *, with_links: boo
         "area_domain": obs.area_domain,
         "category": getattr(obs, "category", None),
         "owner_id": obs.owner_id,
-        "owner_name": _user_name(db, obs.owner_id),
+        "owner_name": names.get(obs.owner_id) if obs.owner_id else None,
         "created_by": obs.created_by,
-        "created_by_name": _user_name(db, obs.created_by),
+        "created_by_name": names.get(obs.created_by) if obs.created_by else None,
+        # A copy of a regulator finding of the Issue Register: overwritten from it on every sync (crosslinks.sync_observation)
+        "mirrored": obs.id in mirror,
+        "mirrored_issue_id": mirror.get(obs.id),
         "closed_at": _iso(obs.closed_at),
         "closed_by": obs.closed_by,
         "source_document_name": obs.source_document_name,
@@ -326,10 +374,11 @@ def serialize_observation(db: Session, obs: AuditObservation, *, with_links: boo
         acts = (
             db.query(AuditObservationActivity)
             .filter(AuditObservationActivity.observation_id == obs.id)
-            .order_by(AuditObservationActivity.created_at.desc())
-            .limit(50)
+            .order_by(AuditObservationActivity.created_at.desc(), AuditObservationActivity.id.desc())
+            .limit(HISTORY_LIMIT)
             .all()
         )
+        who = _names(db, [a.user_id for a in acts])
         data["history"] = [
             {
                 "id": a.id,
@@ -337,11 +386,18 @@ def serialize_observation(db: Session, obs: AuditObservation, *, with_links: boo
                 "message": a.message,
                 "payload": a.payload,
                 "user_id": a.user_id,
-                "user_name": _user_name(db, a.user_id),
+                "user_name": who.get(a.user_id) if a.user_id else None,
                 "created_at": _iso(a.created_at),
             }
             for a in acts
         ]
+        # the record carries the latest HISTORY_LIMIT changes; the page says when there are more
+        data["history_total"] = (
+            db.query(func.count(AuditObservationActivity.id))
+            .filter(AuditObservationActivity.observation_id == obs.id)
+            .scalar()
+            or 0
+        )
     return data
 
 
@@ -433,8 +489,9 @@ def list_observations(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
-    _ensure_tables(db)
     tenant_ids = _tenant_ids(current_user, db)
+    if not _tables_ready(db):                          # a read never creates anything: no table, no observations
+        return {"items": [], "total": 0, "skip": skip, "limit": limit}
     q = db.query(AuditObservation).filter(AuditObservation.tenant_id.in_(tenant_ids))
     if status_filter and status_filter != "all":
         q = q.filter(AuditObservation.status == status_filter)
@@ -462,21 +519,25 @@ def list_observations(
         )
     total = q.count()
     items = (
+        # one extra query per collection (selectin), not one row per link: five joined collections multiplied every observation by its links
         q.options(
-            joinedload(AuditObservation.evidence_links),
-            joinedload(AuditObservation.control_links),
-            joinedload(AuditObservation.risk_links),
-            joinedload(AuditObservation.issue_links),
-            joinedload(AuditObservation.document_links),
+            selectinload(AuditObservation.evidence_links),
+            selectinload(AuditObservation.control_links),
+            selectinload(AuditObservation.risk_links),
+            selectinload(AuditObservation.issue_links),
+            selectinload(AuditObservation.document_links),
         )
-        .order_by(AuditObservation.updated_at.desc())
+        # id breaks a tie so a page boundary never repeats or skips a row (a bulk import stamps many rows in the same instant)
+        .order_by(AuditObservation.updated_at.desc(), AuditObservation.id.desc())
         .offset(skip)
-        .limit(min(limit, 500))
+        .limit(max(1, min(limit, 500)))
         .all()
     )
     page_settings = _settings(db, current_user, tenant_ids)   # once for the page, not per row
+    names = _names(db, [i for o in items for i in (o.owner_id, o.created_by)])
+    mirror = _mirrored(db, [o.id for o in items])
     return {
-        "items": [serialize_observation(db, o, settings=page_settings) for o in items],
+        "items": [serialize_observation(db, o, settings=page_settings, names=names, mirror=mirror) for o in items],
         "total": total,
         "skip": skip,
         "limit": limit,
@@ -489,8 +550,15 @@ def observations_meta(
     current_user: GRCUser = Depends(require_auth),
 ):
     """Distinct filter values for the list UI."""
-    _ensure_tables(db)
     tenant_ids = _tenant_ids(current_user, db)
+    if not _tables_ready(db):                          # a read never creates anything
+        empty = _settings(db, current_user, tenant_ids)
+        return {
+            "statuses": [s["key"] for s in empty["statuses"]], "status_levels": empty["statuses"],
+            "custom_fields": [f for f in empty["fields"] if not f.get("archived")], "sla": empty["sla"],
+            "priorities": sorted(PRIORITIES), "observation_types": sorted(OBS_TYPES), "regulator_sources": [],
+            "audit_periods": [], "categories": [], "counts_by_status": {},
+        }
     sources = [
         r[0]
         for r in db.query(AuditObservation.regulator_source)
@@ -610,6 +678,11 @@ def create_observation(
 
 
 _MAX_UPLOAD_BYTES = 25 * 1024 * 1024  # 25 MB
+# the types the "Upload evidence" panel lists (statutory-audit/_ui.tsx EVIDENCE_ACCEPT): anything else is refused
+EVIDENCE_EXTENSIONS = {
+    "pdf", "doc", "docx", "xls", "xlsx", "csv", "tsv", "txt", "md", "rtf", "json", "log",
+    "png", "jpg", "jpeg", "gif", "webp", "zip",
+}
 _MIN_EXTRACTED_CHARS = 40
 
 
@@ -657,22 +730,22 @@ async def upload_parse_observations(
         try:
             from ...governance.routers.policy_parser import extract_text_from_bytes
         except Exception as e:
-            logger.exception("statutory upload-parse: text extraction import failed")
+            logger.exception("statutory upload-parse: text extraction import failed: %s", e)
             raise HTTPException(
                 status_code=503,
-                detail=f"Text extraction is unavailable on the server: {e}",
+                detail="Reading documents is not available right now. Try again later, or register the observations by hand.",
             )
 
         contents = await file.read()
         if not contents:
-            raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+            raise HTTPException(status_code=400, detail="This file is empty.")
         if len(contents) > _MAX_UPLOAD_BYTES:
             raise HTTPException(
                 status_code=413,
                 detail=(
-                    f"File is too large ({len(contents) // (1024 * 1024)} MB). "
-                    f"Maximum size is {_MAX_UPLOAD_BYTES // (1024 * 1024)} MB. "
-                    "Split the document or upload a text-based excerpt."
+                    f"This file is too large ({len(contents) // (1024 * 1024)} MB). "
+                    f"The most that can be read is {_MAX_UPLOAD_BYTES // (1024 * 1024)} MB. "
+                    "Split the document, or upload an excerpt."
                 ),
             )
 
@@ -683,17 +756,14 @@ async def upload_parse_observations(
                 contents,
                 file_type,
                 filename,
-                max_pages=20 if file_type == "pdf" else None,
+                max_pages=IMPORT_PAGES if file_type == "pdf" else None,
                 allow_ocr=True,
             )
-        except Exception as e:
+        except Exception:
             logger.exception("statutory upload-parse: extract failed for %s", filename)
             raise HTTPException(
                 status_code=422,
-                detail=(
-                    f"Could not read document '{filename}': {e}. "
-                    "Try PDF, Word, Excel (.xlsx), CSV, or a plain-text file."
-                ),
+                detail="This file could not be read. Try a PDF, Word, Excel (.xlsx), CSV or plain-text version of it.",
             )
 
         text = (extracted or "").strip()
@@ -701,13 +771,13 @@ async def upload_parse_observations(
             raise HTTPException(
                 status_code=422,
                 detail=(
-                    "Could not extract enough text from the uploaded file. "
-                    "If this is a scanned PDF, install Tesseract OCR on the server, "
-                    "or upload a text-based PDF, Word, Excel, CSV, or .txt file instead."
+                    "Not enough text could be read from this file. If it is a scan, upload a version with "
+                    "selectable text (PDF, Word, Excel, CSV or plain text) instead."
                 ),
             )
-        if len(text) > 14000:
-            text = text[:14000] + "\n\n...[truncated]"
+        characters_total = len(text)
+        if characters_total > IMPORT_CHARACTERS:
+            text = text[:IMPORT_CHARACTERS] + "\n\n...[truncated]"
 
         client, client_err = _get_openai_client()
         if not client:
@@ -756,6 +826,7 @@ DOCUMENT TEXT:
 """
 
         model_name = get_openai_model()
+        cut_short = False
         try:
             response = client.chat.completions.create(
                 model=model_name,
@@ -770,46 +841,48 @@ DOCUMENT TEXT:
             choice = response.choices[0] if response.choices else None
             msg = choice.message if choice else None
             raw = ((msg.content if msg else None) or "").strip()
+            cut_short = getattr(choice, "finish_reason", None) == "length"
             if not raw and msg is not None:
-                refusal = getattr(msg, "refusal", None)
-                if refusal:
+                if getattr(msg, "refusal", None):
                     raise HTTPException(
                         status_code=502,
-                        detail=f"AI declined to process this document: {refusal}",
+                        detail="The AI declined to read this document. Try another file, or register the observations by hand.",
                     )
             if not raw:
                 raise HTTPException(
                     status_code=502,
                     detail=(
-                        "AI returned an empty response. Try again with a clearer document, "
-                        "or register observations manually."
+                        "The AI returned nothing. Try again with a clearer document, "
+                        "or register the observations by hand."
                     ),
                 )
             analysis = json.loads(raw)
         except HTTPException:
             raise
+        except AIBlocked as exc:        # the data-protection guard refused: its words are written for a person, say them as they are
+            raise HTTPException(status_code=422, detail=str(exc))
         except json.JSONDecodeError:
             raise HTTPException(
                 status_code=502,
-                detail="AI returned invalid JSON. Try again with a clearer document, or register manually.",
+                detail=(
+                    "This document has more observations than can be listed in one go. Import a shorter part of it, or split the file."
+                    if cut_short else
+                    "The AI's answer could not be read. Try again with a clearer document, or register the observations by hand."
+                ),
             )
         except Exception as e:
             msg = str(e)
             lower = msg.lower()
-            if "api_key" in lower or "authentication" in lower or "401" in lower:
-                detail = "AI provider authentication failed. Check the OpenAI API key on the server."
+            if "api_key" in lower or "authentication" in lower or "401" in lower or (
+                "model" in lower and ("not found" in lower or "does not exist" in lower or "404" in lower)
+            ):
+                detail = "AI is not set up for this organisation. Ask an administrator, or register the observations by hand."
                 code = 503
             elif "rate" in lower or "429" in lower:
-                detail = "AI provider rate limit reached. Wait a moment and try again."
-                code = 503
-            elif "model" in lower and ("not found" in lower or "does not exist" in lower or "404" in lower):
-                detail = (
-                    f"Configured AI model '{model_name}' is not available. "
-                    "Update OPENAI_MODEL / AI_INTEGRATIONS_OPENAI_MODEL on the server."
-                )
+                detail = "AI is busy right now. Wait a moment and try again."
                 code = 503
             else:
-                detail = f"AI extraction failed: {msg}"
+                detail = "The AI could not read this document. Try again, or register the observations by hand."
                 code = 502
             logger.warning("statutory upload-parse AI failed: %s", msg)
             raise HTTPException(status_code=code, detail=detail)
@@ -817,8 +890,18 @@ DOCUMENT TEXT:
         if not isinstance(analysis, dict):
             raise HTTPException(
                 status_code=502,
-                detail="AI returned an unexpected payload. Try again, or register observations manually.",
+                detail="The AI's answer was not in the expected form. Try again, or register the observations by hand.",
             )
+
+        # a draft that repeats an observation already registered is flagged (never dropped: the person decides)
+        known: Dict[str, Dict[str, Any]] = {}
+        for oid, ocode, otitle in (
+            db.query(AuditObservation.id, AuditObservation.code, AuditObservation.title)
+            .filter(AuditObservation.tenant_id.in_(_tenant_ids(current_user, db)))
+            .order_by(AuditObservation.id.desc())
+            .all()
+        ):
+            known[_title_key(otitle)] = {"id": oid, "code": ocode}
 
         drafts = []
         for row in analysis.get("observations") or []:
@@ -833,6 +916,7 @@ DOCUMENT TEXT:
             otype = (row.get("observation_type") or "observation").lower()
             if otype not in OBS_TYPES:
                 otype = "observation"
+            twin = known.get(_title_key(title))
             drafts.append(
                 {
                     "title": title,
@@ -852,7 +936,9 @@ DOCUMENT TEXT:
                         or None
                     ),
                     "confidence": row.get("confidence"),
-                    "selected": True,
+                    # an observation of the same title is already registered: shown beside the draft, and the draft starts unticked
+                    "duplicate_of": twin,
+                    "selected": twin is None,
                 }
             )
 
@@ -860,8 +946,8 @@ DOCUMENT TEXT:
             raise HTTPException(
                 status_code=422,
                 detail=(
-                    "AI did not find any discrete observations in this document. "
-                    "Try a clearer circular/letter, or register observations manually."
+                    "The AI did not find any separate observations in this document. "
+                    "Try a clearer circular or letter, or register the observations by hand."
                 ),
             )
 
@@ -873,14 +959,19 @@ DOCUMENT TEXT:
             "category": analysis.get("category") or category_hint,
             "import_batch_id": str(uuid.uuid4()),
             "count": len(drafts),
+            # what was read of the document (the rest was not): the page says so before anyone trusts the list to be complete
+            "characters_read": min(characters_total, IMPORT_CHARACTERS),
+            "characters_total": characters_total,
+            "truncated": characters_total > IMPORT_CHARACTERS,
+            "page_limit": IMPORT_PAGES if file_type == "pdf" else None,
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logger.exception("statutory upload-parse unexpected failure")
         raise HTTPException(
             status_code=500,
-            detail=f"Unexpected error while importing with AI: {e}",
+            detail="Something went wrong while reading the file. Try again, or register the observations by hand.",
         )
 
 
@@ -897,12 +988,7 @@ def confirm_import(
     batch_id = payload.import_batch_id or str(uuid.uuid4())
 
     created = []
-    base_count = (
-        db.query(func.count(AuditObservation.id))
-        .filter(AuditObservation.tenant_id == tenant_id)
-        .scalar()
-        or 0
-    )
+    base_count = _highest_code_number(db, tenant_id)      # the highest number in use: codes continue after it, never from a count
     for item in payload.observations:
         if not item.selected:
             continue
@@ -980,16 +1066,17 @@ def get_observation(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
-    _ensure_tables(db)
     tenant_ids = _tenant_ids(current_user, db)
+    if not _tables_ready(db):                          # a read never creates anything
+        raise HTTPException(status_code=404, detail="Observation not found")
     obs = (
         db.query(AuditObservation)
         .options(
-            joinedload(AuditObservation.evidence_links).joinedload(AuditObservationEvidenceLink.evidence),
-            joinedload(AuditObservation.control_links).joinedload(AuditObservationControlLink.control),
-            joinedload(AuditObservation.risk_links).joinedload(AuditObservationRiskLink.risk),
-            joinedload(AuditObservation.issue_links).joinedload(AuditObservationIssueLink.issue),
-            joinedload(AuditObservation.document_links).joinedload(AuditObservationDocumentLink.document),
+            selectinload(AuditObservation.evidence_links).selectinload(AuditObservationEvidenceLink.evidence),
+            selectinload(AuditObservation.control_links).selectinload(AuditObservationControlLink.control),
+            selectinload(AuditObservation.risk_links).selectinload(AuditObservationRiskLink.risk),
+            selectinload(AuditObservation.issue_links).selectinload(AuditObservationIssueLink.issue),
+            selectinload(AuditObservation.document_links).selectinload(AuditObservationDocumentLink.document),
         )
         .filter(AuditObservation.id == obs_id, AuditObservation.tenant_id.in_(tenant_ids))
         .first()
@@ -1139,7 +1226,7 @@ def link_evidence(
         created_by=current_user.id,
     )
     db.add(ln)
-    _log_activity(db, obs.id, current_user.id, "link", f"Linked evidence #{ev.id}", {"evidence_id": ev.id})
+    _log_activity(db, obs.id, current_user.id, "link", f'Linked evidence "{_short(ev.name)}"', {"evidence_id": ev.id})
     obs.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(ln)
@@ -1168,13 +1255,24 @@ async def upload_evidence(
     obs = _get_obs(obs_id, tenant_ids, db)
     tenant_id = obs.tenant_id
 
-    contents = await file.read()
+    # what the upload panel has always promised, now held by the server: a listed type, at most 25 MB
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext.lstrip(".") not in EVIDENCE_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail="This kind of file can't be attached. Use PDF, Word, Excel, CSV, text, an image or a ZIP.",
+        )
+    contents = await file.read(_MAX_UPLOAD_BYTES + 1)           # never read more than the limit plus one byte
     if not contents:
-        raise HTTPException(status_code=400, detail="Empty file")
+        raise HTTPException(status_code=400, detail="This file is empty.")
+    if len(contents) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"This file is too large. The most that can be attached is {_MAX_UPLOAD_BYTES // (1024 * 1024)} MB.",
+        )
 
     tenant_dir = os.path.join(_UPLOAD_DIR, str(tenant_id))
     os.makedirs(tenant_dir, exist_ok=True)
-    ext = os.path.splitext(file.filename or "")[1].lower()
     file_id = str(uuid.uuid4())
     file_path = os.path.join(tenant_dir, f"{file_id}{ext}")
     with open(file_path, "wb") as fh:
@@ -1233,7 +1331,7 @@ def unlink_evidence(
     )
     if not ln:
         raise HTTPException(status_code=404, detail="Evidence link not found")
-    _log_activity(db, obs.id, current_user.id, "unlink", f"Unlinked evidence #{ln.evidence_id}")
+    _log_activity(db, obs.id, current_user.id, "unlink", f'Unlinked evidence "{_short(getattr(ln.evidence, "name", None) or "a file")}"')
     db.delete(ln)
     obs.updated_at = datetime.utcnow()
     db.commit()
@@ -1251,13 +1349,14 @@ def _add_simple_link(
     create_kwargs: dict,
     label: str,
     target_id: int,
+    target_name: Optional[str] = None,
 ):
     existing = db.query(model).filter_by(**filter_kwargs).first()
     if existing:
         raise HTTPException(status_code=409, detail=f"{label} already linked")
     ln = model(**create_kwargs, created_by=current_user.id)
     db.add(ln)
-    _log_activity(db, obs.id, current_user.id, "link", f"Linked {label} #{target_id}", {label: target_id})
+    _log_activity(db, obs.id, current_user.id, "link", f"Linked {label} {_short(target_name)}" if target_name else f"Linked a {label}", {label: target_id})
     obs.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(ln)
@@ -1297,6 +1396,7 @@ def link_control(
         },
         label="control",
         target_id=control_id,
+        target_name=ctrl.control_id,
     )
     return {
         "id": ln.id,
@@ -1319,7 +1419,7 @@ def unlink_control(
     ln = db.query(AuditObservationControlLink).filter_by(id=link_id, observation_id=obs.id).first()
     if not ln:
         raise HTTPException(status_code=404, detail="Link not found")
-    _log_activity(db, obs.id, current_user.id, "unlink", f"Unlinked control #{ln.internal_control_id}")
+    _log_activity(db, obs.id, current_user.id, "unlink", f"Unlinked control {_short(getattr(ln.control, 'control_id', None) or 'a control')}")
     db.delete(ln)
     obs.updated_at = datetime.utcnow()
     db.commit()
@@ -1351,6 +1451,7 @@ def link_risk(
         create_kwargs={"observation_id": obs.id, "risk_id": risk_id, "notes": body.get("notes")},
         label="risk",
         target_id=risk_id,
+        target_name=getattr(risk, "title", None),
     )
     return {"id": ln.id, "risk_id": ln.risk_id, "title": getattr(risk, "title", None) or getattr(risk, "name", None)}
 
@@ -1368,7 +1469,7 @@ def unlink_risk(
     ln = db.query(AuditObservationRiskLink).filter_by(id=link_id, observation_id=obs.id).first()
     if not ln:
         raise HTTPException(status_code=404, detail="Link not found")
-    _log_activity(db, obs.id, current_user.id, "unlink", f"Unlinked risk #{ln.risk_id}")
+    _log_activity(db, obs.id, current_user.id, "unlink", f'Unlinked risk "{_short(getattr(ln.risk, "title", None) or "a risk")}"')
     db.delete(ln)
     obs.updated_at = datetime.utcnow()
     db.commit()
@@ -1400,6 +1501,7 @@ def link_issue(
         create_kwargs={"observation_id": obs.id, "issue_id": issue_id, "notes": body.get("notes")},
         label="issue",
         target_id=issue_id,
+        target_name=issue.code,
     )
     return {"id": ln.id, "issue_id": ln.issue_id, "code": issue.code, "title": issue.title}
 
@@ -1417,7 +1519,7 @@ def unlink_issue(
     ln = db.query(AuditObservationIssueLink).filter_by(id=link_id, observation_id=obs.id).first()
     if not ln:
         raise HTTPException(status_code=404, detail="Link not found")
-    _log_activity(db, obs.id, current_user.id, "unlink", f"Unlinked issue #{ln.issue_id}")
+    _log_activity(db, obs.id, current_user.id, "unlink", f"Unlinked issue {_short(getattr(ln.issue, 'code', None) or 'an issue')}")
     db.delete(ln)
     obs.updated_at = datetime.utcnow()
     db.commit()
@@ -1453,6 +1555,7 @@ def link_document(
         create_kwargs={"observation_id": obs.id, "document_id": document_id, "notes": body.get("notes")},
         label="document",
         target_id=document_id,
+        target_name=doc.title,
     )
     return {"id": ln.id, "document_id": ln.document_id, "title": doc.title}
 
@@ -1470,7 +1573,7 @@ def unlink_document(
     ln = db.query(AuditObservationDocumentLink).filter_by(id=link_id, observation_id=obs.id).first()
     if not ln:
         raise HTTPException(status_code=404, detail="Link not found")
-    _log_activity(db, obs.id, current_user.id, "unlink", f"Unlinked document #{ln.document_id}")
+    _log_activity(db, obs.id, current_user.id, "unlink", f'Unlinked document "{_short(getattr(ln.document, "title", None) or "a document")}"')
     db.delete(ln)
     obs.updated_at = datetime.utcnow()
     db.commit()
