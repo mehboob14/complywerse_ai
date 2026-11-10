@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { cellName, cellPayload, draftOf, gridOf, hoursError, isDirty, kriOn, kriPayload, slaWords, LEVELS, type MatrixCell } from './settingsModel.ts';
+import { cellName, cellPayload, draftOf, gridOf, hoursError, hoursHint, isDirty, kriOn, kriPayload, slaWords, LEVELS, type MatrixCell } from './settingsModel.ts';
 import { SEVERITY_OPTIONS } from '../../../../../lib/issues/words.ts';
 
 const cell = (impact: string, urgency: string, o: Partial<MatrixCell> = {}): MatrixCell => ({ impact, urgency, severity: 'medium', sla_ack_hours: 24, sla_resolve_hours: 168, is_default: true, ...o });
@@ -34,6 +34,11 @@ test('the hours must be a whole number of at least 1; the form is dirty only whe
   assert.equal(isDirty(c, { ...draftOf(c), hours: '73' }), true);
   assert.equal(isDirty(c, { ...draftOf(c), severity: 'high' }), true);
   assert.equal(isDirty(c, { ...draftOf(c), hours: ' 72 ' }), false, 'spaces are not a change');
+});
+
+test('the line under the hours says the days only when the number is a whole number of days', () => {
+  assert.deepEqual(['72', '168', '48'].map(hoursHint), ['That is 3 days.', 'That is 7 days.', 'That is 2 days.']);
+  assert.deepEqual(['24', '36', '', 'abc', '100'].map(hoursHint), Array(5).fill('A whole number of hours.'));
 });
 
 test('saving a cell sends the acknowledge window unchanged, because the server resets a missing one to 24 hours', () => {

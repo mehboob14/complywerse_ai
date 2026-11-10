@@ -36,6 +36,13 @@ export function hoursError(text: string): string | null {
   return null;
 }
 
+/** The line under the hours field: what it wants, and, when the number is a whole number of days (two or more), that number of days. */
+export function hoursHint(text: string): string {
+  const t = text.trim();
+  const long = hoursError(t) === null ? slaWords(Number(t)) : '';
+  return long.endsWith('days') ? `That is ${long}.` : 'A whole number of hours.';
+}
+
 export const isDirty = (cell: MatrixCell, draft: CellDraft): boolean => draft.severity !== cell.severity || draft.hours.trim() !== String(cell.sla_resolve_hours);
 
 /** The body of PUT /matrices/severity/{impact}/{urgency}. The acknowledge window is not shown (nothing uses it) but is sent as it is: the server resets a missing one to 24 hours. */
