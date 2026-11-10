@@ -42,29 +42,30 @@ export default function AttestDialog({ open, initial, busy, onCancel, onConfirm 
 
   return (
     <dialog ref={dialog} aria-labelledby={`${ids}t`} onClose={onCancel}
-      className="m-auto w-[calc(100%-2rem)] max-w-lg rounded-2xl border border-gray-200 bg-white p-0 text-gray-900 shadow-2xl backdrop:bg-black/40">
+      className="m-auto w-[calc(100%-2rem)] max-w-lg rounded-2xl border border-ds-border bg-ds-surface p-0 text-ds-fg shadow-2xl backdrop:bg-black/40">
       <form onSubmit={submit} className="p-5 sm:p-6">
-        <h2 id={`${ids}t`} className="text-lg font-semibold text-gray-900">Confirm and send</h2>
+        <h2 id={`${ids}t`} className="text-lg font-semibold text-ds-fg">Confirm and send</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <label className="block text-sm font-medium text-gray-800 sm:col-span-2">
+          <label className="block text-sm font-medium text-ds-fg-body sm:col-span-2">
             Name
             <input required autoComplete="name" value={who.name} onChange={set('name')} className={`mt-1 ${FIELD}`} />
           </label>
-          <label className="block text-sm font-medium text-gray-800">
+          <label className="block text-sm font-medium text-ds-fg-body">
             Job title
             <input autoComplete="organization-title" value={who.title} onChange={set('title')} className={`mt-1 ${FIELD}`} />
           </label>
-          <label className="block text-sm font-medium text-gray-800">
+          <label className="block text-sm font-medium text-ds-fg-body">
             Email
             <input required type="email" autoComplete="email" value={who.email} onChange={set('email')} className={`mt-1 ${FIELD}`} />
           </label>
         </div>
-        <label className="mt-4 flex items-start gap-2 text-sm text-gray-800">
+        <label className="mt-4 flex min-h-[44px] items-start gap-3 text-sm text-ds-fg-body">
           <input required type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)}
-            className="mt-1 h-4 w-4 shrink-0 accent-[#0f766e]" />
+            className="mt-0.5 h-6 w-6 shrink-0 accent-[#0f766e]" />
           <span>I confirm these answers are accurate and complete to the best of my knowledge, and that I am authorised to give them.</span>
         </label>
-        <div className="mt-5 flex flex-wrap justify-end gap-2">
+        <p className="mt-3 text-xs text-ds-fg-body">Sending closes this link.</p>
+        <div className="mt-4 flex flex-wrap justify-end gap-2">
           <button type="button" onClick={onCancel} disabled={busy} className={BTN}>Cancel</button>
           <button type="submit" disabled={busy} className={BTN_MAIN}>
             {busy ? <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> : <Send aria-hidden className="h-4 w-4" />} Send answers

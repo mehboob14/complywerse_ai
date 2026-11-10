@@ -10,17 +10,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { AlertCircle, ArrowLeft, CheckCircle, ChevronDown, Download, FileSpreadsheet, Loader2, Shield, Upload } from 'lucide-react';
-import { parseUtc } from '@/lib/serverTime';
+import { formatDate } from '@/lib/format';
+import { portalQuestionnaire } from '@/lib/statuses/vendorPortal';
 import {
-  isAnswered, keepApplicable, nextOpen, readiness, sectionsOf, type EvidenceFile, type PortalQuestion,
+  keepApplicable, nextOpen, readiness, sectionRows, sectionsOf, type EvidenceFile, type PortalQuestion,
 } from './supplier/answerLogic';
 import { createSaver } from './supplier/answerSaver';
 import { canRetry, messageOf, portalCalls, type Attestation, type QuestionMessage, type QuestionnaireData } from './supplier/portalCalls';
+import { downloadName } from './supplier/portalHomeModel';
 import { kindOf, problemText, type ProblemKind } from './supplier/portalProblem';
 import AttestDialog from './supplier/AttestDialog';
 import { PortalFrame } from './supplier/PortalFrame';
 import QuestionCard, { type QuestionProblem } from './supplier/QuestionCard';
 import ReadyBar from './supplier/ReadyBar';
+import SectionsSheet from './supplier/SectionsSheet';
 import { BTN, FOCUS } from './supplier/styles';
 
 // The rules the signed-in side reads too (the assessment review page asks whether an answer owes a document).
@@ -28,10 +31,8 @@ export { evidenceRule, isNotApplicable, noteNeeded, owesEvidence } from './suppl
 export type { QuestionOption, RuleQuestion } from './supplier/answerLogic';
 
 const WAITING = ['pending', 'in_progress', 'returned'];
-const SENT_STATUS: Record<string, string> = { submitted: 'Submitted', under_review: 'In review', accepted: 'Accepted' };
 
-const day = (value: string | null | undefined) =>
-  parseUtc(value)?.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) ?? '';
+const day = (value: string | null | undefined) => formatDate(value, { empty: '' });
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 export default function SupplierQuestionnaire({ apiBase, backHref }: {
@@ -55,6 +56,7 @@ export default function SupplierQuestionnaire({ apiBase, backHref }: {
   const [error, setError] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
   const [attesting, setAttesting] = useState(false);
+  const [sectionsOpen, setSectionsOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const [importing, setImporting] = useState(false);
   const [who, setWho] = useState<Attestation>({ name: '', title: '', email: '' });
@@ -183,7 +185,7 @@ export default function SupplierQuestionnaire({ apiBase, backHref }: {
       const url = URL.createObjectURL(res.data as Blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `questionnaire-${data?.questionnaire_id ?? ''}.${as}`;
+      a.download = downloadName(data?.title, as);
       a.click();
       URL.revokeObjectURL(url);
     } catch {
@@ -218,7 +220,7 @@ export default function SupplierQuestionnaire({ apiBase, backHref }: {
   const notSaved = [...Object.keys(saves).filter((id) => saves[id] !== 'saving'), ...waiting.filter((id) => !(id in saves))];     // failed, or waiting for words
   const saving = Object.values(saves).includes('saving');
   const todo = view.shown.map((q) => q.id).filter((id) => view.open.includes(id) || notSaved.includes(id));
-  const answeredIn = (list: PortalQuestion[]) => list.filter((q) => isAnswered(q, answers[q.id] || '', files[q.id]?.length ?? 0)).length;
+  const rows = sectionRows(sections, answers, files);
 
   const goNext = () => {
     const id = nextOpen(todo, view.shown.map((q) => q.id), jumped.current);
@@ -228,6 +230,17 @@ export default function SupplierQuestionnaire({ apiBase, backHref }: {
     const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     el?.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'center' });
     el?.querySelector<HTMLElement>('input:not([type=file]), textarea, button')?.focus({ preventScroll: true });
+  };
+
+  // After the sheet has closed (its scroll lock is gone then): scroll to the section and put focus on its heading.
+  const goSection = (i: number) => {
+    setSectionsOpen(false);
+    window.setTimeout(() => {
+      const heading = document.getElementById(`section-${i}`);
+      const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      (heading?.closest('section') ?? heading)?.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'start' });
+      heading?.focus({ preventScroll: true });
+    }, 280);
   };
 
   const send = async (person: Attestation) => {
@@ -265,15 +278,15 @@ export default function SupplierQuestionnaire({ apiBase, backHref }: {
   }, [unsaved]);
 
   const back = backHref ? (
-    <Link href={backHref} className={`mb-4 inline-flex items-center gap-1.5 rounded text-sm font-medium text-[#0f766e] hover:underline ${FOCUS}`}>
-      <ArrowLeft aria-hidden className="h-4 w-4" /> All questionnaires
+    <Link href={backHref} className={`mb-2 inline-flex min-h-[44px] items-center gap-1.5 rounded text-sm font-medium text-[#0f766e] hover:underline ${FOCUS}`}>
+      <ArrowLeft aria-hidden className="h-4 w-4" /> Your portal
     </Link>
   ) : null;
 
   if (loading) {
     return (
       <PortalFrame>
-        <p role="status" className="mt-16 flex items-center justify-center gap-2 text-sm text-gray-700">
+        <p role="status" className="mt-16 flex items-center justify-center gap-2 text-sm text-ds-fg-body">
           <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> Loading…
         </p>
       </PortalFrame>
@@ -284,10 +297,10 @@ export default function SupplierQuestionnaire({ apiBase, backHref }: {
     return (
       <PortalFrame>
         {back}
-        <div role="alert" className="rounded-xl border border-gray-200 bg-white p-6 text-center shadow-sm sm:p-8">
+        <div role="alert" className="rounded-xl border border-ds-border bg-ds-surface p-6 text-center shadow-sm sm:p-8">
           <AlertCircle aria-hidden className="mx-auto h-8 w-8 text-amber-700" />
-          <h1 className="mt-3 text-xl font-semibold text-gray-900">We could not open this questionnaire</h1>
-          <p className="mx-auto mt-2 max-w-md text-sm text-gray-700">{loadError?.text}</p>
+          <h1 className="mt-3 text-xl font-semibold text-ds-fg">We could not open this questionnaire</h1>
+          <p className="mx-auto mt-2 max-w-md text-sm text-ds-fg-body">{loadError?.text}</p>
           {loadError && loadError.kind !== 'gone' && loadError.kind !== 'address' && (
             <button type="button" onClick={() => void load()} className={`mt-4 ${BTN}`}>Try again</button>
           )}
@@ -313,29 +326,29 @@ export default function SupplierQuestionnaire({ apiBase, backHref }: {
         <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-6 text-center shadow-sm sm:p-8">
           <CheckCircle aria-hidden className="mx-auto h-8 w-8 text-emerald-700" />
           <h1 ref={thanks} tabIndex={-1} className="mt-3 text-xl font-semibold text-emerald-900 outline-none">Thank you, your answers are in</h1>
-          <p className="mx-auto mt-2 max-w-md text-sm text-gray-800">
+          <p className="mx-auto mt-2 max-w-md text-sm text-ds-fg-body">
             {org || 'We'} received {plural(view.answered, 'answer', 'answers')}{data.submitted_at ? ` on ${day(data.submitted_at)}` : ''}. You can close this page.
           </p>
-          <p className="mt-3 inline-block rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-800">{SENT_STATUS[data.status] || 'Submitted'}</p>
+          <p className="mt-3 inline-block rounded-full bg-ds-surface px-3 py-1 text-xs font-medium text-ds-fg-body">{portalQuestionnaire.label(data.status)}</p>
         </section>
       ) : (
-        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+        <section className="rounded-xl border border-ds-border bg-ds-surface p-5 shadow-sm sm:p-6">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-[#b9ddd8] bg-[#e6f4f1] px-3 py-1 text-xs font-medium text-[#0b4f4a]">
             <Shield aria-hidden className="h-3.5 w-3.5" /> {data.title || 'Questionnaire'}
           </span>
-          <h1 className="mt-3 break-words text-xl font-semibold tracking-tight text-gray-900 sm:text-2xl">
+          <h1 className="mt-3 break-words text-xl font-semibold tracking-tight text-ds-fg sm:text-2xl">
             {org ? `${org} has some questions about ${vendor}` : `Some questions about ${vendor}`}
           </h1>
-          <p className="mt-2 text-sm text-gray-700">
+          <p className="mt-2 text-sm text-ds-fg-body">
             {plural(total, 'question', 'questions')} · Answers save as you go{data.due_date ? ` · Due by ${day(data.due_date)}` : ''}
           </p>
-          {data.expires_at && <p className="mt-0.5 text-xs text-gray-600">Open until {day(data.expires_at)}.</p>}
+          {data.expires_at && <p className="mt-0.5 text-xs text-ds-fg-muted">Open until {day(data.expires_at)}.</p>}
           <div className="mt-4">
             <div className="flex items-baseline justify-between text-sm">
-              <span className="font-medium text-gray-800">{view.answered} of {total} answered</span>
-              <span className="text-xs tabular-nums text-gray-600">{pct}%</span>
+              <span className="font-medium text-ds-fg-body">{view.answered} of {total} answered</span>
+              <span className="text-xs tabular-nums text-ds-fg-muted">{pct}%</span>
             </div>
-            <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-gray-100" role="progressbar" aria-valuemin={0} aria-valuemax={total}
+            <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-ds-border" role="progressbar" aria-valuemin={0} aria-valuemax={total}
               aria-valuenow={view.answered} aria-label="Questions answered">
               <div className="h-full rounded-full bg-[#0f766e] transition-all" style={{ width: `${pct}%` }} />
             </div>
@@ -370,12 +383,12 @@ export default function SupplierQuestionnaire({ apiBase, backHref }: {
       )}
 
       {!done && (
-        <details className="group mt-4 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm">
-          <summary className={`flex cursor-pointer items-center gap-2 rounded font-medium text-gray-900 ${FOCUS}`}>
+        <details className="group mt-4 rounded-xl border border-ds-border bg-ds-surface px-4 py-1 text-sm shadow-sm">
+          <summary className={`flex min-h-[44px] cursor-pointer items-center gap-2 rounded font-medium text-ds-fg ${FOCUS}`}>
             <FileSpreadsheet aria-hidden className="h-4 w-4 text-[#0f766e]" /> Prefer a spreadsheet?
-            <ChevronDown aria-hidden className="ml-auto h-4 w-4 text-gray-600 transition-transform group-open:rotate-180" />
+            <ChevronDown aria-hidden className="ml-auto h-4 w-4 text-ds-fg-muted transition-transform group-open:rotate-180" />
           </summary>
-          <p className="mt-2 text-xs leading-5 text-gray-700">
+          <p className="mt-2 text-xs leading-5 text-ds-fg-body">
             Download the questionnaire as a workbook or a fillable PDF, answer it offline, and upload it here. Your answers are
             saved to check before you send.
           </p>
@@ -393,12 +406,12 @@ export default function SupplierQuestionnaire({ apiBase, backHref }: {
 
       <div className="mt-5 space-y-5">
         {sections.map((section, i) => (
-          <section key={`${section.label}-${i}`} aria-labelledby={`section-${i}`} className="rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
+          <section key={`${section.label}-${i}`} aria-labelledby={`section-${i}`} className="scroll-mt-4 rounded-xl border border-ds-border bg-ds-surface px-4 py-4 shadow-sm sm:px-5">
             <div className="flex items-baseline justify-between gap-3">
-              <h2 id={`section-${i}`} className="text-base font-semibold text-gray-900">{section.label}</h2>
-              <span className="text-xs tabular-nums text-gray-600">{answeredIn(section.questions)}/{section.questions.length}<span className="sr-only"> answered</span></span>
+              <h2 id={`section-${i}`} tabIndex={-1} className="text-base font-semibold text-ds-fg outline-none">{section.label}</h2>
+              <span className="text-xs tabular-nums text-ds-fg-body">{rows[i]?.answered}/{rows[i]?.total}<span className="sr-only"> answered</span></span>
             </div>
-            <ol className="mt-1 divide-y divide-gray-100">
+            <ol className="mt-1 divide-y divide-ds-border">
               {section.questions.map((q) => (
                 <QuestionCard key={q.id} q={q} number={numbers.get(q.id) ?? 0} value={answers[q.id] || ''} comment={comments[q.id] || ''}
                   files={files[q.id] || []} thread={threads[q.id] || []} editable={canEdit(q)}
@@ -414,8 +427,10 @@ export default function SupplierQuestionnaire({ apiBase, backHref }: {
 
       {!done && (
         <>
-          <ReadyBar left={view.left.length} missing={view.missing.length} notSaved={notSaved.length} saving={saving} error={sendError}
-            canNext={todo.length > 0} sending={sending} onNext={goNext} onSend={() => setAttesting(true)} />
+          <ReadyBar answered={view.answered} total={total} left={view.left.length} missing={view.missing.length} notSaved={notSaved.length} saving={saving}
+            error={sendError} canNext={todo.length > 0} sending={sending} onSections={sections.length > 1 ? () => setSectionsOpen(true) : undefined}
+            onNext={goNext} onSend={() => setAttesting(true)} />
+          <SectionsSheet open={sectionsOpen} rows={rows} answered={view.answered} total={total} onClose={() => setSectionsOpen(false)} onPick={goSection} />
           <AttestDialog open={attesting} initial={who} busy={sending} onCancel={() => setAttesting(false)} onConfirm={send} />
         </>
       )}

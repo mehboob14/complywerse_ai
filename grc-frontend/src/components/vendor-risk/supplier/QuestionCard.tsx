@@ -8,7 +8,7 @@
 
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { AlertCircle, Check, Loader2, Lock, MessageSquare, Paperclip, Send } from 'lucide-react';
-import { parseUtc } from '@/lib/serverTime';
+import { formatDate } from '@/lib/format';
 import { asChips, choicesOf, controlOf, evidenceBox, isWholeDate, leaveNote, noteNeeded, pickAnswer, wordsKept, type EvidenceFile, type PortalQuestion } from './answerLogic';
 import type { QuestionMessage } from './portalCalls';
 import EvidenceBox from './EvidenceBox';
@@ -31,11 +31,11 @@ function Choices({ q, name, labelledBy, shown, disabled, onPick, onClear }: {
             <label key={o.value} className={`relative block ${disabled ? 'cursor-default' : 'cursor-pointer'}`}>
               <input type="radio" name={name} value={o.value} checked={on} disabled={disabled} onChange={() => onPick(o.value)}
                 className="peer sr-only" />
-              <span className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm peer-focus-visible:ring-2 peer-focus-visible:ring-[#0f766e] peer-focus-visible:ring-offset-1 peer-disabled:opacity-70 ${
-                on ? 'border-[#0f766e] bg-[#e6f4f1] font-medium text-[#0b4f4a]' : 'border-gray-300 bg-white text-gray-900 hover:bg-gray-50'}`}>
-                <span aria-hidden className={`grid h-4 w-4 shrink-0 place-items-center rounded-full border ${
-                  on ? 'border-[#0f766e] bg-[#0f766e] text-white' : 'border-gray-400'}`}>
-                  {on && <Check className="h-3 w-3" strokeWidth={3} />}
+              <span className={`flex min-h-[44px] items-center gap-2.5 rounded-lg border px-3 py-2 text-[15px] peer-focus-visible:ring-2 peer-focus-visible:ring-[#0f766e] peer-focus-visible:ring-offset-1 peer-disabled:opacity-70 ${
+                on ? 'border-[#0f766e] bg-[#e6f4f1] font-medium text-[#0b4f4a]' : 'border-ds-border-control bg-ds-surface text-ds-fg hover:bg-ds-surface-hover'}`}>
+                <span aria-hidden className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border ${
+                  on ? 'border-[#0f766e] bg-[#0f766e] text-white' : 'border-ds-border-control'}`}>
+                  {on && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
                 </span>
                 <span className="min-w-0 break-words">{o.label}</span>
               </span>
@@ -44,7 +44,7 @@ function Choices({ q, name, labelledBy, shown, disabled, onPick, onClear }: {
         })}
       </div>
       {picked && !disabled && (
-        <button type="button" onClick={onClear} aria-label="Clear the answer" className={LINK}>Clear</button>
+        <button type="button" onClick={onClear} aria-label="Clear the answer" className={`min-w-[44px] justify-center ${LINK}`}>Clear</button>
       )}
     </div>
   );
@@ -152,13 +152,13 @@ export default function QuestionCard(p: {
   return (
     <li id={`question-${q.id}`} className="scroll-mt-24 py-5">
       <div className="flex gap-3">
-        <span aria-hidden className="w-6 shrink-0 pt-0.5 text-right text-xs font-medium tabular-nums text-gray-500">{p.number}</span>
+        <span aria-hidden className="w-6 shrink-0 pt-0.5 text-right text-xs font-medium tabular-nums text-ds-fg-body">{p.number}</span>
         <div className="min-w-0 flex-1">
-          <p id={titleId} className="break-words text-base leading-6 text-gray-900">
+          <p id={titleId} className="break-words text-base leading-6 text-ds-fg">
             {q.text}
-            {!q.required && <span className="ml-2 text-xs text-gray-600">Optional</span>}
+            {!q.required && <span className="ml-2 text-xs text-ds-fg-muted">Optional</span>}
           </p>
-          {(q.help || q.help_text) && <p className="mt-0.5 text-sm text-gray-600">{q.help || q.help_text}</p>}
+          {(q.help || q.help_text) && <p className="mt-0.5 text-sm text-ds-fg-muted">{q.help || q.help_text}</p>}
           {q.locked && (
             <p className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs text-emerald-900">
               <Lock aria-hidden className="h-3.5 w-3.5" /> Answered by your certificate
@@ -189,7 +189,7 @@ export default function QuestionCard(p: {
 
           {noteShown && (
             <div className="mt-3">
-              <label htmlFor={noteId} className="block text-sm font-medium text-gray-800">
+              <label htmlFor={noteId} className="block text-sm font-medium text-ds-fg-body">
                 {needed === 'reason' ? 'Why this does not apply to you' : needed === 'note' ? 'Explain your answer'
                   : isAsked ? 'Your reply' : 'Comment (optional)'}
                 {needed && <span aria-hidden className="ml-1 text-rose-700">*</span>}
@@ -224,18 +224,18 @@ export default function QuestionCard(p: {
           )}
 
           {p.thread.length > 0 && (
-            <div className="mt-3 space-y-2 rounded-lg border border-gray-200 bg-white p-3">
-              <p className="flex items-center gap-1.5 text-xs font-medium text-gray-800">
+            <div className="mt-3 space-y-2 rounded-lg border border-ds-border bg-ds-surface p-3">
+              <p className="flex items-center gap-1.5 text-xs font-medium text-ds-fg-body">
                 <MessageSquare aria-hidden className="h-3.5 w-3.5 text-[#0f766e]" /> Comments
               </p>
               <ul className="space-y-2">
                 {p.thread.map((m) => (
-                  <li key={m.id} className={`rounded-lg px-3 py-2 ${m.from_supplier ? 'ml-6 bg-[#e6f4f1]' : 'mr-6 bg-gray-50'}`}>
-                    <p className="text-xs text-gray-600">
-                      <span className="font-medium text-gray-800">{m.author || (m.from_supplier ? 'You' : 'Us')}</span>
-                      {' · '}{parseUtc(m.created_at)?.toLocaleDateString() ?? ''}
+                  <li key={m.id} className={`rounded-lg px-3 py-2 ${m.from_supplier ? 'ml-6 bg-[#e6f4f1]' : 'mr-6 bg-ds-surface-subtle'}`}>
+                    <p className="text-xs text-ds-fg-muted">
+                      <span className="font-medium text-ds-fg-body">{m.author || (m.from_supplier ? 'You' : 'Us')}</span>
+                      {' · '}{formatDate(m.created_at, { empty: '' })}
                     </p>
-                    <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-gray-900">{m.body}</p>
+                    <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-ds-fg">{m.body}</p>
                   </li>
                 ))}
               </ul>

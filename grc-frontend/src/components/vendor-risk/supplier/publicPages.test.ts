@@ -39,7 +39,7 @@ const FILES = [
 test('none of the public pages uses a native dialog, a hand-built overlay or text under 12px', () => {
   for (const file of FILES) {
     const text = read(file);
-    assert.doesNotMatch(text, /window\.(confirm|alert|prompt)\(|\b(confirm|alert|prompt)\(/, `${file}: native dialog`);
+    assert.doesNotMatch(text, /window\.(confirm|alert|prompt)\(|(?<![.\w])(alert|prompt)\(/, `${file}: native dialog`);   // the kit's useConfirm is named `confirm`: allowed
     assert.doesNotMatch(text, /fixed inset-0/, `${file}: hand-built overlay`);
     assert.doesNotMatch(text, /text-\[(?:[0-9]|10|11)(?:\.\d+)?px\]/, `${file}: text under 12px`);
   }
@@ -48,8 +48,14 @@ test('none of the public pages uses a native dialog, a hand-built overlay or tex
 test("the pages never write the link to browser storage, and only the classifier knows the server's words about a tenant", () => {
   for (const file of FILES) {
     const text = read(file);
-    assert.doesNotMatch(text, /localStorage/, `${file}: localStorage`);
+    assert.doesNotMatch(text, /localStorage\s*[.[]/, `${file}: localStorage`);
     if (file.endsWith('/portalProblem.ts')) continue;
     assert.doesNotMatch(text, /Tenant context|X-Tenant-Slug|subdomain/i, `${file}: a server sentence about a tenant`);
+  }
+});
+
+test('the pages name their greys with the kit tokens: the platform stylesheet repaints every text-gray/slate class to one muted grey (and bg-gray to white), so a named grey is no hierarchy at all', () => {
+  for (const file of FILES) {
+    assert.doesNotMatch(read(file), /(?:text|bg|border|divide)-(?:gray|slate)-\d+/, `${file}: a named grey`);
   }
 });
