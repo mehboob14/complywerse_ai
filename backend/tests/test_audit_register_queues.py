@@ -152,3 +152,14 @@ def test_an_alert_about_one_finding_opens_that_finding_and_a_summary_opens_the_r
     assert links == [f"/auditor-portal/issue-register?finding={issue.id}"] * 2
     assert workflow._notify(db, 1, [7], "Audit findings past due: 2", "Two findings.") == 1
     assert _links(db)[-1] == "/auditor-portal/issue-register"
+
+
+def test_the_ai_assist_answer_never_names_the_model(db, monkeypatch):
+    """The page-facing payload keeps its `model` key and says "AI" instead of the provider's model name."""
+    from grc.modules.issue_management.audit_register import assist
+
+    monkeypatch.setattr(assist, "get_openai_model", lambda: "a-secret-model-name")
+    result = assist.suggest(db, 1, "regulatory", {"title": "Wire callbacks skipped", "issue_text": "Callbacks were skipped."},
+                            today=TODAY, complete=lambda messages: '{"fields": {"risk_rating": {"value": "High", "reason": "Wires"}}}')
+    assert result["model"] == "AI"
+    assert "a-secret-model-name" not in str(result)
