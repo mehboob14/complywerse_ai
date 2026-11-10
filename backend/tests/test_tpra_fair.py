@@ -115,6 +115,20 @@ def test_analyses_are_kept_rerun_and_exported(db, client):
     assert {r.action for r in db.query(TPRAAuditLog).filter_by(entity="fair_analysis")} == {"create", "update", "delete"}
 
 
+def test_the_list_says_how_each_analyses_insurance_stands_so_no_page_recomputes_it(db, client):
+    """`cover_state` is the server's word for `result.cover`: none recorded, enough for the one-in-twenty year, or short of it."""
+    start = client.get("/vendors/1/fair/prefill", params={"effect": "confidentiality"}).json()
+    made = client.post("/fair", json={"vendor_id": 1, "name": "a", "effect": "confidentiality", "inputs": start["inputs"], "notes": start["notes"]}).json()
+    row = lambda: next(r for r in client.get("/fair").json()["items"] if r["id"] == made["id"])  # noqa: E731
+    assert row()["cover_state"] == "none" and row()["insurance_cover"] is None
+    p95 = made["annual"]["p95"]
+    short = client.put(f"/fair/{made['id']}", json={"insurance_cover": max(1, p95 // 2), "row_version": made["row_version"]}).json()
+    assert short["cover_state"] == "short" and row()["cover_state"] == "short"
+    enough = client.put(f"/fair/{made['id']}", json={"insurance_cover": p95 * 10, "row_version": short["row_version"]}).json()
+    assert enough["cover_state"] == "covers" and row()["cover_state"] == "covers"
+    assert client.get("/fair/overview").json()["under_insured"] == []      # the overview agrees: nothing falls short now
+
+
 def test_an_import_is_all_or_nothing(db, client):
     header = client.get("/fair/import/template").text.strip().split(",")
     assert header[:3] == ["vendor", "name", "effect"] and "tef_likely" in header and "fines_most" in header
