@@ -26,6 +26,7 @@ from urllib.parse import urljoin, urlparse
 import requests
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from ....models import GRCUser, TPRAAuditLog, TPRAMonitoringSignal, Vendor, get_db
@@ -36,8 +37,11 @@ router = APIRouter(tags=["Vendor breach alerts"])
 
 ALERT_TYPES = ("breach", "adverse_media", "vulnerability")
 STATUSES = ("new", "investigating", "confirmed", "not_relevant", "closed")
+# What the register shows: the same words, plus "acknowledged" (seen, not worked) apart from "closed" (decided).
+STAGES = ("new", "acknowledged", "investigating", "confirmed", "not_relevant", "closed")
 MOVES = {
     "new": {"investigating", "confirmed", "not_relevant"},
+    "acknowledged": {"investigating", "confirmed", "not_relevant"},
     "investigating": {"new", "confirmed", "not_relevant"},
     "confirmed": {"investigating", "closed"},
     "not_relevant": {"investigating", "closed"},
@@ -52,10 +56,20 @@ _INACTIVE = ("retired", "offboarded", "inactive", "terminated", "requested", "re
 
 def status_of(sig: TPRAMonitoringSignal) -> str:
     """An alert acknowledged elsewhere (the Signals feed, or before triage existed)
-    without being worked reads as closed."""
+    without being worked reads as closed. Older readers (the `status` and `counts` of
+    the board, the vendor panel's triage_status) keep this word; the register reads
+    `stage_of`, which tells acknowledged from closed."""
     if sig.triage_status and sig.triage_status != "new":
         return sig.triage_status
     return "closed" if sig.acknowledged else "new"
+
+
+def stage_of(sig: TPRAMonitoringSignal) -> str:
+    """Where a signal stands: a decision once one was made, else acknowledged (seen, not
+    worked) or new. Acknowledging is not closing: the alert is still open for a decision."""
+    if sig.triage_status and sig.triage_status != "new":
+        return sig.triage_status
+    return "acknowledged" if sig.acknowledged else "new"
 
 
 # ── reading the articles, safely ─────────────────────────────────────────────
@@ -202,10 +216,11 @@ def _names(db: Session, ids) -> Dict[int, str]:
     return {u.id: u.display_name or u.username or u.email for u in db.query(GRCUser).filter(GRCUser.id.in_(ids))}
 
 
-def _alert(db: Session, alert_id: int, tids: List[int]):
-    row = (db.query(TPRAMonitoringSignal, Vendor).join(Vendor, Vendor.id == TPRAMonitoringSignal.vendor_id)
-           .filter(TPRAMonitoringSignal.id == alert_id, TPRAMonitoringSignal.tenant_id.in_(tids),
-                   TPRAMonitoringSignal.deleted_at.is_(None), TPRAMonitoringSignal.signal_type.in_(ALERT_TYPES)).first())
+def _alert(db: Session, alert_id: int, tids: List[int], any_kind: bool = False):
+    query = (db.query(TPRAMonitoringSignal, Vendor).join(Vendor, Vendor.id == TPRAMonitoringSignal.vendor_id)
+             .filter(TPRAMonitoringSignal.id == alert_id, TPRAMonitoringSignal.tenant_id.in_(tids),
+                     TPRAMonitoringSignal.deleted_at.is_(None)))
+    row = (query if any_kind else query.filter(TPRAMonitoringSignal.signal_type.in_(ALERT_TYPES))).first()
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Alert not found")
     return row
@@ -216,30 +231,57 @@ def _row(sig: TPRAMonitoringSignal, v: Vendor, names: Dict[int, str]) -> dict:
             "severity": sig.severity, "title": sig.title, "source": sig.source, "occurred_at": sig.occurred_at,
             "status": status_of(sig), "owner": {"id": sig.triage_owner, "name": names.get(sig.triage_owner)}
             if sig.triage_owner else None, "verified": sig.verified is not False,
-            "sources": len(sig.sources or []), "researched": bool(sig.research), "finding_id": sig.finding_id}
+            "sources": len(sig.sources or []), "researched": bool(sig.research), "finding_id": sig.finding_id,
+            "stage": stage_of(sig), "acknowledged": bool(sig.acknowledged),
+            "triggered_reassessment": bool(sig.triggered_reassessment)}
+
+
+def _open_clause():
+    """Signals still waiting for a decision (new, investigating): they stay on the board however old they are."""
+    sig = TPRAMonitoringSignal
+    return or_(sig.triage_status == "investigating",
+               and_(or_(sig.triage_status.is_(None), sig.triage_status == "new"), sig.acknowledged.isnot(True)))
 
 
 @router.get("/alerts")
 def board(status_: Optional[str] = Query(None, alias="status"), type_: Optional[str] = Query(None, alias="type"),
-          days: int = Query(365, ge=7, le=1825), db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+          days: int = Query(365, ge=7, le=1825), kinds: str = Query("alerts", pattern="^(alerts|all)$"),
+          limit: int = Query(500, ge=1, le=5000), skip: int = Query(0, ge=0),
+          db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """The alert board. `kinds=alerts` (default) is the three kinds worked as cases; `kinds=all` adds every other
+    monitoring signal (rating drops, certificate lapses, financial, SLA) so one register can hold them. The window is
+    the last `days` plus anything still waiting for a decision. `counts` keeps its old words (an acknowledged alert
+    counts as closed there); `stage_counts` tells acknowledged from closed. `total` is every row the filters match,
+    `truncated` says rows were left out (a page cut, or more than the read cap)."""
     tid = _tids(user, db)[0]
     since = datetime.utcnow() - timedelta(days=days)
-    rows = [(s, v) for s, v in (db.query(TPRAMonitoringSignal, Vendor).join(Vendor, Vendor.id == TPRAMonitoringSignal.vendor_id)
-                                .filter(TPRAMonitoringSignal.tenant_id == tid, TPRAMonitoringSignal.deleted_at.is_(None),
-                                        TPRAMonitoringSignal.signal_type.in_(ALERT_TYPES), Vendor.deleted_at.is_(None))
-                                .order_by(TPRAMonitoringSignal.occurred_at.desc()).limit(2000))
-            if (s.occurred_at or since) >= since or status_of(s) in ("new", "investigating")]
+    sig = TPRAMonitoringSignal
+    query = (db.query(sig, Vendor).join(Vendor, Vendor.id == sig.vendor_id)
+             .filter(sig.tenant_id == tid, sig.deleted_at.is_(None), Vendor.deleted_at.is_(None),
+                     or_(sig.occurred_at.is_(None), sig.occurred_at >= since, _open_clause())))
+    if kinds == "alerts":
+        query = query.filter(sig.signal_type.in_(ALERT_TYPES))
+    cap = 5000 if kinds == "all" else 2000
+    rows = query.order_by(sig.occurred_at.desc(), sig.id.desc()).limit(cap).all()
     counts = {k: 0 for k in STATUSES}
+    stage_counts = {k: 0 for k in STAGES}
     for s, _ in rows:
         counts[status_of(s)] += 1
-    kept = [(s, v) for s, v in rows if (not status_ or status_of(s) == status_) and (not type_ or s.signal_type == type_)]
-    names = _names(db, [s.triage_owner for s, _ in kept])
-    return {"items": [_row(s, v, names) for s, v in kept[:500]], "counts": counts, "types": list(ALERT_TYPES)}
+        stage_counts[stage_of(s)] += 1
+    word = stage_of if kinds == "all" else status_of          # the register asks by stage; the default board by the old words
+    kept = [(s, v) for s, v in rows if (not status_ or word(s) == status_) and (not type_ or s.signal_type == type_)]
+    page = kept[skip:skip + limit]
+    names = _names(db, [s.triage_owner for s, _ in page])
+    return {"items": [_row(s, v, names) for s, v in page], "counts": counts, "stage_counts": stage_counts,
+            "total": len(kept), "truncated": len(kept) > skip + limit or len(rows) >= cap, "types": list(ALERT_TYPES)}
 
 
 @router.get("/alerts/{alert_id}")
-def detail(alert_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
-    sig, v = _alert(db, alert_id, _tids(user, db))
+def detail(alert_id: int, any_kind: bool = Query(False, alias="any"), db: Session = Depends(get_db),
+           user: GRCUser = Depends(require_auth)):
+    """One alert. `any=1` also opens a signal that is not one of the three alert kinds (a rating drop, a certificate
+    lapse): it has no moves and no AI reading, only its history."""
+    sig, v = _alert(db, alert_id, _tids(user, db), any_kind)
     history = (db.query(TPRAAuditLog).filter(TPRAAuditLog.tenant_id == sig.tenant_id, TPRAAuditLog.entity == "signal",
                                             TPRAAuditLog.entity_id == sig.id)
                .order_by(TPRAAuditLog.created_at.desc(), TPRAAuditLog.id.desc()).limit(50).all())
@@ -250,7 +292,7 @@ def detail(alert_id: int, db: Session = Depends(get_db), user: GRCUser = Depends
         "triggered_assessment_id": sig.triggered_assessment_id,
         "supplier": {"description": v.description, "services": v.services_provided or [],
                      "data_access_level": v.data_access_level, "data_types": v.data_types_accessed or []},
-        "moves": sorted(MOVES[status_of(sig)]),
+        "moves": sorted(MOVES[stage_of(sig)]) if sig.signal_type in ALERT_TYPES else [],
         "history": [{"action": h.action, "from": h.from_value, "to": h.to_value, "note": h.reason, "by": names.get(h.actor_id),
                      "at": h.created_at} for h in history],
     }
@@ -266,7 +308,7 @@ class MoveIn(BaseModel):
 def move(alert_id: int, body: MoveIn, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     sig, v = _alert(db, alert_id, _tids(user, db))
     rbac.require_write(db, user, "monitoring", "edit")
-    now_status, note = status_of(sig), " ".join((body.note or "").split())
+    now_status, note = stage_of(sig), " ".join((body.note or "").split())
     if body.status not in MOVES[now_status]:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"An alert that is {now_status.replace('_', ' ')} "
                                                          f"cannot move to {body.status.replace('_', ' ')}")

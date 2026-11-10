@@ -170,3 +170,66 @@ def test_new_known_exploited_flaws_in_software_seen_on_an_estate_raise_unverifie
     drafts = connector.poll(db, db.get(Vendor, 1), NOW - timedelta(days=2), NOW)
     assert [(d.external_id, d.severity, d.verification["verified"]) for d in drafts] == [("kev-tech:CVE-2026-1001", "high", False)]
     assert "payroll.test" in drafts[0].detail and "version 2.4.49" in drafts[0].detail
+
+
+# ---- the register: acknowledged is not closed (vendor-monitoring, 2026-11-10) ----
+
+def test_acknowledged_is_its_own_stage_and_closed_stays_a_decision():
+    sig = lambda **kw: TPRAMonitoringSignal(**{"acknowledged": False, "triage_status": None, **kw})
+    assert alerts.stage_of(sig()) == "new"
+    assert alerts.stage_of(sig(acknowledged=True)) == "acknowledged"
+    assert alerts.stage_of(sig(acknowledged=True, triage_status="new")) == "acknowledged"
+    assert alerts.stage_of(sig(acknowledged=True, triage_status="closed")) == "closed"
+    assert alerts.status_of(sig(acknowledged=True)) == "closed"            # the old word is untouched
+
+
+def test_the_register_reads_every_kind_and_counts_acknowledged_apart_from_closed(db, client):
+    db.add_all([
+        TPRAMonitoringSignal(id=3, tenant_id=1, vendor_id=1, signal_type="security_rating", severity="medium", title="Rating fell",
+                             occurred_at=NOW - timedelta(days=2), acknowledged=True, triggered_reassessment=True),
+        TPRAMonitoringSignal(id=4, tenant_id=1, vendor_id=1, signal_type="breach", severity="critical", title="Done",
+                             occurred_at=NOW - timedelta(days=3), acknowledged=True, triage_status="closed"),
+        TPRAMonitoringSignal(id=5, tenant_id=1, vendor_id=1, signal_type="breach", severity="low", title="Old and closed",
+                             occurred_at=NOW - timedelta(days=900), acknowledged=True, triage_status="closed"),
+        TPRAMonitoringSignal(id=6, tenant_id=1, vendor_id=1, signal_type="adverse_media", severity="low", title="Old but waiting",
+                             occurred_at=NOW - timedelta(days=900)),
+    ])
+    db.commit()
+    default = client.get("/alerts").json()
+    assert {i["id"] for i in default["items"]} == {1, 4, 6}                # today's rows: three kinds, last year + still open
+    assert default["counts"]["closed"] == 1 and "total" in default
+    everything = client.get("/alerts", params={"kinds": "all"}).json()
+    by_id = {i["id"]: i for i in everything["items"]}
+    assert set(by_id) == {1, 2, 3, 4, 6} and everything["total"] == 5 and everything["truncated"] is False
+    assert by_id[3]["stage"] == "acknowledged" and by_id[3]["status"] == "closed" and by_id[3]["triggered_reassessment"] is True
+    assert by_id[4]["stage"] == "closed" and by_id[1]["stage"] == "new"
+    assert everything["stage_counts"] == {"new": 3, "acknowledged": 1, "investigating": 0, "confirmed": 0, "not_relevant": 0, "closed": 1}
+    assert everything["counts"]["closed"] == 2                              # the old count still folds acknowledged into closed
+    only = client.get("/alerts", params={"kinds": "all", "status": "acknowledged"}).json()
+    assert [i["id"] for i in only["items"]] == [3] and only["total"] == 1
+
+
+def test_the_register_says_when_it_cut_rows_off(db, client):
+    db.add_all([TPRAMonitoringSignal(id=10 + n, tenant_id=1, vendor_id=1, signal_type="sla", severity="low", title=f"s{n}",
+                                     occurred_at=NOW - timedelta(minutes=n)) for n in range(5)])
+    db.commit()
+    page = client.get("/alerts", params={"kinds": "all", "limit": 3}).json()
+    assert len(page["items"]) == 3 and page["total"] == 7 and page["truncated"] is True
+    assert len(client.get("/alerts", params={"kinds": "all", "limit": 3, "skip": 6}).json()["items"]) == 1       # the seventh row
+    assert client.get("/alerts", params={"kinds": "nonsense"}).status_code == 422
+
+
+def test_an_acknowledged_alert_can_still_be_decided_and_a_signal_opens_without_moves(db, client):
+    sig = db.get(TPRAMonitoringSignal, 1)
+    sig.acknowledged = True                                                   # cleared in the feed, never worked
+    db.commit()
+    detail = client.get("/alerts/1").json()
+    assert detail["stage"] == "acknowledged" and detail["moves"] == ["confirmed", "investigating", "not_relevant"]
+    assert client.post("/alerts/1/move", json={"status": "closed", "note": "no way"}).status_code == 400
+    moved = client.post("/alerts/1/move", json={"status": "not_relevant", "note": "A different Payroll Co, in Canada"})
+    assert moved.status_code == 200 and moved.json()["stage"] == "not_relevant"
+    history = client.get("/alerts/1").json()["history"]
+    assert [(h["from"], h["to"]) for h in history] == [("acknowledged", "not_relevant")]
+    assert client.get("/alerts/2").status_code == 404                         # still not an alert by default
+    other = client.get("/alerts/2", params={"any": 1}).json()
+    assert other["title"] == "Not an alert" and other["moves"] == [] and other["stage"] == "new"
