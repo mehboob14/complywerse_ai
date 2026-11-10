@@ -48,7 +48,7 @@ function StatusCell({ f }: { f: FindingRow }) {
   return (
     <span className="flex min-w-0 flex-col items-start gap-[2px]">
       <StatusPill size="sm" {...statusPill(findingStatus, f.issue_status)} />
-      {f.issue_code && <Link href="/issues" title="Open in Issues / CAPA" onClick={(e) => e.stopPropagation()} className={`inline-flex items-center gap-[4px] text-ds-label ${LABEL_LINK}`}>{f.issue_code}<ExternalLink aria-hidden size={12} /></Link>}
+      {f.issue_code && <Link href="/issues/register" title="Open in Issues / CAPA" onClick={(e) => e.stopPropagation()} className={`inline-flex items-center gap-[4px] text-ds-label ${LABEL_LINK}`}>{f.issue_code}<ExternalLink aria-hidden size={12} /></Link>}
     </span>
   );
 }
@@ -209,7 +209,7 @@ function FindingDetails({ f, now, canEdit, actions }: { f: FindingRow; now: numb
       )}
 
       <FactList min={150}>
-        <Fact label="Issue / CAPA" empty="Not raised yet">{f.issue_code ? <Link href="/issues" className={`inline-flex items-center gap-[4px] ${LABEL_LINK}`}>{f.issue_code}<ExternalLink aria-hidden size={12} /></Link> : null}</Fact>
+        <Fact label="Issue / CAPA" empty="Not raised yet">{f.issue_code ? <Link href="/issues/register" className={`inline-flex items-center gap-[4px] ${LABEL_LINK}`}>{f.issue_code}<ExternalLink aria-hidden size={12} /></Link> : null}</Fact>
         <Fact label="Risk" empty="Not linked">{f.linked_risk_id ? <Link href={`/erm/risks/${f.linked_risk_id}`} className={`block ${TEXT_LINK}`}>{f.linked_risk_title || 'Open the risk'}</Link> : null}</Fact>
         <Fact label="Drill">{f.drill_title ? <Link href={`/bcm/drills/${f.drill_id}`} className={MUTED_LINK}>{f.drill_title}</Link> : null}</Fact>
         <Fact label="Plan">{f.plan_title && f.plan_id ? <Link href={`/bcm/plans/${f.plan_id}`} className={MUTED_LINK}>{f.plan_title}</Link> : null}</Fact>

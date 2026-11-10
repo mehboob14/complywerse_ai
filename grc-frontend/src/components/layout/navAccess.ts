@@ -156,7 +156,10 @@ export const navigation: NavEntry[] = [
     icon: AlertCircle,
     rail: 'Issues',
     items: [
-      { name: 'Issues', href: '/issues', icon: ListTodo, requiredPermissions: ['issue_management:issues:*'] },
+      // Three doors on one right: the Overview (its Settings page lights it), the issue register (a record, /issues/<id>, lights it: an Overview that is exact leaves it to Issues) and the corrective actions
+      { name: 'Overview', href: '/issues', exact: true, activeMatch: '/issues/settings', icon: LayoutDashboard, requiredPermissions: ['issue_management:issues:*'] },
+      { name: 'Issues', href: '/issues/register', activeMatch: '/issues', icon: ListTodo, requiredPermissions: ['issue_management:issues:*'] },
+      { name: 'Corrective actions', href: '/issues/actions', icon: ListChecks, requiredPermissions: ['issue_management:issues:*'] },
       { name: 'Incidents', href: '/erm/incidents', icon: AlertCircle, requiredPermissions: ['erm:incidents:*'] },
     ],
   },

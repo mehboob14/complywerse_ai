@@ -42,7 +42,7 @@ function Remediation({ f }: { f: Finding }) {
     <span className="flex flex-wrap items-center gap-x-[8px] gap-y-[4px]">
       <Pill registry={findingStatus} word={f.issue_status} />
       {f.issue_code && (
-        <Link href="/issues" title="Open in Issues / CAPA" className={`inline-flex items-center gap-[4px] text-ds-label ${LABEL_LINK}`}>{f.issue_code}<ExternalLink aria-hidden size={12} /></Link>
+        <Link href="/issues/register" title="Open in Issues / CAPA" className={`inline-flex items-center gap-[4px] text-ds-label ${LABEL_LINK}`}>{f.issue_code}<ExternalLink aria-hidden size={12} /></Link>
       )}
     </span>
   );

@@ -170,7 +170,7 @@ export function Linkage({ d }: { d: Dashboard }) {
   if (!linkage) return <p className={`text-ds-body ${MUTED}`}>The server did not send these figures.</p>;
   return (
     <ul className="m-0 list-none p-0">
-      <CountRow label="Open CAPAs" count={linkage.open_capas} href="/issues" />
+      <CountRow label="Open CAPAs" count={linkage.open_capas} href="/issues/actions?quick=open" />
       <CountRow label="Risks linked" count={linkage.risks_linked} href="/erm/risks" />
       <CountRow label="Incident invocations" count={linkage.incident_invocations} href={linkage.incident_invocations > 0 ? '/bcm/drills?source=incident_triggered' : undefined} />
     </ul>

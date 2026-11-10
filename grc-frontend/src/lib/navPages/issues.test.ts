@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { breadcrumbFor, ownHeadingSection, registryNamesPage, routeFor, routes } from '../navRegistry.ts';
+import { breadcrumbFor, ownHeadingSection, registryNamesPage, routeFor, routes, sidebarLeafOf } from '../navRegistry.ts';
 
 const ISSUES = fileURLToPath(new URL('../../app/(dashboard)/issues/', import.meta.url));
 const read = (rel: string) => readFileSync(`${ISSUES}${rel}`, 'utf8');
@@ -37,14 +37,16 @@ test('the heading of each register is its registry name (the page reads it from 
   assert.match(read('actions/page.tsx'), /routeFor\('\/issues\/actions'\)\?\.label/);
 });
 
-test('the registers hang under Issue & Incident Management and say where they open from', () => {
+test('the registers are sidebar leaves of Issue & Incident Management, and a record lights Issues', () => {
   assert.deepEqual(breadcrumbFor('/issues/actions').map((c) => c.label)[0], 'Issue & Incident Management');
   for (const page of ['/issues/register', '/issues/actions']) {
     const e = routeFor(page)!;
     assert.equal(e.area, 'issue-incident-management');
-    assert.equal(e.parent, '/issues');
-    assert.ok(e.hidden && e.hidden.length > 20, `${page}: where it opens from`);
+    assert.equal(e.ownHeading, true, `${page}: draws its own head`);
+    assert.ok(sidebarLeafOf(e), `${page}: a leaf of the menu`);
   }
+  assert.equal(routeFor('/issues/:id')?.parent, '/issues/register');
+  assert.equal(sidebarLeafOf(routeFor('/issues/:id')!)?.path, '/issues/register');
 });
 
 test('the Overview and the settings page draw the kit page head themselves, and say so', () => {

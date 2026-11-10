@@ -140,7 +140,7 @@ const riskDef = (key: string) => counterDef(RISK_ATTENTION, key);
 
 /** The counters an area hands the band, in the words and with the addresses of the module's own Overview (Risk Management's are its own: the Issues scorecard's critical incidents are the same count). */
 const ISSUE_COUNTERS: CounterDef[] = [
-  { key: 'sla_breached_issues', label: 'SLA-breached issues', href: '/issues', tone: 'danger' },
+  { key: 'sla_breached_issues', label: 'SLA-breached issues', href: '/issues/register?quick=late', tone: 'danger' },
   riskDef('open_critical_incidents'),
 ];
 const RISK_COUNTERS: CounterDef[] = [riskDef('critical_open_risks'), riskDef('red_kris')];
