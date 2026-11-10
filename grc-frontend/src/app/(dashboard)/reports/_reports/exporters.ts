@@ -8,6 +8,7 @@ import {
 } from 'docx';
 import type { ColumnDef, Row } from './types';
 import { displayText, rawValue } from './grid-utils';
+import { reportCsv } from './csvReport';
 
 function toAOA(cols: ColumnDef[], rows: Row[]): (string | number)[][] {
   const header = cols.map((c) => c.label);
@@ -29,10 +30,9 @@ function download(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+/** CSV: written by the escaping writer (csvReport.ts), so a cell that begins with = + - @ is text when the file is opened in a spreadsheet. The file already starts with a byte-order mark. */
 export function exportCSV(name: string, cols: ColumnDef[], rows: Row[]) {
-  const ws = XLSX.utils.aoa_to_sheet(toAOA(cols, rows));
-  const csv = XLSX.utils.sheet_to_csv(ws);
-  download(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }), `${name}.csv`);
+  download(new Blob([reportCsv(cols, rows)], { type: 'text/csv;charset=utf-8' }), `${name}.csv`);
 }
 
 export function exportExcel(name: string, cols: ColumnDef[], rows: Row[]) {

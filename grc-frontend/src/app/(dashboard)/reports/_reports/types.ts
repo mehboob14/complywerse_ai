@@ -46,7 +46,9 @@ export interface ServerQuery {
   filters: { col: string; op: string; value: string }[];
   logic: 'AND' | 'OR';
 }
-export interface ServerPage { rows: Row[]; total: number; skip: number; limit: number }
+/** A filter the server could not apply (reporting_router `warnings.skipped_filters`): the rows it returned are NOT narrowed by it. */
+export interface SkippedFilter { col: string; op: string; reason: string }
+export interface ServerPage { rows: Row[]; total: number; skip: number; limit: number; warnings?: { skipped_filters?: SkippedFilter[] } }
 
 /** ── Report Builder ─────────────────────────────────────────────────────── */
 export type AggFn = 'count' | 'count_distinct' | 'sum' | 'avg' | 'min' | 'max';
@@ -144,7 +146,7 @@ export interface ServerAggregatePage {
   rows: Row[];
   total: number;
   columns: { key: string; label: string; type?: string }[];
-  warnings?: { skipped_filters?: { col: string; op: string; reason: string }[]; skipped_measures?: string[]; skipped_group_by?: string[] };
+  warnings?: { skipped_filters?: SkippedFilter[]; skipped_measures?: string[]; skipped_group_by?: string[] };
 }
 
 /** One condition in the advanced AND/OR filter builder. */
