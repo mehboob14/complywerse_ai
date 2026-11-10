@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 
 import {
   applicable, choicesOf, controlOf, evidenceBox, evidenceRule, gapsOf, isWholeDate, keepApplicable, leaveNote, nextOpen, noteNeeded, owesEvidence,
-  pickAnswer, readiness, sectionLabel, sectionsOf, wordsKept, type PortalQuestion,
+  pickAnswer, readiness, sectionLabel, sectionRows, sectionsOf, wordsKept, type PortalQuestion,
 } from './answerLogic.ts';
 
 const YES_NO = [
@@ -202,4 +202,13 @@ test('leaving the words box saves them with the waiting pick, keeps an empty box
 test('a date is an answer once it is whole, not while its year is still being typed', () => {
   assert.equal(isWholeDate('2026-11-15'), true);
   for (const typing of ['', '0002-11-15', '0202-11-15', '2026-1-5', '2026-11', 'soon']) assert.equal(isWholeDate(typing), false, typing);
+});
+
+test('each section says how many of its questions are answered (a file question by its file), for the headings and the jump list', () => {
+  const sections = sectionsOf(QUESTIONS);
+  const rows = sectionRows(sections, { subs: 'no', mfa: 'yes' }, { policy: [{ id: 1 }] });
+  assert.deepEqual(rows.map((r) => r.label), sections.map((s) => s.label));
+  assert.equal(rows.reduce((n, r) => n + r.total, 0), QUESTIONS.length);
+  assert.equal(rows.reduce((n, r) => n + r.answered, 0), 3, 'subs, mfa and the policy file');
+  assert.deepEqual(sectionRows(sections, {}, {}).map((r) => r.answered), sections.map(() => 0));
 });

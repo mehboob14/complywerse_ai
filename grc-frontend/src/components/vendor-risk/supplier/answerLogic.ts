@@ -135,6 +135,16 @@ export function sectionsOf<T extends { section?: string; category?: string; doma
   return out;
 }
 
+/** Each section with how many of its questions are answered, for the section headings and the list a long questionnaire jumps by. */
+export function sectionRows<T extends PortalQuestion>(sections: Array<{ label: string; questions: T[] }>, answers: Record<string, string>,
+  files: FilesByQuestion): Array<{ label: string; answered: number; total: number }> {
+  return sections.map((s) => ({
+    label: s.label,
+    answered: s.questions.filter((q) => isAnswered(q, answers[q.id] || '', files[q.id]?.length ?? 0)).length,
+    total: s.questions.length,
+  }));
+}
+
 // ── what is still to do ─────────────────────────────────────────────────────
 
 /** A file question is answered by its file; any other by a value. */
