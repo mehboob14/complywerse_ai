@@ -9,8 +9,8 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { CheckCircle, ChevronRight, ClipboardList, FileText, MessageSquare, Shield } from 'lucide-react';
 import {
-  Conversation, LinkGone, Loading, REQUEST_KIND, REQUEST_STATUS, Shell, WAITING, dateOnly, day, fetchHome, problemOf,
-  type PortalHome, type PortalQuestionnaire, type PortalRequest,
+  Conversation, LinkGone, Loading, PortalProblem, REQUEST_KIND, REQUEST_STATUS, Shell, WAITING, dateOnly, day, fetchHome, problemOf,
+  type PortalFailure, type PortalHome, type PortalQuestionnaire, type PortalRequest,
 } from '../_shared';
 
 const STATUS: Record<string, string> = {
@@ -91,7 +91,7 @@ export default function SupplierHomePage() {
   const { token } = useParams<{ token: string }>();
   const router = useRouter();
   const [home, setHome] = useState<PortalHome | null>(null);
-  const [problem, setProblem] = useState<{ gone: boolean; message: string } | null>(null);
+  const [problem, setProblem] = useState<PortalFailure | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -109,7 +109,7 @@ export default function SupplierHomePage() {
   }, [token, router]);
 
   if (problem?.gone) return <LinkGone message={problem.message} />;
-  if (problem) return <Shell><p role="alert" className="mt-16 text-center text-sm text-rose-700">{problem.message}</p></Shell>;
+  if (problem) return <PortalProblem problem={problem} />;
   if (!home) return <Shell><Loading /></Shell>;
 
   const waiting = home.questionnaires.filter((q) => WAITING.includes(q.status));

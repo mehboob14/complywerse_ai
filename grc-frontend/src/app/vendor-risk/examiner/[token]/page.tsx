@@ -8,6 +8,7 @@ import { useParams } from 'next/navigation';
 import { Loader2, Lock, Printer } from 'lucide-react';
 import apiClient from '@/lib/api';
 import ReportView, { fmtDay, type ReportContent } from '@/components/vendor-risk/ReportView';
+import { kindOf, problemText } from '@/components/vendor-risk/supplier/portalProblem';
 
 interface Shared {
   title: string; kind_label: string; generated_at: string | null; approved_at: string | null; expires_at: string;
@@ -22,9 +23,9 @@ export default function ExaminerReportPage() {
   useEffect(() => {
     apiClient.get(`/vendor-risk/tpra/examiner/${encodeURIComponent(token)}`)
       .then((res) => setReport(res.data as Shared))
-      .catch((e) => setProblem(e?.response?.status === 429
-        ? 'Too many requests. Try again in a few minutes.'
-        : 'This link is not valid. It may have expired or been withdrawn by the organisation that shared it.'));
+      .catch((e) => setProblem(kindOf(e) === 'gone'
+        ? 'This link is not valid. It may have expired or been withdrawn by the organisation that shared it.'
+        : problemText(e, 'The report could not be loaded. Check your connection and try again.')));
   }, [token]);
 
   return (

@@ -10,6 +10,8 @@ import { Loader2, Lock, Mail, Send } from 'lucide-react';
 import apiClient from '@/lib/api';
 import { parseUtc } from '@/lib/serverTime';
 import { PortalFrame } from '@/components/vendor-risk/supplier/PortalFrame';
+import { actionText, kindOf, problemText, UNREACHABLE, type ProblemKind } from '@/components/vendor-risk/supplier/portalProblem';
+import { Button, Notice } from '@/components/ui/ds';
 
 export interface PortalQuestionnaire {
   id: number; title: string; status: string; due_date: string | null; sent_at: string | null;
@@ -45,8 +47,6 @@ export const REQUEST_STATUS: Record<RequestStatus, string> = {
 };
 
 export const WAITING = ['pending', 'in_progress', 'returned'];
-const BUSY = 'Too many requests. Wait a few minutes and try again.';
-
 // One recorded visit per page load: moving between the portal's pages afterwards only reads.
 const opened = new Set<string>();
 
@@ -57,12 +57,25 @@ export async function fetchHome(token: string): Promise<PortalHome> {
   return (await apiClient.post(`${path}/open`)).data as PortalHome;
 }
 
-export function problemOf(e: unknown): { gone: boolean; message: string } {
-  const res = (e as { response?: { status?: number; data?: { detail?: string } } })?.response;
-  if (res?.status === 404 || res?.status === 410) {
-    return { gone: true, message: res.data?.detail || 'This link is no longer valid. Ask your contact for a new one, or request one below.' };
-  }
-  return { gone: false, message: res?.status === 429 ? BUSY : 'The portal could not be reached. Try again in a moment.' };
+export interface PortalFailure { gone: boolean; kind: ProblemKind; message: string }
+
+export function problemOf(e: unknown): PortalFailure {
+  const kind = kindOf(e);
+  return { gone: kind === 'gone', kind, message: problemText(e, UNREACHABLE) };
+}
+
+/** A page that could not open for a reason that is not a dead link: the address has no organisation in it, the server is busy, or the portal could not be reached. */
+export function PortalProblem({ problem }: { problem: PortalFailure }) {
+  const title = problem.kind === 'address' ? 'This address does not open the portal'
+    : problem.kind === 'busy' ? 'Please wait a moment' : 'The portal did not open';
+  return (
+    <Shell>
+      <Notice tone="warning" title={title}
+        action={problem.kind === 'address' ? undefined : <Button onClick={() => window.location.reload()}>Try again</Button>}>
+        {problem.message}
+      </Notice>
+    </Shell>
+  );
 }
 
 export const day = (value: string | null | undefined) =>
@@ -162,7 +175,7 @@ export function RequestLinkForm() {
     try {
       setSent((await apiClient.post('/vendor-risk/portal/request-link', { email })).data?.message);
     } catch (err) {
-      setError((err as { response?: { status?: number } })?.response?.status === 429 ? BUSY : 'That did not go through. Try again.');
+      setError(actionText(err, 'That did not go through. Try again.'));
     } finally {
       setBusy(false);
     }

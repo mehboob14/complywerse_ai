@@ -5,6 +5,7 @@
 import apiClient from '@/lib/api';
 import type { EvidenceFile, PortalQuestion } from './answerLogic';
 import type { Change } from './answerSaver';
+import { actionText, canRetry } from './portalProblem';
 
 export interface QuestionMessage { id: number; from_supplier: boolean; author: string | null; body: string; created_at: string }
 export interface Attestation { name: string; title: string; email: string }
@@ -30,18 +31,9 @@ export interface QuestionnaireData {
   messages?: Record<string, QuestionMessage[]>;     // in the supplier portal: the comments shared on each question
 }
 
-/** A refusal's reason when the server gave one in words, else `fallback`. */
-export function messageOf(e: unknown, fallback = 'That did not save.'): string {
-  const res = (e as { response?: { status?: number; data?: { detail?: unknown } } })?.response;
-  if (res?.status === 429) return 'Too many requests. Wait a few minutes and try again.';
-  return typeof res?.data?.detail === 'string' ? res.data.detail : fallback;
-}
-
-/** Whether trying the same thing again can work: the network, a busy server or a server error; not a refusal with a reason. */
-export function canRetry(e: unknown): boolean {
-  const status = (e as { response?: { status?: number } })?.response?.status;
-  return !status || status === 408 || status === 429 || status >= 500;
-}
+/** A refusal's reason when the server gave one in words, else `fallback` (the address and busy cases are said the same way on every public page). */
+export const messageOf = (e: unknown, fallback = 'That did not save.'): string => actionText(e, fallback);
+export { canRetry };
 
 const file = (name: string, f: File, extra: Record<string, string> = {}) => {
   const form = new FormData();

@@ -6,12 +6,12 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import SupplierQuestionnaire from '@/components/vendor-risk/SupplierQuestionnaire';
-import { LinkGone, Loading, Shell, fetchHome, problemOf } from '../../../_shared';
+import { LinkGone, Loading, PortalProblem, Shell, fetchHome, problemOf, type PortalFailure } from '../../../_shared';
 
 export default function SupplierQuestionnairePage() {
   const { token, qid } = useParams<{ token: string; qid: string }>();
   const [ready, setReady] = useState(false);
-  const [problem, setProblem] = useState<{ gone: boolean; message: string } | null>(null);
+  const [problem, setProblem] = useState<PortalFailure | null>(null);
 
   // The link is checked (and, on the first page loaded, the visit recorded) before the questionnaire opens.
   useEffect(() => {
@@ -21,7 +21,7 @@ export default function SupplierQuestionnairePage() {
   }, [token]);
 
   if (problem?.gone) return <LinkGone message={problem.message} />;
-  if (problem) return <Shell><p role="alert" className="mt-16 text-center text-sm text-rose-700">{problem.message}</p></Shell>;
+  if (problem) return <PortalProblem problem={problem} />;
   if (!ready) return <Shell><Loading /></Shell>;
   return (
     <SupplierQuestionnaire apiBase={`/vendor-risk/portal/${encodeURIComponent(token)}/questionnaires/${encodeURIComponent(qid)}`}

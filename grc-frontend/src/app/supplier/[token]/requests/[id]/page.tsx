@@ -10,8 +10,8 @@ import { useParams } from 'next/navigation';
 import { AlertCircle, ArrowLeft, CheckCircle, Loader2, MessageSquare, Paperclip, Send, Trash2, Upload } from 'lucide-react';
 import apiClient from '@/lib/api';
 import {
-  Conversation, LinkGone, Loading, REQUEST_KIND, REQUEST_STATUS, Shell, dateOnly, day, detailOf, fetchHome, problemOf,
-  type PortalMessage, type PortalRequest,
+  Conversation, LinkGone, Loading, PortalProblem, REQUEST_KIND, REQUEST_STATUS, Shell, dateOnly, day, detailOf, fetchHome, problemOf,
+  type PortalFailure, type PortalMessage, type PortalRequest,
 } from '../../../_shared';
 
 interface RequestFile {
@@ -38,7 +38,7 @@ export default function SupplierRequestPage() {
   const { token, id } = useParams<{ token: string; id: string }>();
   const base = `/vendor-risk/portal/${encodeURIComponent(token)}/requests/${encodeURIComponent(id)}`;
   const [r, setR] = useState<RequestDetail | null>(null);
-  const [problem, setProblem] = useState<{ gone: boolean; message: string } | null>(null);
+  const [problem, setProblem] = useState<PortalFailure | null>(null);
   const [answer, setAnswer] = useState({ response_text: '', plan_text: '', target_date: '' });
   const [dates, setDates] = useState({ coverage_from: '', coverage_to: '', expires_on: '' });
   const [busy, setBusy] = useState<string | null>(null);
@@ -96,7 +96,7 @@ export default function SupplierRequestPage() {
   };
 
   if (problem?.gone) return <LinkGone message={problem.message} />;
-  if (problem) return <Shell><p role="alert" className="mt-16 text-center text-sm text-rose-700">{problem.message}</p></Shell>;
+  if (problem) return <PortalProblem problem={problem} />;
   if (!r) return <Shell><Loading /></Shell>;
 
   const finding = r.kind === 'finding';

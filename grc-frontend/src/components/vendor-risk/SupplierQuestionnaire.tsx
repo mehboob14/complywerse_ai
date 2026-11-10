@@ -16,6 +16,7 @@ import {
 } from './supplier/answerLogic';
 import { createSaver } from './supplier/answerSaver';
 import { canRetry, messageOf, portalCalls, type Attestation, type QuestionMessage, type QuestionnaireData } from './supplier/portalCalls';
+import { kindOf, problemText, type ProblemKind } from './supplier/portalProblem';
 import AttestDialog from './supplier/AttestDialog';
 import { PortalFrame } from './supplier/PortalFrame';
 import QuestionCard, { type QuestionProblem } from './supplier/QuestionCard';
@@ -40,7 +41,7 @@ export default function SupplierQuestionnaire({ apiBase, backHref }: {
   backHref?: string;
 }) {
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<{ kind: ProblemKind; text: string } | null>(null);
   const [data, setData] = useState<QuestionnaireData | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [comments, setComments] = useState<Record<string, string>>({});
@@ -87,7 +88,8 @@ export default function SupplierQuestionnaire({ apiBase, backHref }: {
     try {
       apply((await portalCalls.load(apiBase)).data);
     } catch (e) {
-      setLoadError(messageOf(e, 'This questionnaire link is no longer valid. Ask your contact to send a new one.'));
+      const kind = kindOf(e);
+      setLoadError({ kind, text: kind === 'gone' ? 'This questionnaire link is no longer valid. Ask your contact to send a new one.' : problemText(e) });
     } finally {
       if (!quiet) setLoading(false);
     }
@@ -285,7 +287,10 @@ export default function SupplierQuestionnaire({ apiBase, backHref }: {
         <div role="alert" className="rounded-xl border border-gray-200 bg-white p-6 text-center shadow-sm sm:p-8">
           <AlertCircle aria-hidden className="mx-auto h-8 w-8 text-amber-700" />
           <h1 className="mt-3 text-xl font-semibold text-gray-900">We could not open this questionnaire</h1>
-          <p className="mx-auto mt-2 max-w-md text-sm text-gray-700">{loadError}</p>
+          <p className="mx-auto mt-2 max-w-md text-sm text-gray-700">{loadError?.text}</p>
+          {loadError && loadError.kind !== 'gone' && loadError.kind !== 'address' && (
+            <button type="button" onClick={() => void load()} className={`mt-4 ${BTN}`}>Try again</button>
+          )}
         </div>
       </PortalFrame>
     );
