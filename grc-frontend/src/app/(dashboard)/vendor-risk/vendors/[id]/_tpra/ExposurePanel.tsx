@@ -5,6 +5,7 @@
 // the organisation's own, set in Settings; the numbers are reproducible.
 
 import Link from 'next/link';
+import { ErrorState } from '@/components/ui/ds';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2, TrendingDown } from 'lucide-react';
 import { InfoTip } from '@/components/ui/InfoTip';
@@ -23,13 +24,13 @@ interface Exposure {
 }
 
 export default function ExposurePanel({ vendorId }: { vendorId: number }) {
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['tprm-exposure', vendorId],
     queryFn: async () => (await tpraApi.vendorExposure(vendorId)).data as Exposure,
     ...TPRM_QUERY_OPTS,
   });
-  if (isLoading) return <p className="flex items-center gap-2 text-sm text-gray-500"><Loader2 className="h-4 w-4 animate-spin" /> Simulating…</p>;
-  if (error || !data) return <p role="alert" className="text-sm text-red-600">The exposure could not be worked out.</p>;
+  if (isLoading) return <p className="flex items-center gap-2 text-[13px] text-ds-fg-muted"><Loader2 className="h-4 w-4 animate-spin" /> Simulating…</p>;
+  if (error || !data) return <ErrorState compact title="The exposure could not be worked out" onRetry={() => { void refetch(); }} />;
 
   const money = (v: number) => new Intl.NumberFormat('en-GB', { style: 'currency', currency: data.currency, maximumFractionDigits: 0 }).format(v);
   const value = (factor: string, v: number) => (/cost/i.test(factor) ? money(v)
@@ -42,32 +43,32 @@ export default function ExposurePanel({ vendorId }: { vendorId: number }) {
   ];
 
   return (
-    <div className="space-y-4">
-      <section className="rounded-xl border border-gray-200 bg-white p-4" aria-label="A year of exposure">
+    <div className="space-y-[16px]">
+      <section className="rounded-ds-card border border-ds-border bg-ds-surface p-[16px]" aria-label="A year of exposure">
         <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-          <h3 className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
+          <h3 className="flex items-center gap-1.5 text-[13px] font-[600] text-ds-fg">
             What this vendor could cost us in a year
             <InfoTip label="About this range" text={`A range from ${data.iterations.toLocaleString('en-GB')} simulated years, not a forecast. The constants behind it are set in Settings. A Comply analysis takes one scenario apart factor by factor, starting from these same figures.`} />
           </h3>
           <div className="flex flex-wrap items-center gap-2">
-            <Link href="/vendor-risk/settings#exposure" className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50">
+            <Link href="/vendor-risk/settings#exposure" className="rounded-ds-card border border-ds-border px-2.5 py-1 text-[12px] text-ds-fg-body hover:bg-ds-surface-subtle">
               Settings
             </Link>
-            <Link href={`/vendor-risk/comply-analysis?vendor=${vendorId}`} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50">
+            <Link href={`/vendor-risk/comply-analysis?vendor=${vendorId}`} className="rounded-ds-card border border-ds-border px-2.5 py-1 text-[12px] text-ds-fg-body hover:bg-ds-surface-subtle">
               Run a Comply analysis
             </Link>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
           {year(data.annual).map((t) => (
-            <div key={t.label} className="rounded-lg border border-gray-100 p-3">
-              <p className="text-[11px] text-gray-500">{t.label}</p>
-              <p className="text-lg font-semibold text-slate-900">{t.value}</p>
+            <div key={t.label} className="rounded-ds-card border border-ds-border p-3">
+              <p className="text-[12px] text-ds-fg-muted">{t.label}</p>
+              <p className="text-[16px] font-[600] text-ds-fg">{t.value}</p>
             </div>
           ))}
         </div>
         {data.if_improved && (
-          <p className="mt-3 flex items-start gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+          <p className="mt-3 flex items-start gap-1.5 rounded-ds-card bg-ds-success-soft px-3 py-2 text-[12px] text-ds-success">
             <TrendingDown className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             If its residual rating improved from {data.if_improved.rating_from} to {data.if_improved.rating_to}, the average
             year would be {money(data.if_improved.annual.mean)} and the 1-in-20 year {money(data.if_improved.annual.p95)}.
@@ -76,31 +77,31 @@ export default function ExposurePanel({ vendorId }: { vendorId: number }) {
       </section>
 
       {data.scenarios.map((s) => (
-        <section key={s.key} className="rounded-xl border border-gray-200 bg-white p-4">
+        <section key={s.key} className="rounded-ds-card border border-ds-border bg-ds-surface p-[16px]">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h3 className="text-sm font-semibold text-slate-900">{s.label}</h3>
+            <h3 className="text-[13px] font-[600] text-ds-fg">{s.label}</h3>
             {s.active && (
-              <p className="text-xs text-gray-600">
+              <p className="text-[12px] text-ds-fg-body">
                 If it happens: {money(s.per_event.p10)} to {money(s.per_event.p90)}, most often around {money(s.per_event.p50)}
               </p>
             )}
           </div>
-          {s.note && <p className="mt-1 text-xs text-gray-500">{s.note}</p>}
+          {s.note && <p className="mt-1 text-[12px] text-ds-fg-muted">{s.note}</p>}
           <div className="mt-2 overflow-x-auto">
-            <table className="min-w-full text-left text-xs">
+            <table className="min-w-full text-left text-[12px]">
               <thead>
-                <tr className="border-b border-gray-200 text-gray-500">
+                <tr className="border-b border-ds-border text-ds-fg-muted">
                   {['Input', 'Least', 'Most likely', 'Most', 'Where it comes from'].map((c) => (
                     <th key={c} scope="col" className="px-2 py-1.5 font-medium">{c}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-ds-border">
                 {s.inputs.map((i) => (
-                  <tr key={i.factor} className="text-slate-800">
+                  <tr key={i.factor} className="text-ds-fg">
                     <td className="px-2 py-1.5">{i.factor}</td>
                     {i.range.map((v, j) => <td key={j} className="px-2 py-1.5 tabular-nums">{value(i.factor, v)}</td>)}
-                    <td className="px-2 py-1.5 text-gray-600">{i.basis}</td>
+                    <td className="px-2 py-1.5 text-ds-fg-body">{i.basis}</td>
                   </tr>
                 ))}
               </tbody>
@@ -109,9 +110,9 @@ export default function ExposurePanel({ vendorId }: { vendorId: number }) {
         </section>
       ))}
 
-      <section className="rounded-xl border border-gray-200 bg-white p-4">
-        <h3 className="mb-1 text-sm font-semibold text-slate-900">Assumptions</h3>
-        <ul className="list-disc space-y-0.5 pl-5 text-xs text-gray-600">
+      <section className="rounded-ds-card border border-ds-border bg-ds-surface p-[16px]">
+        <h3 className="mb-1 text-[13px] font-[600] text-ds-fg">Assumptions</h3>
+        <ul className="list-disc space-y-0.5 pl-5 text-[12px] text-ds-fg-body">
           {data.assumptions.map((a) => <li key={a}>{a}</li>)}
         </ul>
       </section>

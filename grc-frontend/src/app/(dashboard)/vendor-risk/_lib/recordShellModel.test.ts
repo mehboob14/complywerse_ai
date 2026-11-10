@@ -1,7 +1,7 @@
 // node --test "src/app/(dashboard)/vendor-risk/_lib/recordShellModel.test.ts"
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ONE_SHOT, BACK, metaLine, nextUp, nextUpText, openFindingCount, recordTabs, reviewWords, showsPicker, tabPatch, type NextStageLike } from './recordShellModel.ts';
+import { ONE_SHOT, BACK, inDays, metaLine, nextUp, nextUpText, openFindingCount, recordTabs, reviewWords, showsPicker, tabPatch, type NextStageLike } from './recordShellModel.ts';
 import { TABS, tabFor } from './vendorRecordModel.ts';
 import { headOf } from './railModel.ts';
 
@@ -87,4 +87,12 @@ test("a vendor's record draws its own head (the top bar names only the section);
   assert.equal(headOf('/vendor-risk/vendors/12?tab=findings'), 'page');
   assert.equal(headOf('/vendor-risk/vendors/12/summary'), 'legacy');
   assert.equal(headOf('/vendor-risk/vendors'), headOf('/vendor-risk/vendors'), "the register is its own group's row");
+});
+
+test('inDays is the value of a date box n days on: this month, across a month end and a year end', () => {
+  assert.equal(inDays(0, TODAY), '2026-11-10');
+  assert.equal(inDays(14, TODAY), '2026-11-24');
+  assert.equal(inDays(21, TODAY), '2026-12-01');
+  assert.equal(inDays(60, TODAY), '2027-01-09');
+  assert.equal(inDays(-10, TODAY), '2026-10-31');
 });

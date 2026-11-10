@@ -11,7 +11,7 @@ export default function Section({ title, info, action, children }: { title: stri
     <section aria-labelledby={id}>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1">
         <div className="flex items-center gap-1.5">
-          <h2 id={id} className="text-[15px] font-semibold leading-6 text-[#1f2933]">{title}</h2>
+          <h2 id={id} className="text-[15px] font-[600] leading-6 text-ds-fg">{title}</h2>
           {info && <InfoTip text={info} label={`About ${title}`} />}
         </div>
         {action}

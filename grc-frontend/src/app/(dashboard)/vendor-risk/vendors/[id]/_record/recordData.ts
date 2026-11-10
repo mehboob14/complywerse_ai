@@ -15,6 +15,9 @@ export type VendorRecord = Record<string, any>;
 
 export const statusOf = (e: unknown): number | undefined => (e as { response?: { status?: number } } | null)?.response?.status;
 
+/** A read that failed for a reason worth saying. A 404 on a supplier's engagements or exit is not one: an archived supplier has none to list (the reads answer "not found"), and the record then shows what the supplier itself holds. */
+export const failed = (q: { isError: boolean; error: unknown }): boolean => q.isError && statusOf(q.error) !== 404;
+
 /** The vendor. A 404 is "not here" and is not retried; any other failure is retried once and then said as a failure (never read as "not found"). */
 export function useVendorRecord(vendorId: number) {
   return useQuery({

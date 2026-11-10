@@ -6,12 +6,18 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { usePeople } from '../../../_lib/portfolioApi';
 import { Plus } from 'lucide-react';
-import { BTN, BTN_PRIMARY, Dialog, Panel, StatusPill, TierBadge, fmt, tones } from '@/app/(dashboard)/vendor-risk/_ui';
+import { BTN, BTN_PRIMARY } from '../_record/btn';
+import { Dialog, StatusPill, TierBadge } from '../_record/recordUi';
+import RecordPanel from '../_record/RecordPanel';
+import { fmt } from '../../../_ui/fmt';
+import { statusPill } from '@/lib/status';
+import { vendorAssessment } from '@/lib/statuses/vendor';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
 import { apiErrorText } from '@/lib/apiError';
-import { tenantApi, vendorRiskApi } from '@/lib/api';
+import { vendorRiskApi } from '@/lib/api';
 
 interface Legacy {
   id: number;
@@ -22,7 +28,6 @@ interface Legacy {
   due_date: string | null;
   assessor: { id: number; full_name: string } | string | null;
 }
-interface UserOption { id: number; username: string; display_name: string | null; email: string }
 
 const TYPES = [
   { id: 'cybersecurity', label: 'Cybersecurity assessment' },
@@ -33,10 +38,10 @@ const TYPES = [
   { id: 'initial_onboarding', label: 'Initial onboarding assessment' },
   { id: 'periodic_review', label: 'Periodic review' },
 ];
-const FIELD = 'h-9 w-full rounded-lg border border-[#c3ccd5] bg-[#fff] px-2.5 text-sm text-[#1f2933] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]';
-const LABEL = 'mb-1 block text-[13px] font-medium text-[#26323d]';
-const TH = 'whitespace-nowrap px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-[#64707e]';
-const TD = 'px-3 py-2.5 text-[13px] text-[#26323d]';
+const FIELD = 'h-9 w-full rounded-ds-card border border-ds-border-strong bg-ds-surface px-2.5 text-[13px] text-ds-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-primary';
+const LABEL = 'mb-1 block text-[13px] font-medium text-ds-fg-body';
+const TH = 'whitespace-nowrap px-3 py-2 text-left text-[12px] font-[600] uppercase tracking-wide text-ds-fg-muted';
+const TD = 'px-3 py-2.5 text-[13px] text-ds-fg-body';
 const words = (s: string) => s.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
 
 export default function LegacyAssessments({ vendorId }: { vendorId: number }) {
@@ -54,11 +59,7 @@ export default function LegacyAssessments({ vendorId }: { vendorId: number }) {
       return (Array.isArray(d) ? d : d.items ?? []) as Legacy[];
     },
   });
-  const { data: users } = useQuery({
-    queryKey: ['tenant-users'],
-    queryFn: async () => ((await tenantApi.getTenantUsers()).data ?? []) as UserOption[],
-    enabled: adding,
-  });
+  const users = usePeople();
 
   const create = useMutation({
     mutationFn: async () => (await vendorRiskApi.createAssessment({
@@ -78,41 +79,40 @@ export default function LegacyAssessments({ vendorId }: { vendorId: number }) {
   const items = data ?? [];
   return (
     <>
-      <Panel
+      <RecordPanel
         title="Legacy assessments"
         count={items.length}
         info="Assessments made on their own, outside the lifecycle. The questionnaires of a review are the cards above."
         action={canCreate ? (
           <button type="button" className={BTN} onClick={() => setAdding(true)}><Plus aria-hidden className="h-4 w-4" /> New assessment</button>
         ) : undefined}
-        flush
       >
         {isLoading ? (
-          <p className="px-5 pb-5 text-[13px] text-[#64707e]">Loading…</p>
+          <p className="px-[20px] pb-5 text-[13px] text-ds-fg-muted">Loading…</p>
         ) : isError ? (
-          <p role="alert" className="px-5 pb-5 text-[13px] text-[#b42318]">The assessments could not be loaded.</p>
+          <p role="alert" className="px-[20px] pb-5 text-[13px] text-ds-danger">The assessments could not be loaded.</p>
         ) : items.length === 0 ? (
-          <p className="px-5 pb-5 text-[13px] text-[#64707e]">None yet.</p>
+          <p className="px-[20px] pb-5 text-[13px] text-ds-fg-muted">None yet.</p>
         ) : (
           <div className="overflow-x-auto pb-2" tabIndex={0} role="region" aria-label="Table of legacy assessments">
             <table className="min-w-full">
               <thead>
-                <tr className="border-y border-[#e1e6eb] bg-[#f7f9fa]">
+                <tr className="border-y border-ds-border bg-ds-surface-subtle">
                   {['Type', 'Status', 'Score', 'Rating', 'Assessor', 'Due', 'Questions'].map((h) => <th key={h} scope="col" className={TH}>{h}</th>)}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#e1e6eb]">
+              <tbody className="divide-y divide-ds-border">
                 {items.map((a) => {
                   const review = `/vendor-risk/assessments/${a.id}?tab=questionnaire`;
                   return (
                     <tr key={a.id}>
-                      <td className={TD}><Link href={review} className="font-medium text-[#0f766e] hover:underline">{words(a.assessment_type || 'assessment')}</Link></td>
-                      <td className={TD}><StatusPill tone={tones.assessment(a.status)} variant="inline">{words(a.status || '')}</StatusPill></td>
+                      <td className={TD}><Link href={review} className="font-medium text-ds-primary-text hover:underline">{words(a.assessment_type || 'assessment')}</Link></td>
+                      <td className={TD}><StatusPill tone={statusPill(vendorAssessment, a.status).tone} variant="inline">{words(a.status || '')}</StatusPill></td>
                       <td className={`${TD} tabular-nums`}>{a.inherent_score != null ? a.inherent_score.toFixed(1) : '-'}</td>
                       <td className={TD}>{a.risk_rating ? <TierBadge tier={a.risk_rating} variant="dot" /> : '-'}</td>
                       <td className={TD}>{typeof a.assessor === 'object' && a.assessor ? a.assessor.full_name : a.assessor ? String(a.assessor) : '-'}</td>
                       <td className={`${TD} whitespace-nowrap`}>{a.due_date ? fmt.date(a.due_date) : '-'}</td>
-                      <td className={TD}><Link href={review} className="whitespace-nowrap text-[#0f766e] hover:underline">View linked questions</Link></td>
+                      <td className={TD}><Link href={review} className="whitespace-nowrap text-ds-primary-text hover:underline">View linked questions</Link></td>
                     </tr>
                   );
                 })}
@@ -120,7 +120,7 @@ export default function LegacyAssessments({ vendorId }: { vendorId: number }) {
             </table>
           </div>
         )}
-      </Panel>
+      </RecordPanel>
 
       <Dialog
         open={adding}
@@ -133,7 +133,7 @@ export default function LegacyAssessments({ vendorId }: { vendorId: number }) {
           </>
         )}
       >
-        <form id="legacy-assessment-form" className="space-y-3.5" onSubmit={(e) => { e.preventDefault(); create.mutate(); }}>
+        <form id="legacy-assessment-form" className="space-y-[14px]" onSubmit={(e) => { e.preventDefault(); create.mutate(); }}>
           <div>
             <label htmlFor="legacy-type" className={LABEL}>Type</label>
             <select id="legacy-type" className={FIELD} value={form.assessment_type} onChange={(e) => setForm({ ...form, assessment_type: e.target.value })}>
@@ -141,14 +141,14 @@ export default function LegacyAssessments({ vendorId }: { vendorId: number }) {
             </select>
           </div>
           <div>
-            <label htmlFor="legacy-due" className={LABEL}>Due date <span className="font-normal text-[#64707e]">(optional)</span></label>
+            <label htmlFor="legacy-due" className={LABEL}>Due date <span className="font-normal text-ds-fg-muted">(optional)</span></label>
             <input id="legacy-due" type="date" className={FIELD} value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
           </div>
           <div>
             <label htmlFor="legacy-assessor" className={LABEL}>Assessor</label>
             <select id="legacy-assessor" className={FIELD} value={form.assessed_by} onChange={(e) => setForm({ ...form, assessed_by: e.target.value })}>
               <option value="">Me</option>
-              {(users ?? []).map((u) => <option key={u.id} value={u.id}>{u.display_name || u.username}</option>)}
+              {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
             </select>
           </div>
         </form>

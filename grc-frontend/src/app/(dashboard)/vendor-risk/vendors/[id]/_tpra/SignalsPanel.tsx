@@ -5,11 +5,15 @@
 // Acknowledge or Dismiss, with no questions asked. A signal can be raised as a finding with it, or later. RBAC: vendor_risk:monitoring:*.
 
 import { useEffect, useId, useState } from 'react';
+import { ErrorState } from '@/components/ui/ds';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ban, ExternalLink, Flag, Loader2, Plus, Radio, RefreshCw, ShieldCheck, ShieldQuestion, Trash2 } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from 'recharts';
-import { BTN, BTN_PRIMARY, Dialog, EmptyState, SeverityChip, StatusPill, TONE, fmt } from '@/app/(dashboard)/vendor-risk/_ui';
+import { BTN, BTN_PRIMARY } from '../_record/btn';
+import { Dialog, EmptyState, SeverityChip, StatusPill } from '../_record/recordUi';
+import { TONE } from '@/lib/status';
+import { fmt } from '../../../_ui/fmt';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
 import { apiErrorText } from '@/lib/apiError';
@@ -20,11 +24,11 @@ import { CheckCard, FIELD, Field } from './FindingDialogs';
 import type { MonitoringSignal } from './types';
 import { SEVERITIES, SIGNAL_TYPES } from './constants';
 
-const FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]';
-const SM = `inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[#c3ccd5] bg-[#fff] px-2.5 text-[13px] font-medium text-[#26323d] hover:bg-[#f3f6f8] disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS}`;
-const GHOST = `inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[13px] font-medium text-[#0f766e] hover:bg-[#f0fdfa] disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS}`;
-const ICON = `grid h-8 w-8 place-items-center rounded-lg text-[#64707e] hover:bg-[#f3f6f8] hover:text-[#26323d] disabled:opacity-50 ${FOCUS}`;
-const CHIP = 'inline-flex items-center gap-1 rounded-md border border-[#d5dbe1] bg-[#f3f6f8] px-1.5 py-0.5 text-[11px] font-medium leading-4 text-[#586472]';
+const FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-primary';
+const SM = `inline-flex h-8 shrink-0 items-center gap-1.5 rounded-ds-card border border-ds-border-strong bg-ds-surface px-2.5 text-[13px] font-medium text-ds-fg-body hover:bg-ds-surface-hover disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS}`;
+const GHOST = `inline-flex h-8 shrink-0 items-center gap-1.5 rounded-ds-card px-2.5 text-[13px] font-medium text-ds-primary-text hover:bg-ds-primary-soft disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS}`;
+const ICON = `grid h-[32px] w-[32px] place-items-center rounded-ds-card text-ds-fg-muted hover:bg-ds-surface-hover hover:text-ds-fg-body disabled:opacity-50 ${FOCUS}`;
+const CHIP = 'inline-flex items-center gap-1 rounded-ds-control border border-ds-border bg-ds-surface-hover px-1.5 py-0.5 text-[12px] font-medium leading-4 text-ds-fg-muted';
 
 export default function SignalsPanel({ vendorId }: { vendorId: number }) {
   const qc = useQueryClient();
@@ -37,8 +41,10 @@ export default function SignalsPanel({ vendorId }: { vendorId: number }) {
   const canRaise = hasPermission('vendor_risk:findings:create') || erm;
 
   const [recording, setRecording] = useState(false);
+  const [ruling, setRuling] = useState<number | null>(null);           // a signal about the wrong company: asks why before it is removed
+  const [ruleReason, setRuleReason] = useState('');
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['tpra-signals', vendorId],
     queryFn: async () => (await tpraApi.listSignals(vendorId)).data as { items: MonitoringSignal[] },
   });
@@ -56,7 +62,7 @@ export default function SignalsPanel({ vendorId }: { vendorId: number }) {
       const made = res.data as { triggered_reassessment_id?: number | null; finding_id?: number | null };
       if (made.finding_id) refreshFindings(qc);
       if (made.triggered_reassessment_id) {
-        toast({ type: 'warning', title: 'Reassessment triggered', message: `Signal opened reassessment #${made.triggered_reassessment_id}.` });
+        toast({ type: 'warning', title: 'Reassessment triggered', message: 'This signal opened a new reassessment.' });
       } else {
         toast({ type: 'success', title: made.finding_id ? 'Signal recorded and finding raised' : 'Signal recorded' });
       }
@@ -79,7 +85,7 @@ export default function SignalsPanel({ vendorId }: { vendorId: number }) {
     onSuccess: (res) => {
       invalidate();
       refreshFindings(qc);
-      toast({ type: 'success', title: 'Finding raised', message: `Finding #${(res.data as { finding_id: number }).finding_id} is on the current assessment.` });
+      toast({ type: 'success', title: 'Finding raised', message: 'It is on the current assessment.' });
     },
     onError: failed('Could not raise a finding'),
   });
@@ -101,13 +107,13 @@ export default function SignalsPanel({ vendorId }: { vendorId: number }) {
   const earlier = ratings && ratings.length > 1 ? ratings[ratings.length - 2] : null;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-[12px]">
       {latest && (
-        <div className="rounded-xl border border-[#d5dbe1] bg-[#fff] p-3">
+        <div className="rounded-ds-card border border-ds-border bg-ds-surface p-3">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <p className="text-[13px] font-medium text-[#1f2933]">External security rating · {latest.provider}</p>
-            <p className="text-[13px] text-[#586472]">
-              <span className="text-base font-semibold text-[#1f2933]">{latest.score}</span> on {fmt.date(latest.captured_at)}
+            <p className="text-[13px] font-medium text-ds-fg">External security rating · {latest.provider}</p>
+            <p className="text-[13px] text-ds-fg-muted">
+              <span className="text-[14px] font-[600] text-ds-fg">{latest.score}</span> on {fmt.date(latest.captured_at)}
               {earlier && (
                 <span className="ml-1" style={{ color: latest.score < earlier.score ? TONE.danger.text : TONE.success.text }}>
                   ({latest.score >= earlier.score ? '+' : ''}{Math.round((latest.score - earlier.score) * 10) / 10})
@@ -131,7 +137,7 @@ export default function SignalsPanel({ vendorId }: { vendorId: number }) {
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[13px] text-[#586472]">{waiting}</p>
+        <p className="text-[13px] text-ds-fg-muted">{waiting}</p>
         {canCreate && (
           <button type="button" onClick={() => setRecording(true)} className={BTN_PRIMARY}>
             <Plus aria-hidden className="h-4 w-4" /> Record signal
@@ -140,53 +146,55 @@ export default function SignalsPanel({ vendorId }: { vendorId: number }) {
       </div>
 
       {isLoading ? (
-        <div className="flex items-center gap-2 py-8 text-sm text-[#586472]"><Loader2 aria-hidden className="h-4 w-4 animate-spin" /> Loading…</div>
+        <div className="flex items-center gap-2 py-8 text-[13px] text-ds-fg-muted"><Loader2 aria-hidden className="h-4 w-4 animate-spin" /> Loading…</div>
+      ) : isError ? (
+        <ErrorState compact title="Couldn’t load the monitoring signals" onRetry={() => { void refetch(); }} />
       ) : signals.length === 0 ? (
         <EmptyState icon={Radio} title="No monitoring signals" hint="Record a breach, a news story, a rating change or a missed service level as you hear of it." />
       ) : (
-        <ul className="divide-y divide-[#e1e6eb] rounded-xl border border-[#d5dbe1] bg-[#fff] px-4">
+        <ul className="divide-y divide-ds-border rounded-ds-card border border-ds-border bg-ds-surface px-[16px]">
           {signals.map((s) => {
             const state = signalStatus(s);
             const sources = (s.sources || []).filter((src) => src.url);
             return (
-              <li key={s.id} className="flex flex-wrap items-start justify-between gap-3 py-3">
+              <li key={s.id} className="flex flex-wrap items-start justify-between gap-[12px] py-3">
                 <div className="min-w-0 flex-1">
                   <p className="flex flex-wrap items-center gap-2">
                     <SeverityChip severity={s.severity} />
-                    <span className="text-[14px] font-semibold leading-5 text-[#1f2933]">{s.title || signalTypeLabel(s.signal_type)}</span>
+                    <span className="text-[14px] font-[600] leading-5 text-ds-fg">{s.title || signalTypeLabel(s.signal_type)}</span>
                     <span className={CHIP}>{signalTypeLabel(s.signal_type)}</span>
                     {s.triggered_reassessment && (
-                      <span className="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-medium leading-4"
+                      <span className="inline-flex items-center gap-1 rounded-ds-control border px-1.5 py-0.5 text-[12px] font-medium leading-4"
                         style={{ background: TONE.warning.tint, borderColor: TONE.warning.border, color: TONE.warning.text }}>
                         <RefreshCw aria-hidden className="h-3 w-3" /> Reassessment
                       </span>
                     )}
                     {s.verification && (s.verified === false ? (
-                      <span className="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-medium leading-4"
+                      <span className="inline-flex items-center gap-1 rounded-ds-control border px-1.5 py-0.5 text-[12px] font-medium leading-4"
                         style={{ background: TONE.warning.tint, borderColor: TONE.warning.border, color: TONE.warning.text }}
                         title="Kept and shown, but not emailed and not reopening the assessment until a second publisher reports it">
                         <ShieldQuestion aria-hidden className="h-3 w-3" /> Unverified: {s.verification.reason || 'one source'}
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-medium leading-4"
+                      <span className="inline-flex items-center gap-1 rounded-ds-control border px-1.5 py-0.5 text-[12px] font-medium leading-4"
                         style={{ background: TONE.success.tint, borderColor: TONE.success.border, color: TONE.success.text }}>
                         <ShieldCheck aria-hidden className="h-3 w-3" /> Verified: {s.verification.checks?.corroboration || 'checked'}
                       </span>
                     ))}
                     {s.finding_id && (
-                      <Link href={`/vendor-risk/vendors/${vendorId}?tab=findings&finding=${s.finding_id}`} className={`${CHIP} hover:bg-[#e8edf1] ${FOCUS}`}>
-                        Finding #{s.finding_id}
+                      <Link href={`/vendor-risk/vendors/${vendorId}?tab=findings&finding=${s.finding_id}`} className={`${CHIP} hover:bg-ds-border ${FOCUS}`}>
+                        See the finding
                       </Link>
                     )}
                   </p>
-                  {s.detail && <p className="mt-1 whitespace-pre-line text-[13px] leading-5 text-[#586472]">{s.detail}</p>}
+                  {s.detail && <p className="mt-1 whitespace-pre-line text-[13px] leading-5 text-ds-fg-muted">{s.detail}</p>}
                   {sources.slice(0, 4).map((src) => (
                     <a key={src.url} href={src.url} target="_blank" rel="noopener noreferrer"
-                      className={`mt-0.5 flex items-center gap-1 truncate rounded-sm text-[12px] text-[#0f766e] hover:underline ${FOCUS}`}>
+                      className={`mt-0.5 flex items-center gap-1 truncate rounded-ds-control text-[12px] text-ds-primary-text hover:underline ${FOCUS}`}>
                       <ExternalLink aria-hidden className="h-3 w-3 shrink-0" /> {src.domain ? `${src.domain}: ` : ''}{src.title || src.url}
                     </a>
                   ))}
-                  <p className="mt-1 text-[12px] leading-4 text-[#64707e]">{[s.source, `seen ${fmt.date(s.occurred_at)}`].filter(Boolean).join(' · ')}</p>
+                  <p className="mt-1 text-[12px] leading-4 text-ds-fg-muted">{[s.source, `seen ${fmt.date(s.occurred_at)}`].filter(Boolean).join(' · ')}</p>
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
                   <StatusPill tone={SIGNAL_STATUS[state].tone}>{SIGNAL_STATUS[state].label}</StatusPill>
@@ -204,13 +212,10 @@ export default function SignalsPanel({ vendorId }: { vendorId: number }) {
                   )}
                   {canEdit && sources.length > 0 && (
                     <button type="button" className={ICON} aria-label="Not about this vendor" title="Not about this vendor: remove and never raise these articles again"
-                      onClick={() => {
-                        const reason = window.prompt('Why is this not about the vendor? (optional)') ?? undefined;
-                        rule.mutate({ id: s.id, reason });
-                      }}><Ban aria-hidden className="h-3.5 w-3.5" /></button>
+                      onClick={() => { setRuleReason(''); setRuling(s.id); }}><Ban aria-hidden className="h-3.5 w-3.5" /></button>
                   )}
                   {canDelete && (
-                    <button type="button" className={`${ICON} hover:!bg-[#fef3f2] hover:!text-[#b42318]`} aria-label="Delete signal" title="Delete signal"
+                    <button type="button" className={`${ICON} hover:!bg-ds-danger-soft hover:!text-ds-danger`} aria-label="Delete signal" title="Delete signal"
                       onClick={() => remove.mutate(s.id)}><Trash2 aria-hidden className="h-3.5 w-3.5" /></button>
                   )}
                 </div>
@@ -222,6 +227,24 @@ export default function SignalsPanel({ vendorId }: { vendorId: number }) {
 
       <RecordSignalDialog open={recording} onClose={() => setRecording(false)} busy={record.isPending} canRaise={canRaise}
         onRecord={(p) => record.mutate(p)} />
+      <Dialog
+        open={ruling !== null}
+        onClose={() => setRuling(null)}
+        title="Not about this vendor"
+        description="These articles are removed from this vendor and will not be raised again."
+        footer={(
+          <>
+            <button type="button" className={BTN} onClick={() => setRuling(null)}>Cancel</button>
+            <button type="button" className={BTN_PRIMARY} disabled={rule.isPending}
+              onClick={() => { if (ruling !== null) rule.mutate({ id: ruling, reason: ruleReason.trim() || undefined }, { onSuccess: () => setRuling(null) }); }}>
+              {rule.isPending ? 'Removing…' : 'Remove them'}
+            </button>
+          </>
+        )}
+      >
+        <label htmlFor="signal-rule-reason" className="mb-[4px] block text-[12px] font-medium text-ds-fg-body">Why is this not about the vendor? (optional)</label>
+        <textarea id="signal-rule-reason" data-autofocus rows={3} className={FIELD} value={ruleReason} onChange={(e) => setRuleReason(e.target.value)} />
+      </Dialog>
     </div>
   );
 }
@@ -244,7 +267,7 @@ function RecordSignalDialog({ open, onClose, busy, canRaise, onRecord }: {
           <button type="submit" form={formId} className={BTN_PRIMARY} disabled={busy || !form.title.trim()}>{busy ? 'Saving…' : 'Record signal'}</button>
         </>
       )}>
-      <form id={formId} className="space-y-3.5" onSubmit={(e) => {
+      <form id={formId} className="space-y-[14px]" onSubmit={(e) => {
         e.preventDefault();
         if (!form.title.trim()) return;
         onRecord({ ...form, title: form.title.trim(), source: form.source.trim() || undefined, detail: form.detail.trim() || undefined,
@@ -254,7 +277,7 @@ function RecordSignalDialog({ open, onClose, busy, canRaise, onRecord }: {
           <input id={`${formId}-title`} className={FIELD} value={form.title} maxLength={255} required data-autofocus
             onChange={(e) => set('title', e.target.value)} />
         </Field>
-        <div className="grid gap-3.5 sm:grid-cols-2">
+        <div className="grid gap-[14px] sm:grid-cols-2">
           <Field id={`${formId}-type`} label="Kind">
             <select id={`${formId}-type`} className={FIELD} value={form.signal_type} onChange={(e) => set('signal_type', e.target.value)}>
               {SIGNAL_TYPES.map((t) => <option key={t} value={t}>{signalTypeLabel(t)}</option>)}

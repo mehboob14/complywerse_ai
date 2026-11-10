@@ -9,7 +9,9 @@ import { Loader2 } from 'lucide-react';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { useToast } from '@/components/ui/ToastProvider';
 import { apiErrorText } from '@/lib/apiError';
-import { BTN, BTN_PRIMARY, Dialog, ToggleChip, fmt } from '../../../_ui';
+import { BTN, BTN_PRIMARY } from './btn';
+import { Dialog, ToggleChip } from './recordUi';
+import { fmt } from '../../../_ui/fmt';
 import { CONTACT_ROLES, portalApi, type ContactFields, type ContactRole, type SupplierContact } from '../../../_lib/portalApi';
 import { AREA, FIELD, HINT, LABEL } from '../../_components/formStyles';
 
@@ -75,8 +77,8 @@ export default function ContactDialog({ vendorId, contact, onClose }: {
         </>
       )}
     >
-      <form id={form} className="space-y-3.5" onSubmit={(e) => { e.preventDefault(); if (ready && !save.isPending) save.mutate(); }}>
-        <div className="grid gap-3.5 sm:grid-cols-2">
+      <form id={form} className="space-y-[14px]" onSubmit={(e) => { e.preventDefault(); if (ready && !save.isPending) save.mutate(); }}>
+        <div className="grid gap-[14px] sm:grid-cols-2">
           <div>
             <label htmlFor={`${form}-name`} className={LABEL}>Name</label>
             <input id={`${form}-name`} data-autofocus required maxLength={255} value={f.name ?? ''} onChange={(e) => set({ name: e.target.value })} className={FIELD} />
@@ -102,7 +104,7 @@ export default function ContactDialog({ vendorId, contact, onClose }: {
             ))}
           </div>
         </fieldset>
-        <div className="flex flex-wrap gap-x-5 gap-y-2 text-[13px] leading-5 text-[#26323d]">
+        <div className="flex flex-wrap gap-x-5 gap-y-2 text-[13px] leading-5 text-ds-fg-body">
           <label className="inline-flex items-center gap-2">
             <input type="checkbox" checked={!!f.is_primary} onChange={(e) => set({ is_primary: e.target.checked })} className="h-4 w-4 accent-[#0f766e]" /> Primary
           </label>

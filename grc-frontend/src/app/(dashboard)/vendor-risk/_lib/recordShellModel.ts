@@ -97,3 +97,12 @@ export const showsPicker = (tab: TabKey, openCount: number): boolean => (tab ===
 
 /** Facts under the name, in order: type, industry, business unit (the website is a link of its own). */
 export const metaLine = (parts: string[]): string => parts.filter(Boolean).join(' · ');
+
+// ── dates for a date box ─────────────────────────────────────────────────────
+
+/** The day `n` days from `today` (the viewer's own calendar) as the value of a date box: "2026-11-24". */
+export function inDays(n: number, today: Date = new Date()): string {
+  const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + n);
+  const two = (x: number) => String(x).padStart(2, '0');
+  return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}`;
+}

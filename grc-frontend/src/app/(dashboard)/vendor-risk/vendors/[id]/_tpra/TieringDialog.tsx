@@ -8,7 +8,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Check } from 'lucide-react';
 import { clsx } from 'clsx';
-import { BTN, BTN_PRIMARY, Dialog, ThresholdRuler, TierBadge, TONE } from '@/app/(dashboard)/vendor-risk/_ui';
+import { BTN, BTN_PRIMARY } from '../_record/btn';
+import { Dialog, TierBadge } from '../_record/recordUi';
+import { TONE } from '@/lib/status';
+import { ThresholdRuler } from '../../../_ui/Charts';
 import { useToast } from '@/components/ui/ToastProvider';
 import { tpraApi } from '@/lib/api';
 import { QuestionRow, useIntake, useIntakeCatalogue } from '../../../_lib/intake/IntakeForm';
@@ -19,7 +22,7 @@ import {
   changed, changesFrom, draftKey, overrideReady, owed, visibleQuestions, type AskedSection,
 } from '../../../_lib/lifecycleLogic';
 
-const FIELD = 'w-full rounded-lg border border-[#c3ccd5] bg-[#fff] px-3 py-2 text-[14px] text-[#1f2933] placeholder:text-[#8a95a1] focus:border-[#0f766e] focus:outline-none focus:ring-2 focus:ring-[#99d5cf]';
+const FIELD = 'w-full rounded-ds-card border border-ds-border-strong bg-ds-surface px-3 py-2 text-[14px] text-ds-fg placeholder:text-ds-fg-muted focus-visible:border-ds-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-border-strong';
 const OVERRIDE = 'override';
 const BANDS = { critical: 75, high: 50, medium: 25 };
 const TIERS = [['critical', 'Critical'], ['high', 'High'], ['medium', 'Medium'], ['low', 'Low']] as const;
@@ -179,7 +182,7 @@ export default function TieringDialog({
       open={open} onClose={close} size={720} flush title={title}
       description={`${total} questions. The tier sets stages and reviewers.`}
       footer={<>
-        <span className="mr-auto text-[13px] text-[#586472]">{left > 0 ? `${left} to answer` : ''}</span>
+        <span className="mr-auto text-[13px] text-ds-fg-muted">{left > 0 ? `${left} to answer` : ''}</span>
         {left > 0 && !blockedWhy && canRunSaved && (
           <button type="button" className={BTN} disabled={fromSaved.isPending || save.isPending} onClick={() => fromSaved.mutate()}
             title="Tier from the answers already saved (else the vendor's profile), without this draft">
@@ -195,29 +198,29 @@ export default function TieringDialog({
       </>}
     >
       {!draft || !catalogue ? (
-        <p className="px-5 py-6 text-[13px] text-[#64707e]">Loading the questions…</p>
+        <p className="px-[20px] py-[24px] text-[13px] text-ds-fg-muted">Loading the questions…</p>
       ) : (
         <div>
-          {blockedWhy && <p className="px-5 pt-3 text-[13px]" style={{ color: TONE.warning.text }}>{blockedWhy}</p>}
+          {blockedWhy && <p className="px-[20px] pt-3 text-[13px]" style={{ color: TONE.warning.text }}>{blockedWhy}</p>}
           {/* The score */}
-          <div className="border-b border-[#eef1f4] px-5 py-3">
+          <div className="border-b border-ds-surface-hover px-[20px] py-3">
             {!score ? (
-              <p className="text-[13px] text-[#64707e]">{previewError && draft && Object.keys(given(draft.answers)).length > 0 ? previewError : 'Answer to see the tier'}</p>
+              <p className="text-[13px] text-ds-fg-muted">{previewError && draft && Object.keys(given(draft.answers)).length > 0 ? previewError : 'Answer to see the tier'}</p>
             ) : (
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <span className="text-[13px] font-semibold text-[#586472]">{draft.tier ? 'Tier' : 'Likely tier'}</span>
+                  <span className="text-[13px] font-[600] text-ds-fg-muted">{draft.tier ? 'Tier' : 'Likely tier'}</span>
                   <TierBadge tier={shown} />
-                  <span className="text-[13px] tabular-nums text-[#586472]">Score {Math.round(score.score * 10) / 10}</span>
-                  {draft.tier && <span className="rounded-full px-2 py-0.5 text-[12px] font-semibold" style={{ background: TONE.pending.tint, color: TONE.pending.text }}>Overridden</span>}
+                  <span className="text-[13px] tabular-nums text-ds-fg-muted">Score {Math.round(score.score * 10) / 10}</span>
+                  {draft.tier && <span className="rounded-full px-2 py-0.5 text-[12px] font-[600]" style={{ background: TONE.pending.tint, color: TONE.pending.text }}>Overridden</span>}
                   {score.minimum_tier && (
-                    <span className="rounded-full px-2 py-0.5 text-[12px] font-semibold" style={{ background: TONE.progress.tint, color: TONE.progress.text }}
+                    <span className="rounded-full px-2 py-0.5 text-[12px] font-[600]" style={{ background: TONE.progress.tint, color: TONE.progress.text }}
                       title={score.minimum_from ? `An answer sets a minimum tier, whatever the score: ${score.minimum_from}` : 'An answer sets a minimum tier, whatever the score.'}>
                       Minimum {score.minimum_tier[0].toUpperCase() + score.minimum_tier.slice(1)} from an answer
                     </span>
                   )}
-                  {moved && <span className="rounded-full px-2 py-0.5 text-[12px] font-semibold" style={{ background: TONE.warning.tint, color: TONE.warning.text }}>Changes from {moved}</span>}
-                  <span className="ml-auto text-[13px] tabular-nums text-[#64707e]">{answered}/{total}</span>
+                  {moved && <span className="rounded-full px-2 py-0.5 text-[12px] font-[600]" style={{ background: TONE.warning.tint, color: TONE.warning.text }}>Changes from {moved}</span>}
+                  <span className="ml-auto text-[13px] tabular-nums text-ds-fg-muted">{answered}/{total}</span>
                 </div>
                 <ThresholdRuler score={score.score} thresholds={policy?.thresholds ?? BANDS} compact showNext />
               </div>
@@ -226,7 +229,7 @@ export default function TieringDialog({
 
           {/* The questions, by section */}
           <div className="grid md:grid-cols-[190px_minmax(0,1fr)]">
-            <nav aria-label="Sections" className="border-b border-[#eef1f4] p-2.5 md:border-b-0 md:border-r">
+            <nav aria-label="Sections" className="border-b border-ds-surface-hover p-2.5 md:border-b-0 md:border-r">
               <ul className="space-y-0.5">
                 {steps.map((k) => {
                   const s = sections.find((x) => x.key === k);
@@ -234,14 +237,14 @@ export default function TieringDialog({
                   return (
                     <li key={k}>
                       <button type="button" onClick={() => setStep(k)} aria-current={step === k ? 'step' : undefined}
-                        className={clsx('flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]',
-                          step === k ? 'bg-[#e6f6f3] font-semibold text-[#0f5f59]' : 'text-[#26323d] hover:bg-[#f3f6f8]')}>
+                        className={clsx('flex w-full items-center gap-2 rounded-ds-card px-2.5 py-2 text-left text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-primary',
+                          step === k ? 'bg-ds-primary-soft font-[600] text-ds-primary-hover' : 'text-ds-fg-body hover:bg-ds-surface-hover')}>
                         <span aria-hidden className="grid h-4 w-4 shrink-0 place-items-center rounded-full"
                           style={{ background: s && open_ === 0 ? TONE.success.dot : '#e3e8ee', color: '#fff' }}>
                           {s && open_ === 0 && <Check className="h-2.5 w-2.5" strokeWidth={3.5} />}
                         </span>
                         <span className="min-w-0 flex-1 truncate">{s ? s.title : 'Override'}</span>
-                        {open_ > 0 && <span className="text-[12px] text-[#64707e]">{open_}</span>}
+                        {open_ > 0 && <span className="text-[12px] text-ds-fg-muted">{open_}</span>}
                       </button>
                     </li>
                   );
@@ -249,11 +252,11 @@ export default function TieringDialog({
               </ul>
             </nav>
 
-            <div className="min-w-0 space-y-3 p-4">
+            <div className="min-w-0 space-y-[12px] p-[16px]">
               {current ? (
                 <>
                   {current.can_answer === false && (
-                    <p className="rounded-lg bg-[#f3f6f8] px-3 py-2 text-[13px] text-[#586472]">Someone else answers this section; you can read it.</p>
+                    <p className="rounded-ds-card bg-ds-surface-hover px-3 py-2 text-[13px] text-ds-fg-muted">Someone else answers this section; you can read it.</p>
                   )}
                   {visibleQuestions(current, draft.answers).map((q) => (
                     <QuestionRow
@@ -265,12 +268,12 @@ export default function TieringDialog({
                   ))}
                 </>
               ) : (
-                <div className="space-y-3">
-                  <p className="text-[13px] text-[#26323d]">
-                    Computed tier is <span className="font-semibold">{score ? score.tier[0].toUpperCase() + score.tier.slice(1) : 'not known yet'}</span>.
+                <div className="space-y-[12px]">
+                  <p className="text-[13px] text-ds-fg-body">
+                    Computed tier is <span className="font-[600]">{score ? score.tier[0].toUpperCase() + score.tier.slice(1) : 'not known yet'}</span>.
                   </p>
                   <div>
-                    <label className="mb-1 block text-[13px] font-medium text-[#26323d]" htmlFor="tier-override">Tier</label>
+                    <label className="mb-1 block text-[13px] font-medium text-ds-fg-body" htmlFor="tier-override">Tier</label>
                     <select id="tier-override" className={FIELD} value={draft.tier} onChange={(e) => setDraft({ ...draft, tier: e.target.value })}>
                       <option value="">Use computed tier</option>
                       {TIERS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
@@ -278,10 +281,10 @@ export default function TieringDialog({
                   </div>
                   {draft.tier && (
                     <div>
-                      <label className="mb-1 block text-[13px] font-medium text-[#26323d]" htmlFor="tier-why">Reason</label>
+                      <label className="mb-1 block text-[13px] font-medium text-ds-fg-body" htmlFor="tier-why">Reason</label>
                       <textarea id="tier-why" rows={3} className={FIELD} value={draft.why} placeholder="Say what the answers miss."
                         onChange={(e) => setDraft({ ...draft, why: e.target.value })} />
-                      {!overrideReady(draft.tier, draft.why) && <p className="mt-0.5 text-[12px] text-[#64707e]">At least 10 characters. It goes on the audit trail.</p>}
+                      {!overrideReady(draft.tier, draft.why) && <p className="mt-0.5 text-[12px] text-ds-fg-muted">At least 10 characters. It goes on the audit trail.</p>}
                     </div>
                   )}
                 </div>

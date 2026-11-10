@@ -9,11 +9,11 @@ import { DOMAIN_LABELS, DOMAIN_KEYS, tierBadge } from './constants';
 
 function barColor(rating?: string): string {
   switch ((rating || '').toLowerCase()) {
-    case 'critical': return 'bg-red-500';
-    case 'high': return 'bg-orange-500';
-    case 'medium': return 'bg-amber-400';
-    case 'low': return 'bg-emerald-500';
-    default: return 'bg-gray-300';
+    case 'critical': return 'bg-ds-danger';
+    case 'high': return 'bg-ds-warning';
+    case 'medium': return 'bg-ds-warning';
+    case 'low': return 'bg-ds-success';
+    default: return 'bg-ds-border-strong';
   }
 }
 
@@ -32,35 +32,35 @@ export default function DomainRiskView({ assessment }: { assessment: TpraAssessm
   const incomplete = hasAny && scoredCount < total;
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4">
+    <div className="rounded-ds-card border border-ds-border bg-ds-surface p-[16px]">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <h3 className="text-sm font-semibold text-slate-900">Residual risk by domain</h3>
+          <h3 className="text-[13px] font-[600] text-ds-fg">Residual risk by domain</h3>
           {/* Assessment coverage — scored vs total active domains. */}
           <span
-            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${
-              incomplete ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-slate-200 bg-slate-50 text-slate-600'
-            }`}
+            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[12px] font-medium ${
+ incomplete ? 'border-ds-border-strong bg-ds-warning-soft text-ds-warning' : 'border-ds-border bg-ds-surface-subtle text-ds-fg-body'
+ }`}
             title={`${scoredCount} of ${total} risk domains have been scored`}
           >
             Coverage: {scoredCount}/{total} ({coverage}%)
           </span>
         </div>
         {assessment.residual_rating && (
-          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${tierBadge(assessment.residual_rating)}`}>
+          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[12px] font-medium ${tierBadge(assessment.residual_rating)}`}>
             Overall: {assessment.residual_rating}{assessment.residual_score != null ? ` (${assessment.residual_score})` : ''}
           </span>
         )}
       </div>
 
       {incomplete && (
-        <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50/60 px-2.5 py-1.5 text-[11px] text-amber-700">
+        <p className="mb-3 rounded-ds-card border border-ds-border-strong bg-ds-warning-soft px-2.5 py-1.5 text-[12px] text-ds-warning">
           Only {scoredCount} of {total} domains are scored — the overall rating reflects partial coverage. Unscored domains are shown as <span className="font-medium">Not assessed</span>, not low-risk.
         </p>
       )}
 
       {!hasAny ? (
-        <p className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 text-xs text-gray-500">
+        <p className="rounded-ds-card border border-dashed border-ds-border-strong bg-ds-surface-subtle p-[16px] text-[12px] text-ds-fg-muted">
           Not scored yet. Run scoring on the Risk Analysis &amp; Scoring stage to populate per-domain residual ratings.
         </p>
       ) : (
@@ -72,8 +72,8 @@ export default function DomainRiskView({ assessment }: { assessment: TpraAssessm
             const pct = residual != null ? Math.max(2, Math.min(100, residual)) : 0;
             return (
               <div key={key} className="grid grid-cols-[9rem_1fr_auto] items-center gap-2">
-                <span className={`truncate text-xs ${scored ? 'text-gray-600' : 'text-slate-400'}`} title={DOMAIN_LABELS[key]}>{DOMAIN_LABELS[key]}</span>
-                <div className={`h-2 overflow-hidden rounded-full ${scored ? 'bg-gray-100' : 'bg-slate-100'}`} role="img"
+                <span className={`truncate text-[12px] ${scored ? 'text-ds-fg-body' : 'text-ds-fg-muted'}`} title={DOMAIN_LABELS[key]}>{DOMAIN_LABELS[key]}</span>
+                <div className={`h-2 overflow-hidden rounded-full ${scored ? 'bg-ds-surface-hover' : 'bg-ds-surface-hover'}`} role="img"
                   aria-label={`${DOMAIN_LABELS[key]} residual ${scored ? d!.rating : 'not assessed'}`}>
                   {scored ? (
                     <div className={`h-full rounded-full ${barColor(d!.rating)}`} style={{ width: `${pct}%` }} />
@@ -83,11 +83,11 @@ export default function DomainRiskView({ assessment }: { assessment: TpraAssessm
                   )}
                 </div>
                 {scored ? (
-                  <span className={`inline-flex w-24 justify-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${tierBadge(d!.rating)}`}>
+                  <span className={`inline-flex w-24 justify-center rounded-full border px-1.5 py-0.5 text-[12px] font-medium ${tierBadge(d!.rating)}`}>
                     {d!.rating}
                   </span>
                 ) : (
-                  <span className="inline-flex w-24 justify-center rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                  <span className="inline-flex w-24 justify-center rounded-full border border-ds-border bg-ds-surface-subtle px-1.5 py-0.5 text-[12px] font-medium text-ds-fg-muted">
                     Not assessed
                   </span>
                 )}

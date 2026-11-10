@@ -3,10 +3,11 @@
 // The three questions the workspace asks before it moves work: send it back (to which stage, and what has to change), skip a stage
 // (why), and open a new review (why). Each needs a reason, which goes on the audit trail with the person's name.
 import { useEffect, useState } from 'react';
-import { BTN, BTN_PRIMARY, Dialog } from '@/app/(dashboard)/vendor-risk/_ui';
+import { BTN, BTN_PRIMARY } from '../_record/btn';
+import { Dialog } from '../_record/recordUi';
 
-const FIELD = 'w-full rounded-lg border border-[#c3ccd5] bg-[#fff] px-3 py-2 text-[14px] text-[#1f2933] placeholder:text-[#8a95a1] focus:border-[#0f766e] focus:outline-none focus:ring-2 focus:ring-[#99d5cf] disabled:bg-[#f3f6f8]';
-const LABEL = 'mb-1 block text-[13px] font-medium text-[#26323d]';
+const FIELD = 'w-full rounded-ds-card border border-ds-border-strong bg-ds-surface px-3 py-2 text-[14px] text-ds-fg placeholder:text-ds-fg-muted focus-visible:border-ds-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-border-strong disabled:bg-ds-surface-hover';
+const LABEL = 'mb-1 block text-[13px] font-medium text-ds-fg-body';
 
 function useReason(open: boolean) {
   const [reason, setReason] = useState('');
@@ -38,7 +39,7 @@ export function SendBackDialog({ open, onClose, targets, initial, busy, onSubmit
         </button>
       </>}
     >
-      <div className="space-y-3">
+      <div className="space-y-[12px]">
         <div>
           <label className={LABEL} htmlFor="sendback-to">Back to</label>
           <select id="sendback-to" className={FIELD} value={target} onChange={(e) => setTarget(e.target.value)}>

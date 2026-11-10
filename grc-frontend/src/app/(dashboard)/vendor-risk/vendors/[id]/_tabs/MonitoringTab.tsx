@@ -11,7 +11,7 @@ import type { TabProps } from './tabProps';
 
 export default function MonitoringTab({ vendorId, vendor }: TabProps) {
   return (
-    <div className="space-y-5">
+    <div className="space-y-[20px]">
       <ReassessmentClock vendorId={vendorId} vendor={vendor} />
       <Section title="Signals" info="Breach, rating, financial, service-level and certificate signals. A breach, or any high or critical one, opens a new reassessment.">
         <SignalsPanel vendorId={vendorId} />

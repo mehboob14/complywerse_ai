@@ -10,7 +10,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link2, Plus, Trash2, Unlink } from 'lucide-react';
 import { tpraApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
-import { BTN, ErrorState, Panel, Skeleton, StatTile } from '../../../_ui';
+import { BTN } from '../_record/btn';
+import RecordPanel from '../_record/RecordPanel';
+import { ErrorState, Skeleton } from '@/components/ui/ds';
+import { StatTile } from '@/components/ui/ds';
+import { formatCount } from '@/lib/format';
 import { FIELD } from '../../_components/formStyles';
 
 interface Impact {
@@ -24,11 +28,11 @@ interface Impact {
 }
 type Target = 'asset' | 'bia_process';
 
-const TH = 'whitespace-nowrap px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-[#64707e]';
-const TD = 'px-3 py-2.5 align-top text-[13px] leading-5 text-[#26323d]';
-const ICON = 'grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[#64707e] hover:bg-[#f3f6f8] hover:text-[#b42318] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]';
-const CHIP = 'inline-flex h-8 items-center gap-1 rounded-lg border border-[#99d5cf] bg-[#fff] px-2.5 text-sm font-medium text-[#0f766e] hover:bg-[#f0fdfa] disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]';
-const NONE = 'text-[13px] leading-5 text-[#64707e]';
+const TH = 'whitespace-nowrap px-3 py-2 text-left text-[12px] font-[600] uppercase tracking-wide text-ds-fg-muted';
+const TD = 'px-3 py-2.5 align-top text-[13px] leading-5 text-ds-fg-body';
+const ICON = 'grid h-[32px] w-[32px] shrink-0 place-items-center rounded-ds-card text-ds-fg-muted hover:bg-ds-surface-hover hover:text-ds-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-primary';
+const CHIP = 'inline-flex h-8 items-center gap-1 rounded-ds-card border border-ds-border-strong bg-ds-surface px-2.5 text-[13px] font-medium text-ds-primary-text hover:bg-ds-primary-soft disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-primary';
+const NONE = 'text-[13px] leading-5 text-ds-fg-muted';
 
 function errorText(e: unknown): string {
   return (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'That did not save.';
@@ -37,10 +41,10 @@ function errorText(e: unknown): string {
 /** A block of the panel: a small heading with what is counted, the link or watch action on the right, then the content. */
 function Block({ title, count, action, children }: { title: string; count?: number; action?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <section className="border-t border-[#e1e6eb] pt-4 first:border-t-0 first:pt-0">
+    <section className="border-t border-ds-border pt-4 first:border-t-0 first:pt-0">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-[14px] font-semibold leading-5 text-[#1f2933]">
-          {title}{count != null && <span className="ml-2 text-[13px] font-medium tabular-nums text-[#64707e]">{count}</span>}
+        <h3 className="text-[14px] font-[600] leading-5 text-ds-fg">
+          {title}{count != null && <span className="ml-2 text-[13px] font-medium tabular-nums text-ds-fg-muted">{count}</span>}
         </h3>
         {action}
       </div>
@@ -57,19 +61,19 @@ function LinkPicker({ type, onPick, busy }: { type: Target; onPick: (id: number)
   });
   const what = type === 'asset' ? 'assets' : 'continuity processes';
   return (
-    <div className="mb-3 space-y-1 rounded-lg border border-[#d5dbe1] p-2">
+    <div className="mb-3 space-y-1 rounded-ds-card border border-ds-border p-2">
       <input value={term} onChange={(e) => setTerm(e.target.value)} autoFocus className={FIELD}
         placeholder={`Search ${what} by name`} aria-label={`Search ${what}`} />
       <ul className="max-h-40 overflow-y-auto">
         {(data || []).map((t) => (
           <li key={t.id}>
             <button type="button" disabled={busy} onClick={() => onPick(t.id)}
-              className="flex w-full justify-between gap-2 rounded px-2 py-1.5 text-left text-sm text-[#26323d] hover:bg-[#f3f6f8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]">
-              <span className="truncate">{t.label}</span><span className="shrink-0 text-[#64707e]">{t.detail}</span>
+              className="flex w-full justify-between gap-2 rounded px-2 py-1.5 text-left text-[13px] text-ds-fg-body hover:bg-ds-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-primary">
+              <span className="truncate">{t.label}</span><span className="shrink-0 text-ds-fg-muted">{t.detail}</span>
             </button>
           </li>
         ))}
-        {data && data.length === 0 && <li className="px-2 py-1.5 text-[13px] text-[#64707e]">Nothing found.</li>}
+        {data && data.length === 0 && <li className="px-2 py-1.5 text-[13px] text-ds-fg-muted">Nothing found.</li>}
       </ul>
     </div>
   );
@@ -106,15 +110,15 @@ export default function DependenciesPanel({ vendorId }: { vendorId: number }) {
     if (isError || !data) return <ErrorState title="Couldn't work out what depends on this vendor" onRetry={() => refetch()} />;
     const linkedAssets = data.assets.filter((a) => a.linked).length;
     return (
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <StatTile label="Continuity processes" value={data.processes.length} caption={data.shortest_rto_hours != null ? `Shortest RTO ${data.shortest_rto_hours}h` : 'No recovery time set'} />
-          <StatTile label="Assets" value={data.assets.length} caption={`${linkedAssets} linked, ${data.assets.length - linkedAssets} named`} />
-          <StatTile label="Assets running its software" value={data.assets_running_its_software} caption="From the software inventory" />
-          <StatTile label="Controls" value={data.controls.length} caption="Linked or provided" />
+      <div className="space-y-[16px]">
+        <div className="grid grid-cols-2 gap-[12px] md:grid-cols-4">
+          <StatTile label="Continuity processes" value={formatCount(data.processes.length)} note={data.shortest_rto_hours != null ? `Shortest RTO ${data.shortest_rto_hours}h` : 'No recovery time set'} />
+          <StatTile label="Assets" value={formatCount(data.assets.length)} note={`${linkedAssets} linked, ${data.assets.length - linkedAssets} named`} />
+          <StatTile label="Assets running its software" value={formatCount(data.assets_running_its_software)} note="From the software inventory" />
+          <StatTile label="Controls" value={formatCount(data.controls.length)} note="Linked or provided" />
         </div>
 
-        {error && <p role="alert" className="text-[13px] leading-5 text-[#c01741]">{error}</p>}
+        {error && <p role="alert" className="text-[13px] leading-5 text-ds-danger">{error}</p>}
 
         <Block title="Continuity processes" count={data.processes.length}
           action={canEdit ? <button type="button" className={BTN} onClick={() => toggle('bia_process')}><Plus aria-hidden className="h-4 w-4" /> Link a process</button> : undefined}>
@@ -122,20 +126,20 @@ export default function DependenciesPanel({ vendorId }: { vendorId: number }) {
           {data.processes.length === 0 ? <p className={NONE}>No continuity process names or links this vendor yet.</p> : (
             <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Table of continuity processes">
               <table className="min-w-full">
-                <thead><tr className="border-y border-[#e1e6eb] bg-[#f7f9fa]">
+                <thead><tr className="border-y border-ds-border bg-ds-surface-subtle">
                   {['Process', 'Plan', 'RTO / RPO / MTPD', "Vendor's BCP"].map((h) => <th key={h} scope="col" className={TH}>{h}</th>)}<th className={TH}><span className="sr-only">Unlink</span></th>
                 </tr></thead>
-                <tbody className="divide-y divide-[#e1e6eb]">
+                <tbody className="divide-y divide-ds-border">
                   {data.processes.map((p) => (
                     <tr key={p.id}>
-                      <td className={`${TD} font-medium text-[#1f2933]`}>{p.process}{p.criticality ? <span className="ml-1 font-normal text-[#64707e]">({p.criticality})</span> : null}</td>
+                      <td className={`${TD} font-medium text-ds-fg`}>{p.process}{p.criticality ? <span className="ml-1 font-normal text-ds-fg-muted">({p.criticality})</span> : null}</td>
                       <td className={TD}>{p.plan || '-'}</td>
                       <td className={`${TD} whitespace-nowrap tabular-nums`}>{[p.rto_hours, p.rpo_hours, p.mtpd_hours].map((h) => (h == null ? '?' : `${h}h`)).join(' / ')}</td>
                       <td className={TD}>{p.vendor_bcp || (p.named_as_dependency ? 'Not recorded' : '-')}</td>
                       <td className={`${TD} text-right`}>
                         {p.linked && p.link_id && canEdit
                           ? <button type="button" onClick={() => unlink.mutate(p.link_id!)} className={ICON} aria-label={`Unlink ${p.process}`} title="Unlink"><Unlink aria-hidden className="h-4 w-4" /></button>
-                          : !p.linked && <span className="text-[12px] text-[#64707e]">Named in the BIA</span>}
+                          : !p.linked && <span className="text-[12px] text-ds-fg-muted">Named in the BIA</span>}
                       </td>
                     </tr>
                   ))}
@@ -152,7 +156,7 @@ export default function DependenciesPanel({ vendorId }: { vendorId: number }) {
             <ul className="space-y-1.5">
               {data.assets.map((a) => (
                 <li key={a.id} className="flex items-center justify-between gap-2 text-[13px] leading-5">
-                  <span><span className="font-medium text-[#1f2933]">{a.name}</span> <span className="text-[#64707e]">{a.type}{a.criticality ? ` · ${a.criticality}` : ''}</span></span>
+                  <span><span className="font-medium text-ds-fg">{a.name}</span> <span className="text-ds-fg-muted">{a.type}{a.criticality ? ` · ${a.criticality}` : ''}</span></span>
                   {a.linked ? (
                     canEdit && a.link_id && <button type="button" onClick={() => unlink.mutate(a.link_id!)} className={ICON} aria-label={`Unlink ${a.name}`} title="Unlink"><Unlink aria-hidden className="h-4 w-4" /></button>
                   ) : (
@@ -169,10 +173,10 @@ export default function DependenciesPanel({ vendorId }: { vendorId: number }) {
           {data.controls.length === 0 ? <p className={NONE}>No control is linked to this vendor or provided by it. Link one from the control&apos;s page.</p> : (
             <ul className="space-y-1.5">
               {data.controls.map((c) => (
-                <li key={c.code} className="text-[13px] leading-5 text-[#26323d]">
-                  <Link href={`/automation/soc2-controls/${encodeURIComponent(c.code)}`} className="font-medium text-[#0f766e] hover:underline">{c.code}</Link>
+                <li key={c.code} className="text-[13px] leading-5 text-ds-fg-body">
+                  <Link href={`/automation/soc2-controls/${encodeURIComponent(c.code)}`} className="font-medium text-ds-primary-text hover:underline">{c.code}</Link>
                   {c.title ? <span> {c.title}</span> : null}
-                  <span className="text-[#64707e]"> · {c.how}</span>
+                  <span className="text-ds-fg-muted"> · {c.how}</span>
                 </li>
               ))}
             </ul>
@@ -185,8 +189,8 @@ export default function DependenciesPanel({ vendorId }: { vendorId: number }) {
               {data.products.map((p) => (
                 <li key={p.id} className="flex items-center justify-between gap-2 text-[13px] leading-5">
                   <span>
-                    <span className="font-medium text-[#1f2933]">{p.name}</span>
-                    {(p.cpe_vendor || p.cpe_product) && <span className="font-mono text-[11px] text-[#64707e]"> cpe:…:{p.cpe_vendor || '*'}:{p.cpe_product || '*'}</span>}
+                    <span className="font-medium text-ds-fg">{p.name}</span>
+                    {(p.cpe_vendor || p.cpe_product) && <span className="font-mono text-[12px] text-ds-fg-muted"> cpe:…:{p.cpe_vendor || '*'}:{p.cpe_product || '*'}</span>}
                   </span>
                   {canEdit && <button type="button" onClick={() => unwatch.mutate(p.id)} className={ICON} aria-label={`Stop watching ${p.name}`} title="Stop watching"><Trash2 aria-hidden className="h-4 w-4" /></button>}
                 </li>
@@ -207,9 +211,9 @@ export default function DependenciesPanel({ vendorId }: { vendorId: number }) {
   })();
 
   return (
-    <Panel title="What depends on them"
+    <RecordPanel title="What depends on them"
       info="Watched products are checked daily against the CISA Known Exploited Vulnerabilities catalogue; a match becomes a monitoring signal. The vendors this one relies on are under Paperwork, Subprocessors.">
       {body}
-    </Panel>
+    </RecordPanel>
   );
 }

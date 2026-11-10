@@ -4,6 +4,7 @@
 // from the central evidence library. Reused at the assessment level (the
 // Questionnaire & Evidence stage "evidence pack") and scoped to a single finding.
 import { useMemo, useRef, useState } from 'react';
+import { ErrorState } from '@/components/ui/ds';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Paperclip, Upload, Link2, X, Loader2, FileText, ExternalLink, Search } from 'lucide-react';
 import { tpraApi, evidenceApi } from '@/lib/api';
@@ -49,7 +50,7 @@ export default function EvidencePanel({
   const [search, setSearch] = useState('');
 
   const key = ['tpra-evidence', assessmentId, findingId ?? 'all'];
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: key,
     queryFn: async () => {
       const res = await tpraApi.listEvidence(assessmentId, findingId ? { finding_id: findingId } : undefined);
@@ -104,22 +105,22 @@ export default function EvidencePanel({
   }, [library, linkedIds, search]);
 
   return (
-    <div className={compact ? '' : 'rounded-xl border border-gray-200 bg-white p-4'}>
+    <div className={compact ? '' : 'rounded-ds-card border border-ds-border bg-ds-surface p-[16px]'}>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
-          <Paperclip className="h-3.5 w-3.5 text-gray-400" /> {title}
-          <span className="rounded-full bg-slate-100 px-1.5 text-[10px] text-slate-500">{items.length}</span>
+        <p className="flex items-center gap-1.5 text-[12px] font-[600] text-ds-fg">
+          <Paperclip className="h-3.5 w-3.5 text-ds-fg-muted" /> {title}
+          <span className="rounded-full bg-ds-surface-hover px-1.5 text-[12px] text-ds-fg-muted">{items.length}</span>
         </p>
         {canEdit && (
           <div className="flex items-center gap-1.5">
             <input ref={fileRef} type="file" className="hidden"
               onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadMut.mutate(f); if (fileRef.current) fileRef.current.value = ''; }} />
             <button onClick={() => fileRef.current?.click()} disabled={uploadMut.isPending}
-              className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+              className="inline-flex items-center gap-1 rounded-ds-card border border-ds-border-strong bg-ds-surface px-2.5 py-1.5 text-[12px] font-medium text-ds-fg-body hover:bg-ds-surface-subtle disabled:opacity-50">
               {uploadMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} Upload
             </button>
             <button onClick={() => setPickerOpen((v) => !v)}
-              className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 hover:bg-gray-50">
+              className="inline-flex items-center gap-1 rounded-ds-card border border-ds-border-strong bg-ds-surface px-2.5 py-1.5 text-[12px] font-medium text-ds-fg-body hover:bg-ds-surface-subtle">
               <Link2 className="h-3.5 w-3.5" /> Link existing
             </button>
           </div>
@@ -128,23 +129,23 @@ export default function EvidencePanel({
 
       {/* Existing-evidence picker */}
       {pickerOpen && (
-        <div className="mb-2 rounded-lg border border-gray-200 bg-gray-50 p-2">
+        <div className="mb-2 rounded-ds-card border border-ds-border bg-ds-surface-subtle p-2">
           <div className="relative mb-1.5">
-            <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+            <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ds-fg-muted" />
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search evidence library…"
-              className="w-full rounded-md border border-gray-300 bg-white py-1.5 pl-7 pr-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500" />
+              className="w-full rounded-ds-control border border-ds-border-strong bg-ds-surface py-1.5 pl-7 pr-2 text-[12px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-primary" />
           </div>
           {libLoading ? (
-            <p className="px-1 py-2 text-[11px] text-gray-400">Loading library…</p>
+            <p className="px-1 py-2 text-[12px] text-ds-fg-muted">Loading library…</p>
           ) : filteredLib.length === 0 ? (
-            <p className="px-1 py-2 text-[11px] text-gray-400">No matching evidence. Upload a new file instead.</p>
+            <p className="px-1 py-2 text-[12px] text-ds-fg-muted">No matching evidence. Upload a new file instead.</p>
           ) : (
             <ul className="max-h-44 space-y-0.5 overflow-y-auto">
               {filteredLib.map((e) => (
                 <li key={e.id}>
                   <button onClick={() => linkMut.mutate(e.id)} disabled={linkMut.isPending}
-                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-white disabled:opacity-50">
-                    <FileText className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
+                    className="flex w-full items-center gap-2 rounded-ds-control px-2 py-1.5 text-left text-[12px] text-ds-fg-body hover:bg-ds-surface disabled:opacity-50">
+                    <FileText className="h-3.5 w-3.5 flex-shrink-0 text-ds-fg-muted" />
                     <span className="truncate">{e.name}{e.file_name ? ` · ${e.file_name}` : ''}</span>
                   </button>
                 </li>
@@ -156,21 +157,23 @@ export default function EvidencePanel({
 
       {/* Attached list */}
       {isLoading ? (
-        <p className="text-[11px] text-gray-400">Loading…</p>
+        <p className="text-[12px] text-ds-fg-muted">Loading…</p>
+      ) : isError ? (
+        <ErrorState compact title="Couldn’t load the evidence" onRetry={() => { void refetch(); }} />
       ) : items.length === 0 ? (
-        <p className="text-[11px] text-gray-400">No evidence attached yet.</p>
+        <p className="text-[12px] text-ds-fg-muted">No evidence attached yet.</p>
       ) : (
         <ul className="space-y-1">
           {items.map((it) => (
-            <li key={it.id} className="flex items-center gap-2 rounded-lg border border-gray-100 bg-gray-50/60 px-2.5 py-1.5">
-              {it.has_file ? <FileText className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" /> : <ExternalLink className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />}
-              <span className="min-w-0 flex-1 truncate text-xs text-slate-700">{it.name || it.file_name || `Evidence #${it.evidence_id}`}</span>
-              {it.evidence_type && <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">{it.evidence_type}</span>}
-              {it.status && <span className="text-[10px] text-gray-400">{it.status}</span>}
+            <li key={it.id} className="flex items-center gap-2 rounded-ds-card border border-ds-border bg-ds-surface-subtle px-2.5 py-1.5">
+              {it.has_file ? <FileText className="h-3.5 w-3.5 flex-shrink-0 text-ds-fg-muted" /> : <ExternalLink className="h-3.5 w-3.5 flex-shrink-0 text-ds-fg-muted" />}
+              <span className="min-w-0 flex-1 truncate text-[12px] text-ds-fg-body">{it.name || it.file_name || 'Untitled evidence'}</span>
+              {it.evidence_type && <span className="rounded-full bg-ds-surface-hover px-1.5 py-0.5 text-[12px] text-ds-fg-muted">{it.evidence_type}</span>}
+              {it.status && <span className="text-[12px] text-ds-fg-muted">{it.status}</span>}
               <EvidenceMaturity evidenceId={it.evidence_id} refresh={['tpra-evidence']} />
               {canEdit && (
                 <button onClick={() => unlinkMut.mutate(it.id)} disabled={unlinkMut.isPending}
-                  title="Remove" className="text-gray-400 hover:text-red-600 disabled:opacity-50">
+                  title="Remove" className="text-ds-fg-muted hover:text-ds-danger disabled:opacity-50">
                   <X className="h-3.5 w-3.5" />
                 </button>
               )}

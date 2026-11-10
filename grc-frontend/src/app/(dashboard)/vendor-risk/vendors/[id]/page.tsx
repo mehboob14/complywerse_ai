@@ -22,7 +22,7 @@ import AtAGlance from './_record/AtAGlance';
 import EngagementPicker from './_record/EngagementPicker';
 import NextUpStrip from './_record/NextUpStrip';
 import RecordHead from './_record/RecordHead';
-import { statusOf, useAfterPaint, useNextUp, useTabCounts, useVendorRecord } from './_record/recordData';
+import { failed, statusOf, useAfterPaint, useNextUp, useTabCounts, useVendorRecord } from './_record/recordData';
 import OverviewTab from './_tabs/OverviewTab';
 import type { TabProps } from './_tabs/tabProps';
 import { EngagementForm } from './_tpra/EngagementsPanel';
@@ -121,7 +121,8 @@ export default function VendorRecordPage() {
   const picker = showsPicker(tab, openScopes(items).length);
   const picked = tab === 'lifecycle' || tab === 'assessments' ? engagementId : null;
   const target = tierTarget(items, picked);
-  const readFailed = engagements.isError || offboarding.isError;
+  const engagementsFailed = failed(engagements);
+  const readFailed = engagementsFailed || failed(offboarding);
 
   const tabProps: TabProps = {
     vendorId, engagementId, vendor, stage: address.stage || null, findingId: findingFrom(address.finding), vatRequest,
@@ -152,10 +153,10 @@ export default function VendorRecordPage() {
       {readFailed && (
         <Notice
           tone="warning"
-          title={engagements.isError ? 'Couldn’t read the engagements' : 'Couldn’t read the exit status'}
-          action={<Button onClick={() => { void (engagements.isError ? engagements.refetch() : offboarding.refetch()); }}>Retry</Button>}
+          title={engagementsFailed ? 'Couldn’t read the engagements' : 'Couldn’t read the exit status'}
+          action={<Button onClick={() => { void (engagementsFailed ? engagements.refetch() : offboarding.refetch()); }}>Retry</Button>}
         >
-          {engagements.isError ? 'The tier, grade and review date below may be incomplete.' : 'Whether an exit is under way may not be shown.'}
+          {engagementsFailed ? 'The tier, grade and review date below may be incomplete.' : 'Whether an exit is under way may not be shown.'}
         </Notice>
       )}
 
@@ -182,7 +183,7 @@ export default function VendorRecordPage() {
           vendor={vendor}
           engagementId={engagementId}
           engagements={engagements.data}
-          engagementsFailed={engagements.isError}
+          engagementsFailed={engagementsFailed}
           onRetryEngagements={() => { void engagements.refetch(); }}
           canEdit={canEdit}
           late={late}
