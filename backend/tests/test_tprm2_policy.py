@@ -172,6 +172,37 @@ def test_approver_roles_are_set_here_and_the_rest_of_the_tier_policy_stays(db):
     assert put(db, approver_roles={"critical": None})["approver_roles"]["critical"] is None
 
 
+def test_the_reopen_thresholds_are_saved_with_the_rest_in_one_request_and_one_audit_row(db):
+    before = tier_policy.merged(get_tiering_config(db, 1)["tier_policy"])
+    put(db, remediation_days={"critical": 3}, reassess_on={"critical": "high", "low": "medium"}, approver_roles={"high": "CISO"})
+    after = tier_policy.merged(get_tiering_config(db, 1)["tier_policy"])
+    assert (after["critical"]["reassess_on"], after["low"]["reassess_on"]) == ("high", "medium")
+    assert after["high"]["reassess_on"] == before["high"]["reassess_on"] and after["high"]["approver_role"] == "CISO"
+    assert get(db)["remediation_days"]["critical"] == 3
+    rows = db.query(TPRAAuditLog).filter(TPRAAuditLog.entity == "policy").all()
+    assert len(rows) == 1                                                  # ONE audit row for the one save
+    sent = json.loads(rows[0].to_value)
+    assert sent["reassess_on"]["critical"] == "high" and json.loads(rows[0].from_value)["reassess_on"]["critical"] == before["critical"]["reassess_on"]
+    count = db.query(TPRAAuditLog).count()
+    put(db, reassess_on={"critical": "high"})                              # nothing changed: nothing written
+    assert db.query(TPRAAuditLog).count() == count
+
+
+def test_a_bad_reopen_threshold_saves_nothing_and_needs_the_same_right_as_the_config(db):
+    with pytest.raises(HTTPException) as bad:
+        put(db, remediation_days={"critical": 3}, reassess_on={"critical": "urgent"})
+    assert bad.value.status_code == 400 and "Reassess on must be one of" in bad.value.detail
+    assert get(db)["remediation_days"]["critical"] == 7 and db.query(TPRATieringConfig).count() == 0
+    with pytest.raises(HTTPException) as bad_tier:
+        put(db, reassess_on={"huge": "high"})
+    assert bad_tier.value.status_code == 400
+    with pytest.raises(HTTPException) as denied:
+        put(db, READER, reassess_on={"low": "high"})
+    assert denied.value.status_code == 403
+    assert put(db, EDITOR, reassess_on={"low": "high"})                    # the config:edit holder may
+    assert tier_policy.merged(get_tiering_config(db, 1)["tier_policy"])["low"]["reassess_on"] == "high"
+
+
 def test_the_old_settings_api_keeps_working_on_the_same_row(db):
     admin = _user(db)
     put(db, remediation_days={"critical": 3}, cadence_days={"critical": 90})

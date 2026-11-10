@@ -20,7 +20,7 @@ from grc.models import TPRASurfaceScan  # read by concentration: platforms seen 
 from grc.models import (
     Base, BcmBiaDependency, BcmBiaRecord, BcmPlan, Evidence, GRCUser, MetricSnapshot, SCFControl, SCFMapping,
     SCFMappingReview, SCFRelease, SCFScope, Tenant, TPRAApproval, TPRAAuditLog, TPRAContract, TPRAControlObligation,
-    TPRAEvidenceLink, TPRAFinding, TPRAFourthParty, TPRAMonitoringSignal, TPRAPlatformAlias, TPRARemediation,
+    TPRAEngagement, TPRAEvidenceLink, TPRAFinding, TPRAFourthParty, TPRAMonitoringSignal, TPRAPlatformAlias, TPRARemediation,
     TPRAReport, TPRARiskAcceptance, TPRAStageInstance, TPRATemplateVersion, TPRATieringConfig, TPRAVendorLink, Vendor,
     VendorAssessment, VendorIncident, VendorQuestionnaireResponse, VendorQuestionnaireTemplate, get_db,
 )
@@ -32,7 +32,7 @@ _TABLES = [TPRASurfaceScan, Tenant, GRCUser, Vendor, VendorAssessment, TPRAStage
            TPRAVendorLink, BcmPlan, BcmBiaRecord, BcmBiaDependency, TPRAContract, TPRAControlObligation, SCFRelease,
            SCFControl, SCFMapping, SCFScope, SCFMappingReview, TPRAReport, VendorQuestionnaireTemplate,
            VendorQuestionnaireResponse, TPRATemplateVersion, TPRATieringConfig, Evidence, TPRAEvidenceLink,
-           MetricSnapshot]
+           TPRAEngagement, MetricSnapshot]
 Q3 = (date(2026, 7, 1), date(2026, 9, 30))
 DAY = datetime(2026, 7, 1, 9)
 TODAY = date(2026, 10, 2)
@@ -122,6 +122,36 @@ def test_coverage_is_in_date_overdue_or_never_approved(db):
     cov = reports.coverage(db, 1, TODAY)
     assert cov["states"] == {fresh.id: "in_date", late.id: "overdue", never.id: "never"}
     assert (cov["active"], cov["coverage_pct"], cov["overdue_pct"]) == (3, 33.3, 33.3)
+
+
+def test_a_vendor_with_an_overdue_engagement_is_overdue_by_the_registers_definition(db):
+    """The register's next action goes by the earliest date of the vendor and its open engagements; coverage does too, so the
+    Overview, the register and the committee pack count the same suppliers."""
+    general_ok, split = _vendor(db, "General fine"), _vendor(db, "Split")
+    split.next_reassessment_date = datetime(2027, 1, 1)
+    general_ok.next_reassessment_date = datetime(2027, 1, 1)
+    for v in (general_ok, split):
+        _decided(db, v, DAY, DAY, DAY)
+    db.add(TPRAEngagement(tenant_id=1, vendor_id=split.id, name="Payments", is_general=False, status="active",
+                          next_reassessment_date=datetime(2026, 8, 15)))
+    db.add(TPRAEngagement(tenant_id=1, vendor_id=general_ok.id, name="Ended one", is_general=False, status="ended",
+                          next_reassessment_date=datetime(2026, 1, 15)))
+    db.add(TPRAEngagement(tenant_id=1, vendor_id=general_ok.id, name="General", is_general=True, status="active",
+                          next_reassessment_date=datetime(2026, 1, 15)))
+    db.commit()
+    cov = reports.coverage(db, 1, TODAY)
+    assert cov["states"] == {general_ok.id: "in_date", split.id: "overdue"}      # an ended or the General engagement does not count
+    assert cov["due"] == {general_ok.id: date(2027, 1, 1), split.id: date(2026, 8, 15)}
+    pack = reports.committee_pack(db, 1, *Q3, TODAY)
+    table = next(s for s in pack["sections"] if s["key"] == "overdue")
+    assert table["rows"] == [["Split", "Medium", "2026-08-15", 48]]            # was due on the engagement's date
+
+
+def test_the_list_of_kept_reports_says_how_many_there_are_and_who_made_each(db, http):
+    first = http.post("/tpra/reports", json={"kind": "register"}).json()
+    assert first["generated_by_id"] == 7 and first["approved_by_id"] is None
+    listed = http.get("/tpra/reports").json()
+    assert listed["total"] == 1 and listed["items"][0]["generated_by_id"] == 7
 
 
 def test_the_committee_pack_counts_its_period_only(db):

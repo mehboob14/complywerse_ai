@@ -40,7 +40,7 @@ from sqlalchemy.orm import Session
 
 from ....models import (
     BcmBiaDependency, BcmBiaRecord, BcmPlan, Evidence, GRCUser, SCFControl, SCFMapping, SCFScope,
-    TPRAApproval, TPRAAuditLog, TPRAContract, TPRAControlObligation, TPRAEvidenceLink, TPRAFinding,
+    TPRAApproval, TPRAAuditLog, TPRAContract, TPRAControlObligation, TPRAEngagement, TPRAEvidenceLink, TPRAFinding,
     TPRAExternalRating, TPRAFourthParty, TPRAMonitoringSignal, TPRARemediation, TPRAReport, TPRARiskAcceptance,
     TPRAStageInstance, TPRASurfaceScan, TPRASurfaceWaiver, TPRAVendorLink, Vendor, VendorAssessment, VendorIncident,
     VendorQuestionnaireResponse, VendorQuestionnaireTemplate, get_db,
@@ -124,18 +124,34 @@ def _tier(v: Vendor) -> str:
 
 # ── Programme measures ───────────────────────────────────────────────────────
 
+def _day(value) -> Optional[date]:
+    return value.date() if isinstance(value, datetime) else value
+
+
 def coverage(db: Session, tenant_id: int, today: date, vendors: Optional[List[Vendor]] = None) -> dict:
     """Each vendor in use is in date (approved, review not yet due), overdue (review
-    date passed) or never approved."""
+    date passed) or never approved. A review is due on the EARLIEST of the vendor's own
+    reassessment date and those of its open engagements: the register's definition of
+    overdue (routers/vendors.py next_action), so every page of the module counts the same
+    suppliers. `due` is that date, for the suppliers that have one."""
     vendors = _vendors(db, tenant_id) if vendors is None else vendors
     approved = {vid for (vid,) in db.query(TPRAApproval.vendor_id).filter(
         TPRAApproval.tenant_id == tenant_id, TPRAApproval.decision.in_(_APPROVED))}
+    dates: Dict[int, List[date]] = defaultdict(list)
+    for v in vendors:
+        if v.next_reassessment_date:
+            dates[v.id].append(_day(v.next_reassessment_date))
+    for vid, at in db.query(TPRAEngagement.vendor_id, TPRAEngagement.next_reassessment_date).filter(
+            TPRAEngagement.tenant_id == tenant_id, TPRAEngagement.is_general.is_(False),
+            TPRAEngagement.status != "ended", TPRAEngagement.next_reassessment_date.isnot(None)):
+        dates[vid].append(_day(at))
+    due = {vid: min(ds) for vid, ds in dates.items() if ds}
     states = {}
     for v in vendors:
-        due = v.next_reassessment_date.date() if v.next_reassessment_date else None
-        states[v.id] = "overdue" if due and due < today else ("in_date" if v.id in approved else "never")
+        d = due.get(v.id)
+        states[v.id] = "overdue" if d and d < today else ("in_date" if v.id in approved else "never")
     n, c = len(vendors), Counter(states.values())
-    return {"states": states, "active": n, "in_date": c["in_date"], "overdue": c["overdue"], "never": c["never"],
+    return {"states": states, "due": due, "active": n, "in_date": c["in_date"], "overdue": c["overdue"], "never": c["never"],
             "coverage_pct": round(100 * c["in_date"] / n, 1) if n else None,
             "overdue_pct": round(100 * c["overdue"] / n, 1) if n else None}
 
@@ -371,9 +387,8 @@ def committee_pack(db: Session, tenant_id: int, start: date, end: date, today: d
     for t in tiers:
         c = Counter(cov["states"][v.id] for v in vendors if _tier(v) == t)
         cov_rows.append([_title(t), sum(c.values()), c["in_date"], c["overdue"], c["never"]])
-    overdue = sorted((v for v in vendors if cov["states"][v.id] == "overdue"), key=lambda v: v.next_reassessment_date)
-    overdue_rows = [[v.name, _title(v.tier), _d(v.next_reassessment_date), (today - v.next_reassessment_date.date()).days]
-                    for v in overdue]
+    overdue = sorted((v for v in vendors if cov["states"][v.id] == "overdue"), key=lambda v: (cov["due"][v.id], v.id))
+    overdue_rows = [[v.name, _title(v.tier), _d(cov["due"][v.id]), (today - cov["due"][v.id]).days] for v in overdue]
 
     length = (end - start).days + 1
     now_m = measures(db, tenant_id, start, end)
@@ -761,6 +776,7 @@ def s_report(db: Session, reports: List[TPRAReport], content: bool = False) -> L
                "vendor_id": r.vendor_id, "period_start": _d(r.period_start), "period_end": _d(r.period_end),
                "content_hash": r.content_hash, "generated_at": r.generated_at.isoformat() if r.generated_at else None,
                "generated_by": people.get(r.generated_by), "approved_by": people.get(r.approved_by),
+               "generated_by_id": r.generated_by, "approved_by_id": r.approved_by,
                "approved_at": r.approved_at.isoformat() if r.approved_at else None,
                "share": {"active": _sharing(r, now), "shared_by": people.get(r.shared_by),
                          "expires_at": r.share_expires_at.isoformat() if r.share_expires_at else None,
@@ -796,9 +812,9 @@ def programme_measures(days: int = Query(365, ge=30, le=1095), db: Session = Dep
 @router.get("/reports")
 def list_reports(db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     tid = graph._tenant(db, user)
-    rows = (db.query(TPRAReport).filter(TPRAReport.tenant_id == tid, TPRAReport.deleted_at.is_(None))
-            .order_by(TPRAReport.generated_at.desc()).limit(200).all())
-    return {"items": s_report(db, rows)}
+    kept = db.query(TPRAReport).filter(TPRAReport.tenant_id == tid, TPRAReport.deleted_at.is_(None))
+    rows = kept.order_by(TPRAReport.generated_at.desc(), TPRAReport.id.desc()).limit(200).all()
+    return {"items": s_report(db, rows), "total": kept.count()}          # `total` says when the 200 newest are not all of them
 
 
 @router.post("/reports", status_code=201)

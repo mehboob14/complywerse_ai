@@ -209,6 +209,7 @@ class PolicyIn(BaseModel):
     skip_matrix: Optional[dict] = None         # {tier: [stage keys that tier skips]}
     required_reviewers: Optional[dict] = None  # {tier: [roster roles that must review]}
     approver_roles: Optional[dict] = None      # {tier: role that must approve, or null: anyone with the right}
+    reassess_on: Optional[dict] = None         # {tier: the alert severity that reopens an assessment}: the tier policy's, saved with the rest in ONE request
 
 
 @router.put("/policy")
@@ -233,9 +234,17 @@ def put_policy(body: PolicyIn, db: Session = Depends(get_db), user: GRCUser = De
             patch = {t: {"approver_role": role} for t, role in asked.items()}
             merged = tier_policy.clean(patch, tier_policy.merged(cfg.get("tier_policy")))
             new["approver_roles"] = {t: merged[t].get("approver_role") for t in TIERS_DOWN}
+        if "reassess_on" in sent:
+            asked = sent["reassess_on"]
+            if not isinstance(asked, dict):
+                raise ValueError("Reopen thresholds have to be given tier by tier")
+            patch = {t: {"reassess_on": sev} for t, sev in asked.items()}
+            merged = tier_policy.clean(patch, tier_policy.merged(cfg.get("tier_policy")))
+            new["reassess_on"] = {t: merged[t].get("reassess_on") for t in TIERS_DOWN}
     except ValueError as exc:
         raise HTTPException(400, str(exc))
-    changed = sorted(k for k, v in new.items() if v != before[k])
+    now_reopen = {t: tier_policy.merged(cfg.get("tier_policy"))[t].get("reassess_on") for t in TIERS_DOWN}
+    changed = sorted(k for k, v in new.items() if v != (now_reopen if k == "reassess_on" else before[k]))
     if changed:
         row = db.query(TPRATieringConfig).filter(
             TPRATieringConfig.tenant_id == tenant_id, TPRATieringConfig.config_key == "default").first()
@@ -249,13 +258,16 @@ def put_policy(body: PolicyIn, db: Session = Depends(get_db), user: GRCUser = De
             if key == "approver_roles":
                 row.tier_policy = tier_policy.clean({t: {"approver_role": r} for t, r in new[key].items()},
                                                     tier_policy.merged(row.tier_policy))
+            elif key == "reassess_on":
+                row.tier_policy = tier_policy.clean({t: {"reassess_on": sev} for t, sev in new[key].items()},
+                                                    tier_policy.merged(row.tier_policy))
             else:
                 setattr(row, key, new[key])
         row.row_version = (row.row_version or 1) + 1
         from .service import write_audit           # late: service reads this module
 
         write_audit(db, tenant_id, entity="policy", action="update", actor_id=user.id,
-                    from_value=json.dumps({k: before[k] for k in changed}),
+                    from_value=json.dumps({k: (now_reopen if k == "reassess_on" else before[k]) for k in changed}),
                     to_value=json.dumps({k: new[k] for k in changed}), reason="Vendor policy updated")
         db.commit()
     return _payload(db, user, tenant_id)
