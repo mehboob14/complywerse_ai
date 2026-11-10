@@ -186,3 +186,20 @@ def test_vendor_options_search_assessment_and_paging(http, db):
     page = http.get(f"{BASE}/vendor-options", params={"limit": 1, "skip": 1}).json()
     assert page["total"] == 2 and [x["name"] for x in page["items"]] == ["Zulu Cloud"]
     assert http.get(f"{BASE}/vendor-options", params={"limit": 5001}).status_code == 422
+
+
+def test_a_save_made_on_a_stale_copy_is_refused_and_one_without_a_stamp_is_not(http, db, monkeypatch):
+    from grc.modules.vendor_risk.tpra import rbac
+    monkeypatch.setattr(rbac, "user_has_any_permission", lambda *a, **k: True)
+    t = _template(db, "Shared draft")
+    url = f"{BASE}/questionnaire-templates/{t.id}"
+    first = http.get(url).json()
+    mine = http.put(url, json={"description": "mine", "expected_updated_at": first["updated_at"]})
+    assert mine.status_code == 200 and mine.json()["description"] == "mine"
+    stale = http.put(url, json={"description": "theirs", "expected_updated_at": first["updated_at"]})
+    assert stale.status_code == 409 and "Someone else changed" in stale.json()["detail"]
+    assert http.get(url).json()["description"] == "mine", "nothing of the refused save was kept"
+    fresh = http.put(url, json={"description": "again", "expected_updated_at": mine.json()["updated_at"]})
+    assert fresh.status_code == 200
+    plain = http.put(url, json={"description": "no stamp"})
+    assert plain.status_code == 200, "a caller that sends no stamp saves as it always did"

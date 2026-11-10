@@ -61,6 +61,9 @@ class TemplateUpdate(BaseModel):
     is_default: Optional[bool] = None
     # The tiers it is sent to by default: the tier policy's own list, the one Settings edits.
     default_tiers: Optional[List[str]] = None
+    # The stamp this person last saw (`updated_at` as the list gave it). Optional: when it is given and the questionnaire has been saved by
+    # someone else since, the change is refused (409) instead of overwriting theirs. Without it nothing changes.
+    expected_updated_at: Optional[str] = None
 
 
 class SendQuestionnaireRequest(BaseModel):
@@ -305,6 +308,9 @@ def update_template(
 
     update_data = payload.model_dump(exclude_unset=True)
     tiers = update_data.pop("default_tiers", None)
+    seen = update_data.pop("expected_updated_at", None)
+    if seen and _CONTENT & set(update_data) and template.updated_at and template.updated_at.isoformat() != seen:
+        raise HTTPException(status_code=409, detail="Someone else changed this questionnaire since you opened it. Reload it to see their changes, then make yours again.")
     if template.archived_at is not None and _CONTENT & set(update_data):
         raise HTTPException(status_code=409, detail="This questionnaire is archived. Restore it to change it.")
     if tiers is not None:
