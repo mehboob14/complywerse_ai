@@ -4,7 +4,7 @@ Demo suppliers reach only the tenants named in TPRM_DEMO_TENANTS. Deleting a sup
 about it goes, it can be restored, and it leaves the register, the dashboards and the reminders. The register pages
 through every supplier and leaves out requests nobody has picked up. Every right the code checks can be granted to a
 role. The workflow engine's supplier steps do what their buttons do, as the workflow's owner, or fail the run and say
-why. The auditor portal's supplier tab reads the real fields and opens the supplier. In-memory SQLite.
+why. The auditor portal's supplier endpoint reads the real fields (its unwired tab, which read it, was deleted with the Portal revamp). In-memory SQLite.
 """
 import pathlib
 import re
@@ -452,8 +452,3 @@ def test_the_auditor_sees_each_suppliers_real_fields_and_an_archived_one_marked(
     assert p["owner"] == {"id": 7, "name": "Ada Admin"} and p["archived_at"] is None
     assert rows["Old Courier"]["archived_at"] == datetime(2026, 9, 1)
 
-
-def test_the_auditors_open_link_goes_to_the_suppliers_page():
-    tab = (FRONTEND / "auditor-portal" / "[frameworkId]" / "_tabs" / "VendorsTab.tsx").read_text(encoding="utf-8")
-    assert "href={`/vendor-risk/vendors/${v.id}`}" in tab and "href={`/vendor-risk/${v.id}`}" not in tab
-    assert (FRONTEND / "vendor-risk" / "vendors" / "[id]" / "page.tsx").exists()

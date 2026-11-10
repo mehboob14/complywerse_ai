@@ -8,5 +8,9 @@ export const LEAVES: Record<string, RouteExtra> = {
 };
 
 export const PAGES: PageSpec[] = [
+  // The Enterprise Log + Contract Compliance tabs of /issues became the issue register, the CAPA Actions tab the corrective-action register; both draw the kit's page head from their component.
+  // Until the sidebar lists them as leaves (Overview / Issues / Corrective actions / Incidents) they open from the tabs of /issues, which forward to them.
+  { path: '/issues/register', label: 'Issues', area: 'issue-incident-management', parent: '/issues', hidden: 'opens from the Enterprise Log and Contract Compliance tabs of Issues (which forward to it), from the Issues panel of a record and from the Overview', keywords: ['Issue register', 'Enterprise log', 'Contract compliance', 'Issue log'], ownHeading: true },
+  { path: '/issues/actions', label: 'Corrective actions', area: 'issue-incident-management', parent: '/issues', hidden: 'opens from the CAPA Actions tab of Issues (which forwards to it) and from the Overview', keywords: ['CAPA', 'Corrective and preventive actions', 'Action board'], ownHeading: true },
   { path: '/issues/:id', label: 'Issue', area: 'issue-incident-management', parent: '/issues', hidden: 'opens from an Issues row, the CAPA board and the records that link an issue (evidence, tasks, vendor findings, the audit register, reports)' },
 ];

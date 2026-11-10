@@ -1,9 +1,9 @@
-// What the three monitoring registers (KRIs, incidents, mitigation actions) have in common, apart from React so `node --test` pins it (registerModel.test.ts): the page's state
+// What the registers built on the Facet explorer's frame (RegisterFrame: Risk Management's KRIs, incidents and mitigation actions, Issues, corrective actions) have in common, apart from React so `node --test` pins it (registerModel.test.ts): the page's state
 // in its address, the facets with live counts, the quick chips with theirs, the sort and the page. WHAT the facets, chips, columns and board are is each register's own
 // definition (RegisterDef); the engine is components/records/facetEngine.ts, the same one the Documents library uses.
-import { integer, listOf, oneOf, sortOf, text, type ParamSpec, type Schema } from '../../../../lib/addressState.ts';
-import { countMatching, evaluate, indexRows, type Chosen, type Evaluated, type FacetIndex, type FacetSpec } from '../../../../components/records/facetEngine.ts';
-import type { BoardColumnDef } from '../../../../components/records/explorerModel.ts';
+import { integer, listOf, oneOf, sortOf, text, type ParamSpec, type Schema } from '../../lib/addressState.ts';
+import { countMatching, evaluate, indexRows, type Chosen, type Evaluated, type FacetIndex, type FacetSpec } from './facetEngine.ts';
+import type { BoardColumnDef } from './explorerModel.ts';
 
 export interface FacetDef<R> {
   /** names the facet in the address (?status=red,amber) and in the counts; not one of q, quick, view, sort, page, id */

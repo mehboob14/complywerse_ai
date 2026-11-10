@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 
 import { readAddress } from '../../../../lib/addressState.ts';
 import { groupBoard } from '../../../../components/records/explorerModel.ts';
-import { evaluateRegister, indexRegister, sortRows, stateOf } from './registerModel.ts';
+import { evaluateRegister, indexRegister, sortRows, stateOf } from '../../../../components/records/registerModel.ts';
 import { ACTION_SCHEMA, actionDef, dueThisWeek, type ActionRow } from './mitigationModel.ts';
 
 const a = (id: number, over: Partial<ActionRow>): ActionRow => ({ id, risk_id: 1, title: `Action ${id}`, action_type: 'mitigate', status: 'open', priority: 'medium', ...over });

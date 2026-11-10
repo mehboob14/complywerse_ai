@@ -7,8 +7,9 @@ Two endpoint roots:
 from datetime import datetime
 from typing import Optional, Dict, Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session, joinedload
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy import and_
+from sqlalchemy.orm import Session, contains_eager, joinedload
 
 from datetime import datetime as _dt
 
@@ -328,29 +329,62 @@ def promote_action_to_task(
     return {"task_id": task.id, "code": getattr(task, "code", None), "already_linked": False}
 
 
-# ── Cross-issue listing (Kanban board) ──────────────────────────────────
+# ── Cross-issue listing (the corrective-actions register) ───────────────
+_OPEN_ACTION = ("planned", "in_progress", "blocked")
+
+
 @router_actions.get("", dependencies=[Depends(_require_view)])
 def list_all_actions(
+    response: Response,
     status_filter: Optional[str] = None,
     action_type: Optional[str] = None,
-    assignee_id: Optional[int] = None,
+    assignee_id: Optional[str] = Query(None, description="a user id, or 'me'"),
+    issue_id: Optional[int] = None,
+    overdue: Optional[bool] = Query(None, description="still open and past its due date (planned, in progress or blocked)"),
+    skip: int = 0,
+    limit: Optional[int] = Query(None, description="without it every action is returned, as before; with it the true count is in X-Total-Count"),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
-    """Returns all actions across issues the user can see, grouped by status
-    on the client for the CAPA board view."""
+    """Returns all actions across issues the user can see, as a plain list, each with the code and title of its issue (and whether it is overdue).
+    The register reads it whole; X-Total-Count says how many match when a limit cut the list."""
     user_tenants = get_user_tenants(current_user, db)
+    now = datetime.utcnow()
     q = db.query(IssueAction).options(
         joinedload(IssueAction.assignee),
         joinedload(IssueAction.verifier),
     ).join(
         Issue, Issue.id == IssueAction.issue_id,
-    ).filter(Issue.tenant_id.in_(user_tenants))
+    ).options(contains_eager(IssueAction.issue)).filter(Issue.tenant_id.in_(user_tenants))
     if status_filter:
         q = q.filter(IssueAction.status == status_filter)
     if action_type:
         q = q.filter(IssueAction.action_type == action_type)
     if assignee_id:
-        q = q.filter(IssueAction.assignee_id == assignee_id)
-    actions = q.order_by(IssueAction.due_date.asc().nullslast(), IssueAction.created_at.desc()).all()
-    return [_serialize_action(a) for a in actions]
+        who = current_user.id if assignee_id.strip().lower() == "me" else None
+        if who is None:
+            try:
+                who = int(assignee_id)
+            except ValueError:
+                raise HTTPException(status_code=422, detail="assignee_id must be a user id or 'me'")
+        if who:
+            q = q.filter(IssueAction.assignee_id == who)
+    if issue_id:
+        q = q.filter(IssueAction.issue_id == issue_id)
+    if overdue is not None:
+        late = and_(IssueAction.status.in_(_OPEN_ACTION), IssueAction.due_date.isnot(None), IssueAction.due_date < now)
+        q = q.filter(late if overdue else ~late)
+    q = q.order_by(IssueAction.due_date.asc().nullslast(), IssueAction.created_at.desc(), IssueAction.id.desc())
+    if limit is not None:
+        response.headers["X-Total-Count"] = str(q.order_by(None).count())
+        q = q.offset(max(0, skip)).limit(max(1, limit))
+    rows = []
+    for a in q.all():
+        row = _serialize_action(a)
+        row["issue_code"] = a.issue.code if a.issue else None
+        row["issue_title"] = a.issue.title if a.issue else None
+        is_late = a.status in _OPEN_ACTION and a.due_date is not None and a.due_date < now
+        row["overdue"] = is_late
+        row["overdue_days"] = max(1, (now - a.due_date).days) if is_late else None
+        rows.append(row)
+    return rows

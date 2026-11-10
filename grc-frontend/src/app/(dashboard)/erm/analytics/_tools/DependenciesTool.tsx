@@ -20,8 +20,8 @@ import { formatCount, truncate } from '@/lib/format';
 import { DEFAULT_STRENGTH, DEPENDENCY_TYPES, dependencyError, factorOfStrength, flattenCascade, reachedCount, strengthWords, STRENGTHS, type CascadeResult } from '@/lib/erm/dependency';
 import { statusPill } from '@/lib/status';
 import { dependencyType, optionsOf } from '@/lib/statuses/monitoring';
-import { riskOptions, useLeanRisks } from '../../_monitoring/lookups';
-import { clampPage, pageSlice } from '../../_monitoring/registerModel';
+import { riskOptions, useLeanRisks } from '@/components/records/lookups';
+import { clampPage, pageSlice } from '@/components/records/registerModel';
 
 interface Dep { id: number; source_risk_id: number; target_risk_id: number; dependency_type: string; impact_factor: number; description?: string | null; source_risk_title?: string | null; target_risk_title?: string | null }
 const SCHEMA = { risk: integer(0, { min: 1 }), q: text() };

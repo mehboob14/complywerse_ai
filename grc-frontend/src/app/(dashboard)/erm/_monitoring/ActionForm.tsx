@@ -12,7 +12,7 @@ import { ACTION_PRIORITIES, ACTION_TYPES, SETTABLE_STATUSES, parseReduction } fr
 import { mitigationStatus, optionsOf, severity, treatmentType } from '@/lib/statuses/monitoring';
 import { formatCount } from '@/lib/format';
 import type { ActionRow } from './mitigationModel';
-import { personOptions, riskOptions, useLeanRisks, useTenantUsers } from './lookups';
+import { personOptions, riskOptions, useLeanRisks, useTenantUsers } from '@/components/records/lookups';
 
 const ROW2 = 'grid gap-[12px] sm:grid-cols-2';
 type Suggestion = { title: string; description: string; action_type: string; priority: string; expected_residual_reduction: number };

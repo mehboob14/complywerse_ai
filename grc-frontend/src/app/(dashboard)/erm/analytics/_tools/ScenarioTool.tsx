@@ -19,7 +19,7 @@ import { categoryLabel, categoryOptions } from '@/lib/erm/categories';
 import { applyCustom, applyPreset, baseOf, bandWord, changeWords, isEligible, percentWords, type Adjusted, type Preset, type ScenarioRow, type ScoreType } from '@/lib/erm/scenario';
 import { statusPill } from '@/lib/status';
 import { severity } from '@/lib/statuses/monitoring';
-import { useLeanRisks, type LeanRisk } from '../../_monitoring/lookups';
+import { useLeanRisks, type LeanRisk } from '@/components/records/lookups';
 
 type Result = { results: ScenarioRow[]; summary: { total_risks_analyzed: number; total_original_score: number; total_adjusted_score: number; total_change: number; risks_increased: number; risks_decreased: number; risks_unchanged: number } };
 const SCORES = [{ value: 'residual', label: 'Residual' }, { value: 'inherent', label: 'Inherent' }];

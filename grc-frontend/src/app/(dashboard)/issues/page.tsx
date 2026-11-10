@@ -17,6 +17,7 @@ import { ClassificationMatrixEditor } from './_components/ClassificationMatrixEd
 import { IssueForm } from './_components/IssueForm';
 import { AutomationFlags } from './_components/AutomationFlags';
 import { ImportIssuesModal } from './_components/ImportIssuesModal';
+import { parseLinked } from '@/lib/issues/words';
 
 type TabId = 'overview' | 'log' | 'capa' | 'contract' | 'closure' | 'severity_matrix' | 'classification_matrix' | 'automation';
 
@@ -31,6 +32,9 @@ const TABS: Array<{ id: TabId; label: string; icon: React.ElementType }> = [
   { id: 'automation',            label: 'Automation',             icon: Zap },
 ];
 
+// Three of the tabs became pages of their own (Issues, Corrective actions): their old addresses, and a click on their tab, go there.
+const FORWARDS: Partial<Record<TabId, string>> = { log: '/issues/register', contract: '/issues/register?category=contract', capa: '/issues/actions' };
+
 type RegisterType = 'audit' | 'platform';
 const REGISTER_KEY = 'issues.register';
 
@@ -44,6 +48,13 @@ export default function IssuesPage() {
   };
   const [tab, setTab] = useState<TabId>(tabFromUrl);
   useEffect(() => { setTab(tabFromUrl()); }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
+  // ?tab=log|contract|capa, and the older "issues of this record" address (?source_type=risk&source_id=7), forward to the pages that replaced them
+  useEffect(() => {
+    const forward = FORWARDS[(params.get('tab') ?? '') as TabId];
+    const linked = parseLinked(`${params.get('source_type') ?? ''}:${params.get('source_id') ?? ''}`);
+    if (forward) router.replace(forward);
+    else if (linked) router.replace(`/issues/register?linked=${linked.type}:${linked.id}`);
+  }, [params, router]);
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
 
@@ -135,7 +146,7 @@ export default function IssuesPage() {
           return (
             <button
               key={t.id}
-              onClick={() => setTab(t.id)}
+              onClick={() => { const forward = FORWARDS[t.id]; if (forward) router.push(forward); else setTab(t.id); }}
               className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
                 active
                   ? 'bg-primary-600 text-[#0a0a0a] shadow-sm'
