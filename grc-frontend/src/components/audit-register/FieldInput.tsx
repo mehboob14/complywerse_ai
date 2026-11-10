@@ -60,7 +60,7 @@ export function FieldInput({ field, value, onChange, options, disabled }: {
     const known = options?.choices?.[field.name] || [];
     const all = text && !known.includes(text) ? [text, ...known] : known;          // a code the file used that is not in today's list still shows
     return (
-      <Select value={text} disabled={disabled} placeholder={`Choose ${field.label.toLowerCase()}`} onChange={(e) => onChange(e.target.value === '' ? null : e.target.value)}>
+      <Select value={text} disabled={disabled} placeholder="Choose one" onChange={(e) => onChange(e.target.value === '' ? null : e.target.value)}>
         {all.map((c) => <option key={c} value={c}>{c}</option>)}
       </Select>
     );

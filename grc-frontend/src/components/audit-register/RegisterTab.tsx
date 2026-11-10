@@ -34,7 +34,10 @@ function RiskCell({ row }: { row: RegisterRow }) {
 
 function OwnerCol({ row, wide }: { row: RegisterRow; wide: boolean }) {
   if (!row.owner_id && hasOwnerToMap(row)) {
-    return <span className="flex min-w-0 flex-col"><span className="truncate text-ds-body text-ds-fg-body" title={row.owner || ''}>{row.owner}</span><span className="text-ds-label text-ds-warning">Not matched to a person</span></span>;
+    // the name the workbook gave, said as a name nobody holds yet: short where the column is narrow (the name is still read out)
+    return wide
+      ? <span className="flex min-w-0 flex-col"><span className="truncate text-ds-body text-ds-fg-body" title={row.owner || ''}>{row.owner}</span><span className="text-ds-label text-ds-warning">Not matched to a person</span></span>
+      : <span className="text-ds-label text-ds-warning" title={row.owner || ''}>Not matched<span className="sr-only">: {row.owner}</span></span>;
   }
   return <OwnerCell name={ownerName(row)} wide={wide} />;
 }

@@ -63,13 +63,12 @@ export function ImportSheet({ file, onClose }: { file: File | null; onClose: () 
 
         {preview && !result && (
           <>
-            <div className="flex items-start gap-[8px]">
-              <FileSpreadsheet aria-hidden className="mt-[2px] h-[18px] w-[18px] shrink-0 text-ds-fg-muted" />
-              <div className="min-w-0">
-                <p className="m-0 break-words text-ds-body font-[600] text-ds-fg [overflow-wrap:anywhere]">{preview.file_name}</p>
-                {preview.as_of && <p className="m-0 text-ds-label text-ds-fg-muted">As of {formatDate(preview.as_of, { calendar: true })}</p>}
-              </div>
-            </div>
+            {preview.as_of && (
+              <p className="m-0 flex items-center gap-[8px] text-ds-body text-ds-fg-muted">
+                <FileSpreadsheet aria-hidden className="h-[16px] w-[16px] shrink-0" />
+                The workbook is as of {formatDate(preview.as_of, { calendar: true })}.
+              </p>
+            )}
             <p className="m-0 text-ds-body text-ds-fg">{readyLine(preview)}</p>
             <p className="m-0 text-ds-label text-ds-fg-muted">Sheets: {sheetsLine(preview.sheet_counts) || 'none'}. Nothing is imported until you press Import; a re-upload updates the same findings.</p>
             {unmatched && <Notice tone="warning">{unmatched}</Notice>}

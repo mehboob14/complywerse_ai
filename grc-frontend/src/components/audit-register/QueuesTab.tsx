@@ -86,9 +86,8 @@ export function QueuesTab({ rows, rights, onOpen }: { rows: readonly RegisterRow
                     kind={{ label: 'Extension', tone: 'pending' }}
                     title={titleOf(x)}
                     onOpen={() => onOpen(x.issue_id)}
-                    context={`${formatDate(x.previous_date, { calendar: true })} → ${formatDate(x.requested_date, { calendar: true })} · ${x.reason}`}
+                    context={`${formatDate(x.previous_date, { calendar: true })} → ${formatDate(x.requested_date, { calendar: true })} · ${x.reason}${x.meeting ? ` · ${x.meeting.title}${x.meeting.scheduled_date ? `, ${formatDate(x.meeting.scheduled_date)}` : ''}` : ''}`}
                     requester={{ name: x.requested_by, role: 'Asked by' }}
-                    due={x.meeting?.scheduled_date ?? null}
                     action={can(rights, 'decideExtension') ? { label: 'Decide', variant: 'primary', onClick: () => setDeciding(x) } : undefined}
                     menu={{ items: openItem(x.issue_id) }}
                   />

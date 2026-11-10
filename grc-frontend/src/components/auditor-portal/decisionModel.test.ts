@@ -52,3 +52,12 @@ test('the sheet follows the kit, uses no native dialog, and sends the cleaned no
   assert.match(src, /import \{[^}]*\bSheet\b[^}]*\} from '@\/components\/ui\/ds'/, 'built on the kit sheet');
   assert.match(src, /dirty=\{/, 'a typed note is not thrown away silently');
 });
+
+test('a page whose words differ can say its own sentence for a missing note (the Issue Register says "not passed")', () => {
+  const rule = ruleOf({ requiredFor: 'rejected', requiredMessage: 'Say what is missing, so the owner knows what to send.' });
+  assert.equal(remarksProblem('rejected', '  ', rule), 'Say what is missing, so the owner knows what to send.');
+  assert.equal(remarksProblem('rejected', 'Need the logs', rule), null);
+  assert.equal(remarksProblem('approved', '', rule), null);
+  // without one the sentence is the Portal's, as before
+  assert.match(remarksProblem('rejected', '', ruleOf()) as string, /turned down/);
+});

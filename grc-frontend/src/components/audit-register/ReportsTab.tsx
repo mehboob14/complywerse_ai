@@ -42,7 +42,7 @@ export function ReportsTab({ rows, rights, onOpen, onAdd, onShow, onManage }: {
 
   const columns: RegisterColumn<ReportLine>[] = [
     { key: 'report', header: 'Report', isRowHeader: true, cell: (r) => <span className="line-clamp-2 break-words text-ds-body font-[600] text-ds-fg [overflow-wrap:anywhere]" title={nameOf(r)}>{nameOf(r)}</span>, card: 'hide' },
-    { key: 'source', header: 'Source', priority: 2, cell: (r) => <span className="text-ds-body text-ds-fg-body">{r.source_title}</span>, card: 'meta' },
+    { key: 'source', header: 'Source', priority: 2, cell: (r) => <span className="whitespace-nowrap text-ds-body text-ds-fg-body">{r.source_title}</span>, card: 'meta' },
     { key: 'date', header: 'Report date', priority: 3, cell: (r) => <span className="whitespace-nowrap text-ds-body text-ds-fg-body">{formatDate(r.report_date, { calendar: true })}</span>, card: 'hide' },
     { key: 'findings', header: 'Findings', align: 'right', cell: (r) => <span className="tabular-nums text-ds-body text-ds-fg">{formatCount(r.issues)}{r.recommendations ? <span className={muted}> + {formatCount(r.recommendations)} recommendations</span> : null}</span>, card: 'meta' },
     { key: 'open', header: 'Open', align: 'right', cell: (r) => <span className="tabular-nums text-ds-body text-ds-fg">{formatCount(r.open)}</span>, card: 'meta' },
@@ -51,7 +51,7 @@ export function ReportsTab({ rows, rights, onOpen, onAdd, onShow, onManage }: {
     { key: 'next', header: 'Next due', priority: 2, cell: (r) => <span className="whitespace-nowrap text-ds-body text-ds-fg-body">{formatDate(r.next_due, { calendar: true })}</span>, card: 'meta' },
     {
       key: 'owners', header: 'Owners', priority: 3, card: 'meta',
-      cell: (r) => { const o = moreCount(r.owners, 2); return <span className="text-ds-body text-ds-fg-body" title={r.owners.join(', ')}>{o.shown.join(', ') || '—'}{o.more ? ` +${o.more}` : ''}</span>; },
+      cell: (r) => { const o = moreCount(r.owners, 2); return <span className="block max-w-[240px] truncate text-ds-body text-ds-fg-body" title={r.owners.join(', ')}>{o.shown.join(', ') || '—'}{o.more ? ` +${o.more}` : ''}</span>; },
     },
   ];
 

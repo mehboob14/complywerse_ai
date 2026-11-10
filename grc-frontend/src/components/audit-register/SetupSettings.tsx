@@ -10,7 +10,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Pencil, Plus, Trash2, X } from 'lucide-react';
 import {
-  Button, Checkbox, ErrorState, FormField, IconButton, MultiSelect, Notice, ReadOnlyNote, RegisterTable, SaveBar, SectionCard, Select, Sheet, SkeletonRows, TextInput, useConfirm,
+  Button, Checkbox, ErrorState, FormField, IconButton, MultiSelect, ReadOnlyNote, RegisterTable, SaveBar, SectionCard, Select, Sheet, SkeletonRows, TextInput, useConfirm,
   useReportedMutation, type RegisterColumn,
 } from '@/components/ui/ds';
 import { errorMessage } from '@/components/ui/ds/reportOutcome';
@@ -272,8 +272,7 @@ export function SetupSettings({ section, canEdit }: { section: SettingsSection; 
   }
   return (
     <div className="flex flex-col gap-[12px]">
-      {!canEdit && <ReadOnlyNote>View only</ReadOnlyNote>}
-      {!canEdit && section !== 'reports' && <Notice tone="info">Audit Services change these settings.</Notice>}
+      {!canEdit && <ReadOnlyNote>View only: Audit Services change these settings</ReadOnlyNote>}
       {section === 'reminders' && <SlaSettings settings={settings.data} users={options.data?.users || []} canEdit={canEdit} />}
       {section === 'reports' && <ReportSettings templates={templates.data} options={options.data} canEdit={canEdit} />}
       {section === 'lists' && <ListSettings settings={settings.data} canEdit={canEdit} />}

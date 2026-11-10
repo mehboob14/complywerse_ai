@@ -54,7 +54,7 @@ export function ValidationDecision({ issueId, open, subject, owner, onClose }: {
       ] : undefined}
       approveLabel="Pass and close"
       rejectLabel="Not passed"
-      remarks={{ requiredFor: 'rejected', label: 'What is missing, or why it did not pass', hint: 'Needed unless it passes: the owner reads it to know what to send.' }}
+      remarks={{ requiredFor: 'rejected', label: 'What is missing, or why it did not pass', hint: 'Needed unless it passes: the owner reads it to know what to send.', requiredMessage: 'Say what is missing, so the owner knows what to send.' }}
       busy={busy}
       error={decide.isError ? errorMessage(decide.error) : null}
       onDecide={(decision, reason) => decide.mutate({ result: decision === 'approved' ? 'pass' : outcome, reason })}
