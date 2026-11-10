@@ -14,7 +14,7 @@ import {
   Avatar, Button, ChipList, EmptyState, ErrorState, FilterChips, Menu, NoAccessState, Pager, RegisterTable, Select, StatusPill, TextInput, useAddressState,
   type FilterChip, type MenuItem, type RegisterColumn,
 } from '@/components/ui/ds';
-import { canRetry, errorMessage, statusOf } from '@/components/ui/ds/reportOutcome';
+import { canRetry, statusOf } from '@/components/ui/ds/reportOutcome';
 import { flag, integer, oneOf, sortOf, text } from '@/lib/addressState';
 import { formatCount, formatDate } from '@/lib/format';
 import { statusPill } from '@/lib/status';
@@ -23,7 +23,7 @@ import {
   DEFAULT_USER_SORT, USER_SORT_KEYS, USER_VIEWS, VIEW_HELP, VIEW_LABEL, countsOf, filterUsers, isFiltering, nameOf, ownAccountReason, peopleLine, sortUsers,
   type UserRecord, type UserView,
 } from '@/lib/people/usersModel';
-import { useMe, useRoles, useUsers } from './peopleData';
+import { plainError, useMe, useRoles, useUsers } from './peopleData';
 import { useUserActions } from './usersActions';
 import { UserSheet } from './UserSheet';
 
@@ -110,10 +110,10 @@ export default function UsersRegister() {
       {forbidden ? (
         <NoAccessState title="You don't have access to the users" reason="Seeing the list of users needs the users right. Ask an administrator." />
       ) : noList ? (
-        <ErrorState title="Couldn't load the users" message={errorMessage(usersQ.error)} onRetry={canRetry(usersQ.error) ? () => { void usersQ.refetch(); } : undefined} />
+        <ErrorState title="Couldn't load the users" message={plainError(usersQ.error)} onRetry={canRetry(usersQ.error) ? () => { void usersQ.refetch(); } : undefined} />
       ) : (
         <>
-          {usersQ.isError && usersQ.data && <ErrorState compact title="Couldn't refresh the users" message={`${errorMessage(usersQ.error)} What is shown may be out of date.`} onRetry={canRetry(usersQ.error) ? () => { void usersQ.refetch(); } : undefined} />}
+          {usersQ.isError && usersQ.data && <ErrorState compact title="Couldn't refresh the users" message={`${plainError(usersQ.error)} What is shown may be out of date.`} onRetry={canRetry(usersQ.error) ? () => { void usersQ.refetch(); } : undefined} />}
           <div className="flex flex-wrap items-center gap-x-[12px] gap-y-[8px]">
             <FilterChips label="Views" chips={usersQ.isLoading ? [] : chips} onToggle={(key) => refilter({ view: key === a.view && key !== 'all' ? 'all' : (key as UserView) })} overflow="scroll" className="min-w-0 max-w-full" />
             <div className="flex w-full flex-wrap items-center gap-[8px] sm:ml-auto sm:w-auto">

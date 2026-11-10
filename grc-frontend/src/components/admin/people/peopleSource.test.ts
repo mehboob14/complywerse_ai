@@ -96,3 +96,13 @@ test('every request of the two pages has an error branch with its words (a refus
   assert.match(read(`${PEOPLE}/MembersSheet.tsx`), /<ErrorState/);
   assert.match(read(`${PEOPLE}/RoleEditor.tsx`), /<ErrorState compact title="Couldn't load the permission list"/);
 });
+
+test('a refusal is said in plain words: the pages never print the server\'s "Permission denied: <key>" (they use plainError, which turns a 403 into one sentence)', () => {
+  for (const f of ['UsersRegister', 'UserSheet', 'RolesRegister', 'RoleEditor']) {
+    const src = read(`${PEOPLE}/${f}.tsx`);
+    assert.doesNotMatch(src, /\berrorMessage\(/, `${f}: use plainError`);
+    assert.match(src, /plainError\(/, f);
+  }
+  assert.match(read(`${PEOPLE}/peopleData.ts`), /statusOf\(error\) === 403 \? NO_RIGHT/);
+  assert.match(read(`${PEOPLE}/RolesRegister.tsx`), /forbidden\s*\?\s*<NoAccessState title="You don't have access to the roles"/, 'the editor address of a person without the right says so too');
+});

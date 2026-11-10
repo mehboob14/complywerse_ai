@@ -19,8 +19,7 @@ import { statusPill } from '@/lib/status';
 import {
   Button, ErrorState, FactList, Fact, FormField, Notice, Sheet, SkeletonLines, StatusPill, TextInput, Checkbox, useReportedMutation,
 } from '@/components/ui/ds';
-import { errorMessage } from '@/components/ui/ds/reportOutcome';
-import { ROLES_KEY, USERS_KEY, usePolicy } from './peopleData';
+import { ROLES_KEY, USERS_KEY, plainError, usePolicy } from './peopleData';
 import type { UserActions } from './usersActions';
 
 const SEARCH_ROLES_FROM = 8;
@@ -68,7 +67,7 @@ export function UserSheet({ user, roles, rolesLoading, rolesError, onRetryRoles,
     retryable: false,
     toast: 'success',
     onSuccess: () => { refresh(); onClose(); },
-    onError: (e) => setServerError(errorMessage(e, "The user wasn't added. Try again.")),
+    onError: (e) => setServerError(plainError(e, "The user wasn't added. Try again.")),
   });
   const update = useReportedMutation({
     mutationFn: () => adminApi.updateUser((user as UserRecord).id, updateBody(saved, form, rolesKnown)),
@@ -77,7 +76,7 @@ export function UserSheet({ user, roles, rolesLoading, rolesError, onRetryRoles,
     retryable: false,
     toast: 'success',
     onSuccess: () => { refresh(); onClose(); },
-    onError: (e) => setServerError(errorMessage(e, "The changes weren't saved. Try again.")),
+    onError: (e) => setServerError(plainError(e, "The changes weren't saved. Try again.")),
   });
   const saving = create.isPending || update.isPending;
 
@@ -143,7 +142,7 @@ export function UserSheet({ user, roles, rolesLoading, rolesError, onRetryRoles,
             <h3 className={HEADING}>Roles{rolesKnown ? <span className="ml-[6px] font-normal text-ds-fg-muted">{form.roleIds.length} of {roles.length}</span> : null}</h3>
           </div>
           {rolesLoading ? <SkeletonLines lines={3} label="Loading the roles" />
-            : rolesError ? <ErrorState compact title="Couldn't load the roles" message={errorMessage(rolesError)} onRetry={onRetryRoles} />
+            : rolesError ? <ErrorState compact title="Couldn't load the roles" message={plainError(rolesError)} onRetry={onRetryRoles} />
             : roles && roles.length === 0 ? <p className="text-ds-body text-ds-fg-muted">There are no roles yet. Create one under Roles & permissions.</p>
             : (
               <>

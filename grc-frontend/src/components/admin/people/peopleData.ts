@@ -4,6 +4,7 @@
 import { useQuery } from '@tanstack/react-query';
 import apiClient, { adminApi } from '@/lib/api';
 import { navAccessFromMe } from '@/components/layout/navAccess';
+import { errorMessage, statusOf } from '@/components/ui/ds/reportOutcome';
 import type { UserRecord } from '@/lib/people/usersModel';
 import type { CatalogueModule, RoleRecord } from '@/lib/people/rolesModel';
 
@@ -27,3 +28,7 @@ export const useMe = () => useQuery({
     return { id: (me?.user?.id ?? null) as number | null, features: navAccessFromMe(me).features };
   },
 });
+
+/** What a refusal says on these pages: the server answers 403 with the permission it wanted ("Permission denied: admin:users:edit"), which is not for a screen. Everything else keeps the server's own cleaned words. */
+export const NO_RIGHT = "You don't have the right to do this. Ask an administrator.";
+export const plainError = (error: unknown, fallback?: string): string => (statusOf(error) === 403 ? NO_RIGHT : errorMessage(error, fallback));

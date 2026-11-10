@@ -12,14 +12,14 @@ import {
   Button, EmptyState, ErrorState, Menu, NoAccessState, Notice, RegisterTable, SkeletonLines, StatusPill, TextInput, useAddressState, useConfirm, useReportedMutation,
   type MenuItem, type RegisterColumn,
 } from '@/components/ui/ds';
-import { canRetry, errorMessage, statusOf } from '@/components/ui/ds/reportOutcome';
+import { canRetry, statusOf } from '@/components/ui/ds/reportOutcome';
 import { integer, sortOf, text } from '@/lib/addressState';
 import { adminApi } from '@/lib/api';
 import { formatCount } from '@/lib/format';
 import { statusPill } from '@/lib/status';
 import { roleKind } from '@/lib/statuses/people';
 import { DEFAULT_ROLE_SORT, ROLE_SORT_KEYS, deleteBlock, deleteRoleText, filterRoles, permissionSummary, sortRoles, type RoleRecord } from '@/lib/people/rolesModel';
-import { ROLES_KEY, USERS_KEY, useMatrix, useMe, useRoles } from './peopleData';
+import { ROLES_KEY, USERS_KEY, plainError, useMatrix, useMe, useRoles } from './peopleData';
 import { useQueryClient } from '@tanstack/react-query';
 import { MembersSheet } from './MembersSheet';
 import { RoleEditor } from './RoleEditor';
@@ -68,7 +68,12 @@ export default function RolesRegister() {
         {rolesQ.isLoading ? (
           <div className="flex flex-col gap-[16px]"><PageHeader variant="page" title="Roles & permissions" /><SkeletonLines lines={6} label="Loading the role" /></div>
         ) : noList ? (
-          <div className="flex flex-col gap-[16px]"><PageHeader variant="page" title="Roles & permissions" /><ErrorState title="Couldn't load the role" message={errorMessage(rolesQ.error)} onRetry={canRetry(rolesQ.error) ? () => { void rolesQ.refetch(); } : undefined} /></div>
+          <div className="flex flex-col gap-[16px]">
+            <PageHeader variant="page" title="Roles & permissions" />
+            {forbidden
+              ? <NoAccessState title="You don't have access to the roles" reason="Seeing roles needs the users right. Ask an administrator." action={<Button onClick={back}>Back to roles</Button>} />
+              : <ErrorState title="Couldn't load the role" message={plainError(rolesQ.error)} onRetry={canRetry(rolesQ.error) ? () => { void rolesQ.refetch(); } : undefined} />}
+          </div>
         ) : creating && !canCreate ? (
           <div className="flex flex-col gap-[16px]">
             <PageHeader variant="page" title="Roles & permissions" />
@@ -146,10 +151,10 @@ export default function RolesRegister() {
       {forbidden ? (
         <NoAccessState title="You don't have access to the roles" reason="Seeing the list of roles needs the users right. Ask an administrator." />
       ) : noList ? (
-        <ErrorState title="Couldn't load the roles" message={errorMessage(rolesQ.error)} onRetry={canRetry(rolesQ.error) ? () => { void rolesQ.refetch(); } : undefined} />
+        <ErrorState title="Couldn't load the roles" message={plainError(rolesQ.error)} onRetry={canRetry(rolesQ.error) ? () => { void rolesQ.refetch(); } : undefined} />
       ) : (
         <>
-          {rolesQ.isError && rolesQ.data && <ErrorState compact title="Couldn't refresh the roles" message={`${errorMessage(rolesQ.error)} What is shown may be out of date.`} onRetry={canRetry(rolesQ.error) ? () => { void rolesQ.refetch(); } : undefined} />}
+          {rolesQ.isError && rolesQ.data && <ErrorState compact title="Couldn't refresh the roles" message={`${plainError(rolesQ.error)} What is shown may be out of date.`} onRetry={canRetry(rolesQ.error) ? () => { void rolesQ.refetch(); } : undefined} />}
           {matrixQ.isError && statusOf(matrixQ.error) === 403 && <Notice tone="info">You can see the roles but not the permission list, so the Permissions column shows counts only.</Notice>}
           <div className="flex flex-wrap items-center gap-[8px]">
             <TextInput

@@ -14,7 +14,7 @@ import { InfoTip } from '@/components/ui/InfoTip';
 import {
   Button, Checkbox, Disclosure, ErrorState, FormField, Notice, ReadOnlyNote, SaveBar, SectionCard, SkeletonLines, StatusPill, TextInput, Textarea, useConfirm, useReportedMutation,
 } from '@/components/ui/ds';
-import { canRetry, errorMessage, statusOf } from '@/components/ui/ds/reportOutcome';
+import { canRetry, statusOf } from '@/components/ui/ds/reportOutcome';
 import { statusPill } from '@/lib/status';
 import { roleKind } from '@/lib/statuses/people';
 import { formatCount } from '@/lib/format';
@@ -22,7 +22,7 @@ import {
   NO_MATRIX_FILTER, blankRole, catalogueNames, changeLine, createRoleBody, deleteBlock, deleteRoleText, diffHeld, formOfRole, impactLine, isFullAccess, isRoleDirty, menuPreview,
   outsideNames, roleErrors, tally, updateRoleBody, type CatalogueModule, type RoleForm, type RoleRecord,
 } from '@/lib/people/rolesModel';
-import { ROLES_KEY, USERS_KEY } from './peopleData';
+import { ROLES_KEY, USERS_KEY, plainError } from './peopleData';
 import { PermissionGrid } from './PermissionGrid';
 
 export interface RoleEditorProps {
@@ -83,7 +83,7 @@ export function RoleEditor({ role, matrix, matrixLoading, matrixError, onRetryMa
       setDraft(null); setServerError(null); setSavedAt(Date.now());
       if (creating) { const id = Number(r.data?.role?.id); if (id) onCreated(id); }
     },
-    onError: (e) => setServerError(errorMessage(e, 'The role could not be saved. Try again.')),
+    onError: (e) => setServerError(plainError(e, 'The role could not be saved. Try again.')),
   });
   const remove = useReportedMutation({
     mutationFn: () => adminApi.deleteRole((role as RoleRecord).id),
@@ -165,7 +165,7 @@ export function RoleEditor({ role, matrix, matrixLoading, matrixError, onRetryMa
           {matrixLoading ? <SkeletonLines lines={6} label="Loading the permission list" />
             : matrixError || !matrix ? (statusOf(matrixError) === 403
               ? <Notice tone="warning" title="You can't see the permission list">Seeing and ticking permissions needs the right to view permissions. Name and description can still be changed.</Notice>
-              : <ErrorState compact title="Couldn't load the permission list" message={errorMessage(matrixError)} onRetry={canRetry(matrixError) ? onRetryMatrix : undefined} />)
+              : <ErrorState compact title="Couldn't load the permission list" message={plainError(matrixError)} onRetry={canRetry(matrixError) ? onRetryMatrix : undefined} />)
             : (
               <div className="flex flex-col gap-[12px]">
                 <div className="flex flex-wrap items-center gap-x-[16px] gap-y-[4px]">
