@@ -1,15 +1,18 @@
 'use client';
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import {
-  Calendar, Check, ChevronDown, ChevronRight, Hash, Link2, Search, Tag, Type,
-} from 'lucide-react';
+// The field picker for links and counts: this module's own columns, and for every linked module the counts, names and fields that come through the link (with how many rows have a value, so an empty
+// column is not added by mistake). It is the second tab of the Add fields sheet. Logic is the builder's (which fields exist, presets, scopes); the markup is the kit's.
+import { useEffect, useMemo, useState } from 'react';
+import { Calendar, Hash, Link2, Search, Tag, Type } from 'lucide-react';
+import { clsx } from 'clsx';
+import { Checkbox, Disclosure, SegmentedControl, TextInput } from '@/components/ui/ds';
 import type { ColType, ColumnDef, Row } from './types';
 import type { LinkageDef } from './linkages';
 import { toggleVisibleColumn } from './builderUtils';
 import { rawValue } from './grid-utils';
 
 const typeIcon = (t?: ColType) => (t === 'number' ? Hash : t === 'date' ? Calendar : t === 'badge' ? Tag : Type);
+const TYPE_WORD: Record<string, string> = { number: 'number', date: 'date', badge: 'tag', text: 'text', linkage: 'link' };
 
 export type FieldScope = 'all' | 'dataset' | 'linked' | 'selected';
 
@@ -24,16 +27,7 @@ function fillRate(col: ColumnDef, rows: Row[]): number | null {
 }
 
 export default function ColumnPicker({
-  baseColumns,
-  linkageCatalog,
-  linkageColumns,
-  visibleKeys,
-  onChange,
-  fieldQ,
-  onFieldQChange,
-  rows = [],
-  compact = false,
-  defaultScope = 'all',
+  baseColumns, linkageCatalog, linkageColumns, visibleKeys, onChange, fieldQ, onFieldQChange, rows = [], defaultScope = 'all',
 }: {
   baseColumns: ColumnDef[];
   linkageCatalog: LinkageDef[];
@@ -43,63 +37,34 @@ export default function ColumnPicker({
   fieldQ: string;
   onFieldQChange: (q: string) => void;
   rows?: Row[];
-  compact?: boolean;
   defaultScope?: FieldScope;
 }) {
   const [openLinkages, setOpenLinkages] = useState<Set<string>>(() => new Set());
   const [scope, setScope] = useState<FieldScope>(defaultScope);
 
   const q = fieldQ.trim().toLowerCase();
-  const matches = (label: string, extra = '') =>
-    !q || label.toLowerCase().includes(q) || extra.toLowerCase().includes(q);
+  const matches = (label: string) => !q || label.toLowerCase().includes(q);
+  const fieldCount = baseColumns.length + linkageColumns.length;
 
-  const fieldCount =
-    baseColumns.length + linkageColumns.length;
-
+  // a link that already has a field on the report starts open
   useEffect(() => {
     setOpenLinkages((prev) => {
       let changed = false;
       const next = new Set(prev);
       for (const link of linkageCatalog) {
-        const hasSelected = linkageColumns.some(
-          (c) => c.linkageKey === link.key && visibleKeys.includes(c.key),
-        );
-        if (hasSelected && !next.has(link.key)) {
-          next.add(link.key);
-          changed = true;
-        }
+        const hasSelected = linkageColumns.some((c) => c.linkageKey === link.key && visibleKeys.includes(c.key));
+        if (hasSelected && !next.has(link.key)) { next.add(link.key); changed = true; }
       }
       return changed ? next : prev;
     });
   }, [visibleKeys, linkageCatalog, linkageColumns]);
-
-  useEffect(() => {
-    if (!q) return;
-    setOpenLinkages((prev) => {
-      const next = new Set(prev);
-      for (const link of linkageCatalog) {
-        const fields = linkageColumns.filter((c) => c.linkageKey === link.key);
-        if (
-          fields.some(
-            (c) =>
-              c.label.toLowerCase().includes(q) ||
-              link.label.toLowerCase().includes(q) ||
-              link.module.toLowerCase().includes(q),
-          )
-        ) {
-          next.add(link.key);
-        }
-      }
-      return next;
-    });
-  }, [q, linkageCatalog, linkageColumns]);
 
   const baseFiltered = useMemo(() => {
     let list = baseColumns.filter((c) => matches(c.label));
     if (scope === 'linked') list = [];
     if (scope === 'selected') list = list.filter((c) => visibleKeys.includes(c.key));
     return list;
-  }, [baseColumns, q, scope, visibleKeys]);
+  }, [baseColumns, q, scope, visibleKeys]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const groupedLinkage = useMemo(() => {
     if (scope === 'dataset') return [];
@@ -108,26 +73,12 @@ export default function ColumnPicker({
       fields: linkageColumns.filter((c) => {
         if (c.linkageKey !== link.key) return false;
         if (scope === 'selected' && !visibleKeys.includes(c.key)) return false;
-        return (
-          !q ||
-          c.label.toLowerCase().includes(q) ||
-          link.label.toLowerCase().includes(q) ||
-          link.module.toLowerCase().includes(q)
-        );
+        return !q || c.label.toLowerCase().includes(q) || link.label.toLowerCase().includes(q) || link.module.toLowerCase().includes(q);
       }),
     }));
   }, [linkageCatalog, linkageColumns, q, scope, visibleKeys]);
 
   const toggle = (key: string) => onChange(toggleVisibleColumn(visibleKeys, key));
-
-  const toggleLinkage = (key: string) => {
-    setOpenLinkages((s) => {
-      const n = new Set(s);
-      n.has(key) ? n.delete(key) : n.add(key);
-      return n;
-    });
-  };
-
   const selectAllLinkage = (linkKey: string) => {
     const keys = linkageColumns.filter((c) => c.linkageKey === linkKey).map((c) => c.key);
     const allOn = keys.every((k) => visibleKeys.includes(k));
@@ -138,9 +89,7 @@ export default function ColumnPicker({
   const presets = useMemo(() => {
     const essentials = baseColumns.slice(0, Math.min(4, baseColumns.length)).map((c) => c.key);
     const scoring = baseColumns.filter((c) => c.type === 'number').map((c) => c.key);
-    const ownership = baseColumns
-      .filter((c) => /owner|assignee|responsible|created.?by|updated.?by/i.test(c.label) || /owner|assignee/i.test(c.key))
-      .map((c) => c.key);
+    const ownership = baseColumns.filter((c) => /owner|assignee|responsible|created.?by|updated.?by/i.test(c.label) || /owner|assignee/i.test(c.key)).map((c) => c.key);
     const badges = baseColumns.filter((c) => c.type === 'badge').map((c) => c.key);
     return [
       { id: 'essentials', label: 'Essentials', keys: essentials },
@@ -152,237 +101,102 @@ export default function ColumnPicker({
 
   const applyPreset = (keys: string[]) => {
     const set = new Set(visibleKeys);
-    const allOn = keys.every((k) => set.has(k));
-    if (allOn) onChange(visibleKeys.filter((k) => !keys.includes(k)));
+    if (keys.every((k) => set.has(k))) onChange(visibleKeys.filter((k) => !keys.includes(k)));
     else onChange([...visibleKeys, ...keys.filter((k) => !set.has(k))]);
   };
 
-  const scopes: { id: FieldScope; label: string; count?: number }[] = [
-    { id: 'all', label: 'All modules' },
-    { id: 'dataset', label: 'This dataset', count: baseColumns.length },
-    { id: 'linked', label: 'Linked', count: linkageColumns.length },
-    { id: 'selected', label: 'Selected', count: visibleKeys.length },
+  const scopes = [
+    { value: 'all' as const, label: 'All' },
+    { value: 'dataset' as const, label: `This module (${baseColumns.length})` },
+    { value: 'linked' as const, label: `Linked (${linkageColumns.length})` },
+    { value: 'selected' as const, label: `Selected (${visibleKeys.length})` },
   ];
 
   return (
-    <div className={compact ? '' : 'flex h-full min-h-0 flex-col'}>
-      <div className="shrink-0 space-y-2">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
-          <input
-            value={fieldQ}
-            onChange={(e) => onFieldQChange(e.target.value)}
-            placeholder={`Search ${fieldCount} fields · ${linkageCatalog.length + 1} modules`}
-            className="w-full rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-2 text-xs focus:border-primary-500 focus:outline-none"
-          />
+    <div className="flex flex-col gap-[12px]">
+      <TextInput
+        type="search"
+        aria-label="Search fields"
+        placeholder={`Search ${fieldCount} fields in ${linkageCatalog.length + 1} modules`}
+        value={fieldQ}
+        onChange={(e) => onFieldQChange(e.target.value)}
+        leftAdornment={<Search aria-hidden className="h-[14px] w-[14px]" />}
+        autoComplete="off"
+      />
+      {presets.length > 0 && scope !== 'linked' && (
+        <div className="flex flex-wrap gap-[6px]" role="group" aria-label="Field sets">
+          {presets.map((p) => {
+            const active = p.keys.every((k) => visibleKeys.includes(k));
+            return (
+              <button
+                key={p.id}
+                type="button"
+                aria-pressed={active}
+                onClick={() => applyPreset(p.keys)}
+                className={clsx('inline-flex min-h-ds-control-sm items-center rounded-full border px-[10px] text-ds-label focus-visible:outline-none focus-visible:shadow-ds-ring', active ? 'border-transparent bg-ds-primary text-ds-on-primary' : 'border-ds-border-strong bg-ds-surface text-ds-fg-body hover:bg-ds-surface-hover')}
+              >
+                {p.label} ({p.keys.length})
+              </button>
+            );
+          })}
         </div>
-
-        {presets.length > 0 && scope !== 'linked' && (
-          <div className="flex flex-wrap gap-1">
-            {presets.map((p) => {
-              const active = p.keys.every((k) => visibleKeys.includes(k));
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => applyPreset(p.keys)}
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition-colors ${
-                    active
-                      ? 'bg-primary-500 text-[#0a0a0a]'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  {p.label} · {p.keys.length}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        <div className="flex gap-0.5 rounded-lg bg-slate-100 p-0.5">
-          {scopes.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => setScope(s.id)}
-              className={`min-w-0 flex-1 truncate rounded-md px-1.5 py-1 text-[10px] font-semibold transition-colors ${
-                scope === s.id
-                  ? 'bg-slate-900 text-white shadow-sm'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              {s.label}
-              {s.count != null ? ` (${s.count})` : ''}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className={`mt-2 space-y-1 ${compact ? 'max-h-[360px] overflow-y-auto' : 'min-h-0 flex-1 overflow-y-auto'}`}>
-        {(scope === 'all' || scope === 'dataset' || scope === 'selected') && baseFiltered.length > 0 && (
-          <FieldGroup title="This dataset" count={baseFiltered.filter((c) => visibleKeys.includes(c.key)).length}>
-            {baseFiltered.map((c) => (
-              <FieldRow
-                key={c.key}
-                col={c}
-                checked={visibleKeys.includes(c.key)}
-                onToggle={() => toggle(c.key)}
-                fill={fillRate(c, rows)}
-              />
-            ))}
-          </FieldGroup>
-        )}
-
-        {(scope === 'all' || scope === 'linked' || scope === 'selected') && (
-          <>
-            {scope === 'all' && (
-              <div className="mb-1 mt-2 flex items-center justify-between px-0.5">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                  Linked modules ({linkageCatalog.length})
-                </span>
-              </div>
-            )}
-
-            {groupedLinkage.map(({ link, fields }) => {
-              const allFields = linkageColumns.filter((c) => c.linkageKey === link.key);
-              const visibleCount = allFields.filter((c) => visibleKeys.includes(c.key)).length;
-              const open = openLinkages.has(link.key) || (!!q && fields.length > 0);
-              if (!fields.length && (q || scope === 'selected')) return null;
-              const shown = q || scope === 'selected' ? fields : allFields;
-              return (
-                <div key={link.key} className="mt-0.5">
-                  <button
-                    type="button"
-                    onClick={() => toggleLinkage(link.key)}
-                    className="flex w-full items-center gap-1.5 rounded-md px-1 py-1.5 text-left hover:bg-slate-50"
-                  >
-                    {open ? (
-                      <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
-                    ) : (
-                      <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
-                    )}
-                    <Link2 className="h-3.5 w-3.5 text-primary-500" />
-                    <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-700">
-                      {link.label}
-                    </span>
-                    <span className="hidden text-[10px] text-slate-400 sm:inline">{link.module}</span>
-                    {visibleCount > 0 && (
-                      <span className="rounded-full bg-primary-100 px-1.5 py-0.5 text-[10px] font-semibold text-primary-800">
-                        {visibleCount}
-                      </span>
-                    )}
-                  </button>
-                  {open && (
-                    <div className="ml-2 max-h-[240px] overflow-y-auto border-l border-slate-100 pl-2">
-                      <div className="mb-1 flex items-center justify-between">
-                        <span className="text-[10px] text-slate-400">
-                          via {link.module} · {allFields.length} fields
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => selectAllLinkage(link.key)}
-                          className="text-[10px] font-medium text-slate-400 hover:text-primary-700"
-                        >
-                          {allFields.every((c) => visibleKeys.includes(c.key)) ? 'Deselect all' : 'Select all'}
-                        </button>
-                      </div>
-                      {shown.map((c) => (
-                        <FieldRow
-                          key={c.key}
-                          col={c}
-                          checked={visibleKeys.includes(c.key)}
-                          onToggle={() => toggle(c.key)}
-                          linked
-                          fill={fillRate(c, rows)}
-                          moduleHint={link.module}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </>
-        )}
-
-        {baseFiltered.length === 0 && groupedLinkage.every((g) => !g.fields.length) && (
-          <p className="px-2 py-6 text-center text-xs text-slate-400">No fields match.</p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function FieldGroup({ title, count, children }: { title: string; count: number; children: ReactNode }) {
-  return (
-    <div>
-      <div className="mb-1 flex items-center gap-2 px-0.5">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{title}</span>
-        {count > 0 && (
-          <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
-            {count}
-          </span>
-        )}
-      </div>
-      <div className="space-y-0.5">{children}</div>
-    </div>
-  );
-}
-
-function FieldRow({
-  col,
-  checked,
-  onToggle,
-  linked = false,
-  fill = null,
-  moduleHint,
-}: {
-  col: ColumnDef;
-  checked: boolean;
-  onToggle: () => void;
-  linked?: boolean;
-  fill?: number | null;
-  moduleHint?: string;
-}) {
-  const Icon = typeIcon(col.type);
-  return (
-    <label
-      className={`flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-xs transition-colors ${
-        checked
-          ? 'bg-primary-50 text-primary-900 ring-1 ring-inset ring-primary-200'
-          : 'text-slate-700 hover:bg-slate-50'
-      }`}
-    >
-      <span
-        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
-          checked ? 'border-primary-600 bg-primary-600 text-white' : 'border-slate-300 bg-white'
-        }`}
-      >
-        {checked && <Check className="h-3 w-3" strokeWidth={3} />}
-      </span>
-      <input type="checkbox" checked={checked} onChange={onToggle} className="sr-only" />
-      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-slate-100 text-slate-500">
-        <Icon className="h-3 w-3" />
-      </span>
-      <span className="min-w-0 flex-1 truncate font-medium" title={col.label}>
-        {col.label}
-      </span>
-      {moduleHint && (
-        <span className="hidden max-w-[4.5rem] truncate text-[10px] text-slate-400 xl:inline">{moduleHint}</span>
       )}
-      {linked && !moduleHint && <Link2 className="h-3 w-3 shrink-0 text-primary-400" />}
-      <span className="shrink-0 text-[10px] capitalize text-slate-400">{col.type || 'text'}</span>
-      {fill != null && (
-        <span className="flex w-12 shrink-0 items-center gap-1" title={`${fill}% filled`}>
-          <span className="h-1 flex-1 overflow-hidden rounded-full bg-slate-200">
-            <span
-              className={`block h-full rounded-full ${fill >= 80 ? 'bg-emerald-500' : fill >= 40 ? 'bg-amber-400' : 'bg-slate-300'}`}
-              style={{ width: `${fill}%` }}
-            />
-          </span>
-          <span className="w-6 text-right tabular-nums text-[9px] text-slate-400">{fill}%</span>
+      <SegmentedControl label="Which fields to list" name="field-scope" options={scopes} value={scope} onChange={setScope} />
+
+      <div className="flex flex-col gap-[4px]">
+        {(scope === 'all' || scope === 'dataset' || scope === 'selected') && baseFiltered.length > 0 && (
+          <section aria-label="This module">
+            <p className="m-0 pb-[2px] text-ds-label text-ds-fg-muted">This module ({baseFiltered.filter((c) => visibleKeys.includes(c.key)).length} on the report)</p>
+            {baseFiltered.map((c) => <FieldRow key={c.key} col={c} checked={visibleKeys.includes(c.key)} onToggle={() => toggle(c.key)} fill={fillRate(c, rows)} />)}
+          </section>
+        )}
+
+        {(scope === 'all' || scope === 'linked' || scope === 'selected') && groupedLinkage.map(({ link, fields }) => {
+          const allFields = linkageColumns.filter((c) => c.linkageKey === link.key);
+          const visibleCount = allFields.filter((c) => visibleKeys.includes(c.key)).length;
+          if (!fields.length && (q || scope === 'selected')) return null;
+          const shown = q || scope === 'selected' ? fields : allFields;
+          const open = openLinkages.has(link.key) || (!!q && fields.length > 0);
+          return (
+            <Disclosure
+              key={link.key}
+              label={`${link.label} (${link.module})`}
+              count={visibleCount}
+              level={4}
+              region={false}
+              open={open}
+              onOpenChange={(next) => setOpenLinkages((s) => { const n = new Set(s); if (next) n.add(link.key); else n.delete(link.key); return n; })}
+            >
+              <div className="flex flex-col gap-[2px] pb-[8px]">
+                <button type="button" onClick={() => selectAllLinkage(link.key)} className="self-start rounded-ds-control px-[8px] py-[4px] text-ds-label text-ds-primary-text hover:bg-ds-primary-soft focus-visible:outline-none focus-visible:shadow-ds-ring">
+                  {allFields.every((c) => visibleKeys.includes(c.key)) ? `Deselect all ${allFields.length} fields` : `Select all ${allFields.length} fields`}
+                </button>
+                {shown.map((c) => <FieldRow key={c.key} col={c} checked={visibleKeys.includes(c.key)} onToggle={() => toggle(c.key)} fill={fillRate(c, rows)} linked />)}
+              </div>
+            </Disclosure>
+          );
+        })}
+
+        {baseFiltered.length === 0 && groupedLinkage.every((g) => !g.fields.length) && <p className="m-0 py-[16px] text-center text-ds-body text-ds-fg-muted">No fields match.</p>}
+      </div>
+    </div>
+  );
+}
+
+function FieldRow({ col, checked, onToggle, linked = false, fill = null }: { col: ColumnDef; checked: boolean; onToggle: () => void; linked?: boolean; fill?: number | null }) {
+  const Icon = linked ? Link2 : typeIcon(col.type);
+  return (
+    <Checkbox
+      checked={checked}
+      onChange={onToggle}
+      className="w-full"
+      label={(
+        <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-[8px] gap-y-[2px]">
+          <Icon aria-hidden className="h-[14px] w-[14px] shrink-0 text-ds-fg-muted" />
+          <span className="min-w-0 text-ds-body text-ds-fg [overflow-wrap:anywhere]">{col.label}</span>
+          <span className="text-ds-label text-ds-fg-muted">{TYPE_WORD[col.type || 'text'] ?? 'text'}{fill != null ? `, ${fill}% filled` : ''}</span>
         </span>
       )}
-    </label>
+    />
   );
 }

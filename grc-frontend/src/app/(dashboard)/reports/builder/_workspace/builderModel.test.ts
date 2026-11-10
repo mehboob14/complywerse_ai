@@ -4,9 +4,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  conditionText, hasUnsaved, keyFacts, mergeAddedFields, newFieldCount, opLabel, picksFromVisible, savedShape, sortChoice, sortFromChoice, switchNeedsConfirm, toggleShortcut, toggleSort,
+  conditionText, drillNarrow, hasUnsaved, keyFacts, mergeAddedFields, newFieldCount, opLabel, picksFromVisible, savedShape, sortChoice, sortFromChoice, switchNeedsConfirm, toggleShortcut, toggleSort,
   togglePick, withoutCondition, workingSpec,
 } from './builderModel.ts';
+import { cellTone } from '../../_reports/cellTone.ts';
 import { emptySpec, type ColumnDef, type FilterRules, type ReportSpec } from '../../_reports/types.ts';
 import { EMPTY_TOKEN, encodeMultiValue } from '../../_reports/filter-utils.ts';
 
@@ -132,4 +133,30 @@ test('key figures in summary mode: groups, source rows (not when the server summ
   assert.deepEqual(server.map((x) => x.label), ['Summary groups']);
   assert.equal(facts('risks', rows, rows, { groups: 1, sourceRows: 1, grand: { label: 'Average', value: 12.345 } })[2].value, '12.3');
   assert.equal(facts('risks', rows, rows, { groups: 1, sourceRows: 1, grand: { label: 'Highest', value: 'High' } })[2].value, 'High');
+});
+
+test('a badge cell takes its tone from the colour word the dataset gave it; no colour is neutral', () => {
+  assert.equal(cellTone('bg-rose-50 text-rose-700 border-rose-200'), 'danger');
+  assert.equal(cellTone('bg-amber-50 text-amber-700'), 'warning');
+  assert.equal(cellTone('bg-orange-50 text-orange-700'), 'warning');
+  assert.equal(cellTone('bg-emerald-50 text-emerald-700'), 'success');
+  assert.equal(cellTone('bg-primary-50 text-primary-700'), 'progress');
+  assert.equal(cellTone('bg-slate-100 text-slate-600'), 'neutral');
+  assert.equal(cellTone(undefined), 'neutral');
+});
+
+test('a dashboard click narrows a copy of an AND report to the clicked category; an OR report opens as saved and says so', () => {
+  const and: ReportSpec = { ...emptySpec('risks'), id: 'r1', rules: { logic: 'AND', conditions: [{ id: 'a', col: 'status', op: 'eq', value: 'Open' }] } };
+  const narrowed = drillNarrow(and, 'category', 'Cyber', 'x1');
+  assert.equal(narrowed.refused, false);
+  assert.deepEqual(narrowed.spec.rules.conditions.map((c) => [c.id, c.col, c.op]), [['a', 'status', 'eq'], ['drill_x1', 'category', 'in']]);
+  assert.equal(and.rules.conditions.length, 1, 'the saved report is not changed');
+  assert.deepEqual(drillNarrow(and, 'category', '—', 'x2').spec.rules.conditions[1].value, encodeMultiValue([EMPTY_TOKEN]), "a blank group is the filter's blank token");
+  const or: ReportSpec = { ...and, rules: { logic: 'OR', conditions: [{ id: 'a', col: 'status', op: 'eq', value: 'Open' }, { id: 'b', col: 'owner', op: 'eq', value: 'Sam' }] } };
+  const kept = drillNarrow(or, 'category', 'Cyber');
+  assert.equal(kept.refused, true);
+  assert.equal(kept.spec, or);
+  const one: ReportSpec = { ...or, rules: { logic: 'OR', conditions: [{ id: 'a', col: 'status', op: 'eq', value: 'Open' }] } };
+  assert.equal(drillNarrow(one, 'category', 'Cyber').spec.rules.logic, 'AND', 'one active condition has no OR to preserve');
+  assert.deepEqual(drillNarrow(and, null, null), { spec: and, refused: false });
 });

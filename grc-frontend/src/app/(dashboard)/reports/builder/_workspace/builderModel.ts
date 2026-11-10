@@ -3,7 +3,7 @@
 // ReportWorkspace and the rail only draw and call these. Nothing here fetches; the formulas of the key figures are the ones the old builder used (audit 5.1), moved here unchanged.
 import { formatCount } from '../../../../../lib/format.ts';
 import { emptySpec, type ColumnDef, type FilterRule, type FilterRules, type ReportSpec, type Row, type SortSpec } from '../../_reports/types.ts';
-import { EMPTY_TOKEN, decodeMultiValue, isCountColumn } from '../../_reports/filter-utils.ts';
+import { EMPTY_TOKEN, decodeMultiValue, encodeMultiValue, isCountColumn } from '../../_reports/filter-utils.ts';
 import { isActiveCondition } from '../../_reports/grid-utils.ts';
 
 /* ── opening a report ───────────────────────────────────────────────────────────────────────────────────── */
@@ -219,4 +219,29 @@ export function keyFacts({ datasetKey, rows, matching, summary }: FactsInput, no
     }).length, 'warning');
   }
   return facts.slice(0, 4);
+}
+
+/* ── opening a report from a dashboard's click ───────────────────────────────────────────────────────────── */
+
+/**
+ * A dashboard chart's click opens the report narrowed to the category that was clicked: one more condition on a COPY of the report, visible, removable and never saved unless the person saves.
+ * The filter list is one flat AND/OR list, so it cannot say "(A or B) and category": narrowing a report that combines with OR would silently turn it into a different, smaller set. Such a report
+ * opens as saved and `refused` is true (the page says so).
+ */
+export function drillNarrow(found: ReportSpec, col: string | null, value: string | null, stamp: string = Date.now().toString(36)): { spec: ReportSpec; refused: boolean } {
+  if (!col || value == null) return { spec: found, refused: false };
+  const canNarrow = found.rules.logic === 'AND' || found.rules.conditions.filter(isActiveCondition).length <= 1;
+  if (!canNarrow) return { spec: found, refused: true };
+  return {
+    refused: false,
+    spec: {
+      ...found,
+      rules: {
+        ...found.rules,
+        logic: 'AND',
+        // the pivot labels a blank group "—"; the filter spells blank as EMPTY_TOKEN
+        conditions: [...found.rules.conditions, { id: `drill_${stamp}`, col, op: 'in', value: encodeMultiValue([value === '—' ? EMPTY_TOKEN : value]) }],
+      },
+    },
+  };
 }

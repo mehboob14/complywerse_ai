@@ -948,7 +948,7 @@ export const DATASETS: ReportDataset[] = [
   // API of its own — the page picks a framework via the same certification-journey
   // list already covered by the `journeys` dataset, then drills into per-framework
   // evidence/controls/risks/vendors tabs (no flat register to report on). Reused
-  // rather than duplicated; see COVERAGE_MATRIX.md.
+  // rather than duplicated.
 ];
 
 export { sevTone };

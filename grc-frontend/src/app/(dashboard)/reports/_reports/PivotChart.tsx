@@ -56,14 +56,14 @@ const TOOLTIP = {
   contentStyle: { borderRadius: 10, border: '1px solid #e2e8f0', boxShadow: '0 4px 16px rgba(15,23,42,0.08)', fontSize: 12, padding: '8px 10px' },
   labelStyle: { color: INK.primary, fontWeight: 600, marginBottom: 2 },
 };
-const AXIS = { tick: { fill: INK.muted, fontSize: 11 }, tickLine: false, axisLine: { stroke: INK.grid } };
-const LEGEND = { wrapperStyle: { fontSize: 11, color: INK.secondary } };
+const AXIS = { tick: { fill: INK.muted, fontSize: 12 }, tickLine: false, axisLine: { stroke: INK.grid } };
+const LEGEND = { wrapperStyle: { fontSize: 12, color: INK.secondary } };
 const trunc = (s: string, n = 14) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
 function Empty({ children }: { children: ReactNode }) {
   return (
-    <div className="flex h-full min-h-[240px] items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50/50 p-6 text-center">
-      <p className="max-w-xs text-sm text-slate-500">{children}</p>
+    <div className="flex h-full min-h-[240px] items-center justify-center rounded-ds-card border border-dashed border-ds-border-strong bg-ds-surface-subtle p-[24px] text-center">
+      <p className="m-0 max-w-xs text-ds-body text-ds-fg-muted">{children}</p>
     </div>
   );
 }
@@ -90,8 +90,8 @@ export default function PivotChart({
   const labels = !!options?.labels;
   const fmt = (v: unknown) => fmtAgg(Number(v), m?.agg ?? 'count');
 
-  if (!m) return <Empty>Add a <span className="font-medium text-slate-700">Value</span> to chart.</Empty>;
-  if (!nodes.length) return <Empty>Add a <span className="font-medium text-slate-700">Row</span> field to plot categories.</Empty>;
+  if (!m) return <Empty>This chart needs a <span className="font-medium text-ds-fg">calculation</span> to plot.</Empty>;
+  if (!nodes.length) return <Empty>This chart needs a <span className="font-medium text-ds-fg">breakdown field</span> to plot its categories.</Empty>;
 
   // ── Shared: categories × series (the column field), capped at 8 series ──────
   const ranked = hasCol
@@ -109,7 +109,7 @@ export default function PivotChart({
   });
   const dense = data.length > 6;
   const capNote = hiddenCount > 0
-    ? <p className="pt-1 text-center text-[11px] text-slate-400">Showing the {MAX_SERIES} largest of {ranked.length} series — the Table view has them all.</p>
+    ? <p className="m-0 pt-[4px] text-center text-ds-label text-ds-fg-muted">Showing the {MAX_SERIES} largest of {ranked.length} series. The Table view has them all.</p>
     : null;
   const frame = (chart: ReactElement, note: ReactNode = capNote) => (
     <div className="flex h-full min-h-0 flex-col">
@@ -142,9 +142,9 @@ export default function PivotChart({
         {legend && slices.length > 1 && <Legend {...LEGEND} />}
       </PieChart>,
       (tail.length > 0 || dropped > 0) ? (
-        <p className="pt-1 text-center text-[11px] text-slate-400">
+        <p className="m-0 pt-[4px] text-center text-ds-label text-ds-fg-muted">
           {tail.length > 0 && additive && `Smallest ${tail.length} grouped as "Other". `}
-          {tail.length > 0 && !additive && `Top ${head.length} of ${nodes.length} — see the Table view for all. `}
+          {tail.length > 0 && !additive && `Top ${head.length} of ${nodes.length}. The Table view has them all. `}
           {dropped > 0 && `${dropped} group${dropped > 1 ? 's' : ''} with no positive value omitted.`}
         </p>
       ) : null,
@@ -168,8 +168,8 @@ export default function PivotChart({
     return frame(
       <RadarChart data={data} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
         <PolarGrid stroke={INK.grid} />
-        <PolarAngleAxis dataKey="name" tick={{ fill: INK.muted, fontSize: 11 }} tickFormatter={(v: string) => trunc(String(v), 10)} />
-        <PolarRadiusAxis tick={{ fill: INK.muted, fontSize: 10 }} axisLine={false} />
+        <PolarAngleAxis dataKey="name" tick={{ fill: INK.muted, fontSize: 12 }} tickFormatter={(v: string) => trunc(String(v), 10)} />
+        <PolarRadiusAxis tick={{ fill: INK.muted, fontSize: 12 }} axisLine={false} />
         <Tooltip {...TOOLTIP} formatter={(v) => fmt(v)} />
         {legend && keys.length > 1 && <Legend {...LEGEND} />}
         {keys.map((k) => <Radar key={k} name={k} dataKey={k} stroke={colorOf(k)} fill={colorOf(k)} fillOpacity={keys.length > 1 ? 0.15 : 0.3} isAnimationActive={animate} />)}
@@ -179,7 +179,7 @@ export default function PivotChart({
 
   // ── Scatter (measure 1 vs measure 2) ────────────────────────────────────────
   if (kind === 'scatter') {
-    if (measures.length < 2) return <Empty>Scatter needs two <span className="font-medium text-slate-700">Values</span> — add another to plot X vs Y.</Empty>;
+    if (measures.length < 2) return <Empty>Scatter needs two <span className="font-medium text-ds-fg">calculations</span> to plot one against the other.</Empty>;
     const mx = measures[0], my = measures[1];
     const pts = nodes.map((n) => ({ name: n.label, x: Number(n.totals[0] ?? 0), y: Number(n.totals[1] ?? 0) }));
     const lbl = (mm: typeof mx) => (mm.agg === 'count' ? 'Count' : `${mm.agg} ${mm.key}`);
@@ -187,14 +187,14 @@ export default function PivotChart({
       <ScatterChart margin={{ top: 12, right: 16, bottom: 24, left: 4 }}>
         <CartesianGrid stroke={INK.grid} />
         <XAxis type="number" dataKey="x" name={lbl(mx)} {...AXIS} height={40}
-          label={{ value: lbl(mx), position: 'insideBottom', offset: -2, fill: INK.muted, fontSize: 11 }} />
+          label={{ value: lbl(mx), position: 'insideBottom', offset: -2, fill: INK.muted, fontSize: 12 }} />
         <YAxis type="number" dataKey="y" name={lbl(my)} {...AXIS} width={52} />
         <ZAxis range={[60, 61]} />
         <Tooltip {...TOOLTIP} cursor={{ strokeDasharray: '3 3' }}
           formatter={(v: unknown, n: unknown) => [String(v), String(n)]}
           labelFormatter={() => ''} />
         <Scatter data={pts} fill={SERIES[0]} isAnimationActive={animate}>
-          {labels && <LabelList dataKey="name" position="top" style={{ fontSize: 10, fill: INK.secondary }} />}
+          {labels && <LabelList dataKey="name" position="top" style={{ fontSize: 12, fill: INK.secondary }} />}
         </Scatter>
       </ScatterChart>,
       null,
@@ -215,18 +215,18 @@ export default function PivotChart({
     return (
       <div className="flex h-full min-h-0 flex-col">
         <div className="min-h-0 flex-1 overflow-auto">
-          <div className="grid gap-0.5" style={{ gridTemplateColumns: `minmax(120px, 180px) repeat(${cols.length}, minmax(64px, 1fr))` }}>
-            <div className="sticky left-0 top-0 z-10 bg-white" />
+          <div className="grid gap-[2px]" style={{ gridTemplateColumns: `minmax(120px, 180px) repeat(${cols.length}, minmax(64px, 1fr))` }}>
+            <div className="sticky left-0 top-0 z-[1] bg-ds-surface" />
             {cols.map((c) => (
-              <div key={c.key} className="truncate px-2 py-1 text-center text-[11px] font-semibold text-slate-500" title={c.key}>{trunc(c.key, 12)}</div>
+              <div key={c.key} className="truncate px-[8px] py-[4px] text-center text-ds-label font-[600] text-ds-fg-muted" title={c.key}>{trunc(c.key, 12)}</div>
             ))}
             {nodes.map((n) => (
               <Fragment key={n.label}>
-                <div className="sticky left-0 z-10 truncate bg-white px-2 py-1 text-[11px] font-medium text-slate-600" title={n.label}>{trunc(n.label, 20)}</div>
+                <div className="sticky left-0 z-[1] truncate bg-ds-surface px-[8px] py-[4px] text-ds-label text-ds-fg-body" title={n.label}>{trunc(n.label, 20)}</div>
                 {cols.map((c) => {
                   const v = valAt(n, c.ci); const t = norm(v);
                   return (
-                    <div key={c.key} className="flex items-center justify-center rounded px-1 py-1.5 text-[11px] tabular-nums" title={`${n.label} · ${c.key}: ${fmt(v)}`}
+                    <div key={c.key} className="flex items-center justify-center rounded-ds-control px-[4px] py-[6px] text-ds-label tabular-nums" title={`${n.label} · ${c.key}: ${fmt(v)}`}
                       style={{ background: heatColor(t), color: heatInk(t) }}>
                       {v == null ? '' : fmt(v)}
                     </div>
@@ -236,7 +236,7 @@ export default function PivotChart({
             ))}
           </div>
         </div>
-        {hiddenCount > 0 && <p className="pt-1 text-center text-[11px] text-slate-400">Showing the {MAX_SERIES} largest of {ranked.length} columns — the Table view has them all.</p>}
+        {hiddenCount > 0 && <p className="m-0 pt-[4px] text-center text-ds-label text-ds-fg-muted">Showing the {MAX_SERIES} largest of {ranked.length} columns. The Table view has them all.</p>}
       </div>
     );
   }
@@ -273,7 +273,7 @@ export default function PivotChart({
   const tip = <Tooltip {...TOOLTIP} cursor={isBar ? { fill: 'rgba(15,23,42,0.04)' } : undefined} formatter={(v) => fmt(v)} />;
   const leg = legend && keys.length > 1 ? <Legend {...LEGEND} /> : null;
   const dataLabel = labels && keys.length <= 3
-    ? (k: string) => <LabelList dataKey={k} position={horizontal ? 'right' : 'top'} formatter={(v: unknown) => fmt(v)} style={{ fontSize: 10, fill: INK.secondary }} />
+    ? (k: string) => <LabelList dataKey={k} position={horizontal ? 'right' : 'top'} formatter={(v: unknown) => fmt(v)} style={{ fontSize: 12, fill: INK.secondary }} />
     : () => null;
 
   if (isBar) {
@@ -324,7 +324,7 @@ function TreemapCell(props: Record<string, unknown>) {
     <g>
       <rect x={x} y={y} width={width} height={height} fill={fill} stroke="#fff" strokeWidth={2} rx={2} />
       {width > 56 && height > 22 && (
-        <text x={x + 6} y={y + 16} fill="#fff" fontSize={11} fontWeight={600}>{trunc(String(name ?? ''), Math.floor(width / 8))}</text>
+        <text x={x + 6} y={y + 16} fill="#fff" fontSize={12} fontWeight={600}>{trunc(String(name ?? ''), Math.floor(width / 8))}</text>
       )}
     </g>
   );

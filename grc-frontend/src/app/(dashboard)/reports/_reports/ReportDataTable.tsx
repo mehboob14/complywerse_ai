@@ -1,17 +1,20 @@
 'use client';
 
-import { Fragment, useMemo, useRef } from 'react';
+// The rows of a report as a table: sort (click a header, Shift for a second column), resize, reorder by drag, pin to the left, group, totals. New in the workspace: it is PAGED (a register of 5,000 rows is
+// no longer drawn as 5,000 rows), the numbers in the footer still describe every matching row, a partial load says so in the footer, and the whole table is the kit's (tokens, 12px text, sort buttons that
+// are real buttons with a target a finger can hit). The print view draws the same table with `paged={false}`.
+import { Fragment, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import {
-  ArrowDown, ArrowUp, ChevronsUpDown, GripVertical, Pin,
-} from 'lucide-react';
+import { clsx } from 'clsx';
+import { ArrowDown, ArrowUp, ChevronsUpDown, GripVertical, Pin } from 'lucide-react';
+import { Pager, StatusPill } from '@/components/ui/ds';
+import { formatCount } from '@/lib/format';
 import type { ColumnDef, Row, SortSpec } from './types';
 import { cellAlign, cellDisplay } from './builderUtils';
 import { aggregate, groupRows, numericValue, rawValue } from './grid-utils';
+import { cellTone } from './cellTone';
 
-/** A cell value that is really a list — an array, or the server's "; "-joined
- *  multi-value string (linkage / cross-module fields only) — split into atomic
- *  parts. Returns null for a genuine single value so plain text is untouched. */
+/** A cell value that is really a list — an array, or the server's "; "-joined multi-value string (linkage / cross-module fields only) — split into atomic parts. Null for a genuine single value. */
 function toValueList(c: ColumnDef, raw: unknown, text: string): string[] | null {
   if (Array.isArray(raw)) {
     const items = raw.map((x) => String(x).trim()).filter(Boolean);
@@ -19,28 +22,16 @@ function toValueList(c: ColumnDef, raw: unknown, text: string): string[] | null 
   }
   const multiField = c.key.includes('_names') || !!c.linkageModule;
   const s = typeof raw === 'string' ? raw : text;
-  if (multiField && typeof s === 'string' && s.includes('; ')) {
-    return s.split(';').map((x) => x.trim()).filter(Boolean);
-  }
+  if (multiField && typeof s === 'string' && s.includes('; ')) return s.split(';').map((x) => x.trim()).filter(Boolean);
   return null;
 }
 
-/** Production flat table — resize, reorder, pin, sort, group, totals. */
+const PAGE_SIZES = [25, 50, 100, 250] as const;
+const TH = 'group relative select-none border-b border-ds-border bg-ds-surface-subtle p-0 text-left align-middle !text-ds-label !text-ds-fg-muted';
+const TD = 'truncate border-t border-ds-border px-[12px] py-[8px] align-middle !text-ds-body !text-ds-fg-body';
+
 export default function ReportDataTable({
-  cols,
-  rows,
-  visibleKeys,
-  widths = {},
-  onWidthsChange,
-  align = {},
-  pinned = [],
-  onReorder,
-  sorts = [],
-  onSort,
-  labelFor,
-  groupByKey = null,
-  showTotals = false,
-  totalInDataset,
+  cols, rows, visibleKeys, widths = {}, onWidthsChange, align = {}, pinned = [], onReorder, sorts = [], onSort, labelFor, groupByKey = null, showTotals = false, totalInDataset, paged = true, loadNote,
 }: {
   cols: ColumnDef[];
   rows: Row[];
@@ -56,43 +47,39 @@ export default function ReportDataTable({
   groupByKey?: string | null;
   showTotals?: boolean;
   totalInDataset?: number;
+  /** false for print: every row, no pager */
+  paged?: boolean;
+  /** what the footer says when the rows are only part of the register ("first 5,000 of 5,310 rows") */
+  loadNote?: string;
 }) {
   const dragKey = useRef<string | null>(null);
   const resizing = useRef<{ key: string; startX: number; startW: number } | null>(null);
+  const [pageNo, setPageNo] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(100);
 
   const colWidth = (c: ColumnDef) => widths[c.key] ?? c.width ?? 140;
   const isPinned = (key: string) => pinned.includes(key);
 
   const ordered = useMemo(() => {
-    const shown = visibleKeys
-      .map((k) => cols.find((c) => c.key === k))
-      .filter((c): c is ColumnDef => !!c);
+    const shown = visibleKeys.map((k) => cols.find((c) => c.key === k)).filter((c): c is ColumnDef => !!c);
     const pin = pinned.map((k) => shown.find((c) => c.key === k)).filter((c): c is ColumnDef => !!c);
-    const rest = shown.filter((c) => !pinned.includes(c.key));
-    return [...pin, ...rest];
+    return [...pin, ...shown.filter((c) => !pinned.includes(c.key))];
   }, [visibleKeys, cols, pinned]);
 
-  // Header field name (clean — no module prefix). When two visible columns share
-  // the same name (a cross-module combine), the source module is shown as a small
-  // eyebrow ABOVE only those colliding headers — nothing ambiguous, no "(Module)"
-  // suffix cluttering every header.
+  // When two visible columns share a name (a cross-module combine), the source module is shown as a small line above only those headers.
   const headerLabel = (c: ColumnDef) => labelFor?.(c.key) ?? c.label;
   const labelCounts = new Map<string, number>();
-  for (const c of ordered) {
-    const l = headerLabel(c);
-    labelCounts.set(l, (labelCounts.get(l) ?? 0) + 1);
-  }
+  for (const c of ordered) labelCounts.set(headerLabel(c), (labelCounts.get(headerLabel(c)) ?? 0) + 1);
 
   const groupCol = groupByKey ? cols.find((c) => c.key === groupByKey) ?? null : null;
-  const groups = useMemo(
-    () => (groupCol ? groupRows(groupCol, rows) : null),
-    [groupCol, rows],
-  );
+  const groups = useMemo(() => (groupCol ? groupRows(groupCol, rows) : null), [groupCol, rows]);
+  // the order the rows are drawn in: grouped rows are gathered, so a page of them is a run of whole groups (the last may continue on the next page)
+  const flat = useMemo(() => (groups ? groups.flatMap((g) => g.rows) : rows), [groups, rows]);
 
   const maxByCol = useMemo(() => {
     const m = new Map<string, number>();
     for (const c of ordered) {
-      if (c.type !== 'number') continue;
+      if (c.type !== 'number' || c.key === 'id' || /^id$/i.test(c.label)) continue;
       let max = 0;
       for (const r of rows) {
         const n = numericValue(c, r);
@@ -102,6 +89,16 @@ export default function ReportDataTable({
     }
     return m;
   }, [ordered, rows]);
+
+  // back to the first page when what is listed changes
+  const viewKey = `${rows.length}|${sorts.map((s) => `${s.key}${s.dir}`).join(',')}|${groupByKey ?? ''}|${pageSize}|${visibleKeys.length}`;
+  const [seen, setSeen] = useState(viewKey);
+  if (seen !== viewKey) { setSeen(viewKey); setPageNo(1); }
+  const pages = paged ? Math.max(1, Math.ceil(flat.length / pageSize)) : 1;
+  const page = Math.min(Math.max(1, pageNo), pages);
+  const shownRows = useMemo(() => (paged ? flat.slice((page - 1) * pageSize, page * pageSize) : flat), [paged, flat, page, pageSize]);
+  const shownGroups = useMemo(() => (groupCol && groups ? groupRows(groupCol, shownRows) : null), [groupCol, groups, shownRows]);
+  const groupTotals = useMemo(() => new Map((groups ?? []).map((g) => [g.key, g.rows])), [groups]);
 
   const leftOf = (c: ColumnDef) => {
     let x = 0;
@@ -129,8 +126,7 @@ export default function ReportDataTable({
     resizing.current = { key: c.key, startX: e.clientX, startW: colWidth(c) };
     const move = (ev: MouseEvent) => {
       if (!resizing.current) return;
-      const w = Math.max(64, resizing.current.startW + (ev.clientX - resizing.current.startX));
-      onWidthsChange({ ...widths, [resizing.current.key]: w });
+      onWidthsChange({ ...widths, [resizing.current.key]: Math.max(64, resizing.current.startW + (ev.clientX - resizing.current.startX)) });
     };
     const up = () => {
       resizing.current = null;
@@ -141,86 +137,41 @@ export default function ReportDataTable({
     document.addEventListener('mouseup', up);
   };
 
-  const sortIcon = (key: string) => {
-    const s = sorts.find((x) => x.key === key);
-    if (!s) return <ChevronsUpDown className="h-3 w-3 opacity-40" />;
-    return s.dir === 'asc'
-      ? <ArrowUp className="h-3 w-3 text-primary-600" />
-      : <ArrowDown className="h-3 w-3 text-primary-600" />;
-  };
-
   const renderCell = (c: ColumnDef, row: Row) => {
     const text = cellDisplay(c, row);
     const href = c.href?.(row);
     const raw = c.accessor ? c.accessor(row) : rawValue(c, row);
-    const tone = c.badgeTone?.(raw);
     const a = cellAlign(c, align);
 
-    if (c.type === 'badge') {
-      return (
-        <span
-          className={`inline-block max-w-full truncate rounded-full border px-2 py-0.5 text-[11px] font-medium ${
-            tone || 'border-slate-200 bg-slate-50 text-slate-700'
-          }`}
-        >
-          {text || '—'}
-        </span>
-      );
-    }
+    if (c.type === 'badge') return <StatusPill size="sm" tone={cellTone(c.badgeTone?.(raw))} label={text || '—'} />;
 
     if (c.type === 'number') {
       const n = numericValue(c, row);
-      const max = maxByCol.get(c.key) || 1;
-      const pct = n == null ? 0 : Math.min(100, (Math.abs(n) / max) * 100);
-      const barTone =
-        pct >= 75 ? 'bg-rose-400' : pct >= 45 ? 'bg-amber-400' : pct >= 20 ? 'bg-primary-400' : 'bg-emerald-400';
+      const pct = n == null ? 0 : Math.min(100, (Math.abs(n) / (maxByCol.get(c.key) || 1)) * 100);
+      const bar = pct >= 75 ? 'bg-ds-danger' : pct >= 45 ? 'bg-ds-warning' : pct >= 20 ? 'bg-ds-primary' : 'bg-ds-success';
       return (
-        <div className={`flex min-w-0 items-center gap-2 ${a === 'right' ? 'justify-end' : ''}`}>
-          <span className="tabular-nums text-slate-800">{text}</span>
-          {n != null && (
-            <span className="h-1.5 w-14 shrink-0 overflow-hidden rounded-full bg-slate-100">
-              <span className={`block h-full rounded-full ${barTone}`} style={{ width: `${pct}%` }} />
-            </span>
-          )}
+        <div className={clsx('flex min-w-0 items-center gap-[8px]', a === 'right' && 'justify-end')}>
+          <span className="tabular-nums text-ds-fg">{text}</span>
+          {n != null && maxByCol.has(c.key) && <span aria-hidden className="h-[6px] w-[48px] shrink-0 overflow-hidden rounded-full bg-ds-border"><span className={clsx('block h-full rounded-full', bar)} style={{ width: `${pct}%` }} /></span>}
         </div>
       );
     }
 
-    // Atomic display: a multi-value cell (array or "; "-joined linkage list)
-    // becomes one chip per value instead of a single mashed string.
+    // a multi-value cell (array or "; "-joined linkage list) becomes one chip per value instead of one mashed string
     const list = toValueList(c, raw, text);
     if (list && list.length > 1) {
       return (
-        <div className="flex flex-wrap gap-1">
-          {list.map((v, i) => (
-            <span
-              key={i}
-              title={v}
-              className={`inline-block max-w-[180px] truncate rounded-full border px-2 py-0.5 text-[11px] ${
-                /^\+\d+/.test(v)
-                  ? 'border-slate-200 bg-slate-100 text-slate-500'
-                  : 'border-slate-200 bg-slate-50 text-slate-700'
-              }`}
-            >
-              {v}
-            </span>
-          ))}
+        <div className="flex flex-wrap gap-[4px]">
+          {list.map((v, i) => <span key={i} title={v} className="inline-block max-w-[180px] truncate rounded-full border border-ds-border bg-ds-surface-subtle px-[8px] py-[1px] text-ds-label text-ds-fg-body">{v}</span>)}
         </div>
       );
     }
 
+    // the record opens in a NEW tab so the report being built stays as it is
     if (href) {
-      // Open the record in a new tab so the built report stays intact — closing
-      // the tab (or switching back) returns you to Reports with the report as-is.
       return (
-        <Link
-          href={href}
-          target="_blank"
-          rel="noopener noreferrer"
-          title="Open in a new tab"
-          className="font-medium text-primary-700 hover:underline"
-        >
-          {text}
+        <Link href={href} target="_blank" rel="noopener noreferrer" title="Open in a new tab" className="inline-flex min-h-ds-control-sm items-center text-ds-primary-text underline-offset-2 hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring">
+          {text}<span className="sr-only"> (opens in a new tab)</span>
         </Link>
       );
     }
@@ -228,21 +179,15 @@ export default function ReportDataTable({
   };
 
   const renderRow = (row: Row, i: number) => (
-    <tr key={String(row.id ?? i)} className="border-t border-slate-100 hover:bg-slate-50/80">
+    <tr key={`${String(row.id ?? '')}:${(page - 1) * pageSize + i}`} className="hover:bg-ds-surface-hover">
       {ordered.map((c) => {
         const text = cellDisplay(c, row);
-        const a = cellAlign(c, align);
         const pinnedCol = isPinned(c.key);
         return (
           <td
             key={c.key}
-            style={{
-              width: colWidth(c),
-              minWidth: colWidth(c),
-              maxWidth: colWidth(c),
-              ...(pinnedCol ? { position: 'sticky', left: leftOf(c), zIndex: 10, background: 'white' } : {}),
-            }}
-            className={`truncate px-3 py-2 text-slate-800 ${a === 'right' ? 'text-right' : ''}`}
+            style={{ width: colWidth(c), minWidth: colWidth(c), maxWidth: colWidth(c), ...(pinnedCol ? { position: 'sticky', left: leftOf(c), zIndex: 1, background: 'var(--ds-surface)' } : {}) }}
+            className={`${TD} ${cellAlign(c, align) === 'right' ? 'text-right' : ''}`}
             title={text}
           >
             {renderCell(c, row)}
@@ -252,99 +197,63 @@ export default function ReportDataTable({
     </tr>
   );
 
-  const numericCols = ordered.filter((c) => c.type === 'number');
-
-  const groupSummary = (groupRowsList: Row[]) => {
-    if (!numericCols.length) return `${groupRowsList.length} row${groupRowsList.length === 1 ? '' : 's'}`;
-    const parts = numericCols.slice(0, 3).map((c) => {
-      const mode = c.agg === 'avg' ? 'avg' : 'Σ';
-      const colForAgg = { ...c, agg: c.agg ?? 'sum' as const };
-      return `${mode} ${c.label.toLowerCase()} ${aggregate(colForAgg, groupRowsList)}`;
-    });
-    return parts.join(' · ');
+  // an identifier is a number but not a quantity: no bar under it and no total of it
+  const isId = (c: ColumnDef) => c.key === 'id' || /^id$/i.test(c.label);
+  const numericCols = ordered.filter((c) => c.type === 'number' && !isId(c));
+  const groupSummary = (list: Row[]) => {
+    if (!numericCols.length) return `${list.length} ${list.length === 1 ? 'row' : 'rows'}`;
+    return numericCols.slice(0, 3).map((c) => `${c.agg === 'avg' ? 'Average' : 'Total'} ${c.label.toLowerCase()} ${aggregate({ ...c, agg: c.agg ?? 'sum' }, list)}`).join(' · ');
   };
 
   if (!ordered.length) {
-    return (
-      <div className="flex h-48 items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
-        Select at least one column in the field browser.
-      </div>
-    );
+    return <div className="flex h-[192px] items-center justify-center rounded-ds-card border border-dashed border-ds-border-strong bg-ds-surface-subtle px-[16px] text-center text-ds-body text-ds-fg-muted">Add at least one column to see the rows.</div>;
   }
 
+  const matchLine = `${formatCount(rows.length)} ${rows.length === 1 ? 'row matches' : 'rows match'}${totalInDataset != null && totalInDataset !== rows.length ? `, ${formatCount(totalInDataset)} in the module` : ''}${groups ? `, ${groups.length} groups` : ''}`;
+
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
-      <div className="min-h-0 flex-1 overflow-auto">
-        <table className="w-max min-w-full table-fixed border-collapse text-sm">
-          <thead className="sticky top-0 z-20 bg-slate-50 shadow-[0_1px_0_#e2e8f0]">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-ds-card border border-ds-border bg-ds-surface">
+      <div className={clsx('min-h-0 flex-1 overflow-auto', paged && 'max-h-[max(240px,calc(100dvh-380px))]')}>
+        <table className="w-max min-w-full table-fixed !border-separate border-spacing-0 text-left">
+          <thead className="sticky top-0 z-[2]">
             <tr>
               {ordered.map((c) => {
                 const pinnedCol = isPinned(c.key);
                 const a = cellAlign(c, align);
                 const sorted = sorts.find((s) => s.key === c.key);
+                const Icon = !sorted ? ChevronsUpDown : sorted.dir === 'asc' ? ArrowUp : ArrowDown;
                 return (
                   <th
                     key={c.key}
-                    style={{
-                      width: colWidth(c),
-                      minWidth: colWidth(c),
-                      maxWidth: colWidth(c),
-                      ...(pinnedCol ? { position: 'sticky', left: leftOf(c), zIndex: 30 } : {}),
-                    }}
+                    scope="col"
+                    aria-sort={sorted ? (sorted.dir === 'asc' ? 'ascending' : 'descending') : undefined}
+                    style={{ width: colWidth(c), minWidth: colWidth(c), maxWidth: colWidth(c), ...(pinnedCol ? { position: 'sticky', left: leftOf(c), zIndex: 3 } : {}) }}
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={(e) => {
                       e.preventDefault();
                       if (dragKey.current && dragKey.current !== c.key) reorderCol(dragKey.current, c.key);
                       dragKey.current = null;
                     }}
-                    className={`group relative select-none border-b border-slate-200 px-0 py-0 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 ${
-                      pinnedCol ? 'bg-slate-50 shadow-[1px_0_0_0_#e2e8f0]' : ''
-                    }`}
+                    className={TH}
                   >
-                    <div className="flex items-center gap-0.5 px-2 py-2.5">
-                      {onReorder && (
-                        <span
-                          draggable
-                          onDragStart={() => {
-                            dragKey.current = c.key;
-                          }}
-                          className="cursor-grab text-slate-300 hover:text-slate-500"
-                        >
-                          <GripVertical className="h-3.5 w-3.5" />
-                        </span>
-                      )}
+                    <div className="flex items-center gap-[2px] px-[8px]">
+                      {onReorder && <span aria-hidden draggable onDragStart={() => { dragKey.current = c.key; }} className="cursor-grab text-ds-fg-muted"><GripVertical className="h-[14px] w-[14px]" /></span>}
                       <button
                         type="button"
                         onClick={(e) => onSort?.(c.key, e.shiftKey)}
-                        className={`flex min-w-0 flex-1 items-center gap-1 ${a === 'right' ? 'justify-end' : ''}`}
-                        title={onSort ? 'Click to sort · Shift+click for multi-sort' : undefined}
+                        disabled={!onSort}
+                        title={onSort ? 'Sort by this column. Hold Shift to sort by several.' : undefined}
+                        className={clsx('flex min-h-ds-control min-w-0 flex-1 items-center gap-[4px] rounded-ds-control px-[4px] text-ds-label font-[600] focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--ds-focus)]', a === 'right' && 'justify-end', sorted ? 'text-ds-fg' : 'text-ds-fg-muted')}
                       >
-                        <span className={`flex min-w-0 flex-col leading-tight ${a === 'right' ? 'items-end' : ''}`}>
-                          {c.linkageModule && (labelCounts.get(headerLabel(c)) ?? 0) > 1 && (
-                            <span
-                              className="truncate text-[9px] font-semibold uppercase tracking-wide text-slate-400"
-                              title={c.linkageModule}
-                            >
-                              {c.linkageModule}
-                            </span>
-                          )}
+                        <span className={clsx('flex min-w-0 flex-col', a === 'right' && 'items-end')}>
+                          {c.linkageModule && (labelCounts.get(headerLabel(c)) ?? 0) > 1 && <span className="truncate text-ds-label font-normal text-ds-fg-muted">{c.linkageModule}</span>}
                           <span className="truncate">{headerLabel(c)}</span>
                         </span>
-                        {onSort && sortIcon(c.key)}
+                        {onSort && <Icon aria-hidden className={clsx('h-[14px] w-[14px] shrink-0', !sorted && 'opacity-60')} />}
                       </button>
-                      {pinnedCol && <Pin className="h-3 w-3 shrink-0 text-primary-500" />}
-                      {sorted && (
-                        <span className="rounded bg-primary-100 px-1 text-[9px] font-bold text-primary-800">
-                          {sorted.dir === 'asc' ? '↑' : '↓'}
-                        </span>
-                      )}
+                      {pinnedCol && <Pin aria-label="Pinned" className="h-[14px] w-[14px] shrink-0 text-ds-primary-text" />}
                     </div>
-                    {onWidthsChange && (
-                      <span
-                        onMouseDown={(e) => startResize(e, c)}
-                        className="absolute -right-1 top-0 z-10 h-full w-2 cursor-col-resize hover:bg-primary-200/40"
-                      />
-                    )}
+                    {onWidthsChange && <span aria-hidden onMouseDown={(e) => startResize(e, c)} className="absolute right-0 top-0 z-[1] h-full w-[6px] cursor-col-resize hover:bg-ds-primary-soft" />}
                   </th>
                 );
               })}
@@ -352,62 +261,48 @@ export default function ReportDataTable({
           </thead>
           <tbody>
             {rows.length === 0 ? (
-              <tr>
-                <td colSpan={ordered.length} className="px-3 py-10 text-center text-slate-400">
-                  No rows match your filters.
-                </td>
-              </tr>
-            ) : groups ? (
-              groups.map((g) => (
-                <Fragment key={`g-${g.key}`}>
-                  <tr className="border-t border-slate-200 bg-slate-50/90">
-                    <td colSpan={ordered.length} className="px-3 py-2">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className="rounded-full bg-white px-2.5 py-0.5 text-xs font-semibold text-slate-800 ring-1 ring-slate-200">
-                            {g.key}
-                          </span>
-                          <span className="text-[11px] text-slate-500">
-                            {g.rows.length} {groupCol?.label?.toLowerCase() || 'items'}
-                          </span>
+              <tr><td colSpan={ordered.length} className="px-[12px] py-[40px] text-center !text-ds-body !text-ds-fg-muted">No rows match the filters.</td></tr>
+            ) : shownGroups ? (
+              shownGroups.map((g) => {
+                const whole = groupTotals.get(g.key) ?? g.rows;
+                return (
+                  <Fragment key={`g-${g.key}`}>
+                    <tr>
+                      <td colSpan={ordered.length} className="border-t border-ds-border bg-ds-surface-subtle px-[12px] py-[8px] !text-ds-label !text-ds-fg-body">
+                        <div className="flex flex-wrap items-center justify-between gap-[8px]">
+                          <span className="font-[600] text-ds-fg">{g.key} <span className="font-normal text-ds-fg-muted">{whole.length} {groupCol?.label?.toLowerCase() || 'items'}{whole.length > g.rows.length ? `, ${g.rows.length} on this page` : ''}</span></span>
+                          <span className="tabular-nums text-ds-fg-muted">{groupSummary(whole)}</span>
                         </div>
-                        <span className="text-[11px] tabular-nums text-slate-500">{groupSummary(g.rows)}</span>
-                      </div>
-                    </td>
-                  </tr>
-                  {g.rows.map((row, i) => renderRow(row, i))}
-                </Fragment>
-              ))
+                      </td>
+                    </tr>
+                    {g.rows.map((row, i) => renderRow(row, i))}
+                  </Fragment>
+                );
+              })
             ) : (
-              rows.map((row, i) => renderRow(row, i))
+              shownRows.map((row, i) => renderRow(row, i))
             )}
           </tbody>
         </table>
       </div>
 
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50/80 px-3 py-2 text-[11px] text-slate-500">
-        <span>
-          {rows.length.toLocaleString()} row{rows.length === 1 ? '' : 's'} match
-          {totalInDataset != null && totalInDataset !== rows.length
-            ? ` · ${totalInDataset.toLocaleString()} in dataset`
-            : ''}
-          {groups ? ` · ${groups.length} groups` : ''}
-        </span>
-        {showTotals && numericCols.length > 0 && rows.length > 0 && (
-          <div className="flex flex-wrap items-center gap-3 font-medium text-slate-700">
-            {numericCols.slice(0, 4).map((c) => {
-              const colForAgg = { ...c, agg: c.agg ?? 'sum' as const };
-              const avgCol = { ...c, agg: 'avg' as const };
-              return (
-                <span key={c.key} className="tabular-nums">
-                  Σ {c.label} {aggregate(colForAgg, rows)}
-                  {c.agg === 'avg' || /residual|score|rating/i.test(c.label) ? (
-                    <span className="ml-2 text-slate-500">avg {aggregate(avgCol, rows)}</span>
-                  ) : null}
+      <div className="flex shrink-0 flex-col gap-[8px] border-t border-ds-border bg-ds-surface-subtle px-[12px] py-[8px]">
+        <div className="flex flex-wrap items-center justify-between gap-x-[16px] gap-y-[4px] text-ds-label text-ds-fg-muted">
+          <span>{matchLine}{loadNote ? `. Read: ${loadNote}` : ''}</span>
+          {showTotals && numericCols.length > 0 && rows.length > 0 && (
+            <span className="flex flex-wrap items-center gap-x-[16px] gap-y-[2px] tabular-nums text-ds-fg-body">
+              {numericCols.slice(0, 4).map((c) => (
+                // a column that is averaged says "Average" once; the others are totals, and a score also gets its average (a total of scores means little)
+                <span key={c.key}>
+                  {c.agg === 'avg' ? `Average ${c.label.toLowerCase()} ${aggregate({ ...c, agg: 'avg' }, rows)}` : `Total ${c.label.toLowerCase()} ${aggregate({ ...c, agg: c.agg ?? 'sum' }, rows)}`}
+                  {c.agg !== 'avg' && /residual|score|rating/i.test(c.label) ? <span className="ml-[6px] text-ds-fg-muted">average {aggregate({ ...c, agg: 'avg' }, rows)}</span> : null}
                 </span>
-              );
-            })}
-          </div>
+              ))}
+            </span>
+          )}
+        </div>
+        {paged && rows.length > PAGE_SIZES[0] && (
+          <Pager page={page} pageSize={pageSize} total={flat.length} onPage={setPageNo} onPageSize={setPageSize} pageSizes={PAGE_SIZES} noun={{ one: 'row', other: 'rows' }} />
         )}
       </div>
     </div>
