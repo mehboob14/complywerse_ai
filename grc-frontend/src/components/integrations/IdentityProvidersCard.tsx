@@ -21,6 +21,7 @@ import {
   IdpGroupMapping,
 } from '@/lib/api';
 import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
+import { useConfirm } from '@/components/ui/ds';
 import { authedFetch } from '@/lib/auth-fetch';
 
 const PROVIDER_LABEL = 'Microsoft Entra ID';
@@ -34,9 +35,9 @@ const STATUS_BANNER: Record<string, { kind: 'ok' | 'err'; msg: string }> = {
   connected: { kind: 'ok', msg: 'Microsoft Entra ID connected successfully.' },
   token_exchange_failed: { kind: 'err', msg: 'Microsoft rejected the consent. Please try again.' },
   id_token_invalid: { kind: 'err', msg: 'Microsoft sign-in could not be verified. Please try again.' },
-  no_id_token: { kind: 'err', msg: 'Microsoft did not return an ID token.' },
-  no_tid: { kind: 'err', msg: 'Microsoft did not return a directory ID.' },
-  provider_error: { kind: 'err', msg: 'Microsoft returned an error during consent. Check the backend log for the AADSTS code.' },
+  no_id_token: { kind: 'err', msg: 'Microsoft did not confirm who signed in. Please try again.' },
+  no_tid: { kind: 'err', msg: 'Microsoft did not say which directory the account belongs to. Please try again.' },
+  provider_error: { kind: 'err', msg: 'Microsoft returned an error while asking for consent. Try again; if it keeps happening, ask whoever runs the platform to look at the server log.' },
   viral_tenant: {
     kind: 'err',
     msg:
@@ -55,6 +56,7 @@ const STATUS_BANNER: Record<string, { kind: 'ok' | 'err'; msg: string }> = {
 export function IdentityProvidersCard() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { confirm, confirmDialog } = useConfirm();
   const [open, setOpen] = useState(false);
   // Google Workspace card opens a separate info panel — the OAuth flow
   // isn't wired up yet, so this panel just explains what's coming.
@@ -419,7 +421,7 @@ export function IdentityProvidersCard() {
   };
 
   const handleDisconnect = async () => {
-    if (!confirm('Disconnect Microsoft Entra ID? Existing federated users keep their accounts; sign-in via Microsoft will stop working until you reconnect.')) {
+    if (!(await confirm({ title: 'Disconnect Microsoft Entra ID?', message: 'People who signed in through Microsoft keep their accounts. Signing in with Microsoft stops working until you connect it again.', confirmLabel: 'Disconnect', tone: 'danger' }))) {
       return;
     }
     setSaving(true);
@@ -477,15 +479,15 @@ export function IdentityProvidersCard() {
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
             <Building2 size={16} className="text-blue-600" />
-            Access connectors
+            Identity providers
           </h2>
-          <span className="text-xs text-slate-400">3 tiers · directories → governance → apps</span>
+          <span className="text-xs text-slate-500">Microsoft Entra ID signs people in. The others feed Access Reviews with people and their permissions.</span>
         </div>
 
         {/* ───────── Tier 1 ───────── */}
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-blue-50 text-blue-700 text-[11px] font-semibold">1</span>
+            <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-blue-50 text-blue-700 text-[12px] font-semibold">1</span>
             <span className="text-sm font-semibold text-slate-700">Directories &amp; login</span>
             <span className="text-xs text-slate-400">— identity + basic roles</span>
           </div>
@@ -512,7 +514,7 @@ export function IdentityProvidersCard() {
                 <p className="text-xs text-slate-500 truncate">SSO sign-in + user provisioning</p>
               </div>
             </div>
-            <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${status.cls}`}>
+            <span className={`text-[12px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${status.cls}`}>
               {loading ? '…' : status.label}
             </span>
           </button>
@@ -540,7 +542,7 @@ export function IdentityProvidersCard() {
                 <p className="text-xs text-slate-500 truncate">Pull users for access reviews (access token)</p>
               </div>
             </div>
-            <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${googleConnected ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+            <span className={`text-[12px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${googleConnected ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
               {googleConnected ? 'Connected' : 'Not connected'}
             </span>
           </button>
@@ -560,7 +562,7 @@ export function IdentityProvidersCard() {
                 <p className="text-xs text-slate-500 truncate">Pull users for access reviews (API token)</p>
               </div>
             </div>
-            <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${oktaConnected ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+            <span className={`text-[12px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${oktaConnected ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
               {oktaConnected ? 'Connected' : 'Not connected'}
             </span>
           </button>
@@ -581,7 +583,7 @@ export function IdentityProvidersCard() {
                 <p className="text-xs text-slate-500 truncate">On-prem directory for access reviews</p>
               </div>
             </div>
-            <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${ldapConnected ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+            <span className={`text-[12px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${ldapConnected ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
               {ldapConnected ? 'Connected' : 'Not connected'}
             </span>
           </button>
@@ -592,7 +594,7 @@ export function IdentityProvidersCard() {
         {/* ───────── Tier 2 ───────── */}
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-violet-50 text-violet-700 text-[11px] font-semibold">2</span>
+            <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-violet-50 text-violet-700 text-[12px] font-semibold">2</span>
             <span className="text-sm font-semibold text-slate-700">IAM / IGA governance</span>
             <span className="text-xs text-slate-400">— full entitlements, requests &amp; approvals</span>
           </div>
@@ -603,15 +605,15 @@ export function IdentityProvidersCard() {
               onClick={() => { pickVendor(v.key); setIgaMsg(null); setIgaOpen(true); }}
               className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-left hover:border-blue-300 hover:bg-blue-50/30 transition">
               <div className="flex items-center gap-3 min-w-0">
-                <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded text-white text-[10px] font-bold ${v.kind === 'PAM' ? 'bg-slate-700' : 'bg-[#0033A0]'}`}>
+                <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded text-white text-[12px] font-bold ${v.kind === 'PAM' ? 'bg-slate-700' : 'bg-[#0033A0]'}`}>
                   {v.label.replace(/[^A-Za-z ]/g, '').split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()}
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-slate-800 truncate">{v.label} <span className="text-[10px] text-slate-400">{v.kind}</span></p>
+                  <p className="text-sm font-medium text-slate-800 truncate">{v.label} <span className="text-[12px] text-slate-400">{v.kind}</span></p>
                   <p className="text-xs text-slate-500 truncate">identities + entitlements</p>
                 </div>
               </div>
-              <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${igaConnected?.vendor === v.key ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+              <span className={`text-[12px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${igaConnected?.vendor === v.key ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
                 {igaConnected?.vendor === v.key ? 'Connected' : 'Not connected'}
               </span>
             </button>
@@ -623,7 +625,7 @@ export function IdentityProvidersCard() {
         {/* ───────── Tier 3 ───────── */}
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-slate-200 text-slate-700 text-[11px] font-semibold">3</span>
+            <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-slate-200 text-slate-700 text-[12px] font-semibold">3</span>
             <span className="text-sm font-semibold text-slate-700">Business apps</span>
             <span className="text-xs text-slate-400">— app-level permissions where the risk sits</span>
           </div>
@@ -642,7 +644,7 @@ export function IdentityProvidersCard() {
                   <p className="text-xs text-slate-500 truncate">{a.key === 'database' ? 'accounts + granted privileges' : 'users + app-level permissions'}</p>
                 </div>
               </div>
-              <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${appConnected?.app === a.key ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+              <span className={`text-[12px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${appConnected?.app === a.key ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
                 {appConnected?.app === a.key ? 'Connected' : 'Not connected'}
               </span>
             </button>
@@ -821,7 +823,7 @@ export function IdentityProvidersCard() {
               Load sample data
             </button>
           </div>
-          <p className="text-[11px] text-slate-400">No live {selVendor?.label || 'IGA'} tenant? “Load sample data” pulls a representative population (tagged <code>.sample</code>) so you can run the full review.</p>
+          <p className="text-[12px] text-slate-400">No live {selVendor?.label || 'IGA'} tenant? “Load sample data” pulls a representative population (tagged <code>.sample</code>) so you can run the full review.</p>
         </div>
       </RightSlidePanel>
 
@@ -888,7 +890,7 @@ export function IdentityProvidersCard() {
               Load sample data
             </button>
           </div>
-          <p className="text-[11px] text-slate-400">No live {selApp?.label || 'app'}? “Load sample data” pulls a representative population (tagged <code>.sample</code>) so you can run the full review.</p>
+          <p className="text-[12px] text-slate-400">No live {selApp?.label || 'app'}? “Load sample data” pulls a representative population (tagged <code>.sample</code>) so you can run the full review.</p>
         </div>
       </RightSlidePanel>
 
@@ -1060,8 +1062,8 @@ export function IdentityProvidersCard() {
                 {mappings.map((m) => (
                   <li key={m.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
                     <div className="min-w-0">
-                      <p className="font-medium text-slate-800 truncate">{m.entra_group_name || m.entra_group_id}</p>
-                      <p className="text-xs text-slate-500 truncate">→ {m.role_name || `Role #${m.role_id}`}</p>
+                      <p className="font-medium text-slate-800 truncate">{m.entra_group_name || 'A group without a name'}</p>
+                      <p className="text-xs text-slate-500 truncate">→ {m.role_name || 'A role that was removed'}</p>
                     </div>
                     <button onClick={() => handleDeleteMapping(m.id)} className="p-1.5 text-slate-400 hover:text-rose-600" title="Remove mapping">
                       <Trash2 size={14} />
@@ -1075,7 +1077,7 @@ export function IdentityProvidersCard() {
               <p className="text-xs font-medium text-slate-600 flex items-center gap-1"><Plus size={12} /> Add mapping</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[11px] text-slate-500 mb-0.5">Entra group</label>
+                  <label className="block text-[12px] text-slate-500 mb-0.5">Entra group</label>
                   <input
                     className={inputCls}
                     value={pendingGroup ? pendingGroup.display_name : groupQuery}
@@ -1103,7 +1105,7 @@ export function IdentityProvidersCard() {
                   )}
                 </div>
                 <div>
-                  <label className="block text-[11px] text-slate-500 mb-0.5">GRC role</label>
+                  <label className="block text-[12px] text-slate-500 mb-0.5">GRC role</label>
                   <select className={inputCls} value={pendingRoleId} onChange={(e) => setPendingRoleId(e.target.value ? Number(e.target.value) : '')}>
                     <option value="">Select a role…</option>
                     {roles.map((r) => (<option key={r.id} value={r.id}>{r.name}</option>))}
@@ -1124,6 +1126,7 @@ export function IdentityProvidersCard() {
           </div>
         )}
       </RightSlidePanel>
+      {confirmDialog}
     </>
   );
 }
@@ -1135,7 +1138,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
     <div>
       <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
       {children}
-      {hint && <p className="mt-1 text-[11px] text-slate-500">{hint}</p>}
+      {hint && <p className="mt-1 text-[12px] text-slate-500">{hint}</p>}
     </div>
   );
 }

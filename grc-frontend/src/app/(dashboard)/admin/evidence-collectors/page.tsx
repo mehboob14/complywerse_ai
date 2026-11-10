@@ -3,10 +3,9 @@
 // Connections: the systems this platform collects evidence from. A register, not a wall of 124 cards: Active (the connected ones, the useful default), Failing and All, a search and a category, one row a
 // connector with its status, when it last collected and ONE action (Manage, Connect, or Details for one that cannot collect yet). Connecting is a guide in a Sheet (ConnectorSheet). Data is
 // GET /automation/soc2/catalog, so the count always matches what the backend can collect from; nothing is listed from a static frontend list.
-// The same page is the Administration page's "Connections" tab and the Cybersecurity Assurance admin copy: on its own address it draws its page head; embedded, the host page already has one, so it draws only
-// its controls. The old links keep working: ?connector=<id> opens that connector, ?return=<path> says where Back goes, ?show=failing|active|all picks the tab.
+// This is the Controls Automation menu's "Connections" page (the full list of evidence sources, the ones that cannot collect yet included). The sources that ARE connected are also rows of Administration >
+// Connected systems, which opens the same sheet (ConnectorSheet). The links into this page keep working: ?connector=<id> opens that connector, ?return=<path> says where Back goes, ?show=failing|active|all picks the tab.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { usePathname } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plug, Search } from 'lucide-react';
 import { PageHeader } from '@/components/ui';
@@ -64,8 +63,6 @@ function ConnectorRow({ c, onOpen }: { c: Connector; onOpen: () => void }) {
 
 export default function ConnectionsPage() {
   const qc = useQueryClient();
-  const pathname = usePathname();
-  const standalone = pathname === '/admin/evidence-collectors';
   const canConnect = useRights().can('scan');
 
   const [address, setAddress] = useAddressState(CONNECTIONS_SCHEMA);
@@ -111,11 +108,7 @@ export default function ConnectionsPage() {
 
   return (
     <div className="mx-auto flex max-w-[1200px] flex-col gap-[12px]">
-      {standalone ? (
-        <PageHeader variant="page" title={title} meta={meta} info="The systems your evidence is collected from. Connect any one source in a category; its checks then run daily and the controls it covers read passing or failing." />
-      ) : (
-        meta && <p className="m-0 text-ds-body text-ds-fg-muted">{meta}</p>
-      )}
+      <PageHeader variant="page" title={title} meta={meta} info="The systems your evidence is collected from. Connect any one source in a category; its checks then run daily and the controls it covers read passing or failing. Everything else this platform connects to is under Administration > Connected systems." />
 
       <div className="flex flex-wrap items-center gap-[8px]" role="search" aria-label="Find a connection">
         <SegmentedControl

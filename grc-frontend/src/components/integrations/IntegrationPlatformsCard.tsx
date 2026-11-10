@@ -17,8 +17,8 @@ import {
  *   - shows the platform's logo tile + name + one-line description,
  *   - reports a live status badge ("Not configured" / "2 connected"),
  *   - clicks through to the right management surface:
- *       cloud connectors (AWS / Azure / GCP) → /admin (Cloud Connectors tab)
- *       legacy scanners  (Nessus / Nexpose)  → /integrations/connections
+ *       cloud connectors (AWS / Azure / GCP) → Administration > Connected systems (Cloud security)
+ *       legacy scanners  (Nessus / Nexpose)  → Administration > Connected systems (Scanners)
  *
  * The badge counts are populated from two existing endpoints:
  *   - `cloudConnectorsApi.list()` for the new framework rows,
@@ -117,9 +117,9 @@ export function IntegrationPlatformsCard() {
   const onClick = (p: PlatformDef) => {
     if (p.kind === 'cloud_connector') {
       // Open the Cloud Connectors admin tab with the right provider preselected.
-      router.push(`/admin?tab=cloud-connectors&provider=${p.provider}`);
+      router.push(`/admin/connections?kind=cloud&provider=${p.provider}`);
     } else {
-      router.push('/integrations/connections');
+      router.push('/admin/connections?kind=scanners');
     }
   };
 
@@ -150,7 +150,7 @@ export function IntegrationPlatformsCard() {
                   <p className="text-sm font-medium text-slate-800 truncate flex items-center gap-1.5">
                     {p.label}
                     {p.kind === 'legacy_scanner' && (
-                      <span className="rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-700">
+                      <span className="rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-amber-700">
                         Legacy
                       </span>
                     )}
@@ -158,7 +158,7 @@ export function IntegrationPlatformsCard() {
                   <p className="text-xs text-slate-500 truncate">{p.description}</p>
                 </div>
               </div>
-              <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${
+              <span className={`text-[12px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${
                 isConnected
                   ? 'bg-emerald-100 text-emerald-700'
                   : 'bg-slate-100 text-slate-600'
