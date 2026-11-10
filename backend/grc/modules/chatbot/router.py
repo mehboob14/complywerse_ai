@@ -23,6 +23,18 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text, func, or_
 
 from ...services.ai_usage import usage_scope
+from ...services.ai_gateway.errors import AIBlocked
+from ...services.licence_guard import LicenceRestrictedContent
+
+# A refusal by the data-protection guard (AIBlocked) or by the SCF licence guard is not a failure: nothing was sent, and asking again
+# gives the same refusal. It is caught BEFORE every generic `except` below and said in plain words (see _refusal_of).
+_REFUSED = (AIBlocked, LicenceRestrictedContent)
+
+
+class ChatUnavailable(Exception):
+    """The model could not be asked or gave no usable answer (no key, a provider fault, an empty reply). The caller answers
+    `outcome="failed"` in plain words; the person may retry."""
+
 
 # Add complychat to path
 complychat_path = Path(__file__).parent / "complychat" / "complychat"
@@ -41,6 +53,9 @@ MAX_HISTORY_LENGTH = 10
 CHAT_UPLOAD_ROOT = Path(__file__).resolve().parents[3] / "uploads" / "complychat"
 CHAT_UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
 VECTOR_INDEX_STATE: Dict[int, Dict[str, str]] = {}
+# What a chat accepts as an attachment (the page states the same words: complychat/_chat/uploadRules.ts)
+CHAT_UPLOAD_TYPES = frozenset({".txt", ".md", ".csv", ".pdf", ".docx", ".pptx"})
+CHAT_UPLOAD_MAX_BYTES = 10 * 1024 * 1024
 VECTOR_MATCH_LIMIT = int(os.getenv("COMPLYCHAT_VECTOR_MATCH_LIMIT", "16"))
 VECTOR_SCORE_THRESHOLD = float(os.getenv("COMPLYCHAT_VECTOR_SCORE_THRESHOLD", "0.18"))
 VECTOR_CATALOG_FALLBACK_LIMIT = int(os.getenv("COMPLYCHAT_VECTOR_CATALOG_FALLBACK_LIMIT", "120"))
@@ -760,10 +775,7 @@ def answer_grc_knowledge_question(
         import openai as _openai
         _api_key = os.environ.get("OPENAI_API_KEY", "")
         if not _api_key:
-            return (
-                "I couldn't reach the AI engine. "
-                "Please ask about frameworks, risks, or controls stored in the platform."
-            )
+            raise ChatUnavailable("the AI service is not set up")
         _client = _openai.OpenAI(api_key=_api_key)
         try:
             from ...services.ai_tracing import wrap_openai_for_tracing
@@ -812,15 +824,18 @@ def answer_grc_knowledge_question(
                 temperature=0.2,
                 max_tokens=1500,
             )
-        return (completion.choices[0].message.content or "").strip() or "I couldn't generate an answer. Please try rephrasing."
+        answer = (completion.choices[0].message.content or "").strip()
+        if not answer:                      # never hand back (or store) an empty answer
+            raise ChatUnavailable("the AI service gave an empty answer")
+        return answer
 
+    except _REFUSED:                        # the guard refused: its own words reach the person (before the generic except)
+        raise
+    except ChatUnavailable:
+        raise
     except Exception as llm_err:
         logger.warning(f"[LLM-FALLBACK] knowledge answer failed: {llm_err}")
-        return (
-            "I can answer questions about GRC frameworks (ISO 27001, PCI DSS, NIST, SAMA, SBP, DORA), "
-            "controls, vulnerabilities, assets, governance, and evidence management. "
-            "Please try rephrasing your question."
-        )
+        raise ChatUnavailable("the AI service could not answer") from llm_err
 
 
 def answer_with_db_context(
@@ -1081,10 +1096,7 @@ def analyze_uploaded_files_with_llm(
         import openai as _openai
         _api_key = os.environ.get("OPENAI_API_KEY", "")
         if not _api_key:
-            return (
-                "I couldn't reach the AI engine (missing API key). "
-                "Please check that OPENAI_API_KEY is configured."
-            )
+            raise ChatUnavailable("the AI service is not set up")
         _client = _openai.OpenAI(api_key=_api_key)
         try:
             from ...services.ai_tracing import wrap_openai_for_tracing
@@ -1139,14 +1151,18 @@ def analyze_uploaded_files_with_llm(
                 temperature=0.2,
                 max_tokens=2000,
             )
-        return (completion.choices[0].message.content or "").strip() or "I couldn't generate an analysis. Please try rephrasing."
+        analysis = (completion.choices[0].message.content or "").strip()
+        if not analysis:                    # never hand back (or store) an empty answer
+            raise ChatUnavailable("the AI service gave an empty answer")
+        return analysis
 
+    except _REFUSED:                        # the guard refused: its own words reach the person (before the generic except)
+        raise
+    except ChatUnavailable:
+        raise
     except Exception as llm_err:
         logger.warning(f"[FILE-ANALYSIS-LLM] failed: {llm_err}")
-        return (
-            "I encountered an error while analyzing the document. "
-            "Please ensure the file is a readable PDF, Word document (.docx), or plain text file and try again."
-        )
+        raise ChatUnavailable("the AI service could not read the files") from llm_err
 
 
 detect_query_type = None
@@ -1159,12 +1175,13 @@ generate_answer_from_fallback_data = None
 fetch_table_schema_from_db = None
 load_full_database_schema = None
 SQL_AGENT_ENABLED = False
+NO_USABLE_DATA_TITLE = "No usable data found"       # the SQL agent's answer when the rows are empty in every field (grc_sql_agent.py)
 
 try:
     from grc_sql_agent import (
         detect_query_type, generate_sql_query, validate_sql, format_query_results,
         validate_columns_in_sql, get_fallback_data_for_question, generate_answer_from_fallback_data,
-        fetch_table_schema_from_db, load_full_database_schema, drop_secret_columns
+        fetch_table_schema_from_db, load_full_database_schema, drop_secret_columns, NO_USABLE_DATA_TITLE
     )  # type: ignore
     SQL_AGENT_ENABLED = True
     logger.info("[YES] SQL Agent loaded successfully (ChromaDB disabled)")
@@ -1254,7 +1271,7 @@ class ChatRequest(BaseModel):
 
 
 class ChatSource(BaseModel):
-    """Source reference model"""
+    """Source reference model. `kind` and `label` are additive: the screen names a source by them, not by the type key or the id."""
     rank: int
     entity_type: str
     entity_id: Optional[str] = ""
@@ -1263,10 +1280,12 @@ class ChatSource(BaseModel):
     control_name: Optional[str] = None
     relevance_score: float
     snippet: str
+    kind: str = Field("record", description="live_data (the platform's own records, queried), record (a stored document or record), your_file (a file attached to the chat)")
+    label: Optional[str] = Field(None, description="the plain name of the source's type, e.g. Document")
 
 
 class ChatResponse(BaseModel):
-    """Chat response model"""
+    """Chat response model. `outcome` and `blocked` are additive."""
     answer: str
     sources: List[ChatSource]
     framework_filter: Optional[str]
@@ -1274,6 +1293,8 @@ class ChatResponse(BaseModel):
     has_more: bool = Field(False, description="Whether more results are available")
     total_count: int = Field(0, description="Total number of results available")
     current_offset: int = Field(0, description="Current offset in results")
+    outcome: str = Field("answer", description="answer | no_data | failed (retrying may help) | blocked (the data-protection guard refused: retrying gives the same)")
+    blocked: Optional[Dict[str, str]] = Field(None, description="outcome blocked: {code, reason}; reason is a plain sentence written for a person")
 
 
 class FrameworkInfo(BaseModel):
@@ -1342,8 +1363,49 @@ def _no_platform_data_answer(question: str) -> str:
 
 def _sql_failure_answer(question: str) -> str:
     return (
-        f"I could not complete this data query reliably: \"{question.strip()}\".\n"
-        "No generated sample data is shown. Please try simpler wording or a narrower filter."
+        f"I could not find a reliable answer to: \"{question.strip()}\".\n"
+        "Nothing was made up. Try again, or ask about one area at a time (for example risks, controls or evidence)."
+    )
+
+
+# What the person is told when the model could not be asked, or gave nothing usable. Plain words: no key name, no error text.
+UNAVAILABLE_ANSWER = "Comply Agent could not answer this right now. Nothing was lost: you can try again in a moment."
+_BLOCKED_HEADLINES = {
+    "licence_restricted": "This request includes text that cannot be sent to the AI.",
+}
+_BLOCKED_DEFAULT = "This question includes information that is not sent to the AI."
+
+
+def _refusal_of(exc: BaseException) -> Dict[str, str]:
+    """A guard refusal as the screen reads it: `answer` is the headline, `reason` the guard's own sentence (already written for a person)."""
+    code = exc.code if isinstance(exc, AIBlocked) else "licence_restricted"
+    return {"code": str(code), "headline": _BLOCKED_HEADLINES.get(code, _BLOCKED_DEFAULT), "reason": str(exc)}
+
+
+def _is_no_data_answer(answer: str, rows: List[Any]) -> bool:
+    """No records matched, or they were empty in every field (the SQL agent's "No usable data found" answer)."""
+    return not rows or answer.lstrip().startswith(f"## {NO_USABLE_DATA_TITLE}")
+
+
+def _blocked_response(exc: BaseException, framework: Optional[str]) -> "ChatResponse":
+    refusal = _refusal_of(exc)
+    return ChatResponse(
+        answer=refusal["headline"],
+        sources=[],
+        framework_filter=framework,
+        timestamp=datetime.utcnow().isoformat(),
+        outcome="blocked",
+        blocked={"code": refusal["code"], "reason": refusal["reason"]},
+    )
+
+
+def _failed_response(framework: Optional[str], answer: str = UNAVAILABLE_ANSWER) -> "ChatResponse":
+    return ChatResponse(
+        answer=answer,
+        sources=[],
+        framework_filter=framework,
+        timestamp=datetime.utcnow().isoformat(),
+        outcome="failed",
     )
 
 
@@ -2621,6 +2683,27 @@ def _query_qdrant_hits(
     return [item for item in sorted_hits if float(item.get("score") or 0.0) >= VECTOR_SCORE_THRESHOLD][:limit]
 
 
+# What a source is called on screen (the type keys below are internal). The page, not the server, decides whether a source links to a record.
+_SOURCE_LABELS = {
+    "governance_document": "Document",
+    "governance_document_version": "Document version",
+    "policy_statement": "Policy statement",
+    "policy_statement_version": "Policy statement version",
+    "committee_charter": "Committee charter",
+    "risk_assessment": "Risk assessment",
+    "compliance_program": "Compliance program",
+    "grc_compliance_assessment": "Compliance assessment",
+    "framework_risk_assessment": "Framework risk assessment",
+    "compliance_assessment_document": "Assessment document",
+    "evidence_file": "Evidence",
+    "uploaded_framework": "Framework",
+    "seeded_framework": "Framework",
+    "seeded_framework_control": "Framework control",
+    "parsed_framework_control": "Framework control",
+    "chat_upload": "Your file",
+}
+
+
 def _vector_hits_to_sources(hits: List[Dict[str, Any]]) -> List[ChatSource]:
     sources: List[ChatSource] = []
     for index, hit in enumerate(hits, start=1):
@@ -2640,6 +2723,8 @@ def _vector_hits_to_sources(hits: List[Dict[str, Any]]) -> List[ChatSource]:
                 control_name=title or None,
                 relevance_score=score_value,
                 snippet=snippet,
+                kind="your_file" if source_type == "chat_upload" else "record",
+                label=_SOURCE_LABELS.get(source_type) or source_type.replace("_", " ").capitalize(),
             )
         )
     return sources
@@ -2809,7 +2894,7 @@ async def ask_compliance_question(
     if not SQL_AGENT_ENABLED or not callable(generate_sql_query) or not callable(validate_sql):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="SQL Agent service is not available."
+            detail="Comply Agent is not available right now."
         )
 
     # === Deterministic handling for framework progress / active journey overview ===
@@ -3056,16 +3141,8 @@ async def ask_compliance_question(
             # No valid SQL — return a deterministic, non-fabricated response.
             logger.info("[SAFE-FAIL] No valid SQL generated; returning deterministic response")
             answer = _sql_failure_answer(request.message)
-            store_chat_exchange(current_user.id, session_id, request.message, answer, offset=request.offset)
-            return ChatResponse(
-                answer=answer,
-                sources=[],
-                framework_filter=request.framework,
-                timestamp=datetime.utcnow().isoformat(),
-                has_more=False,
-                total_count=0,
-                current_offset=0
-            )
+            store_chat_exchange(current_user.id, session_id, request.message, answer, offset=request.offset, is_error=True)
+            return _failed_response(request.framework, answer)
         
         # [SEARCH] STEP 2: Validate columns BEFORE execution
         sql_query = sql_result['sql']
@@ -3136,16 +3213,8 @@ Generate new SQL using ONLY the column names listed above.
                     if not validation['valid']:
                         logger.error("[FAIL] RETRY FAILED: New query still has column errors")
                         answer = _sql_failure_answer(request.message)
-                        store_chat_exchange(current_user.id, session_id, request.message, answer, offset=request.offset)
-                        return ChatResponse(
-                            answer=answer,
-                            sources=[],
-                            framework_filter=request.framework,
-                            timestamp=datetime.utcnow().isoformat(),
-                            has_more=False,
-                            total_count=0,
-                            current_offset=0
-                        )
+                        store_chat_exchange(current_user.id, session_id, request.message, answer, offset=request.offset, is_error=True)
+                        return _failed_response(request.framework, answer)
                 else:
                     logger.error("[FAIL] RETRY FAILED: Could not regenerate query")
             
@@ -3153,23 +3222,16 @@ Generate new SQL using ONLY the column names listed above.
             if not validation['valid']:
                 logger.error("[FAIL] Final validation failed")
                 answer = _sql_failure_answer(request.message)
-                store_chat_exchange(current_user.id, session_id, request.message, answer, offset=request.offset)
-                return ChatResponse(
-                    answer=answer,
-                    sources=[],
-                    framework_filter=request.framework,
-                    timestamp=datetime.utcnow().isoformat(),
-                    has_more=False,
-                    total_count=0,
-                    current_offset=0
-                )
-        
+                store_chat_exchange(current_user.id, session_id, request.message, answer, offset=request.offset, is_error=True)
+                return _failed_response(request.framework, answer)
+
         if not library and _touches_documents(sql_query):
+            # outside the document library: nothing to show this person (a right, not a fault: retrying cannot help)
             logger.info("[SAFE-FAIL] SQL over governance documents for someone outside the document library")
-            answer = _sql_failure_answer(request.message)
+            answer = _no_platform_data_answer(request.message)
             store_chat_exchange(current_user.id, session_id, request.message, answer, offset=request.offset)
             return ChatResponse(answer=answer, sources=[], framework_filter=request.framework, timestamp=datetime.utcnow().isoformat(),
-                                has_more=False, total_count=0, current_offset=0)
+                                has_more=False, total_count=0, current_offset=0, outcome="no_data")
 
         # [SEARCH] STEP 3: Execute SQL query
         logger.info(f"[SEARCH] Executing SQL: {sql_query[:200]}...")
@@ -3220,8 +3282,8 @@ Generate new SQL using ONLY the column names listed above.
                     actor_user_id=current_user.id,
                     actor_username=current_user.username,
                 ):
-                    answer = format_query_results(data_list, request.message, sql_query, language="en") + pagination_note
-            
+                    answer = format_query_results(data_list, request.message, sql_query, language="en", total_count=total_count or None) + pagination_note
+
             # 💾 STEP 4: Save to conversation history
             store_chat_exchange(
                 current_user.id,
@@ -3248,9 +3310,11 @@ Generate new SQL using ONLY the column names listed above.
                 control_code=None,
                 control_name=f"{entity_label} — {len(data_list)} item(s) found",
                 relevance_score=1.0,
-                snippet=f"{len(data_list)} record(s) retrieved from your platform"
-            )] if request.include_sources else []
-            
+                snippet=f"{len(data_list)} record(s) retrieved from your platform",
+                kind="live_data",
+                label=entity_label,
+            )] if request.include_sources and data_list else []     # no records: nothing to cite
+
             return ChatResponse(
                 answer=answer,
                 sources=sources,
@@ -3258,9 +3322,12 @@ Generate new SQL using ONLY the column names listed above.
                 timestamp=datetime.utcnow().isoformat(),
                 has_more=has_more,
                 total_count=total_count,
-                current_offset=request.offset
+                current_offset=request.offset,
+                outcome="no_data" if _is_no_data_answer(answer, data_list) else "answer",
             )
-            
+
+        except _REFUSED:                    # the guard refused the result formatting: not an SQL fault, never retried
+            raise
         except Exception as sql_error:
             # CRITICAL: Rollback transaction on error to prevent InFailedSqlTransaction state
             try:
@@ -3347,7 +3414,7 @@ Generate new SQL using ONLY the column names listed above. Use PostgreSQL syntax
                                     actor_username=current_user.username,
                                 ):
                                     answer = format_query_results(retry_data, request.message, retry_sql, language="en")
-                            
+
                             return ChatResponse(
                                 answer=answer,
                                 sources=[],
@@ -3355,8 +3422,11 @@ Generate new SQL using ONLY the column names listed above. Use PostgreSQL syntax
                                 timestamp=datetime.utcnow().isoformat(),
                                 has_more=False,
                                 total_count=len(retry_data),
-                                current_offset=0
+                                current_offset=0,
+                                outcome="no_data" if _is_no_data_answer(answer, retry_data) else "answer",
                             )
+                        except _REFUSED:    # a refusal is not a SQL error: it leaves through the outer handler, not as "could not complete"
+                            raise
                         except Exception as retry_error:
                             logger.error(f"[FAIL] RETRY EXECUTION FAILED: {retry_error}")
                             db.rollback()
@@ -3378,22 +3448,22 @@ Generate new SQL using ONLY the column names listed above. Use PostgreSQL syntax
                 is_error=True,
                 sources=[{"sql_preview": sql_query, "auto_retry_attempted": True}],
             )
-            
-            return ChatResponse(
-                answer=answer,
-                sources=[],
-                framework_filter=request.framework,
-                timestamp=datetime.utcnow().isoformat(),
-                has_more=False,
-                total_count=0,
-                current_offset=0
-            )
-        
+
+            return _failed_response(request.framework, answer)
+
+    except _REFUSED as refusal:
+        # The data-protection (or SCF licence) guard refused to send this to the AI. Said in plain words, 200 so the page shows it in
+        # the chat; the exchange is NOT kept in the session log (the question held what the guard keeps out), and nothing was sent.
+        logger.info("[GUARD] a question was refused before it reached the AI (%s)", getattr(refusal, "code", "licence_restricted"))
+        return _blocked_response(refusal, request.framework)
+    except ChatUnavailable as unavailable:
+        logger.warning("[LLM] the AI could not answer: %s", unavailable)
+        return _failed_response(request.framework)
     except Exception as e:
         logger.error(f"Error in complychat ask: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to process question: {str(e)}"
+            detail="Comply Agent could not answer this right now."
         )
 
 
@@ -3418,17 +3488,47 @@ async def get_conversation_history(
     }
 
 
+def _remove_chat_upload_vectors(db: Session, current_user: GRCUser, uploaded_files: List[Dict[str, Any]]) -> bool:
+    """Take a chat's uploaded files out of the vector store (they were indexed per tenant, by file id, when they were attached).
+    True when there is nothing left to find: no files, no vector store, or every delete went through. A fault is logged and
+    reported as False; it is never raised at the person."""
+    file_ids = [str(f.get("id")) for f in uploaded_files if f.get("id")]
+    if not file_ids:
+        return True
+    service = get_qdrant_service()
+    if not service or not getattr(service, "is_available", False):
+        return True                       # no vector store is configured: nothing was ever indexed
+    try:
+        for tenant_id in get_user_tenants(current_user, db):
+            for file_id in file_ids:
+                service.delete_source_points(int(tenant_id), "chat_upload", file_id)
+        return True
+    except Exception as exc:
+        logger.warning("Could not remove a chat's uploaded files from the search index: %s", type(exc).__name__)
+        return False
+
+
 @router.delete("/history/{session_id}")
 async def clear_conversation_history(
     session_id: str,
+    db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
     """
     Clear conversation history for a session.
 
-    Use this to delete a chat and its associated uploaded file context.
+    Use this to delete a chat and its associated uploaded file context: the files on disk and their copy in the vector store.
+    The copy goes first: when the vector store cannot be reached nothing is deleted (503) so the delete can be tried again; a
+    chat's text never stays searchable after the person was told it was deleted.
     """
     storage_key = get_session_storage_key(current_user.id, session_id)
+    uploaded_files = list(load_session_uploaded_files(current_user.id, session_id))     # before the manifest is dropped
+    if not _remove_chat_upload_vectors(db, current_user, uploaded_files):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The files of this chat could not be removed from search yet. Nothing was deleted: try again in a moment.",
+        )
+
     session_message_logs.pop(storage_key, None)
     conversation_history.pop(storage_key, None)
     session_uploaded_files.pop(storage_key, None)
@@ -3445,7 +3545,11 @@ async def clear_conversation_history(
             pass
 
     logger.info(f"🗑️ Cleared history for session: {session_id}")
-    return {"message": f"History cleared for session {session_id}", "success": True}
+    return {
+        "message": f"History cleared for session {session_id}",
+        "success": True,
+        "files_removed": len(uploaded_files),
+    }
 
 
 @router.post("/upload")
@@ -3455,21 +3559,37 @@ async def upload_chat_files(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    """Upload one or more files for ComplyChat context. Any format is accepted."""
+    """Upload one or more files for ComplyChat context: text, Markdown, CSV, PDF, Word (.docx) or PowerPoint (.pptx), 10 MB each.
+    A file outside that is refused (400 / 413) with a sentence for a person, before anything is written."""
     if not files:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No files were provided."
         )
 
+    # read and check every file first: one refused file keeps the others from being half-kept
+    checked: List[Tuple[Any, str, bytes]] = []
+    for upload in files:
+        original_name = Path(upload.filename or f"upload-{uuid4().hex}").name      # the name, never a path the browser sent along
+        if Path(original_name).suffix.lower() not in CHAT_UPLOAD_TYPES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"{original_name} can't be attached. Use a text, Markdown, CSV, PDF, Word (.docx) or PowerPoint (.pptx) file.",
+            )
+        file_bytes = await upload.read(CHAT_UPLOAD_MAX_BYTES + 1)
+        if len(file_bytes) > CHAT_UPLOAD_MAX_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"{original_name} is larger than {CHAT_UPLOAD_MAX_BYTES // (1024 * 1024)} MB.",
+            )
+        checked.append((upload, original_name, file_bytes))
+
     resolved_session_id = resolve_chat_session_id(session_id, current_user.id)
     upload_dir = get_session_upload_dir(current_user.id, resolved_session_id)
     existing_files = load_session_uploaded_files(current_user.id, resolved_session_id)
     uploaded_items: List[Dict[str, Any]] = []
 
-    for upload in files:
-        file_bytes = await upload.read()
-        original_name = upload.filename or f"upload-{uuid4().hex}"
+    for upload, original_name, file_bytes in checked:
         saved_name = f"{uuid4().hex}_{original_name}"
         file_path = upload_dir / saved_name
         file_path.write_bytes(file_bytes)

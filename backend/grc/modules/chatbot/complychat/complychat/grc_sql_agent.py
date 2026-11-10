@@ -53,6 +53,16 @@ DETERMINISTIC_RESULT_FORMATTING = str(
     os.getenv("COMPLYCHAT_DETERMINISTIC_RESULT_FORMATTING", "true")
 ).strip().lower() in {"1", "true", "yes", "on"}
 
+# The title of the answer given when the rows found are empty in (nearly) every field: router.py reads it to mark the reply "no data".
+NO_USABLE_DATA_TITLE = "No usable data found"
+
+
+def _is_refusal(exc: BaseException) -> bool:
+    """A refusal by the data-protection guard (AIBlocked) or the SCF licence guard (LicenceRestrictedContent). It is not a failure of the
+    model or of the query: nothing was sent and asking again gives the same answer, so it is never retried and never turned into an
+    apology here; router.py says it in plain words. Matched by name so this module needs no import of the guard (it loads on its own)."""
+    return type(exc).__name__ in ("AIBlocked", "LicenceRestrictedContent")
+
 def load_full_database_schema():
     """
     Load ALL table schemas from database at startup.
@@ -171,7 +181,7 @@ def validate_columns_in_sql(sql: str) -> dict:
     }
 
 
-def _deterministic_format_query_results(results: list, question: str) -> str:
+def _deterministic_format_query_results(results: list, question: str, total_count: int = None) -> str:
     if not results:
         return "## No Results Found\n\nNo data matches your query criteria."
 
@@ -192,9 +202,10 @@ def _deterministic_format_query_results(results: list, question: str) -> str:
 
     total = len(results)
     shown = results[:20]
+    found = max(total, total_count or 0)        # the question's real total, not the size of the page that was read
     summary = (
         "## Executive Summary\n\n"
-        f"Found **{total}** item(s) for: \"{question.strip()}\".\n\n"
+        f"Found **{found}** item(s) for: \"{question.strip()}\".\n\n"
     )
 
     table = "| " + " | ".join(columns) + " |\n"
@@ -2678,22 +2689,24 @@ PAGINATION REQUIREMENT:
         
         return {
             "sql": None,
-            "explanation": f"Error: Unable to parse AI response. Please rephrase your question.",
+            "explanation": "The AI's reply could not be read.",
             "entity_type": "error",
             "estimated_rows": "n/a"
         }
-        
+
     except Exception as e:
+        if _is_refusal(e):          # the guard refused: not a fault to retry or to describe, the caller says it in plain words
+            raise
         logger.error(f"[FAIL] SQL generation error: {e}")
-        
+
         # Retry on timeout or connection errors
         if retry_count < 2 and ("timeout" in str(e).lower() or "connection" in str(e).lower()):
             logger.info("[REFRESH] Retrying after timeout/connection error...")
             return generate_sql_query(question, language, retry_count + 1, limit, offset)
-        
+
         return {
             "sql": None,
-            "explanation": f"Error generating SQL: {str(e)}. Please try rephrasing your question.",
+            "explanation": "The question could not be turned into a query.",
             "entity_type": "error",
             "estimated_rows": "n/a"
         }
@@ -2910,15 +2923,18 @@ def validate_sql(sql: str) -> bool:
     return True
 
 
-def format_query_results(results: list, question: str, sql: str, language: str = "en") -> str:
+def format_query_results(results: list, question: str, sql: str, language: str = "en", total_count: int = None) -> str:
     """
     Format SQL query results into structured, professional response using Groq LLM
-    
+
     Returns markdown-formatted answer with:
     - Executive summary
     - Structured data tables
     - Key insights
     - Actionable recommendations
+
+    `total_count` is how many records the question matches in all (the page read here holds at most 10); the count in the answer is that.
+    A guard refusal (AIBlocked, LicenceRestrictedContent) is raised, never turned into a table.
     """
     if not results:
         return "## No Results Found\n\nNo data matches your query criteria."
@@ -2943,41 +2959,24 @@ def format_query_results(results: list, question: str, sql: str, language: str =
         # If 80%+ rows are completely NULL (wrong JOIN), block it
         null_percentage = (completely_null_rows / len(sample_rows)) * 100
         if null_percentage >= 80:
-            logger.warning(f"[WARN]️ Query returned {null_percentage:.0f}% completely NULL rows - Wrong JOIN!")
-            return f"""## [WARN]️ No Valid Data Found
-
-**Query Executed Successfully, but Results Contain No Actual Data**
-
-The SQL query returned **{len(results)} rows**, but **{null_percentage:.0f}%** of ALL fields are NULL/empty. This usually indicates:
-
-1. **[FAIL] Wrong JOIN Logic**: The query joined unrelated tables using incorrect foreign keys
-2. **📭 No Matching Records**: The relationships you're querying don't exist yet
-3. **🔗 Missing Links**: Records exist but aren't properly connected in the database
-
-**Your Question:** {question}
-
-**What Happened:**
-```sql
-{sql}
-```
-This query joined tables incorrectly or queried relationships that don't have data yet.
-
-**💡 Suggestions:**
-- Try simpler queries first: "show me all controls" or "list all assets"
-- Verify the data exists: Check if records have been created
-- Report this issue: The AI may need better schema knowledge for this type of question
-
----
-*If you believe this is an error, please share this message with the system administrator.*
-"""
+            logger.warning(f"[WARN] Query returned {null_percentage:.0f}% completely NULL rows - wrong JOIN?")
+            # Plain words for a person: no query text, no table or column names, no emoji (rule U1).
+            return (
+                f"## {NO_USABLE_DATA_TITLE}\n\n"
+                f"I found {len(results)} matching record(s), but they are empty in the fields this question needs, "
+                "so there is nothing reliable to report.\n\n"
+                f"**Your question:** {question.strip()}\n\n"
+                "- Check that the records have been filled in.\n"
+                "- Or ask about one area at a time, for example risks, controls or evidence.\n"
+            )
     
     # If we get here, show the data (even if some fields are NULL)
     logger.info("[YES] Data validation passed - proceeding with formatting")
 
     if DETERMINISTIC_RESULT_FORMATTING:
         logger.info("[SAFE] Deterministic result formatting is enabled")
-        return _deterministic_format_query_results(results, question)
-    
+        return _deterministic_format_query_results(results, question, total_count)
+
     try:
         # Limit data sent to LLM (first 100 rows for formatting)
         sample_data = results[:100]
@@ -3041,7 +3040,7 @@ SEVERITY/STATUS EMPHASIS:
 - Open/unresolved: highlight in recommendations
 
 DATA ACCURACY:
-- Count MUST match exactly: {total_rows} total items found
+- Count MUST match exactly: {max(total_rows, total_count or 0)} total items found ({total_rows} are listed below)
 - Never round or approximate
 
 Respond in {language}. Be concise, professional, and actionable."""
@@ -3066,25 +3065,10 @@ Present this data clearly with a summary, table, insights, and recommended actio
         return formatted_response
         
     except Exception as e:
+        if _is_refusal(e):          # the guard refused to send these rows: say so, do not print the rows as a "fallback" table
+            raise
         logger.error(f"[FAIL] Result formatting error: {e}")
-        
-        # Fallback to basic formatting with structure
-        fallback = f"## Query Results\n\n**Total Results:** {len(results)}\n\n"
-        
-        # Create basic table
-        if results and len(results) > 0:
-            # Get column names
-            columns = list(results[0].keys())
-            
-            # Table header
-            fallback += "| " + " | ".join(columns) + " |\n"
-            fallback += "|" + "|".join(["---" for _ in columns]) + "|\n"
-            
-            # Table rows (max 20)
-            for row in results[:20]:
-                fallback += "| " + " | ".join([str(row.get(col, "")) for col in columns]) + " |\n"
-            
-            if len(results) > 20:
-                fallback += f"\n*Showing 20 of {len(results)} total results*\n"
-        
-        return fallback
+
+        # The AI could not write the summary: show the records as a plain table. The same deterministic table as the default
+        # formatting: it leaves out ids, tenant and audit columns (the dump of every column it replaces printed them).
+        return _deterministic_format_query_results(results, question, total_count)
