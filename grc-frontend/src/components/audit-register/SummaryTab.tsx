@@ -64,8 +64,8 @@ function SourceTable({ caption, columns, rows, total = true, onCell }: {
       <Table caption={caption}>
         <THead>
           <Tr>
-            <Th>Source</Th>
-            {columns.map((c) => <Th key={c.source} align="right">{c.title}</Th>)}
+            <Th className="min-w-[180px]">Source</Th>
+            {columns.map((c) => <Th key={c.source} align="right" className="whitespace-nowrap">{c.title}</Th>)}
             {total && <Th align="right">Total</Th>}
           </Tr>
         </THead>
@@ -74,7 +74,7 @@ function SourceTable({ caption, columns, rows, total = true, onCell }: {
             const sum = columns.reduce((s, c) => s + (row.cells[c.source] ?? 0), 0);
             return (
               <Tr key={row.key}>
-                <RowHeaderCell className={row.bold ? 'font-[600]' : undefined}>{row.label}</RowHeaderCell>
+                <RowHeaderCell className={`min-w-[180px] ${row.bold ? 'font-[600]' : ''}`}>{row.label}</RowHeaderCell>
                 {columns.map((c) => (
                   <Td key={c.source} align="right" className={`${NUM} ${row.bold ? 'font-[600]' : ''}`}>
                     {count(row.cells[c.source] ?? 0, c.source, row.key, `${row.label}, ${c.title}`, <Figure ours={row.cells[c.source] ?? 0} theirs={row.theirs?.[c.source]} />)}

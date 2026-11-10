@@ -18,7 +18,9 @@ export type FindingTab = 'fields' | 'validation' | 'extension' | 'links';
 export function FindingTabs({ issueId, rights, subject, owner, initialTab = 'fields', onDirtyChange }: {
   issueId: number; rights: RegisterRights; subject: string; owner?: string | null; initialTab?: FindingTab; onDirtyChange?: (dirty: boolean) => void;
 }) {
-  const [tab, setTab] = useState<FindingTab>(initialTab);
+  // until the person picks a tab the first one follows the work (the register's rows may arrive after the drawer opened from a notification's link)
+  const [picked, setTab] = useState<FindingTab | null>(null);
+  const tab = picked ?? initialTab;
   // asked once here and read again by the tab (same query key): whether this kind of finding has a validation step at all
   const validation = useQuery<ValidationState>({
     queryKey: ['audit-register-validation', issueId], retry: false,

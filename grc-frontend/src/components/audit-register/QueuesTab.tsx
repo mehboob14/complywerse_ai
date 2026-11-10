@@ -9,7 +9,7 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Button, Combobox, EmptyState, ErrorState, SectionCard, SkeletonRows, WorkRow, useReportedMutation, type MenuItem } from '@/components/ui/ds';
 import { errorMessage } from '@/components/ui/ds/reportOutcome';
-import { auditRegisterApi } from '@/lib/api';
+import apiClient, { auditRegisterApi } from '@/lib/api';
 import { formatCount, formatDate } from '@/lib/format';
 import { extensionStatus } from '@/lib/statuses/auditRegister';
 import { can, type RegisterRights } from '@/lib/auditRegister/rights';
@@ -30,10 +30,22 @@ export function QueuesTab({ rows, rights, onOpen }: { rows: readonly RegisterRow
   const today = useMemo(() => new Date(), [rows]);              // eslint-disable-line react-hooks/exhaustive-deps
   const waiting = useMemo(() => validationQueue(rows, today), [rows, today]);
   const owners = useMemo(() => ownersToMap(rows), [rows]);
-  const extensions = useQuery<ExtensionLine[]>({
+  // the newest 200 requests, and every undecided one besides (a queue never loses an old request behind newer decided ones); the two are one list
+  const recent = useQuery<ExtensionLine[]>({
     queryKey: ['audit-register-all-extensions'],
     queryFn: async () => (await auditRegisterApi.extensions()).data as ExtensionLine[],
   });
+  const undecided = useQuery<ExtensionLine[]>({
+    queryKey: ['audit-register-all-extensions', 'undecided'],
+    queryFn: async () => (await apiClient.get('/issue-management/issues/audit-register/extensions', { params: { status: 'requested' } })).data as ExtensionLine[],
+  });
+  const extensions = {
+    isLoading: recent.isLoading || undecided.isLoading,
+    isError: recent.isError || undecided.isError,
+    error: recent.error ?? undecided.error,
+    refetch: () => { void recent.refetch(); void undecided.refetch(); },
+    data: recent.data && undecided.data ? undecided.data.concat(recent.data.filter((x) => !undecided.data.some((u) => u.id === x.id))) : undefined,
+  };
   const mappings = useQuery<OwnerMapping>({
     queryKey: ['audit-register-owner-mappings'], enabled: can(rights, 'readMappings'),
     queryFn: async () => (await auditRegisterApi.ownerMappings()).data as OwnerMapping,
@@ -75,7 +87,7 @@ export function QueuesTab({ rows, rights, onOpen }: { rows: readonly RegisterRow
 
       <SectionCard id="queue-extensions" title="Extension requests" meta={extensions.data ? `${formatCount(queue.waiting.length)} waiting for the committee` : undefined} info="A new target date needs the Audit Committee’s approval. Audit Services record what the committee decided; for a regulator’s finding they also record the day the regulator was told.">
         {extensions.isLoading ? <div className="p-[12px]"><SkeletonRows rows={3} columns={3} label="Loading the extension requests" /></div>
-          : extensions.isError ? <ErrorState compact title="Couldn't load the extension requests" message={errorMessage(extensions.error)} onRetry={() => { void extensions.refetch(); }} />
+          : extensions.isError ? <ErrorState compact title="Couldn't load the extension requests" message={errorMessage(extensions.error)} onRetry={() => extensions.refetch()} />
           : queue.waiting.length + queue.toNotify.length + queue.decided.length === 0 ? <EmptyState bare kind="firstUse" title="No extension has been asked for" description="An owner asks for more time from the finding's Extension tab." />
           : (
             <>

@@ -163,3 +163,17 @@ def test_the_ai_assist_answer_never_names_the_model(db, monkeypatch):
                             today=TODAY, complete=lambda messages: '{"fields": {"risk_rating": {"value": "High", "reason": "Wires"}}}')
     assert result["model"] == "AI"
     assert "a-secret-model-name" not in str(result)
+
+
+def test_the_extension_list_can_ask_for_the_undecided_ones_only(db):
+    one, two = _finding(db, "MRA-1"), _finding(db, "MRA-2")
+    owner, auditor = db.get(m.GRCUser, 7), db.get(m.GRCUser, 8)
+    first = workflow.request_extension(db, one[0], one[1], owner, TODAY + timedelta(days=60), "Vendor delay", None, today=TODAY)
+    workflow.request_extension(db, two[0], two[1], owner, TODAY + timedelta(days=90), "Staffing", None, today=TODAY)
+    workflow.decide_extension(db, first, auditor, True, "Approved", today=TODAY)
+    db.commit()
+    user = db.get(m.GRCUser, 8)
+    everything = api.list_extensions(db=db, current_user=user)
+    waiting = api.list_extensions(status="requested", db=db, current_user=user)
+    assert len(everything) == 2
+    assert [x["status"] for x in waiting] == ["requested"] and waiting[0]["reference"] == "MRA-2"

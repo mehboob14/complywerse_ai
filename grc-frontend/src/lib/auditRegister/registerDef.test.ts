@@ -3,10 +3,11 @@
 // owner, no rating or no report has a value to filter by), the default sort puts what needs attention first, the board has a column for every status, and an owner opens on "Mine".
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync, readFileSync } from 'node:fs';
 
 import { evaluateRegister, indexRegister, sortRows, stateOf } from '../../components/records/registerModel.ts';
 import { readAddress } from '../addressState.ts';
-import { OWNER_SCHEMA, REGISTER_SCHEMA, attentionValue, dayMs, daysSince, dueOf, hasOwnerToMap, isAwaiting, referenceOf, registerCounts, registerDef, reportLabel, type RegisterRow } from './registerDef.ts';
+import { ENTRY_TEMPLATE_OF, OWNER_SCHEMA, REGISTER_SCHEMA, attentionValue, dayMs, daysSince, dueOf, hasOwnerToMap, isAwaiting, referenceOf, registerCounts, registerDef, reportLabel, type RegisterRow } from './registerDef.ts';
 
 let next = 1;
 const row = (over: Partial<RegisterRow> = {}): RegisterRow => ({
@@ -128,4 +129,13 @@ test('a search finds a finding by its number, title, owner, report or line of bu
   assert.equal(find('examination'), 6);   // every row but the one with no report
   assert.equal(find('regulator'), 5);
   assert.equal(find('zzz'), 0);
+});
+
+test('the sheet a new finding is added on, from its source, is the table the server keeps (template.ENTRY_TEMPLATE_BY_SOURCE)', () => {
+  const file = new URL('../../../../backend/grc/modules/issue_management/audit_register/template.py', import.meta.url);
+  if (!existsSync(file)) return;
+  const m = /ENTRY_TEMPLATE_BY_SOURCE = \{([\s\S]*?)\}/.exec(readFileSync(file, 'utf8'));
+  assert.ok(m, 'the table is in template.py');
+  const served = Object.fromEntries(Array.from((m as RegExpExecArray)[1].matchAll(/"([a-z_]+)":\s*"([a-z_]+)"/g)).map((x) => [x[1], x[2]]));
+  for (const [source, key] of Object.entries(ENTRY_TEMPLATE_OF)) assert.equal(served[source], key, source);
 });

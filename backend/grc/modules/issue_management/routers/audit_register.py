@@ -806,13 +806,19 @@ def decide_validation(
 @router.get("/extensions", dependencies=[Depends(_require_view)])
 def list_extensions(
     issue_id: int = None,
+    status: str = None,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
+    """Extension requests, newest first (the newest 200). ``status=requested`` lists the ones the
+    Audit Committee has not decided: all of them, so a queue never loses an old request behind 200
+    newer decided ones."""
     tenant_id = get_user_primary_tenant(current_user, db)
     query = db.query(AuditExtensionRequest).filter(AuditExtensionRequest.tenant_id == tenant_id)
     if issue_id:
         query = query.filter(AuditExtensionRequest.issue_id == issue_id)
+    if status:
+        query = query.filter(AuditExtensionRequest.status == status)
     out = []
     for ext in query.order_by(AuditExtensionRequest.id.desc()).limit(200).all():
         profile = (db.query(AuditIssueProfile)
