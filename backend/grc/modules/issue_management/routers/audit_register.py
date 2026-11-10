@@ -12,12 +12,12 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import Response
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from ....rich_audit import write_rich_audit_log
 
 from ....models import (AuditExtensionRequest, AuditIssueProfile, AuditRegisterImport,
-                        AuditRegisterReport, BusinessUnit, GRCUser, IssueActivity, IssueAssetLink,
+                        AuditRegisterReport, BusinessUnit, GRCUser, Issue, IssueActivity, IssueAssetLink,
                         IssueVulnerabilityLink, RiskIncident, Tenant, get_db)
 from ....routers.auth_router import get_user_primary_tenant, require_auth, require_tenant_permission
 from ....services import evidence_review
@@ -215,25 +215,45 @@ def list_imports(
 
 @router.get("/rows", dependencies=[Depends(_require_view)])
 def list_register_rows(
+    response: Response,
     source: str = None,
     deleted: bool = False,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ) -> List[Dict[str, Any]]:
     """The register as the client keeps it: their columns, their words.
-    ``deleted=true`` lists what was deleted instead, to restore."""
+    ``deleted=true`` lists what was deleted instead, to restore.
+
+    The list stops at 5,000 findings (the Reports module's cap too); ``X-Total-Count`` says how many
+    there are, so a page can tell a person the list is cut instead of showing a smaller register as
+    the whole. Each row also says whether it is the caller's (``mine``), waits for Audit Services
+    (``awaiting_validation`` since ``waiting_since``) or has an extension request waiting
+    (``extension_requested``): the Register's chips and the Queues are made from these."""
     tenant_id = get_user_primary_tenant(current_user, db)
     query = (db.query(AuditIssueProfile)
+             .options(joinedload(AuditIssueProfile.issue).joinedload(Issue.owner))   # one query, not two lazy loads per row
              .filter(AuditIssueProfile.tenant_id == tenant_id,
                      AuditIssueProfile.deleted_at.isnot(None) if deleted
                      else AuditIssueProfile.deleted_at.is_(None))
              .order_by(AuditIssueProfile.source, AuditIssueProfile.issue_ref))
     if source:
         query = query.filter(AuditIssueProfile.source == source)
+    response.headers["X-Total-Count"] = str(query.count())
+    profiles = query.limit(5000).all()                       # the Reports module's cap too
+    waiting = {issue_id for (issue_id,) in db.query(AuditExtensionRequest.issue_id)
+               .filter(AuditExtensionRequest.tenant_id == tenant_id,
+                       AuditExtensionRequest.status == "requested").all()}
+    submitted = workflow.submitted_on(db, [p.issue_id for p in profiles
+                                           if getattr(p.issue, "workflow_state", None) == "closure_review"])
     out = []
     today = date.today()
-    for profile in query.limit(5000).all():                  # the Reports module's cap too
+    for profile in profiles:
         issue = profile.issue
+        status_code = effective_status(profile, issue, today)
+        awaiting = getattr(issue, "workflow_state", None) == "closure_review" and status_code != "CD"
+        since = (submitted.get(profile.issue_id)
+                 or profile.validation_started_on
+                 or (profile.created_at.date() if profile.created_at else None)) if awaiting else None
         out.append({
             "issue_id": profile.issue_id,
             "code": getattr(issue, "code", None),
@@ -266,10 +286,14 @@ def list_register_rows(
             "days_past_due": (days_past_due(profile, issue, today)
                               if (profile.revised_target_date or profile.target_date or issue.due_date)
                               else profile.days_past_due or profile.aged_days_from_target),
-            "status": effective_status(profile, issue, today),
+            "status": status_code,
             "workflow_state": getattr(issue, "workflow_state", None),
             "deleted": profile.deleted_at is not None,
             "deleted_at": profile.deleted_at.isoformat() if profile.deleted_at else None,
+            "mine": bool(getattr(issue, "owner_id", None)) and issue.owner_id == current_user.id,
+            "awaiting_validation": awaiting,
+            "waiting_since": since.isoformat() if since else None,
+            "extension_requested": profile.issue_id in waiting,
         })
     return out
 

@@ -41,8 +41,14 @@ def _name(user: Optional[GRCUser]) -> Optional[str]:
     return (getattr(user, "display_name", None) or getattr(user, "username", None)) if user else None
 
 
+REGISTER_LINK = "/auditor-portal/issue-register"
+
+
 def _notify(db: Session, tenant_id: int, user_ids: Iterable[Optional[int]], subject: str,
-            message: str, *, email: bool = False, kind: str = "info") -> int:
+            message: str, *, email: bool = False, kind: str = "info",
+            issue_id: Optional[int] = None) -> int:
+    """``issue_id`` makes the alert open that finding's panel (``?finding=``); an alert about the
+    register as a whole (the reminder summaries) opens the register."""
     from ...workflow_engine.services.notification_service import send_workflow_notification
 
     ids = sorted({int(u) for u in user_ids if u})
@@ -51,7 +57,8 @@ def _notify(db: Session, tenant_id: int, user_ids: Iterable[Optional[int]], subj
     sent = send_workflow_notification(db, tenant_id=tenant_id, subject=subject[:500],
                                       message=message, workflow_instance_id=None, user_ids=ids,
                                       channels=["in_app", "email"] if email else ["in_app"],
-                                      notification_type=kind, link="/auditor-portal/issue-register")
+                                      notification_type=kind,
+                                      link=f"{REGISTER_LINK}?finding={issue_id}" if issue_id else REGISTER_LINK)
     return sent.get("notified_users", 0)
 
 
@@ -152,7 +159,7 @@ def submit_for_validation(db: Session, issue: Issue, profile: AuditIssueProfile,
     _notify(db, issue.tenant_id, audit_services(db, issue.tenant_id),
             f"Ready for validation: {_label(issue, profile)}",
             f"{_name(actor) or 'The owner'} submitted {len(evidence_ids)} file(s) for validation."
-            + (f"\n\n{note.strip()}" if (note or "").strip() else ""))
+            + (f"\n\n{note.strip()}" if (note or "").strip() else ""), issue_id=issue.id)
     return {"evidence_ids": evidence_ids, "changes": changed}
 
 
@@ -185,8 +192,23 @@ def decide_validation(db: Session, issue: Issue, profile: AuditIssueProfile, act
     _notify(db, issue.tenant_id, [issue.owner_id],
             f"{_label(issue, profile)}: {words}",
             f"Audit Services: {words}." + (f"\n\n{reason.strip()}" if (reason or "").strip() else ""),
-            kind="info" if result == "pass" else "warning")
+            kind="info" if result == "pass" else "warning", issue_id=issue.id)
     return {"changes": changed}
+
+
+def submitted_on(db: Session, issue_ids: List[int]) -> Dict[int, date]:
+    """The day the owner last submitted each of these findings for validation, in one query per
+    500 findings (the register lists them all at once; a finding nobody submitted is not in it)."""
+    out: Dict[int, date] = {}
+    for start in range(0, len(issue_ids), 500):
+        chunk = issue_ids[start:start + 500]
+        for issue_id, at in (db.query(IssueActivity.issue_id, func.max(IssueActivity.created_at))
+                             .filter(IssueActivity.issue_id.in_(chunk),
+                                     IssueActivity.type == "validation_submitted")
+                             .group_by(IssueActivity.issue_id).all()):
+            if at:
+                out[issue_id] = at.date()
+    return out
 
 
 def status_definitions(db: Session, tenant_id: int, profile: AuditIssueProfile) -> Dict[str, str]:
@@ -331,7 +353,8 @@ def request_extension(db: Session, issue: Issue, profile: AuditIssueProfile, act
         committee = db.get(GovernanceCommittee, meeting.committee_id)
         _notify(db, issue.tenant_id, [committee.chair_id, committee.secretary_id] if committee else [],
                 f"Extension request for the {meeting.title} agenda",
-                f"{_label(issue, profile)}: new target date {requested_date.isoformat()} requested.")
+                f"{_label(issue, profile)}: new target date {requested_date.isoformat()} requested.",
+                issue_id=issue.id)
     db.add(IssueActivity(issue_id=issue.id, user_id=actor.id, type="extension_requested",
                          payload={"request_id": request.id, "to": requested_date.isoformat(),
                                   "meeting_id": request.meeting_id}))
@@ -370,7 +393,7 @@ def decide_extension(db: Session, request: AuditExtensionRequest, actor: GRCUser
             (f"The Audit Committee approved the new target date {request.requested_date.isoformat()}."
              if approve else "The Audit Committee did not approve the extension.")
             + (f"\n\n{request.decision_notes}" if request.decision_notes else ""),
-            kind="info" if approve else "warning")
+            kind="info" if approve else "warning", issue_id=issue.id)
     return request
 
 
