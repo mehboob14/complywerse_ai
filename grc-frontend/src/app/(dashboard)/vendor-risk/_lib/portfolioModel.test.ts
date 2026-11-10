@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { badgeText, headerStats, isActive, isDrillDown, shellKey } from './portfolioModel.ts';
+import { badgeText, headerStats, isDrillDown, shellKey } from './portfolioModel.ts';
 
 test('the header line states the facts, drops a part that is zero, and keeps the vendors', () => {
   assert.equal(headerStats({ vendors: 12, critical: 2, open_findings: 1, intake_pending: 3 }), '12 vendors · 2 critical · 1 open finding');
@@ -29,7 +29,7 @@ test('a rail badge shows nothing for zero and stops at 99+', () => {
   assert.equal(badgeText(100), '99+');
 });
 
-test('a vendor record and the questionnaire builder draw their own header; every other page gets the module header', () => {
+test('a vendor record and the questionnaire builder draw their own header; every other page gets the strip of the layout', () => {
   for (const path of ['/vendor-risk/vendors/12', '/vendor-risk/vendors/12/summary', '/vendor-risk/vendors/12?tab=findings',
     '/vendor-risk/questionnaires/abc123/builder', '/vendor-risk/questionnaires/abc123/builder/']) {
     assert.equal(isDrillDown(path), true, path);
@@ -46,16 +46,4 @@ test('the shell remounts per vendor record and is one shell for every other page
   assert.equal(shellKey('/vendor-risk/vendors/13/summary'), '/vendor-risk/vendors/13/summary');
   assert.equal(shellKey('/vendor-risk/vendors'), 'vendor-risk-shell');
   assert.equal(shellKey('/vendor-risk/findings'), 'vendor-risk-shell');
-});
-
-test('the rail entry on is the page itself and the pages beneath it; the Overview only on its own', () => {
-  assert.equal(isActive('/vendor-risk', '/vendor-risk', true), true);
-  assert.equal(isActive('/vendor-risk/vendors', '/vendor-risk', true), false);
-  assert.equal(isActive('/vendor-risk/vendors', '/vendor-risk/vendors'), true);
-  assert.equal(isActive('/vendor-risk/vendors/12', '/vendor-risk/vendors'), true);       // a record keeps the Register lit
-  assert.equal(isActive('/vendor-risk/questionnaires/abc/builder', '/vendor-risk/questionnaires'), true);
-  assert.equal(isActive('/vendor-risk/vendors-old', '/vendor-risk/vendors'), false);     // a sibling that only starts the same way
-  assert.equal(isActive('/vendor-risk/settings/emails', '/vendor-risk/settings'), true);
-  assert.equal(isActive('/vendor-risk/policy/', '/vendor-risk/policy'), true);
-  assert.equal(isActive('/vendor-risk/roster', '/vendor-risk/policy'), false);
 });

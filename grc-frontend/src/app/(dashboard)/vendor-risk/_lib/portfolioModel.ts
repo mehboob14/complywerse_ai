@@ -1,5 +1,5 @@
-// What the module's header and rail work out: the line of facts, the rail's counts, which routes are a drill-down (they draw their
-// own header), which rail entry is on. Pure, so `node --test` runs portfolioModel.test.ts against it.
+// What the module's heads work out: the line of facts, the counts of the strip row, which routes are a drill-down (they draw their
+// own header). Pure, so `node --test` runs portfolioModel.test.ts against it.
 
 export interface Counts { vendors: number; critical: number; open_findings: number; intake_pending: number }
 
@@ -33,9 +33,3 @@ export function isDrillDown(pathname: string): boolean {
 
 /** Moving between list pages keeps the page's cached data (no flash); only a vendor's own pages remount, one per record. */
 export const shellKey = (pathname: string): string => (/\/vendor-risk\/vendors\/\d+/.test(pathname || '') ? pathname : 'vendor-risk-shell');
-
-/** Whether a rail entry is the one on: its own page (and, unless `exact`, the pages beneath it). */
-export function isActive(pathname: string, href: string, exact = false): boolean {
-  const path = (pathname || '').split(/[?#]/)[0].replace(/\/+$/, '') || '/';
-  return exact ? path === href : path === href || path.startsWith(`${href}/`);
-}

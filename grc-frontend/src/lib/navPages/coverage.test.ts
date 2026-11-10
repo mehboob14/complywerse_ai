@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { areaName, breadcrumbFor, routeFor, routes, type RouteEntry } from '../navRegistry.ts';
 import { flattenLeaves, navigation, navPermissions } from '../../components/layout/navAccess.ts';
 import { activeNavHref } from '../../components/layout/navActive.ts';
+import { HEAD as VENDOR_HEAD } from '../../app/(dashboard)/vendor-risk/_lib/railModel.ts';
 
 const APP = fileURLToPath(new URL('../../app/', import.meta.url));
 const HERE = fileURLToPath(new URL('./', import.meta.url));
@@ -250,6 +251,7 @@ test('ownHeading is on exactly the pages that draw the kit head (PageHeader vari
   const HEAD_FROM_A_COMPONENT = ['/governance/kpi-report', '/governance/mappings', '/automation/soc2-controls', '/automation/soc2-controls/review', '/automation/assurance', '/compliance', '/compliance/statements', '/automation/soc2-controls/:code',
     '/frameworks', '/frameworks/:id', '/frameworks/onboarding/:id', '/bcm/plans', '/bcm/drills', '/bcm/findings',
     '/dashboard',
+    ...Object.keys(VENDOR_HEAD).filter((path) => VENDOR_HEAD[path] === 'layout'),     // vendor-risk/_lib/railModel.ts HEAD: the pages whose head the layout draws until their group rebuilds them
     '/controls', '/control-library', '/control-library/:id', '/control-library/review',
     '/assessments/register', '/assessments/types',
     '/issues/register', '/issues/actions',

@@ -1,11 +1,18 @@
-// What the Overview works out from the program dashboard's numbers: the four tiles, the cards' rows and slices, and the links each
-// leads to (every one is the register, or the findings, filtered the way it counted). Pure, so `node --test` runs
-// overviewModel.test.ts against it. Every P0 key is optional here: an older server gives a page of zeros, not a crash.
+// What the Overview works out from the program dashboard's numbers: the counters of the band, the posture card, the breakdowns' rows and slices, and the links each leads to (every one is
+// the register, or the findings, filtered the way it counted). Pure, so `node --test` runs overviewModel.test.ts against it. Every P0 key is optional here: an older server gives a page
+// of zeros, not a crash. `tiles` keeps its keys: the Performance Overview's vendor row (lib/perf/moduleFeeds.ts) reads them.
+//
+// ONE number for each thing (vendor-shell, 2026-11-08): "reassessment overdue" is the server's (`reassessment_overdue`, the register's next-action definition: the earlier of a vendor's own
+// date and its engagements' dates is before today, vendors in use) and the posture card says that number, not a second one counted from the dates; a residual score is banded on the
+// tenant's thresholds (vendorRules.ts); the two coverages have two names ("Critical vendors assessed", "Reviews in window").
 
 import { fmt } from '../_ui/fmt.ts';
 import { tierColor, tierLabel } from '../_ui/tiers.ts';
-import { TONE, tones, type Tone } from '../_ui/tones.ts';
+import { TONE, tones } from '../_ui/tones.ts';
+import { vendorTier } from '../../../../lib/statuses/vendor.ts';
+import type { Tone } from '../../../../lib/status.ts';
 import { ATTENTION, attentionLabel, attentionTone } from './attention.ts';
+import { DOMAIN_LABELS, titleCase } from './tprmShared.ts';
 
 export type Scope = 'portfolio' | 'mine';
 
@@ -49,6 +56,7 @@ export interface Dashboard {
 
 export const REGISTER = '/vendor-risk/vendors';
 export const FINDINGS = '/vendor-risk/findings';
+export const INTAKE = '/vendor-risk/intake';
 
 /** The register filtered as a tile or card counted. In "My queue" the counts are of the caller's own vendors, so the link says so. */
 export function registerHref(filters: Record<string, string>, scope: Scope): string {
@@ -74,9 +82,19 @@ export function tiles(d: Pick<Dashboard, 'not_tiered' | 'no_owner' | 'reassessme
   ];
 }
 
+export interface Counter { key: string; label: string; value: number; tone: Tone; caption?: string; href: string }
+
+/** What the counters band says: the four tiles and the requests waiting for a decision (the true total, not the four the old card listed). */
+export function counters(d: Pick<Dashboard, 'not_tiered' | 'no_owner' | 'reassessment_overdue' | 'kpis' | 'intake_pending'>, scope: Scope): Counter[] {
+  return [
+    ...tiles(d, scope),
+    { key: 'requests', label: 'Requests waiting', value: d.intake_pending?.total ?? 0, tone: 'pending', href: INTAKE },
+  ];
+}
+
 export interface AttentionRow { code: string; label: string; tone: Tone; count: number; href: string }
 
-/** One row per thing vendors wait on, in the register's order (a code this page does not know comes last, in its own words). */
+/** One row per thing vendors wait on, in the register's order (a code this page does not know comes last, in readable words). */
 export function attentionRows(counts: Record<string, number> | undefined, scope: Scope): AttentionRow[] {
   const known = ATTENTION.map((a) => a.code);
   const codes = [...known, ...Object.keys(counts ?? {}).filter((c) => !known.includes(c)).sort()];
@@ -123,20 +141,10 @@ export function statusBars(byStatus: Record<string, number> | undefined): Status
 
 export interface Coverage { percent: number | null; caption: string; outside: number }
 
-/** The coverage gauge: how many of the critical and high vendors are inside their reassessment window. */
+/** The window gauge: how many of the critical and high vendors are inside their reassessment window. */
 export function coverageView(c: Dashboard['coverage']): Coverage {
   if (!c || !c.total) return { percent: null, caption: '', outside: 0 };
   return { percent: c.percent ?? Math.round((c.in_window / c.total) * 100), caption: `${c.in_window}/${c.total} critical and high`, outside: Math.max(0, c.total - c.in_window) };
-}
-
-export interface IntakeRow { id: number; name: string; byline: string; duplicate: boolean }
-
-/** The first requests waiting for a decision: "requester · date". */
-export function intakeRows(items: PendingRequest[] | undefined, most = 4): IntakeRow[] {
-  return (items ?? []).slice(0, most).map((r) => ({
-    id: r.id, name: r.name, duplicate: !!r.duplicate,
-    byline: [r.requested_by || 'Unattributed', r.submitted_at ? fmt.date(r.submitted_at) : ''].filter(Boolean).join(' · '),
-  }));
 }
 
 export const topResidual = (list: TopVendor[] | undefined, most = 5): TopVendor[] => (list ?? []).slice(0, most);
@@ -145,21 +153,88 @@ export const topResidual = (list: TopVendor[] | undefined, most = 5): TopVendor[
 export const barWidth = (score: number | null | undefined): number =>
   typeof score === 'number' && Number.isFinite(score) ? Math.min(100, Math.max(0, score)) : 0;
 
-export interface Kpi { key: string; label: string; value: number | string; tone: 'warning' | 'danger' | 'neutral' | 'success' | 'progress'; caption?: string; href?: string }
+// ── the posture card ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
-/** What Compliverse's own headline numbers say, kept under Verity's cards: the attention queue, the portfolio's size, coverage,
- *  the residual score, and the reviews coming up. (The critical findings are the fourth tile.) */
-export function kpis(k: Kpis): Kpi[] {
-  const urgent = k.attention_urgent ?? 0;
-  const removed = Math.max(0, Math.round(k.portfolio_inherent - k.portfolio_residual));
-  return [
-    { key: 'queue', label: 'Attention queue', value: k.attention_open ?? 0, tone: urgent ? 'danger' : 'success', caption: urgent ? `${urgent} urgent` : undefined, href: '/vendor-risk/attention' },
-    { key: 'active', label: 'Active vendors', value: k.active_vendors, tone: 'neutral', caption: k.onboarded_this_period > 0 ? `+${k.onboarded_this_period} onboarded · 30d` : 'No new onboards · 30d' },
-    { key: 'coverage', label: 'Critical coverage', value: `${k.critical_coverage}%`, tone: k.critical_coverage >= 90 ? 'success' : 'warning', caption: `${k.critical_covered}/${k.critical_count} critical assessed` },
-    { key: 'residual', label: 'Portfolio residual', value: k.portfolio_residual, tone: 'neutral', caption: `${removed} removed vs inherent ${k.portfolio_inherent}` },
-    {
-      key: 'reviews', label: 'Reviews due ≤30d', value: k.reviews_due_30d, tone: k.overdue_reviews ? 'warning' : 'neutral',
-      caption: [k.overdue_reviews > 0 ? `${k.overdue_reviews} overdue` : '', `${k.new_signals} new signals`].filter(Boolean).join(' · '),
-    },
-  ];
+export type Verdict = 'unset' | 'within' | 'approaching' | 'over';
+
+export const VERDICT: Record<Verdict, { label: string; tone: Tone }> = {
+  unset: { label: 'Appetite not set', tone: 'neutral' },
+  within: { label: 'Within appetite', tone: 'success' },
+  approaching: { label: 'Approaching appetite', tone: 'warning' },
+  over: { label: 'Over appetite', tone: 'danger' },
+};
+
+/** The board's thirty-second read: over the appetite line, within eight points of it, or inside it; neutral when the tenant set none. */
+export function verdictOf(residual: number, appetite: number | null | undefined): Verdict {
+  if (typeof appetite !== 'number' || !Number.isFinite(appetite)) return 'unset';
+  if (residual > appetite) return 'over';
+  return residual >= appetite - 8 ? 'approaching' : 'within';
+}
+
+export interface Posture {
+  verdict: Verdict;
+  headline: string;
+  /** "3 over the line", "on the line", "5 of headroom"; '' without an appetite */
+  gap: string;
+  residual: number;
+  inherent: number;
+  /** the points of risk the controls remove */
+  removed: number;
+  /** critical vendors with a residual score; null when there is no critical vendor */
+  assessed: { percent: number | null; caption: string; tone: Tone };
+  window: Coverage;
+  reviews: { due: number; overdue: number | null };
+}
+
+/** The posture card from the dashboard and the appetite line. */
+export function postureView(d: Pick<Dashboard, 'kpis' | 'coverage' | 'reassessment_overdue'>, appetite: number | null | undefined): Posture {
+  const k = d.kpis;
+  const residual = k.portfolio_residual ?? 0;
+  const inherent = k.portfolio_inherent ?? 0;
+  const has = typeof appetite === 'number' && Number.isFinite(appetite);
+  const gap = has ? Math.round((residual - (appetite as number)) * 10) / 10 : 0;          // one decimal: 45.8 - 45 is 0.8, not 0.7999999999999972
+  const critical = k.critical_count ?? 0;
+  return {
+    verdict: verdictOf(residual, appetite),
+    headline: has ? `Portfolio residual ${residual} against an appetite of ${appetite}` : `Portfolio residual ${residual}`,
+    gap: !has ? '' : gap > 0 ? `${gap} over the line` : gap === 0 ? 'On the line' : `${Math.abs(gap)} of headroom`,
+    residual, inherent, removed: Math.max(0, Math.round(inherent - residual)),
+    assessed: critical > 0
+      ? { percent: k.critical_coverage, caption: `${k.critical_covered}/${critical} critical vendors have a residual score`, tone: k.critical_coverage >= 90 ? 'success' : 'warning' }
+      : { percent: null, caption: 'No critical vendors', tone: 'neutral' },
+    window: coverageView(d.coverage),
+    reviews: { due: k.reviews_due_30d ?? 0, overdue: typeof d.reassessment_overdue === 'number' ? d.reassessment_overdue : null },
+  };
+}
+
+// ── the breakdowns ───────────────────────────────────────────────────────────────────────────────────────────────────────
+
+export interface DomainRow { key: string; label: string; value: number; href: string }
+
+/** Where the open findings gather: the domains with the most first, each leading to the findings of that domain. */
+export function domainRows(byDomain: Record<string, number> | undefined, most = 8): DomainRow[] {
+  return Object.entries(byDomain ?? {})
+    .filter(([, n]) => n > 0)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, most)
+    .map(([key, value]) => ({ key, value, label: DOMAIN_LABELS[key] ?? titleCase(key), href: `${FINDINGS}?domain=${encodeURIComponent(key)}` }));
+}
+
+export interface SignalRow { id: number; vendorId: number; title: string; meta: string; tone: Tone; severity: string; fresh: boolean }
+
+/** The latest outside-in signals as rows: what, for which vendor, when. */
+export function signalRows(feed: Signal[] | undefined, most = 6): SignalRow[] {
+  return (feed ?? []).slice(0, most).map((s) => ({
+    id: s.id, vendorId: s.vendor_id, fresh: !s.acknowledged, severity: vendorTier.label(s.severity), tone: vendorTier.tone(s.severity),
+    title: s.title || titleCase(s.signal_type),
+    meta: [s.vendor_name || 'A vendor', titleCase(s.signal_type), fmt.date(s.occurred_at)].join(' · '),
+  }));
+}
+
+export interface TierGap { tier: string; label: string; inherent: number; residual: number }
+
+/** Inherent against residual by tier, the tiers in the ramp's order. */
+export function tierGaps(rows: Dashboard['inherent_vs_residual'] | undefined): TierGap[] {
+  const order = ['critical', 'high', 'medium', 'low'];
+  return (rows ?? []).slice().sort((a, b) => order.indexOf(a.tier) - order.indexOf(b.tier)).map((r) => ({ tier: r.tier, label: tierLabel(r.tier), inherent: r.inherent, residual: r.residual }));
 }

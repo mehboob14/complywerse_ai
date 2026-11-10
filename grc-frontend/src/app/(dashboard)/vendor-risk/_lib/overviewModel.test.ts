@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  attentionRows, barWidth, coverageView, intakeRows, kpis, registerHref, severitySlices, statusBars, sum, tiles, tierSlices, topResidual,
+  attentionRows, barWidth, counters, coverageView, domainRows, postureView, registerHref, severitySlices, signalRows, statusBars, sum, tierGaps, tiles, tierSlices, topResidual, verdictOf,
   type Kpis,
 } from './overviewModel.ts';
 
@@ -43,8 +43,8 @@ test('needs-attention rows follow the register\'s order, skip what is zero, and 
   assert.equal(rows[0].href, '/vendor-risk/vendors?attention=reassessment_overdue');
   assert.deepEqual(attentionRows({}, 'portfolio'), []);                                   // the card says "All clear"
   assert.deepEqual(attentionRows(undefined, 'portfolio'), []);
-  const odd = attentionRows({ brand_new: 2 }, 'portfolio');                               // a code from a newer server still shows
-  assert.deepEqual([odd[0].code, odd[0].label, odd[0].tone], ['brand_new', 'brand_new', 'neutral']);
+  const odd = attentionRows({ brand_new: 2 }, 'portfolio');                               // a code from a newer server still shows, in readable words (Rule U1: no raw code on a screen)
+  assert.deepEqual([odd[0].code, odd[0].label, odd[0].tone], ['brand_new', 'Brand new', 'neutral']);
 });
 
 test('the tier donut keeps the tiers that have someone in them and the untiered apart, each leading to its own list', () => {
@@ -77,20 +77,6 @@ test('coverage is the share inside the reassessment window, with how many sit ou
   assert.deepEqual(coverageView(undefined), { percent: null, caption: '', outside: 0 });
 });
 
-test('the intake card shows the first four requests: who asked and when, and whether it may be a duplicate', () => {
-  const rows = intakeRows([
-    { id: 1, name: 'Northwind', requested_by: 'Dana Okafor', requested_by_id: 5, submitted_at: '2026-09-26T12:00:00', duplicate: true },
-    { id: 2, name: 'Gravel', requested_by: null, requested_by_id: null, submitted_at: null, duplicate: false },
-    { id: 3, name: 'C', requested_by: 'X', requested_by_id: 1, submitted_at: '2026-09-27', duplicate: false },
-    { id: 4, name: 'D', requested_by: 'X', requested_by_id: 1, submitted_at: '2026-09-27', duplicate: false },
-    { id: 5, name: 'E', requested_by: 'X', requested_by_id: 1, submitted_at: '2026-09-27', duplicate: false },
-  ]);
-  assert.equal(rows.length, 4);
-  assert.deepEqual(rows[0], { id: 1, name: 'Northwind', byline: 'Dana Okafor · 26 Sep 2026', duplicate: true });
-  assert.equal(rows[1].byline, 'Unattributed');
-  assert.deepEqual(intakeRows(undefined), []);
-});
-
 test('highest residual is the first five, with a bar from 0 to 100', () => {
   const vendors = Array.from({ length: 8 }, (_, i) => ({ id: i, name: `V${i}`, tier: 'high', residual: 90 - i, inherent: 80, rating: null, grade: 'C' }));
   assert.deepEqual(topResidual(vendors).map((v) => v.id), [0, 1, 2, 3, 4]);
@@ -101,22 +87,51 @@ test('highest residual is the first five, with a bar from 0 to 100', () => {
   assert.equal(barWidth(null), 0);
 });
 
-test('Compliverse\'s own headline numbers stay: the queue, the size, coverage, residual and the reviews coming up', () => {
-  const k = kpis(KPIS);
-  assert.deepEqual(k.map((x) => [x.label, x.value]), [
-    ['Attention queue', 9], ['Active vendors', 12], ['Critical coverage', '80%'], ['Portfolio residual', 44.5], ['Reviews due ≤30d', 4],
-  ]);
-  assert.equal(k[0].caption, '2 urgent');
-  assert.equal(k[0].tone, 'danger');
-  assert.equal(k[0].href, '/vendor-risk/attention');
-  assert.equal(k[1].caption, '+2 onboarded · 30d');
-  assert.equal(k[2].tone, 'warning');
-  assert.equal(k[3].caption, '17 removed vs inherent 61');
-  assert.equal(k[4].caption, '2 overdue · 6 new signals');
-  const calm = kpis({ ...KPIS, attention_urgent: 0, onboarded_this_period: 0, critical_coverage: 95, overdue_reviews: 0 });
-  assert.equal(calm[0].tone, 'success');
-  assert.equal(calm[0].caption, undefined);
-  assert.equal(calm[1].caption, 'No new onboards · 30d');
-  assert.equal(calm[2].tone, 'success');
-  assert.equal(calm[4].caption, '6 new signals');
+test('the counters band is the four tiles and the requests waiting, the true total of them, linking to Intake', () => {
+  const c = counters({ not_tiered: 3, no_owner: 4, reassessment_overdue: 1, kpis: KPIS, intake_pending: { total: 7, items: [] } }, 'portfolio');
+  assert.deepEqual(c.map((x) => [x.key, x.value, x.tone]), [['not_tiered', 3, 'warning'], ['no_owner', 4, 'warning'], ['overdue', 1, 'danger'], ['critical', 3, 'danger'], ['requests', 7, 'pending']]);
+  assert.equal(c[4].href, '/vendor-risk/intake');
+  assert.equal(c[3].caption, '1 overdue');
+  assert.equal(counters({ kpis: KPIS }, 'portfolio')[4].value, 0);
+});
+
+test('the verdict: over the appetite line, within eight points of it, inside it; none without an appetite', () => {
+  assert.deepEqual([50, 45.1, 45, 37, 36.9].map((r) => verdictOf(r, 45)), ['over', 'over', 'approaching', 'approaching', 'within']);
+  assert.equal(verdictOf(50, null), 'unset');
+  assert.equal(verdictOf(50, undefined), 'unset');
+});
+
+test('the posture card says the number of the server for overdue, names the two coverages apart, and counts the points the controls remove', () => {
+  const p = postureView({ kpis: KPIS, coverage: { in_window: 4, total: 5, percent: 80 }, reassessment_overdue: 1 }, 45);
+  assert.deepEqual([p.verdict, p.gap, p.residual, p.inherent, p.removed], ['approaching', '0.5 of headroom', 44.5, 61, 17]);
+  assert.equal(p.headline, 'Portfolio residual 44.5 against an appetite of 45');
+  assert.deepEqual(p.assessed, { percent: 80, caption: '4/5 critical vendors have a residual score', tone: 'warning' });
+  assert.deepEqual(p.window, { percent: 80, caption: '4/5 critical and high', outside: 1 });
+  assert.deepEqual(p.reviews, { due: 4, overdue: 1 }, 'the overdue is reassessment_overdue, not the older count of every vendor with a past date (2)');
+  const bare = postureView({ kpis: { ...KPIS, critical_count: 0, critical_coverage: 0, portfolio_inherent: 40, portfolio_residual: 52 } }, null);
+  assert.deepEqual([bare.verdict, bare.gap, bare.removed, bare.assessed.percent, bare.reviews.overdue], ['unset', '', 0, null, null]);
+  assert.equal(postureView({ kpis: { ...KPIS, critical_coverage: 95 } }, 45).assessed.tone, 'success');
+  assert.equal(postureView({ kpis: KPIS }, 40).gap, '4.5 over the line');
+});
+
+test('the findings gather by domain: the most first, ties by name, each leading to that domain in the register', () => {
+  const rows = domainRows({ cybersecurity: 4, data_privacy: 4, legal: 0, esg: 1, brand_new: 2 });
+  assert.deepEqual(rows.map((r) => [r.label, r.value]), [['Cybersecurity', 4], ['Data Privacy', 4], ['Brand New', 2], ['ESG & Sustainability', 1]]);
+  assert.equal(rows[0].href, '/vendor-risk/findings?domain=cybersecurity');
+  assert.equal(domainRows(Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`d${i}`, i + 1]))).length, 8);
+  assert.deepEqual(domainRows(undefined), []);
+});
+
+test('the signal feed is the latest six with the severity said in words; one nobody has acknowledged is fresh', () => {
+  const feed = Array.from({ length: 8 }, (_, i) => ({ id: i, vendor_id: 1, vendor_name: i === 0 ? null : 'Acme', signal_type: 'security_rating', severity: i === 1 ? 'critical' : 'info', title: i === 2 ? 'TLS expires' : null, occurred_at: '2026-11-01', acknowledged: i > 0 }));
+  const rows = signalRows(feed);
+  assert.equal(rows.length, 6);
+  assert.deepEqual([rows[0].title, rows[0].meta, rows[0].fresh, rows[0].severity, rows[0].tone], ['Security Rating', 'A vendor · Security Rating · 1 Nov 2026', true, 'Info', 'neutral']);
+  assert.deepEqual([rows[1].severity, rows[1].tone, rows[2].title], ['Critical', 'danger', 'TLS expires']);
+  assert.deepEqual(signalRows(undefined), []);
+});
+
+test('inherent against residual runs in the order of the ramp, whatever order the server sent', () => {
+  assert.deepEqual(tierGaps([{ tier: 'low', inherent: 20, residual: 10 }, { tier: 'critical', inherent: 90, residual: 70 }]).map((r) => [r.label, r.inherent, r.residual]), [['Critical', 90, 70], ['Low', 20, 10]]);
+  assert.deepEqual(tierGaps(undefined), []);
 });
