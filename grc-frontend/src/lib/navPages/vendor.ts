@@ -64,6 +64,8 @@ export const PAGES: PageSpec[] = [
   { path: `${V}/attention`, label: 'Needs attention', area: AREA, parent: V, hidden: 'opens from the Work queue link of the Overview and from the Needs attention counter', keywords: ['Attention queue', 'Work queue'], ...heading(`${V}/attention`) },
   { path: `${V}/actions`, label: 'Planned actions', area: AREA, parent: V, hidden: 'opens from the My work card of the Overview', ...heading(`${V}/actions`) },
   // The two pages removed from the rail (D50) still forward to the Overview.
+  // The Assessments board is the Board view of the Register: the old address forwards there.
+  { path: `${V}/assessments`, label: 'Vendors', area: AREA, aliasOf: `${V}/vendors` },
   { path: `${V}/procurement`, label: OVERVIEW, area: AREA, aliasOf: V },
   { path: `${V}/shadow-saas`, label: OVERVIEW, area: AREA, aliasOf: V },
 
@@ -75,7 +77,7 @@ export const PAGES: PageSpec[] = [
   { path: `${V}/questionnaires/:token/builder`, label: 'Questionnaire builder', area: AREA, parent: `${V}/questionnaires`, hidden: 'opens from a questionnaire (Edit or New) in Questionnaires' },
   { path: `${V}/vendors/:id`, label: 'Vendor', area: AREA, parent: `${V}/vendors`, hidden: 'opens from a Register row and from the vendor name on most pages of the module and of the Auditor Portal' },
   { path: `${V}/vendors/:id/summary`, label: 'Vendor summary report', area: AREA, parent: `${V}/vendors`, hidden: 'opens from the vendor record\'s menu ("Summary report")' },
-  { path: `${V}/assessments/:id`, label: 'Vendor assessment', area: AREA, parent: `${V}/assessments`, hidden: 'opens from a questionnaire sent to a vendor and from a vendor\'s assessment dialog' },
+  { path: `${V}/assessments/:id`, label: 'Vendor assessment', area: AREA, parent: `${V}/vendors`, hidden: 'opens from a questionnaire sent to a vendor and from a vendor\'s assessment dialog' },
   { path: `${V}/comply-analysis/:id`, label: 'Comply analysis', area: AREA, parent: `${V}/comply-analysis`, hidden: 'opens from a row of Comply analyses' },
   { path: `${V}/reports/:id`, label: 'Vendor report', area: AREA, parent: `${V}/reports`, hidden: 'opens from a kept report in Reports, and straight after one is generated' },
   { path: `${V}/settings/emails`, label: 'Emails', area: AREA, parent: `${V}/settings`, hidden: 'opens from Third-party risk settings (the emails link)', keywords: ['Vendor emails'] },

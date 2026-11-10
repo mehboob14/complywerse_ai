@@ -100,9 +100,9 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 export function money(value: number | null | undefined, currency?: string | null): string {
   if (value === null || value === undefined) return '—';
   try {
-    if (currency) return new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 0 }).format(value);
+    if (currency) return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value);
   } catch { /* an unknown code falls through to a plain number */ }
-  return `${new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(value)}${currency ? ` ${currency}` : ''}`;
+  return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(value)}${currency ? ` ${currency}` : ''}`;
 }
 
 /** What the clock says about a contract, in words. */

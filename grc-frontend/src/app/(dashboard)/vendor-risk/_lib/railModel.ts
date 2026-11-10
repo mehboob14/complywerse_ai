@@ -37,9 +37,9 @@ const V = '/vendor-risk';
 
 export const RAIL: RailEntry[] = [
   { key: 'overview', name: 'Overview', href: V, also: [`${V}/attention`, `${V}/actions`] },
-  { key: 'vendors', name: 'Vendors', href: `${V}/vendors`, tabs: [
-    { name: 'Register', href: `${V}/vendors`, title: 'Vendors', keywords: ['Vendor register', 'Suppliers'] },
-    { name: 'Assessments', href: `${V}/assessments`, title: 'Vendor Assessments' },
+  // The Assessments board is the Board view of the Register now: `/assessments` forwards to it (and the legacy review pages beneath it, /assessments/:id, still belong to Vendors).
+  { key: 'vendors', name: 'Vendors', href: `${V}/vendors`, also: [`${V}/assessments`], tabs: [
+    { name: 'Register', href: `${V}/vendors`, title: 'Vendors', keywords: ['Vendor register', 'Suppliers', 'Vendor assessments', 'Assessments board'] },
     { name: 'Contracts', href: `${V}/contracts` },
     { name: 'Check-ins', href: `${V}/reviews`, title: 'Yearly check-ins', keywords: ['Vendor reviews', 'Annual reviews'] },
   ] },
@@ -78,7 +78,7 @@ export const HEAD: Readonly<Record<string, HeadBy>> = {
   [V]: 'page',
   [`${V}/attention`]: 'page',
   [`${V}/actions`]: 'page',
-  [`${V}/vendors`]: 'layout',
+  [`${V}/vendors`]: 'page',
   [`${V}/intake`]: 'layout',
   [`${V}/findings`]: 'layout',
   [`${V}/questionnaires`]: 'layout',
@@ -87,7 +87,7 @@ export const HEAD: Readonly<Record<string, HeadBy>> = {
 };
 
 /** The pages whose head carries the module's two ways to bring a vendor in (Request vendor, Add vendor) when the layout draws it. */
-export const WITH_ACTIONS: readonly string[] = [`${V}/vendors`, `${V}/intake`];
+export const WITH_ACTIONS: readonly string[] = [`${V}/intake`];       // the Register draws its own buttons (vendors/_register/VendorRegister)
 
 const clean = (pathname: string): string => (pathname || '').split(/[?#]/)[0].replace(/\/+$/, '') || '/';
 const under = (path: string, href: string): boolean => path === href || path.startsWith(`${href}/`);

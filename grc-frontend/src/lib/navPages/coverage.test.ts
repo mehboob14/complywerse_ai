@@ -252,6 +252,7 @@ test('ownHeading is on exactly the pages that draw the kit head (PageHeader vari
     '/frameworks', '/frameworks/:id', '/frameworks/onboarding/:id', '/bcm/plans', '/bcm/drills', '/bcm/findings',
     '/dashboard',
     ...Object.keys(VENDOR_HEAD).filter((path) => VENDOR_HEAD[path] === 'layout'),     // vendor-risk/_lib/railModel.ts HEAD: the pages whose head the layout draws until their group rebuilds them
+    '/vendor-risk/vendors',                      // Vendors register: VendorRegister draws the head (vendor-register)
     '/controls', '/control-library', '/control-library/:id', '/control-library/review',
     '/assessments/register', '/assessments/types',
     '/issues/register', '/issues/actions',
@@ -281,7 +282,7 @@ test('breadcrumbFor gives a sane trail for an example URL of every module', () =
   assert.deepEqual(labels('/erm/analytics/dependencies'), ['Risk Management', 'Operational Risk', 'Advanced Analytics', 'Risk Dependencies']);
   assert.deepEqual(labels('/erm/appetite'), ['Risk Management', 'Operational Risk', 'Risk Appetite']);
   assert.deepEqual(labels('/erm/kris'), ['Governance', 'KRIs']);
-  assert.deepEqual(labels('/vendor-risk/assessments/5'), ['Third-Party Vendor Risk', 'Vendors', 'Vendor Assessments', 'Vendor assessment']);
+  assert.deepEqual(labels('/vendor-risk/assessments/5'), ['Third-Party Vendor Risk', 'Vendors', 'Vendor assessment']);
   assert.deepEqual(labels('/vendor-risk/policy'), ['Third-Party Vendor Risk', 'Roster', 'Policy']);
   assert.deepEqual(labels('/compliance/assessments/8'), ['Compliance Management', 'Overview', 'Assessment Control Center', 'Assessment']);
   assert.deepEqual(labels('/frameworks/3'), ['Compliance Management', 'Frameworks', 'Framework']);

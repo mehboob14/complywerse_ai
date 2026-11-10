@@ -198,6 +198,7 @@ export function vendorDef(ctx: VendorCtx): RegisterDef<VendorRow> {
     quick: [
       { key: 'tiering', label: 'Needs tiering', test: (v) => v.next_action?.code === 'not_tiered', title: 'Nobody has tiered the vendor yet' },
       { key: 'overdue', label: 'Reassessment overdue', test: (v) => v.next_action?.code === 'reassessment_overdue', title: 'The vendor or one of its engagements was due for reassessment before today' },
+      { key: 'lifecycle', label: 'In lifecycle', test: (v) => !!v.lifecycle, title: 'An assessment has started (what the old board showed first)' },
       { key: 'noowner', label: 'No owner', test: (v) => !v.owner && statusWord(v) !== 'retired', title: 'No business owner is named (a retired vendor is left out)' },
       ...(me != null ? [{ key: 'mine', label: 'Mine', test: (v: VendorRow) => v.owner_id === me, title: 'You are the business owner' }] : []),
     ],
@@ -214,7 +215,7 @@ export function vendorDef(ctx: VendorCtx): RegisterDef<VendorRow> {
     defaultSort: { key: 'risk', dir: 'asc' },
     board: {
       label: 'Vendors by lifecycle stage',
-      columns: [{ id: NOT_STARTED, label: 'Not started', test: (v: VendorRow) => !v.lifecycle }].concat(STAGES.map((s) => ({ id: s.key, label: stageShort(s.key), test: (v: VendorRow) => v.lifecycle?.stage === s.key }))),
+      columns: STAGES.map((s) => ({ id: s.key, label: stageShort(s.key), test: (v: VendorRow) => v.lifecycle?.stage === s.key })).concat({ id: NOT_STARTED, label: 'Not started', test: (v: VendorRow) => !v.lifecycle }),
     },
     pageSize: 25,
   };

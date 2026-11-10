@@ -42,7 +42,7 @@ test('a vendor is tiered when it has a score: a tier column on its own is a plac
 
 test('the quick chips count what the server decided and what the person is', () => {
   const { quickCounts } = evaluate(state());
-  assert.deepEqual(quickCounts, { all: 5, tiering: 1, overdue: 1, noowner: 1, mine: 2 });          // Mine = Ada's two; No owner = Bravo
+  assert.deepEqual(quickCounts, { all: 5, tiering: 1, overdue: 1, lifecycle: 3, noowner: 1, mine: 2 });          // Mine = Ada's two; No owner = Bravo
 });
 
 test('the facets and their words: next step, stage, personal data, classification (any case) and "none" for a vendor with no value', () => {
@@ -79,9 +79,9 @@ test('the default order is the server\'s "risk" order: worst tier first, a vendo
 
 test('the board has a column for every stage and one for a vendor with no lifecycle, and each vendor is in exactly one', () => {
   const cols = def.board!.columns;
-  assert.deepEqual(cols.map((c) => c.id), [NOT_STARTED, ...STAGES.map((s) => s.key)]);
+  assert.deepEqual(cols.map((c) => c.id), [...STAGES.map((s) => s.key), NOT_STARTED], 'the stages in the order of the lifecycle, then the vendors that have not started');
   for (const r of rows) assert.equal(cols.filter((c) => c.test(r)).length, 1, r.name);
-  assert.deepEqual(cols.map((c) => c.label).slice(0, 4), ['Not started', 'Intake', 'Tiering', 'Planning']);
+  assert.deepEqual(cols.map((c) => c.label).slice(0, 3), ['Intake', 'Tiering', 'Planning']);
 });
 
 test('the schema reads what the old register wrote, once migrated: the Overview\'s links keep landing on the same vendors', () => {

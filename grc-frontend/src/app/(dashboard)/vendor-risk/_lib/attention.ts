@@ -1,6 +1,6 @@
 // The one thing a vendor can be waiting on (backend routers/vendors.py NEXT_ACTIONS: the first that holds wins), in the register's own order, with the words and the colour family the
 // Overview and the Register give each. The words are lib/statuses/vendor.ts `vendorNextStep` (the tests pin them against the server's table); this file only lists them in order.
-// Pure, so `node --test` runs registerModel.test.ts against it.
+// Pure, so `node --test` runs vendorRegisterDef.test.ts and the Overview tests against it.
 import type { Tone } from '../../../../lib/status.ts';
 import { vendorNextStep } from '../../../../lib/statuses/vendor.ts';
 

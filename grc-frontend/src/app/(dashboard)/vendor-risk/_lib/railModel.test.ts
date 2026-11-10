@@ -2,7 +2,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { Building2 } from 'lucide-react';
@@ -53,8 +54,8 @@ test('only Intake and Findings carry a count, as in the reference product', () =
   assert.deepEqual(RAIL.filter((e) => e.count).map((e) => [e.key, e.count]), [['intake', 'intake_pending'], ['findings', 'open_findings']]);
 });
 
-test('the strip of a page is the tabs of its entry: none for the Overview, Intake, Findings and Questionnaires, the same four on every page of Vendors', () => {
-  assert.deepEqual(tabsOf('/vendor-risk/vendors/12').map((t) => t.name), ['Register', 'Assessments', 'Contracts', 'Check-ins']);
+test('the strip of a page is the tabs of its entry: none for the Overview, Intake, Findings and Questionnaires, the same three on every page of Vendors', () => {
+  assert.deepEqual(tabsOf('/vendor-risk/vendors/12').map((t) => t.name), ['Register', 'Contracts', 'Check-ins'], 'the Assessments board is the Board view of the Register now');
   assert.deepEqual(tabsOf('/vendor-risk/alerts?x=1').map((t) => t.name), ['Signals', 'Breach alerts', 'Security ratings', 'Technology', 'Concentration']);
   assert.deepEqual(tabsOf('/vendor-risk/settings/emails').map((t) => t.name), ['Roster', 'Policy', 'Settings']);
   for (const path of ['/vendor-risk', '/vendor-risk/attention', '/vendor-risk/intake', '/vendor-risk/findings', '/vendor-risk/questionnaires', '/risks']) assert.deepEqual(tabsOf(path), [], path);
@@ -72,14 +73,20 @@ const FILE = (route: string): string => {
   const rest = route.replace(/^\/vendor-risk/, '').replace(/^\//, '');
   return fileURLToPath(new URL(`../${rest ? `${rest}/` : ''}page.tsx`, import.meta.url));
 };
+/** The page and, when it keeps its head in a component of its own folder (a register's `_register/`), that component: where the head is drawn. */
+const SOURCE = (route: string): string => {
+  const page = FILE(route);
+  const dir = join(dirname(page), '_register');
+  return [page].concat(existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith('.tsx')).map((f) => join(dir, f)) : []).map((f) => readFileSync(f, 'utf8')).join(' ');
+};
 
 test('HEAD: a page that draws its head draws the page head of the kit; a page the layout draws has no heading of its own; every row is a real page', () => {
   for (const [path, by] of Object.entries(HEAD)) {
-    const source = readFileSync(FILE(path), 'utf8');
-    if (by === 'page') assert.match(source, /<PageHeader[\s\S]{0,80}variant="page"/, `${path} draws PageHeader variant="page"`);
+    const source = SOURCE(path);
+    if (by === 'page') assert.match(source, /<PageHeader[\s\S]{0,80}variant="page"/, `${path} draws PageHeader variant="page" (in the page or in its _register component)`);
     if (by === 'layout') assert.ok(!/<h1|<PageHeader|ModuleHeader/.test(source), `${path}: the layout draws its head, so the page draws none`);
   }
-  assert.equal(headOf('/vendor-risk/vendors?tier=high'), 'layout');
+  assert.equal(headOf('/vendor-risk/vendors?tier=high'), 'page');
   assert.equal(headOf('/vendor-risk'), 'page');
   assert.equal(headOf('/vendor-risk/vendors/12'), 'legacy');
   assert.equal(headOf('/vendor-risk/alerts'), 'legacy');
