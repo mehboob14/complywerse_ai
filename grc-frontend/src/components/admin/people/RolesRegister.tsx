@@ -69,6 +69,11 @@ export default function RolesRegister() {
           <div className="flex flex-col gap-[16px]"><PageHeader variant="page" title="Roles & permissions" /><SkeletonLines lines={6} label="Loading the role" /></div>
         ) : noList ? (
           <div className="flex flex-col gap-[16px]"><PageHeader variant="page" title="Roles & permissions" /><ErrorState title="Couldn't load the role" message={errorMessage(rolesQ.error)} onRetry={canRetry(rolesQ.error) ? () => { void rolesQ.refetch(); } : undefined} /></div>
+        ) : creating && !canCreate ? (
+          <div className="flex flex-col gap-[16px]">
+            <PageHeader variant="page" title="Roles & permissions" />
+            <NoAccessState title="You can't create roles" reason="Creating a role needs the right to create roles. Ask an administrator." action={<Button onClick={back}>Back to roles</Button>} />
+          </div>
         ) : !creating && !edited ? (
           <div className="flex flex-col gap-[16px]">
             <PageHeader variant="page" title="Roles & permissions" />

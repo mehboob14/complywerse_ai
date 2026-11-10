@@ -89,7 +89,7 @@ export default function UserAIUsagePage({ params }: { params: { id: string } }) 
       ) : (
         <>
           <div className="grid grid-cols-2 gap-[12px] md:grid-cols-4">
-            <StatTile label="Total tokens" value={data ? formatCount(data.summary.total_tokens) : null} loading={q.isLoading} info="Everything the AI read and wrote for this person in the period." />
+            <StatTile label="Total tokens" value={data ? formatCount(data.summary.total_tokens) : null} loading={q.isLoading} />
             <StatTile label="Input tokens" value={data ? formatCount(data.summary.prompt_tokens) : null} loading={q.isLoading} />
             <StatTile label="Output tokens" value={data ? formatCount(data.summary.completion_tokens) : null} loading={q.isLoading} />
             <StatTile label="AI uses" value={data ? formatCount(data.summary.calls) : null} loading={q.isLoading} />
