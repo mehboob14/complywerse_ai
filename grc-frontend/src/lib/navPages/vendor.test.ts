@@ -76,7 +76,9 @@ test('the sidebar the model describes has the eight entries, and every one is a 
 
 test('the Work panel offers the pages a person can open: no forward, no record', () => {
   const open = pagesForArea(AREA).map((e) => e.path);
-  for (const forward of [`${V}/procurement`, `${V}/shadow-saas`, `${V}/settings/alert-rules`]) assert.ok(!open.includes(forward), `${forward} is a forward`);
+  for (const forward of [`${V}/procurement`, `${V}/shadow-saas`, `${V}/settings/alert-rules`, `${V}/alerts`, `${V}/technology`, `${V}/concentration`]) assert.ok(!open.includes(forward), `${forward} is a forward`);
+  assert.equal(routeFor(`${V}/alerts`)?.aliasOf, `${V}/monitoring`);
+  assert.equal(routeFor(`${V}/technology`)?.aliasOf, `${V}/dependencies`);
   assert.equal(routeFor(`${V}/procurement`)?.aliasOf, V);
   assert.equal(routeFor(`${V}/settings/alert-rules`)?.aliasOf, `${V}/policy`);
   for (const record of [`${V}/vendors/:id`, `${V}/vendors/:id/summary`, `${V}/assessments/:id`, `${V}/intake/:id`, `${V}/comply-analysis/:id`, `${V}/reports/:id`, `${V}/questionnaires/:token/builder`]) {

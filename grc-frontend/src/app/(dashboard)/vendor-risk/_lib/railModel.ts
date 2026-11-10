@@ -46,12 +46,10 @@ export const RAIL: RailEntry[] = [
   { key: 'intake', name: 'Intake', href: `${V}/intake`, count: 'intake_pending', waiting: 'pending', keywords: ['Vendor requests', 'Request vendor'] },
   { key: 'findings', name: 'Findings', href: `${V}/findings`, count: 'open_findings', waiting: 'open', keywords: ['Vendor findings', 'Remediation'] },
   { key: 'questionnaires', name: 'Questionnaires', href: `${V}/questionnaires`, keywords: ['Questionnaire templates', 'Due diligence'] },
-  { key: 'monitoring', name: 'Monitoring', href: `${V}/monitoring`, tabs: [
-    { name: 'Signals', href: `${V}/monitoring`, title: 'Monitoring Signals', keywords: ['Monitoring', 'Continuous monitoring'] },
-    { name: 'Breach alerts', href: `${V}/alerts` },
-    { name: 'Security ratings', href: `${V}/security` },
-    { name: 'Technology', href: `${V}/technology`, keywords: ['Vendor technology', 'Technology stack'] },
-    { name: 'Concentration', href: `${V}/concentration`, keywords: ['Concentration risk', 'Subprocessors'] },
+  { key: 'monitoring', name: 'Monitoring', href: `${V}/monitoring`, also: [`${V}/alerts`, `${V}/technology`, `${V}/concentration`], tabs: [
+    { name: 'Alerts', href: `${V}/monitoring`, keywords: ['Signals', 'Monitoring signals', 'Breach alerts', 'Adverse media', 'Monitoring', 'Continuous monitoring'] },
+    { name: 'Security ratings', href: `${V}/security`, keywords: ['Outside-in', 'Supplier ratings'] },
+    { name: 'Dependencies', href: `${V}/dependencies`, keywords: ['Technology', 'Technology stack', 'Concentration', 'Concentration risk', 'Shared platforms', 'Subprocessors', 'Fourth parties'] },
   ] },
   { key: 'insights', name: 'Insights', href: `${V}/risk-360`, tabs: [
     { name: 'Risk 360°', href: `${V}/risk-360`, keywords: ['Risk 360', 'Insights'] },
@@ -84,6 +82,9 @@ export const HEAD: Readonly<Record<string, HeadBy>> = {
   [`${V}/intake`]: 'layout',
   [`${V}/findings`]: 'layout',
   [`${V}/questionnaires`]: 'layout',
+  [`${V}/monitoring`]: 'page',
+  [`${V}/security`]: 'page',
+  [`${V}/dependencies`]: 'page',
   [`${V}/roster`]: 'layout',
   [`${V}/policy`]: 'layout',
 };

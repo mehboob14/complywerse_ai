@@ -7,6 +7,7 @@
 
 import { useId, useState } from 'react';
 import { clsx } from 'clsx';
+import { formatDate } from '@/lib/format';
 
 export type Severity = 'critical' | 'high' | 'medium' | 'low';
 
@@ -62,34 +63,34 @@ export const everyDays = (d: number) =>
 export const SCAN_PROVIDER = 'Outside-in scan';
 export const SEVERITY_ORDER: Severity[] = ['critical', 'high', 'medium', 'low'];
 export const SEVERITY_CLS: Record<Severity, string> = {
-  critical: 'border-rose-600 bg-rose-600 text-white',
-  high: 'border-rose-200 bg-rose-50 text-rose-700',
-  medium: 'border-amber-200 bg-amber-50 text-amber-800',
-  low: 'border-slate-200 bg-slate-50 text-slate-600',
+  critical: 'border-ds-danger bg-ds-danger text-ds-on-danger',
+  high: 'border-ds-danger-border bg-ds-danger-soft text-ds-danger',
+  medium: 'border-ds-border bg-ds-warning-soft text-ds-warning',
+  low: 'border-ds-border bg-ds-surface-subtle text-ds-fg-muted',
 };
 
 type Tone = 'good' | 'warning' | 'critical';
 export const gradeTone = (grade?: string | null): Tone =>
   grade === 'A' || grade === 'B' ? 'good' : grade === 'C' ? 'warning' : 'critical';
 export const scoreTone = (score: number): Tone => (score >= 80 ? 'good' : score >= 60 ? 'warning' : 'critical');
-const FILL: Record<Tone, string> = { good: 'bg-emerald-600', warning: 'bg-amber-600', critical: 'bg-rose-600' };
-const TRACK: Record<Tone, string> = { good: 'bg-emerald-100', warning: 'bg-amber-100', critical: 'bg-rose-100' };
+const FILL: Record<Tone, string> = { good: 'bg-ds-success', warning: 'bg-ds-warning', critical: 'bg-ds-danger' };
+const TRACK: Record<Tone, string> = { good: 'bg-ds-success-soft', warning: 'bg-ds-warning-soft', critical: 'bg-ds-danger-soft' };
 const CHIP: Record<Tone, string> = {
-  good: 'border-emerald-200 bg-emerald-50 text-emerald-800',
-  warning: 'border-amber-200 bg-amber-50 text-amber-800',
-  critical: 'border-rose-200 bg-rose-50 text-rose-800',
+  good: 'border-ds-border bg-ds-success-soft text-ds-success',
+  warning: 'border-ds-border bg-ds-warning-soft text-ds-warning',
+  critical: 'border-ds-danger-border bg-ds-danger-soft text-ds-danger',
 };
 
 export function GradeBadge({ grade, size = 'sm' }: { grade: string | null | undefined; size?: 'sm' | 'lg' }) {
-  if (!grade) return <span className="text-xs text-slate-400">Not rated</span>;
+  if (!grade) return <span className="text-ds-label text-ds-fg-muted">Not rated</span>;
   if (size === 'lg') {
     return (
-      <span className={clsx('inline-flex h-14 w-14 items-center justify-center rounded-full text-2xl font-bold text-white', FILL[gradeTone(grade)])}
+      <span className={clsx('inline-flex h-[56px] w-[56px] items-center justify-center rounded-full text-[24px] font-[700] text-ds-on-primary', FILL[gradeTone(grade)])}
         aria-label={`Grade ${grade}`}>{grade}</span>
     );
   }
   return (
-    <span className={clsx('inline-flex h-6 min-w-[1.5rem] items-center justify-center rounded-md border px-1 text-xs font-semibold', CHIP[gradeTone(grade)])}
+    <span className={clsx('inline-flex h-[24px] min-w-[24px] items-center justify-center rounded-ds-control border px-[4px] text-ds-label font-[600]', CHIP[gradeTone(grade)])}
       aria-label={`Grade ${grade}`}>{grade}</span>
   );
 }
@@ -99,18 +100,18 @@ export function Meter({ label, value }: { label: string; value: number }) {
   const tone = scoreTone(value);
   return (
     <div>
-      <div className="mb-1 flex items-baseline justify-between gap-2 text-xs">
-        <span className="text-slate-600">{label}</span>
-        <span className="font-medium tabular-nums text-slate-800">{value}</span>
+      <div className="mb-[4px] flex items-baseline justify-between gap-[8px] text-ds-label">
+        <span className="text-ds-fg-muted">{label}</span>
+        <span className="font-[500] tabular-nums text-ds-fg">{value}</span>
       </div>
-      <div className={clsx('h-1.5 rounded-full', TRACK[tone])} role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={value} aria-label={label}>
-        <div className={clsx('h-1.5 rounded-full', FILL[tone])} style={{ width: `${Math.max(2, value)}%` }} />
+      <div className={clsx('h-[6px] rounded-full', TRACK[tone])} role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={value} aria-label={label}>
+        <div className={clsx('h-[6px] rounded-full', FILL[tone])} style={{ width: `${Math.max(2, value)}%` }} />
       </div>
     </div>
   );
 }
 
-const fmt = (d: string) => new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+const fmt = (d: string) => formatDate(d);
 
 /** Score over time: a recessive line, the latest point in the accent, a crosshair
  *  readout on hover or focus. The same values are listed elsewhere on the page. */
@@ -131,7 +132,7 @@ export function Sparkline({ points, width = 160, height = 40, label }: { points:
   return (
     <div className="relative inline-block">
       <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-labelledby={`${id}-t`} tabIndex={0}
-        className="overflow-visible rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-400"
+        className="overflow-visible rounded-ds-control focus-visible:outline-none focus-visible:shadow-ds-ring"
         onPointerMove={(e) => pick(e.clientX, e.currentTarget.getBoundingClientRect())} onPointerLeave={() => setAt(null)}
         onKeyDown={(e) => {
           if (e.key === 'ArrowLeft') setAt(Math.max(0, (at ?? last) - 1));
@@ -142,12 +143,12 @@ export function Sparkline({ points, width = 160, height = 40, label }: { points:
         <path d={path} fill="none" stroke="#94a3b8" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
         {at !== null && <line x1={x(at)} x2={x(at)} y1={pad / 2} y2={height - pad / 2} stroke="#cbd5e1" strokeWidth={1} />}
         <circle cx={x(shown)} cy={y(points[shown].score)} r={4} fill="currentColor" stroke="#ffffff" strokeWidth={2}
-          className="text-primary-600" />
+          className="text-ds-primary" />
       </svg>
       {at !== null && (
-        <div className="pointer-events-none absolute -top-9 z-10 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs text-white shadow"
+        <div className="pointer-events-none absolute -top-[36px] z-10 whitespace-nowrap rounded-ds-control bg-ds-fg px-[8px] py-[4px] text-ds-label text-ds-surface shadow-ds-pop"
           style={{ left: Math.min(Math.max(0, x(at) - 40), width - 80) }}>
-          <b className="font-semibold">{points[at].score}</b> <span className="text-slate-300">{fmt(points[at].at)}</span>
+          <b className="font-[600]">{points[at].score}</b> <span className="text-ds-border">{fmt(points[at].at)}</span>
         </div>
       )}
     </div>

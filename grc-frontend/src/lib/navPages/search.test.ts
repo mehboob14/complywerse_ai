@@ -87,7 +87,8 @@ test('the palette finds the pages by the names people use: acronyms, old names, 
   assert.ok(find('TPRM').includes('/vendor-risk'));
   assert.ok(find('sso').includes('/admin'), 'a section of the Administration page is a keyword of it');
   assert.ok(find('token usage').includes('/admin/ai-usage'));
-  assert.ok(find('breach alerts').includes('/vendor-risk/alerts'));
+  assert.ok(find('breach alerts').includes('/vendor-risk/monitoring'), 'the Breach alerts page is the Alerts register now; the old address is a forward');
+  assert.ok(find('concentration risk').includes('/vendor-risk/dependencies') && find('technology stack').includes('/vendor-risk/dependencies'));
   assert.ok(find('governance overview').includes('/governance'), 'every word somewhere in the name, groups and path');
   assert.ok(find('risk management appetite').includes('/erm/appetite'), 'a module name and a page name together');
   assert.ok(find('complychat').includes('/complychat'));
