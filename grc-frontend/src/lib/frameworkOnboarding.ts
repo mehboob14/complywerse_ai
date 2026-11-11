@@ -154,9 +154,60 @@ export type OnboardingState = 'not_started' | 'draft' | 'ready' | 'complete' | '
 export type UnderwayKind =
   | 'Running before onboarding existed' | 'Certified or attested outside the platform' | 'Regulator-mandated start' | 'Other';
 
+/**
+ * Framework version management (`backend/.../versioning.py`, design `docs/framework-version-management.md`): what an approved onboarding was settled against and
+ * what changed since. A change flags and asks; it never edits an answer, the approved snapshot, an assessment or evidence.
+ */
+export type VersionState = 'not_tracked' | 'current' | 'needs_review' | 'superseded';
+export type VersionOutcome = 'confirmed' | 'changes_needed' | 'start_new_version';
+export interface VersionReason { code: string; text: string }
+export interface VersionStaleAnswer { ref: string; step: string; step_label: string; label: string; answer: string; reasons: VersionReason[] }
+export interface VersionDecision {
+  ref: string;
+  step: string | null;
+  step_label: string | null;
+  label: string;
+  answer: string;
+  reasons: VersionReason[];
+  /** the questions this decision now asks or no longer asks */
+  affects: Array<{ ref: string; label: string; now: 'asked' | 'not asked'; answered: boolean }>;
+}
+export interface VersionNewQuestion { ref: string; step: string; step_label: string; label: string; level: 'required' | 'advised'; why: string }
+export interface VersionControl { reference: string; title: string }
+export interface VersionJourney { id: number; name: string; status: string; controls: number; affected: number; by_status: Record<string, number>; evidence_files: number }
+export interface VersionStatus {
+  state: VersionState;
+  tracking: { since: string | null; source: 'approval' | 'first_check' | 'review' | null; version: string | null; pending: boolean } | null;
+  now: { library_version: string | null; version: string | null; framework: string | null; retired: boolean } | null;
+  successor: { framework_id: number | null; name: string | null; version: string | null; onboarding_id: number | null } | null;
+  reasons: VersionReason[];
+  stale: { answers: VersionStaleAnswer[]; decisions: VersionDecision[]; new_questions: VersionNewQuestion[]; gate: Array<{ label: string; text: string }> };
+  controls: { added: number; removed: number; changed: number; sample: { added: VersionControl[]; removed: VersionControl[]; changed: VersionControl[] } };
+  impact: { journeys: VersionJourney[]; kept: { snapshots: number; evidence_files: number }; changed: boolean } | null;
+  counts: Partial<Record<'answers' | 'decisions' | 'new_questions' | 'new_required' | 'gate' | 'controls_added' | 'controls_removed' | 'controls_changed', number>>;
+  /** changes that never make an answer stale (a new advised question, a reworded option) */
+  minor: string[];
+  /** the server's name for this change; never shown */
+  change_id: string | null;
+  checked_at: string | null;
+  review_state: 'changes_needed' | 'migrated' | null;
+}
+/** What the register says of a row, from the last check (the onboarding's own page measures live). */
+export interface RegisterReview {
+  state: 'current' | 'needs_review' | 'superseded';
+  text: string | null;
+  /** the library replaced or retired the row this onboarding belongs to */
+  replaced?: boolean;
+  checked_at?: string | null;
+  pending?: boolean;
+  successor_onboarding_id?: number | null;
+}
+export interface VersionCheckResult { checked: number; started: number; needs_review: number; notified: number }
+
 export interface RegisterRow {
   uploaded_framework_id: number;
   name: string;
+  /** the version text the library row holds */
   version: string | null;
   slug: string | null;
   family: string;
@@ -168,11 +219,13 @@ export interface RegisterRow {
   progress: { done: number; total: number } | null;
   updated_at: string | null;
   underway: { kind: string | null; at: string | null; legacy: boolean } | null;
+  /** what the last version check found; null while the onboarding is a draft or not started (nothing is tracked yet) */
+  review?: RegisterReview | null;
 }
 export interface Register {
   frameworks: RegisterRow[];
-  counts: Record<OnboardingState, number>;
-  meta: { underway_kinds: UnderwayKind[]; min_underway_reason: number; min_reopen_reason: number };
+  counts: Record<OnboardingState, number> & { needs_review?: number };
+  meta: { underway_kinds: UnderwayKind[]; min_underway_reason: number; min_reopen_reason: number; version_checked_at?: string | null; min_review_note?: number };
 }
 
 export interface OnboardingEvent { kind: string; by: string | null; at: string | null; detail: Record<string, unknown> }
@@ -205,7 +258,12 @@ export interface OnboardingView {
   events: OnboardingEvent[];
   catalog_version: number;
   current_catalog_version: number;
+  /** the version of the framework the library holds for this onboarding, as the library writes it */
+  framework_version: string | null;
+  version: VersionStatus;
 }
+/** The answer to a version review: the reviewed onboarding's view, and for "start for the new version" the draft that was started and the answers that did not fit. */
+export type VersionReviewResult = OnboardingView & { started_onboarding_id?: number; not_carried?: Array<{ label: string; why: string }> };
 
 export interface GateDecision {
   allowed: boolean;
@@ -302,6 +360,10 @@ export const onboardingApi = {
   approve: async (id: number, note?: string): Promise<OnboardingView> => (await apiClient.post(`${O}/${id}/approve`, { note: note || null })).data,
   reopen: async (id: number, reason: string): Promise<OnboardingView> => (await apiClient.post(`${O}/${id}/reopen`, { reason })).data,
   underway: async (id: number, kind: UnderwayKind, reason: string): Promise<OnboardingView> => (await apiClient.post(`${O}/${id}/underway`, { kind, reason })).data,
+  /** measures every settled onboarding against what it was settled on and tells the program owners (needs the right to edit frameworks) */
+  versionCheck: async (): Promise<VersionCheckResult> => (await apiClient.post(`${O}/version-check`)).data,
+  /** a person's decision on a version change, with a note of at least `meta.min_review_note` characters; each outcome needs its own right (the server decides) */
+  versionReview: async (id: number, outcome: VersionOutcome, note: string): Promise<VersionReviewResult> => (await apiClient.post(`${O}/${id}/version-review`, { outcome, note })).data,
 };
 
 /** Query keys, so every screen that shows onboarding state reads again after a change. */

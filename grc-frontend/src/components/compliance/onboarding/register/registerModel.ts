@@ -7,8 +7,18 @@ import type { OnboardingState, RegisterRow } from '@/lib/frameworkOnboarding';
 import type { Tone } from '@/lib/status';
 
 export const STATE_ORDER: readonly OnboardingState[] = ['not_started', 'draft', 'ready', 'complete', 'underway'];
-export type StateFilter = 'all' | OnboardingState;
-export const STATE_FILTERS: readonly StateFilter[] = ['all', ...STATE_ORDER];
+/** `needs_review` is not a state: it keeps the rows whose framework changed since they were approved (the last version check). */
+export type StateFilter = 'all' | OnboardingState | 'needs_review';
+export const STATE_FILTERS: readonly StateFilter[] = ['all', ...STATE_ORDER, 'needs_review'];
+
+/** The word on each quick filter (the same words as the state pills; this file reads no value from the api module, so the node tests can load it). */
+export const FILTER_LABEL: Record<StateFilter, string> = {
+  all: 'All', not_started: 'Not started', draft: 'Draft', ready: 'Ready', complete: 'Complete', underway: 'Underway', needs_review: 'Needs review',
+};
+
+/** The quick filters to draw: every state, and "Needs review" only when some row needs it (or it is the one chosen, so a link to it never hides its own chip). */
+export const visibleFilters = (counts: Record<StateFilter, number>, current: StateFilter): StateFilter[] =>
+  STATE_FILTERS.filter((s) => s !== 'needs_review' || counts.needs_review > 0 || current === 'needs_review');
 
 /** The tone of each state's pill (the word is always drawn as well). */
 export const STATE_TONE: Record<OnboardingState, Tone> = {
@@ -23,14 +33,18 @@ const matchesText = (row: RegisterRow, q: string): boolean =>
 /** The rows that pass the filter. `family` is a family key ('' for all). */
 export function filterRows(rows: readonly RegisterRow[], f: RegisterFilter): RegisterRow[] {
   const q = f.q.trim().toLowerCase();
-  return rows.filter((r) => (f.state === 'all' || r.state === f.state) && (!f.family || r.family === f.family) && matchesText(r, q));
+  const stateOk = (r: RegisterRow): boolean => (f.state === 'all' || (f.state === 'needs_review' ? r.review?.state === 'needs_review' : r.state === f.state));
+  return rows.filter((r) => stateOk(r) && (!f.family || r.family === f.family) && matchesText(r, q));
 }
 
 /** How many rows each quick filter would show, given the family and the text (so the number on a chip is what pressing it shows). */
 export function countsOf(rows: readonly RegisterRow[], f: Pick<RegisterFilter, 'family' | 'q'>): Record<StateFilter, number> {
   const base = filterRows(rows, { ...f, state: 'all' });
-  const out: Record<StateFilter, number> = { all: base.length, not_started: 0, draft: 0, ready: 0, complete: 0, underway: 0 };
-  for (const r of base) out[r.state] += 1;
+  const out: Record<StateFilter, number> = { all: base.length, not_started: 0, draft: 0, ready: 0, complete: 0, underway: 0, needs_review: 0 };
+  for (const r of base) {
+    out[r.state] += 1;
+    if (r.review?.state === 'needs_review') out.needs_review += 1;
+  }
   return out;
 }
 
