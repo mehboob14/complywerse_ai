@@ -18,7 +18,7 @@ test('the Folders view is the same list: the same rows one step under their fold
   // a folder's documents sit one step under its arrow, level with a folder inside it: a row's own cells are one step right of a folder header at the same depth
   assert.ok(items.includes('recordRows(p.rows, node.depth + 1, i.toggleRow)') && !items.includes('recordRows(p.rows, node.depth + 2'));
   assert.ok(items.includes("kind: 'group'") && items.includes('<FolderHeadRow') && items.includes('<ShowMoreRow'));
-  assert.ok(workspace.includes('{!inFolders && ('));                                               // the pager is the list's; folders have "Show N more"
+  assert.ok(workspace.includes('{!inFolders && !grouped && ('));                                               // the pager is the list's; folders have "Show N more"
 });
 
 test('a folder header is a real button that says whether it is open and what it controls; its tick box is not a click on the row', () => {

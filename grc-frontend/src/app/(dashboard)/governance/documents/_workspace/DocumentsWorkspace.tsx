@@ -47,7 +47,7 @@ import { useDepartmentNames, useFrameworkInfo } from './lib';
 import { coverageFromRows, fetchAttention, fetchCoverage, fetchLibrary, bulkArchive, bulkAssignOwner, bulkPublish, bulkSetReviewDate, moveDocument, restoreDocument } from './api';
 import { ARCHIVE_LINE, libraryCounts, unlessArchivedAsked } from './archive';
 import { creation, departmentScopes, departmentPaths } from './library';
-import { LIBRARY_SCHEMA, filtersPatch, openPatch, pageOf, statePatch, viewPatch, type LibraryAddress } from './libraryAddress';
+import { LIBRARY_SCHEMA, filtersPatch, groupPatch, openPatch, pageOf, statePatch, viewPatch, type LibraryAddress } from './libraryAddress';
 import { groupDocuments, statusesOfColumn } from './libraryBoard';
 import {
   FACET_TITLE, OPEN_AT_FIRST, RAIL_ORDER, SEARCHABLE, chosenOf, departmentsAbove, indexDocuments, orderedOptions, railOptions, ruleOf,
@@ -58,9 +58,18 @@ import {
   showMoreStep, allFolders, type FoldChange, type FoldView, type MoveTarget,
 } from './libraryFolders';
 import { caretLabel, folderItems, recordRows } from './libraryItems';
+import { CalendarView } from './CalendarView';
+import { GroupMenu } from './GroupMenu';
+import { GroupsToolbar, groupedItems } from './GroupedRows';
+import { NeedsYou } from './NeedsYou';
+import { TrackerView } from './TrackerView';
+import { buildCalendar, calendarShowAll } from './libraryCalendar';
+import { GROUP_LABEL, NO_FOLD, boardByGroup, boardSubline, flipGroup, groupDocs, groupIsOpen, groupedOrder, setAllGroups, showAllByColumn, type GroupFold } from './libraryGroups';
+import { peopleOf } from './libraryTracker';
+import { WORKSPACE_VIEWS, activeView as findActiveView, viewLook } from './libraryViews';
 import {
-  ATTENTION_LABEL, BUILT_IN_VIEWS, NO_FILTERS, SORT_KEYS, attentionDepartment, exportColumnsFor, isFiltering, nextSort, nextStatuses, sortDocs, toCsv, viewMatching,
-  type FacetKey, type Filters, type LibraryViewId, type MatchContext, type SavedView, type Sort, type SortKey,
+  ATTENTION_LABEL, BUILT_IN_VIEWS, NO_FILTERS, SORT_KEYS, attentionDepartment, exportColumnsFor, isFiltering, nextSort, nextStatuses, sortDocs, toCsv,
+  type FacetKey, type Filters, type GroupKey, type LibraryViewId, type MatchContext, type SavedView, type Sort, type SortKey,
 } from './libraryModel';
 import { csvName, exportWords, headCount, isCut, loadedNotice, missingOpen, noMatch, pagerNoun } from './libraryNumbers';
 import {
@@ -97,7 +106,7 @@ const SORT_LABEL: Record<SortKey, string> = {
 };
 /** The quick views in the chip row, in order, with the short words a chip has room for; every other built-in view is in the Views menu. */
 const QUICK: [string, string][] = [
-  ['all', 'All'], ['mine', 'Mine'], ['waiting', WAITING_LABEL], ['overdue', 'Review overdue'], ['drafts', 'Drafts & in review'], ['in-force', 'In force'], ['no-owner', 'No owner'], ['archived', 'Archived'],
+  ['all', 'All'], ['mine', 'Mine'], ['waiting', WAITING_LABEL], ['overdue', 'Review overdue'], ['drafts', 'Drafts & in review'], ['in-force', 'In force'], ['framework-coverage', 'Framework coverage'], ['acks-outstanding', 'Acknowledgements'], ['review-calendar', 'Review calendar'], ['no-owner', 'No owner'], ['archived', 'Archived'],
 ];
 const BULK_ICON = { publish: Send, 'assign-owner': UserPlus, 'set-review': CalendarClock, archive: Archive, restore: ArchiveRestore } as const;
 const NO_KEYS: ReadonlySet<string> = new Set<string>();
@@ -163,6 +172,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   const { filters, sort } = page.state;
   const openId = page.openId;
   const viewParam = page.view;
+  const groupParam = page.group;
   const setFilters = useCallback((next: Filters) => setAddress(filtersPatch(next)), [setAddress]);
   const setSort = useCallback((next: Sort) => setAddress({ sort: next }), [setAddress]);
   const setOpenId = useCallback((id: number | null) => setAddress(openPatch(id)), [setAddress]);
@@ -175,11 +185,12 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
     setSaved(loadViews(browserStore(), viewsKey(currentUserId)));
   }, [currentUserId]);
   const changePrefs = (next: Prefs) => { setPrefs(next); savePrefs(browserStore(), prefsKey(currentUserId), next); };
-  const views = useMemo(() => [...BUILT_IN_VIEWS, ...saved], [saved]);
+  const views = useMemo(() => [...BUILT_IN_VIEWS, ...WORKSPACE_VIEWS, ...saved], [saved]);
   const [folderPrefs, setFolderPrefs] = useState<FolderPrefs | null>(null);
   useEffect(() => { setFolderPrefs(loadFolderPrefs(browserStore(), foldersKey(currentUserId))); }, [currentUserId]);
   const changeFolderPrefs = (next: FolderPrefs) => { setFolderPrefs(next); saveFolderPrefs(browserStore(), foldersKey(currentUserId), next); };
-  const changeView = (next: LibraryViewId) => { setAddress(viewPatch(next)); changeFolderPrefs({ view: next, open: folderPrefs?.open ?? {} }); };
+  const changeView = (next: LibraryViewId) => { setAddress(viewPatch(next)); changeFolderPrefs({ ...(folderPrefs ?? {}), view: next, open: folderPrefs?.open ?? {} }); };
+  const changeGroup = (next: GroupKey) => { setAddress(groupPatch(next)); changeFolderPrefs({ ...(folderPrefs ?? {}), view: folderPrefs?.view ?? null, open: folderPrefs?.open ?? {}, group: next }); };
 
   // ── the data: the whole library in one lean request ──
   const { data: listData, isLoading: docsLoading, isError: listFailed, error: listError, refetch } = useQuery({
@@ -211,8 +222,10 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
     staleTime: 5 * 60 * 1000,
   });
   // what waits for this person: the inbox the top bar already asks for (the same queries), never a count of nobody while it has not answered
-  const { inbox } = useInbox();
+  // the sent requests too: the Tracker names who a request the person sent is waiting on (same query key as Needs my action, not polled)
+  const { inbox, refetch: refetchInbox, fetchingSource } = useInbox({ includeSent: true });
   const waiting = useMemo(() => waitingForMe(inbox), [inbox]);
+  const people = useMemo(() => peopleOf(inbox), [inbox]);
 
   // ── names the rules and the cells need ──
   const departmentName = useDepartmentNames();
@@ -239,6 +252,10 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   const deciding = viewParam == null && (folderPrefs == null || (folderPrefs.view == null && departmentsQ.isLoading));
   const inFolders = view === 'folders';
   const inBoard = view === 'board';
+  const inTracker = view === 'tracker';
+  const inCalendar = view === 'calendar';
+  const group: GroupKey = groupParam ?? folderPrefs?.group ?? 'none';
+  const grouped = view === 'table' && group !== 'none';
   const waitingForData = docsLoading || deciding || (inFolders && departmentsQ.isLoading) || attnWaiting;
   const foldersBlocked = inFolders && !waitingForData && (departmentsQ.isError || noDepartments);
   const targets = useMemo(() => moveTargets(departments, levelNames), [departments, levelNames]);
@@ -285,8 +302,13 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
     for (const v of views) out[v.id] = countMatching(index, chosenOf(v.state.filters), ruleOf(v.state.filters, matchCtx));
     return out;
   }, [views, index, matchCtx]);
-  const activeView = viewMatching(views, page.state);
-  const applyView = (v: SavedView) => setAddress(statePatch(v.state));
+  const activeView = findActiveView(views, page.state, view, group);
+  const applyView = (v: SavedView) => {
+    // a view is its filters, and where it has them its layout and grouping (the older views fit any layout and leave the grouping off)
+    const look = viewLook(v);
+    setAddress({ ...statePatch(v.state), ...(look.layout ? viewPatch(look.layout) : {}), ...groupPatch(look.group ?? null) });
+    if (look.layout) changeFolderPrefs({ ...(folderPrefs ?? {}), view: look.layout, open: folderPrefs?.open ?? {}, group: look.group ?? null });
+  };
   const waitingNumber = waitingCount(waiting, allDocs);
   const quick: FilterChip[] = [
     ...(!activeView && filtering ? [{ key: 'custom', label: 'Custom filters', count: filteredDocs.length, active: true, title: 'Custom filters: press to clear them' }] : []),
@@ -305,7 +327,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   // ── saved views ──
   const [naming, setNaming] = useState(false);
   const saveView = (name: string) => {
-    const next = [...saved, { id: newViewId(saved), name, state: page.state }];
+    const next = [...saved, { id: newViewId(saved), name, state: page.state, layout: view, group }];
     setSaved(next);
     saveViews(browserStore(), viewsKey(currentUserId), next);
     notify.success(`“${name}” is in your views.`, { title: 'View saved' });
@@ -319,6 +341,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   };
   const viewItems: MenuItem[] = [
     ...BUILT_IN_VIEWS.map((v, i) => ({ key: `v:${v.id}`, label: v.name, checked: activeView?.id === v.id, radio: true, trailing: String(viewCounts[v.id] ?? 0), section: i === 0 ? 'Views' : undefined, onSelect: () => applyView(v) })),
+    ...WORKSPACE_VIEWS.map((v, i) => ({ key: `v:${v.id}`, label: v.name, checked: activeView?.id === v.id, radio: true, trailing: String(viewCounts[v.id] ?? 0), section: i === 0 ? 'Compliance' : undefined, onSelect: () => applyView(v) })),
     ...saved.map((v, i) => ({ key: `v:${v.id}`, label: v.name, checked: activeView?.id === v.id, radio: true, trailing: String(viewCounts[v.id] ?? 0), section: i === 0 ? 'Saved by you' : undefined, onSelect: () => applyView(v) })),
     { key: 'save', label: 'Save current filters as a view…', section: 'Manage', disabled: !filtering || !!activeView, reason: !filtering ? 'Filter or search first' : activeView ? 'This is already a view' : undefined, onSelect: () => setNaming(true) },
     ...saved.map((v) => ({ key: `del:${v.id}`, label: `Delete “${truncate(v.name, 40).text}”…`, danger: true, onSelect: () => { void deleteView(v); } })),
@@ -336,13 +359,21 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   const at = useMemo(() => new Map(entries.map((e) => [e.doc.id, e])), [entries]);
   const top = useMemo(() => roots.map((n) => n.doc), [roots]);
   const parents = useMemo(() => entries.filter((e) => e.children.length > 0).map((e) => e.doc.id), [entries]);
-  const ordered = useMemo(() => (folders ? displayOrder(folders) : sortDocs(filteredDocs, sort, lookupsForSort)), [folders, filteredDocs, sort, lookupsForSort]);
+  // grouped (the List by department, owner, framework ...): each group with its figures; a document under several frameworks is a full row in the first and a slim line in the others
+  const groupLookups = useMemo(() => ({ ...lookups, counts }), [lookups, counts]);
+  const docGroups = useMemo(() => (grouped ? groupDocs(sortDocs(filteredDocs, sort, lookupsForSort), group, groupLookups, now) : []), [grouped, filteredDocs, sort, lookupsForSort, group, groupLookups, now]);
+  const ordered = useMemo(
+    () => (folders ? displayOrder(folders) : grouped ? groupedOrder(docGroups) : sortDocs(filteredDocs, sort, lookupsForSort)),
+    [folders, grouped, docGroups, filteredDocs, sort, lookupsForSort],
+  );
+  const calendar = useMemo(() => (inCalendar ? buildCalendar(filteredDocs, now) : null), [inCalendar, filteredDocs, now]);
 
   // what the person closed, paged to and asked for belongs to one set of matches, one order and one page size: when they change, they start again
   const [fold, setFold] = useState<Fold>(NOTHING_OPEN);
   const [pageNo, setPageNo] = useState(1);
   const [shut, setShut] = useState<ReadonlySet<string>>(NO_KEYS);
   const [extra, setExtra] = useState<Record<string, number>>({});
+  const [gfold, setGfold] = useState<GroupFold>(NO_FOLD);
   const viewKey = `${matchKey}|${sort.key}:${sort.dir}|${prefs.pageSize}`;
   const [seen, setSeen] = useState({ match: matchKey, view: viewKey });
   if (seen.view !== viewKey) {
@@ -359,7 +390,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
 
   // ── the folders (Folders view) ──
   const foldView: FoldView = { saved: folderPrefs?.open ?? {}, shut, filtering, docCount: filteredDocs.length };
-  const applyFold = (change: FoldChange) => { if (filtering) setShut(change.shut); else changeFolderPrefs({ view: folderPrefs?.view ?? null, open: change.saved }); };
+  const applyFold = (change: FoldChange) => { if (filtering) setShut(change.shut); else changeFolderPrefs({ ...(folderPrefs ?? {}), view: folderPrefs?.view ?? null, open: change.saved }); };
   const everyFolder = folders ? allFolders(folders) : [];
   const foldable = everyFolder.filter(expandable);
   const allFoldersOpen = foldable.every((n) => folderIsOpen(foldView, n.key));
@@ -380,7 +411,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   const ticked = actionableIds(selection.selected, filteredDocs.map((doc) => ({ doc, match: true })));
 
   const listItems = useMemo((): { items: RecordItem<GovDoc>[]; drawn: number[] } => {
-    if (inBoard || waitingForData) return { items: [], drawn: [] };
+    if (inBoard || inTracker || inCalendar || waitingForData) return { items: [], drawn: [] };
     if (folders) {
       const built = folderItems({
         folders, view: foldView, extra, uid, selectable, selected: selection.selected,
@@ -393,9 +424,21 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
       });
       return { items: built.items, drawn: built.rows.map((r) => r.doc.id) };
     }
+    if (grouped) {
+      const open = (g: { key: string }) => groupIsOpen(gfold, g.key, filteredDocs.length);
+      const built = groupedItems({
+        groups: docGroups, by: group, isOpen: open, extra, fold, filtering, toggleRow, selected: selection.selected, selectable,
+        onTick: (ids) => selection.set((s) => toggleAll(s, ids)),
+        onFlip: (g) => setGfold((f) => flipGroup(f, g.key, filteredDocs.length)),
+        onMore: (g, step) => setExtra((e) => ({ ...e, [g.key]: (e[g.key] ?? 0) + step })),
+        onFewer: (g) => setExtra((e) => { const next = { ...e }; delete next[g.key]; return next; }),
+        onOpen: (d) => setOpenId(d.id),
+      });
+      return { items: built.items, drawn: built.rows.map((r) => r.doc.id) };
+    }
     return { items: recordRows(pageRows, 0, toggleRow), drawn: pageRows.map((r) => r.doc.id) };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inBoard, waitingForData, folders, foldView.saved, folderPrefs, shut, filtering, filteredDocs.length, extra, uid, selectable, selection.selected, at, fold, pageRows]);
+  }, [inBoard, inTracker, inCalendar, grouped, docGroups, group, gfold, waitingForData, folders, foldView.saved, folderPrefs, shut, filtering, filteredDocs.length, extra, uid, selectable, selection.selected, at, fold, pageRows]);
   const pageIds = listItems.items.filter((i) => i.kind === 'row' && !i.context).map((i) => (i as { id: number }).id);
 
   // ── handlers ──
@@ -570,7 +613,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
     onMove: (dir) => setCursor((c) => moveCursor(listItems.drawn, c, dir)),
     onOpen: () => { if (cursor != null) setOpenId(cursor); },
     onEscape: () => { if (selection.selected.size > 0) selection.clear(); },
-  }, !inBoard);
+  }, !inBoard && !inTracker && !inCalendar);
   useEffect(() => {
     if (cursor != null) document.querySelector(`[data-record-row="${cursor}"]`)?.scrollIntoView({ block: 'nearest' });
   }, [cursor]);
@@ -643,22 +686,42 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
       return <ErrorState title={`Couldn't load “${ATTENTION_LABEL[attnKind]}”`} message={errorMessage(attn.error)} onRetry={canRetry(attn.error) ? () => { void attn.refetch(); } : undefined} />;
     }
     if (filteredDocs.length === 0) return <div className="rounded-ds-card border border-ds-border bg-ds-surface">{empty}</div>;
+    if (inTracker) {
+      return <TrackerView docs={ordered} lookups={lookups} now={now} people={people} activeId={openId} onOpen={(d) => setOpenId(d.id)} hrefOf={docHref} />;
+    }
+    if (inCalendar && calendar) {
+      return (
+        <div className="rounded-ds-card border border-ds-border bg-ds-surface">
+          <CalendarView
+            calendar={calendar}
+            now={now}
+            activeId={openId}
+            onOpen={(d) => setOpenId(d.id)}
+            onShowAll={(c) => { const s = calendarShowAll(c); if ('review' in s) setFilters({ ...filters, review: s.review }); else changeGroup('review'); changeView('table'); }}
+          />
+        </div>
+      );
+    }
     if (inBoard) {
-      const board = groupDocuments(ordered, archivedList);
+      const board = group === 'none' ? groupDocuments(ordered, archivedList) : boardByGroup(ordered, group, groupLookups, now);
       return (
         <div className="rounded-ds-card border border-ds-border bg-ds-surface">
           <BoardColumns
-            label="Documents by status"
+            label={group === 'none' ? 'Documents by status' : `Documents by ${GROUP_LABEL[group].toLowerCase()}`}
             columns={board}
             getId={(d: GovDoc) => d.id}
             activeId={openId}
             cardLabel={(d: GovDoc) => d.title}
             onOpen={(d: GovDoc) => setOpenId(d.id)}
-            onShowAll={(column) => { setFilters({ ...filters, statuses: statusesOfColumn(column, filteredDocs) }); changeView('table'); }}
+            onShowAll={(column) => {
+              if (group === 'none') setFilters({ ...filters, statuses: statusesOfColumn(column, filteredDocs) });
+              else { const p = showAllByColumn(group, column); if (p) setFilters({ ...filters, ...p }); }
+              changeView('table');
+            }}
             renderCard={(d: GovDoc) => (
               <>
                 <span dir="auto" className="line-clamp-2 text-ds-body font-[600] text-ds-fg [overflow-wrap:anywhere]">{d.title}</span>
-                <span className="truncate text-ds-label text-ds-fg-muted">{[d.document_code, d.owner_name || 'Unassigned'].filter(Boolean).join(' · ')}</span>
+                <span className="truncate text-ds-label text-ds-fg-muted">{group === 'none' ? [d.document_code, d.owner_name || 'Unassigned'].filter(Boolean).join(' · ') : boardSubline(d, group, lookups)}</span>
               </>
             )}
           />
@@ -680,8 +743,19 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
             total={serverTotal}
           />
         ) : null}
+        {grouped ? (
+          <GroupsToolbar
+            by={group}
+            allOpen={docGroups.every((g) => groupIsOpen(gfold, g.key, filteredDocs.length))}
+            onToggleAll={() => setGfold(setAllGroups(docGroups.map((g) => g.key), !docGroups.every((g) => groupIsOpen(gfold, g.key, filteredDocs.length))))}
+            groups={docGroups.length}
+            documents={filteredDocs.length}
+            loaded={allDocs.length}
+            total={serverTotal}
+          />
+        ) : null}
         <RecordTable
-          caption={inFolders ? 'Documents by department' : 'Documents'}
+          caption={inFolders ? 'Documents by department' : grouped ? `Documents by ${GROUP_LABEL[group].toLowerCase()}` : 'Documents'}
           columns={columns}
           items={listItems.items}
           sort={sortState}
@@ -694,7 +768,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
           card={(row) => <DocumentCard row={row} env={env} />}
           compact={prefs.density === 'compact'}
         />
-        {!inFolders && (
+        {!inFolders && !grouped && (
           <Pager
             className="mt-[8px]"
             page={pageClamped}
@@ -710,7 +784,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
     );
   })();
 
-  const viewOptions = [{ value: 'table', label: 'List' }, { value: 'folders', label: 'Folders' }, { value: 'board', label: 'Board' }];
+  const viewOptions = [{ value: 'table', label: 'List' }, { value: 'folders', label: 'Folders' }, { value: 'board', label: 'Board' }, { value: 'calendar', label: 'Calendar' }, { value: 'tracker', label: 'Tracker' }];
   const head = (fit: ExplorerFit) => (
     <PageHeader
       variant="page"
@@ -745,6 +819,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
               // the list was read once and a later read failed (after a change, say): what is on screen is the last answer, and it says so
               <ErrorState compact title="Couldn't refresh the documents" message={`${errorMessage(listError)} What is shown may be out of date.`} onRetry={canRetry(listError) ? () => { void refetch(); } : undefined} className="rounded-ds-card border border-ds-danger-border bg-ds-danger-soft" />
             )}
+            {inTracker && <NeedsYou inbox={inbox} now={now} onRetry={(s) => refetchInbox(s)} fetching={fetchingSource} link={(href) => withFrom(href, here)} />}
             {notice && <ListNotice title={notice.title}>{notice.detail}</ListNotice>}
             {waitNote && <ListNotice title={waitNote.title}>{waitNote.detail}</ListNotice>}
             {missing && (
@@ -769,12 +844,13 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
         views={{ label: 'Library view', name: `${uid}-view`, options: viewOptions, value: view, onChange: (v) => changeView(v as LibraryViewId) }}
         actions={(fit) => (
           <>
-            {!inBoard && !inFolders && parents.length > 0 && !loading && !fit.compact && (
+            {!inBoard && !inFolders && !inTracker && !inCalendar && !grouped && parents.length > 0 && !loading && !fit.compact && (
               <Button variant="ghost" onClick={() => setFold(allParentsOpen ? collapseAll(parents) : expandAll(fold))} leftIcon={allParentsOpen ? <ChevronsDownUp aria-hidden /> : <ChevronsUpDown aria-hidden />}>
                 <span className={fit.tight ? 'sr-only' : undefined}>{allParentsOpen ? 'Collapse all' : 'Expand all'}</span>
               </Button>
             )}
-            {!inBoard && <Menu label="Sort" items={sortItems} />}
+            {!inBoard && !inCalendar && <Menu label="Sort" items={sortItems} />}
+            {(view === 'table' || view === 'board') && <GroupMenu value={group} onChange={changeGroup} />}
             <Button leftIcon={<Download aria-hidden />} onClick={exportCsv} disabled={filteredDocs.length === 0 || loading} title={words.title}>
               <span className={fit.tight ? 'sr-only' : undefined}>{words.label}</span>
             </Button>

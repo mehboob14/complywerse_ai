@@ -62,7 +62,7 @@ export function ReviewDate({ doc, now, compact = false }: { doc: Pick<LibDoc, 's
   const s = reviewState(doc, now);
   const tone = reviewTone(s.bucket);
   if (!s.due) {
-    return s.label ? <span className={`text-ds-body ${tone.text}`} title={s.long}>{s.label}</span> : <span className="text-ds-body text-ds-fg-muted" aria-label="No review date"><span aria-hidden>{EMPTY}</span></span>;
+    return s.label ? <span className={`text-ds-body ${tone.text}`} title={s.long}>{s.label}</span> : <span className="text-ds-body text-ds-fg-muted"><span aria-hidden>{EMPTY}</span><span className="sr-only">No review date</span></span>;
   }
   const day = formatDate(doc.next_review_date, { calendar: true });
   const label = s.long ? `${day}, ${s.long}` : day;

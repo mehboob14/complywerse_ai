@@ -1,7 +1,7 @@
 // What the library remembers for one person on one browser: which columns, how dense, how many rows a page, and the views they saved.
 // A convenience, never state that matters: storage can be missing, blocked or full, so every read and write is guarded and the page
 // works the same without it. Pure (the store is passed in), so `node --test` runs libraryPrefs.test.ts against it.
-import { DEFAULT_STATE, fromParams, toParams, type LibraryViewId, type SavedView } from './libraryModel.ts';
+import { DEFAULT_STATE, GROUP_KEYS, LIBRARY_VIEWS, fromParams, toParams, type GroupKey, type LibraryViewId, type SavedView } from './libraryModel.ts';
 
 export type Density = 'comfortable' | 'compact';
 export interface Prefs { hidden: string[]; density: Density; pageSize: number }
@@ -69,17 +69,19 @@ export function loadViews(store: KeyValueStore | null, key: string): SavedView[]
   for (const v of raw) {
     if (!v || typeof v.id !== 'string' || typeof v.name !== 'string' || !v.name.trim()) continue;
     const params = typeof v.query === 'string' ? new URLSearchParams(v.query) : toParams(DEFAULT_STATE);
-    out.push({ id: v.id, name: v.name.trim(), state: fromParams(params) });
+    const layout = (LIBRARY_VIEWS as readonly string[]).includes(v.layout) ? (v.layout as LibraryViewId) : undefined;
+    const group = (GROUP_KEYS as readonly string[]).includes(v.group) ? (v.group as GroupKey) : undefined;
+    out.push({ id: v.id, name: v.name.trim(), state: fromParams(params), ...(layout ? { layout } : {}), ...(group ? { group } : {}) });
   }
   return out;
 }
 export function saveViews(store: KeyValueStore | null, key: string, views: readonly SavedView[]): void {
-  write(store, key, views.filter((v) => !v.builtIn).map((v) => ({ id: v.id, name: v.name, query: toParams(v.state).toString() })));
+  write(store, key, views.filter((v) => !v.builtIn).map((v) => ({ id: v.id, name: v.name, query: toParams(v.state).toString(), ...(v.layout ? { layout: v.layout } : {}), ...(v.group ? { group: v.group } : {}) })));
 }
 
 /** What the Folders view keeps for a person: the layout they chose (null: not chosen, so the default applies) and which folders they
  *  left open (true) or closed (false), by folder key. A separate key from the columns: it holds nothing the table needs. */
-export interface FolderPrefs { view: LibraryViewId | null; open: Record<string, boolean> }
+export interface FolderPrefs { view: LibraryViewId | null; open: Record<string, boolean>; group?: GroupKey | null }
 const FOLDERS_KEY = 'gov-docs-library:folders:v1';
 export const foldersKey = (userId: number | null | undefined) => `${FOLDERS_KEY}:${userId ?? 'anon'}`;
 /** More folders than this are never kept (a deleted department's key would otherwise stay for ever). */
@@ -87,9 +89,10 @@ const FOLDERS_KEPT = 500;
 
 export function loadFolderPrefs(store: KeyValueStore | null, key: string): FolderPrefs {
   const out: FolderPrefs = { view: null, open: {} };
-  const raw = read(store, key) as { view?: unknown; open?: unknown } | null;
+  const raw = read(store, key) as { view?: unknown; open?: unknown; group?: unknown } | null;
   if (!raw || typeof raw !== 'object') return out;
-  if (raw.view === 'table' || raw.view === 'folders' || raw.view === 'board') out.view = raw.view;
+  if ((LIBRARY_VIEWS as readonly string[]).includes(raw.view as string)) out.view = raw.view as LibraryViewId;
+  if ((GROUP_KEYS as readonly string[]).includes(raw.group as string)) out.group = raw.group as GroupKey;
   if (raw.open && typeof raw.open === 'object' && !Array.isArray(raw.open)) {
     const open = raw.open as Record<string, unknown>;
     Object.keys(open).filter((k) => /^(d\d+|none)$/.test(k)).slice(0, FOLDERS_KEPT).forEach((k) => { if (typeof open[k] === 'boolean') out.open[k] = open[k] as boolean; });
