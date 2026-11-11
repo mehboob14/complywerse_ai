@@ -9,6 +9,7 @@ from .routers import (
 )
 from .tpra.api import router as tpra_router
 from .tpra.dashboard import router as tpra_dashboard_router, portfolio_router as tpra_portfolio_router
+from .tpra.overview_charts import router as tpra_overview_charts_router
 from .tpra.attention import router as tpra_attention_router
 from .tpra.graph import router as tpra_graph_router
 from .tpra.reports import router as tpra_reports_router
@@ -86,6 +87,8 @@ router.include_router(lifecycle_router)
 router.include_router(tpra_router)
 # Program dashboard + risk-trend (read-only aggregation over TPRA tables + snapshots).
 router.include_router(tpra_dashboard_router)
+# The Overview's chart datasets: tier by residual band, review calendar, stages, findings by status and age, signals by month.
+router.include_router(tpra_overview_charts_router)
 # The counts the module header and rail show (/vendor-risk/portfolio/counts).
 router.include_router(tpra_portfolio_router)
 # What needs somebody today, computed from current data.

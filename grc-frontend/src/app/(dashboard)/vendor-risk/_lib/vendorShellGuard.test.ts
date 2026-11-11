@@ -10,7 +10,7 @@ import { findViolations } from '../../../../components/ui/ds/kitRules.ts';
 const ROOT = 'src/app/(dashboard)/vendor-risk';
 const FILES = [
   'layout.tsx', 'page.tsx', '_lib/VendorNav.tsx', '_lib/VendorActions.tsx', '_lib/actions/shared.tsx',
-  '_overview/parts.tsx', '_overview/TrendChart.tsx', 'attention/page.tsx', 'attention/_sheets.tsx', 'actions/page.tsx',
+  '_overview/parts.tsx', '_overview/visuals.tsx', '_overview/chartsModel.ts', 'attention/page.tsx', 'attention/_sheets.tsx', 'actions/page.tsx',
 ];
 const source = (file: string) => readFileSync(`${ROOT}/${file}`, 'utf8').replace(/\r\n/g, '\n');
 

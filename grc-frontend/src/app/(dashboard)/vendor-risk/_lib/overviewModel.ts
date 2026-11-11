@@ -172,6 +172,8 @@ export function verdictOf(residual: number, appetite: number | null | undefined)
 }
 
 export interface Posture {
+  /** whether any vendor has a residual score: without one the portfolio's residual is "not recorded", not a score of 0 */
+  scored: boolean;
   verdict: Verdict;
   headline: string;
   /** "3 over the line", "on the line", "5 of headroom"; '' without an appetite */
@@ -187,7 +189,7 @@ export interface Posture {
 }
 
 /** The posture card from the dashboard and the appetite line. */
-export function postureView(d: Pick<Dashboard, 'kpis' | 'coverage' | 'reassessment_overdue'>, appetite: number | null | undefined): Posture {
+export function postureView(d: Pick<Dashboard, 'kpis' | 'coverage' | 'reassessment_overdue'> & Partial<Pick<Dashboard, 'top_residual_vendors'>>, appetite: number | null | undefined): Posture {
   const k = d.kpis;
   const residual = k.portfolio_residual ?? 0;
   const inherent = k.portfolio_inherent ?? 0;
@@ -195,6 +197,7 @@ export function postureView(d: Pick<Dashboard, 'kpis' | 'coverage' | 'reassessme
   const gap = has ? Math.round((residual - (appetite as number)) * 10) / 10 : 0;          // one decimal: 45.8 - 45 is 0.8, not 0.7999999999999972
   const critical = k.critical_count ?? 0;
   return {
+    scored: (d.top_residual_vendors ?? []).length > 0,
     verdict: verdictOf(residual, appetite),
     headline: has ? `Portfolio residual ${residual} against an appetite of ${appetite}` : `Portfolio residual ${residual}`,
     gap: !has ? '' : gap > 0 ? `${gap} over the line` : gap === 0 ? 'On the line' : `${Math.abs(gap)} of headroom`,

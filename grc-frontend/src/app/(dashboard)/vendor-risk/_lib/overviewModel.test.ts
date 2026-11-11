@@ -112,6 +112,8 @@ test('the posture card says the number of the server for overdue, names the two 
   assert.deepEqual([bare.verdict, bare.gap, bare.removed, bare.assessed.percent, bare.reviews.overdue], ['unset', '', 0, null, null]);
   assert.equal(postureView({ kpis: { ...KPIS, critical_coverage: 95 } }, 45).assessed.tone, 'success');
   assert.equal(postureView({ kpis: KPIS }, 40).gap, '4.5 over the line');
+  assert.equal(postureView({ kpis: KPIS }, 40).scored, false);                                                                  // no scored vendor listed: the residual is not recorded
+  assert.equal(postureView({ kpis: KPIS, top_residual_vendors: [{ id: 1, name: 'A', tier: 'high', residual: 60, inherent: 70, rating: null, grade: null }] }, 40).scored, true);
 });
 
 test('the findings gather by domain: the most first, ties by name, each leading to that domain in the register', () => {
