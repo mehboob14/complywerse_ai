@@ -614,6 +614,77 @@ def observations_meta(
     }
 
 
+@router.get("/observations/summary")
+def observations_summary(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """What the Portal's front door draws of the observations (GET only, writes nothing): the numbers of the register's own chips and the shape of the whole list.
+
+    `open`: not in a final status of the organisation's own levels. `deadlines`: the open ones by where they stand against their due date or SLA, as the register's
+    chips read it (`overdue` = SLA breached, `due_30` = due within 30 days, `later`, `paused` = the status stops the clock, `no_deadline`). `by_priority`: for each
+    priority, the count in each status key. `months`, `opened` (by creation), `closed` (by closing): the last 12 calendar months. `regulators`: per regulator
+    (case ignored), open and total, most open first. `levels`: the organisation's status levels, in order.
+    """
+    from ....services.module_settings import sla_state
+    from ..months import month_windows
+
+    tenant_ids = _tenant_ids(current_user, db)
+    settings = _settings(db, current_user, tenant_ids)
+    levels = [{"key": l["key"], "label": l.get("label") or l["key"], "terminal": bool(l.get("terminal"))} for l in sorted(settings["statuses"], key=lambda l: l.get("order") or 0)]
+    final = {l["key"] for l in levels if l["terminal"]}
+    now = datetime.utcnow()
+    windows = month_windows(now)
+    out: Dict[str, Any] = {
+        "total": 0, "open": 0, "deadlines": {"overdue": 0, "due_30": 0, "later": 0, "paused": 0, "no_deadline": 0},
+        "levels": levels, "priorities": sorted(PRIORITIES, key=["critical", "high", "medium", "low"].index), "by_priority": {},
+        "months": [key for key, _, _ in windows], "opened": [0] * len(windows), "closed": [0] * len(windows), "regulators": [],
+    }
+    if not _tables_ready(db):                          # a read never creates anything
+        return out
+    month_of = {key: i for i, (key, _, _) in enumerate(windows)}
+    seen_status: List[str] = []
+    regulators: Dict[str, Dict[str, Any]] = {}
+    for status_key, priority, due, created, closed, source, values in db.query(
+        AuditObservation.status, AuditObservation.priority, AuditObservation.due_date, AuditObservation.created_at, AuditObservation.closed_at,
+        AuditObservation.regulator_source, AuditObservation.custom_values,
+    ).filter(AuditObservation.tenant_id.in_(tenant_ids)).all():
+        status_key, priority = status_key or "open", (priority or "medium").lower()
+        out["total"] += 1
+        cell = out["by_priority"].setdefault(priority, {})
+        cell[status_key] = cell.get(status_key, 0) + 1
+        if status_key not in seen_status:
+            seen_status.append(status_key)
+        if created and f"{created:%Y-%m}" in month_of:
+            out["opened"][month_of[f"{created:%Y-%m}"]] += 1
+        if closed and f"{closed:%Y-%m}" in month_of:
+            out["closed"][month_of[f"{closed:%Y-%m}"]] += 1
+        name = (source or "").strip()
+        reg = regulators.setdefault(name.lower(), {"name": name or None, "open": 0, "total": 0})
+        reg["total"] += 1
+        if status_key in final:
+            continue
+        out["open"] += 1
+        reg["open"] += 1
+        state = sla_state(settings, status=status_key, due_date=due, priority=priority, opened_at=created, now=now, values=values or {})
+        word, days = state["state"], state["due_in_days"]
+        if word == "breached":
+            out["deadlines"]["overdue"] += 1
+        elif word in ("due_soon", "on_track"):
+            out["deadlines"]["due_30" if days is not None and 0 <= days <= 30 else "later"] += 1
+        elif word == "paused":
+            out["deadlines"]["paused"] += 1
+        else:
+            out["deadlines"]["no_deadline"] += 1
+    known = {l["key"] for l in levels}
+    for key in seen_status:                                       # a status the organisation has since retired still has its observations
+        if key not in known:
+            levels.append({"key": key, "label": key.replace("_", " ").capitalize(), "terminal": False})
+    out["priorities"] += sorted(p for p in out["by_priority"] if p not in out["priorities"])
+    out["regulators"] = sorted(regulators.values(), key=lambda r: (-r["open"], -r["total"], (r["name"] or "~").lower()))[:50]
+    return out
+
+
 @router.post("/observations", status_code=status.HTTP_201_CREATED)
 def create_observation(
     payload: ObservationCreate,

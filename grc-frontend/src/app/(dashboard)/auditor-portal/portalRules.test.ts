@@ -3,6 +3,8 @@
 // native dialog or hover-only action, no bare mutation, no server path or e-mail on a screen, a decision is sent through the route the platform has always used (and a file
 // previews by its LIBRARY id), Auto-approve is kept behind a question, an old address is forwarded, and the queue links into Frameworks without importing any of it.
 // The pages of Statutory Audit, Internal Audit and the Issue Register are other groups' and are not read here.
+// The front door's dashboard (2026-11-11: figures, graphs on the chart kit, then the worklist) has its own pins at the end: the kit's cards and tiles, a state for every request, no colour outside
+// the palette, every part that opens records a link.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
@@ -114,4 +116,58 @@ test('the shared sheet is exported for the register group: DecisionSheet and its
   assert.match(sheet, /export function DecisionSheet\b/);
   assert.match(sheet, /export interface DecisionSheetProps\b/);
   assert.match(read(join(SRC, 'components', 'auditor-portal', 'decisionModel.ts')), /export function remarksProblem\b/);
+});
+
+// ── the front door as a dashboard ────────────────────────────────────────────
+
+test('the front door leads with figures and graphs on the chart kit and keeps the worklist and the journeys under them', () => {
+  const page = code(join(APP, 'page.tsx'));
+  assert.match(page, /hero=\{<FrontKpis/);
+  assert.match(page, /visuals=\{<FrontVisuals/);
+  assert.match(page, /work=\{<DoNowCard/);
+  assert.match(page, /posture=\{<JourneysCard/);
+  assert.match(page, /<SkipToWork/, 'a keyboard gets past the graphs to the work');
+  const visuals = code(join(APP, '_front', 'FrontVisuals.tsx'));
+  assert.match(visuals, /<ChartGrid>/);
+  assert.equal((visuals.match(/<Cell span=/g) ?? []).length, 8, 'eight cards: four of the review work, four of the observations');
+  for (const f of ['ReviewCards.tsx', 'ObservationCards.tsx']) {
+    const src = code(join(APP, '_front', f));
+    assert.match(src, /from '@\/components\/overview\/charts'/, `${f} draws with the chart kit`);
+    assert.doesNotMatch(src, /from 'recharts'/, `${f} does not draw a second chart kit`);
+    for (const card of src.match(/<ChartCard[\s\S]*?>/g) ?? []) assert.match(card, /cardState\(/, `${f}: a card without its own state`);
+  }
+});
+
+test('every graph and tile has its own loading, failure and empty state, and a failed request is never a figure', () => {
+  const state = code(join(APP, '_front', 'cardState.ts'));
+  assert.match(state, /state: 'loading'/);
+  assert.match(state, /state: 'error'/);
+  assert.match(state, /state: 'denied'/);
+  assert.match(state, /canRetry\(/);
+  const kpis = code(join(APP, '_front', 'FrontKpis.tsx'));
+  assert.match(kpis, /tileFeed\(/);
+  assert.doesNotMatch(kpis, /\?\? 0|\|\| 0/, 'a tile does not default to 0 when its request failed');
+  for (const f of ['ReviewCards.tsx', 'ObservationCards.tsx']) assert.match(code(join(APP, '_front', f)), /emptyText=/, `${f}: nothing-to-show says what fills the card`);
+});
+
+test('no colour is written in the front door: the palette owns every hex, and a state is never only a colour', () => {
+  for (const f of walk(join(APP, '_front')).concat(join(APP, 'page.tsx'))) {
+    assert.doesNotMatch(code(f), /#[0-9a-fA-F]{3,8}|rgba?\(|hsla?\(/, `${f} writes a colour`);
+  }
+  const model = code(join(SRC, 'lib', 'auditorPortal', 'frontModel.ts'));
+  assert.doesNotMatch(model, /#[0-9a-fA-F]{3,8}/);
+  assert.match(model, /STATUS\.good/);
+  assert.match(model, /STATUS\.bad/);
+});
+
+test('what a graph opens is a link into the records (a queue, a decision or the register on the same filter)', () => {
+  const model = code(join(SRC, 'lib', 'auditorPortal', 'frontModel.ts'));
+  assert.match(model, /journeyHref\(c\.id\)/, 'a journey bar opens its queue');
+  assert.match(model, /counterTarget\('scope', cards\)/, 'the waiting slice opens the scope queue');
+  assert.match(model, /\?quick=overdue/);
+  assert.match(model, /\?quick=due30/);
+  assert.match(model, /\?priority=\$\{encodeURIComponent/);
+  const kpis = code(join(APP, '_front', 'FrontKpis.tsx'));
+  assert.match(kpis, /rowHref\(first\)/, 'the oldest wait opens its decision');
+  assert.match(kpis, /counterTarget\('files', cards\)/);
 });
