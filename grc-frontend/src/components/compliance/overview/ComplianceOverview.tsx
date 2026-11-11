@@ -1,13 +1,14 @@
 'use client';
 
 /**
- * Compliance > Overview, a worklist-first cockpit (option A of the Overview design lab, the frame the Governance and Risk Management Overviews use: components/overview): what needs
- * attention as a band of four counters whose total is their sum, the person's own work ("Needs my action", the shared inbox narrowed to evidence to approve) beside one compact
- * posture card, and the breakdowns below (one row per framework journey, coverage, onboarding). The six section cards, the radar and the four tiles of the old page are gone: their
- * formulas are behind "How is it scored?", the pages they opened are in the strip under the heading.
- * Every request loads, fails and has nothing on its own (a failed load used to read as "score -, nothing needs attention"). The score and its counters are the server's
- * (GET /compliance/policies/dashboard/sections-overview, query key and payload unchanged: the main Dashboard reads the same key); the journeys' figures are lib/journeyModel.ts's; lapsed
- * evidence is the evidence summary's. Rules and words: overviewModel.ts.
+ * Compliance > Overview, a dashboard on the worklist-first cockpit (the frame the Governance and Risk Management Overviews use: components/overview). It leads with six figures (the score,
+ * Ready, Implemented, open requirements, journeys due, evidence approved; Tiles.tsx) and the counters of what needs attention (a band whose total is their sum), then ten graphs (Charts.tsx:
+ * the score by area, journeys by stage and date, requirements by status per journey, Ready by journey, the daily record, where the open work is, evidence by status / freshness / month, the
+ * measures behind each area), then the person's own work ("Needs my action", the shared inbox narrowed to evidence to approve) beside the weakest areas, and the tables below (one row per
+ * framework journey, coverage, onboarding). The formulas are behind "How is it scored?", the pages the old tiles opened are in the strip under the heading.
+ * Every request loads, fails and has nothing on its own (a failed load used to read as "score -, nothing needs attention"), and every graph is drawn from an answer the page already has:
+ * the score and its counters are the server's (GET /compliance/policies/dashboard/sections-overview, query key and payload unchanged: the main Dashboard reads the same key); the journeys'
+ * figures are lib/journeyModel.ts's; lapsed evidence is the evidence summary's; the history is the Frameworks hub's key. Rules and words: overviewModel.ts, graphModel.ts.
  */
 import { useMemo, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
@@ -26,11 +27,14 @@ import { useInbox } from '@/lib/inbox/inboxApi';
 import { clockOf } from '@/lib/inbox/inboxView';
 import { titleFor } from '@/lib/navRegistry';
 import type { OverviewSection } from '@/components/dashboard/score-kit';
+import { Charts } from './Charts';
 import { ComplianceStrip } from './ComplianceStrip';
-import { useEvidenceSummary, useJourneys, useOnboardingRegister, useScorecard } from './overviewData';
+import { DEFAULT_PERIOD, HERO_DAYS, daysOf } from './graphModel';
+import { Tiles } from './Tiles';
+import { useEvidenceSummary, useJourneys, useOnboardingRegister, useScorecard, useTrend } from './overviewData';
 import { AreasSheet, CoverageBody, FrameworkRows, OnboardingBody, PostureCard } from './OverviewParts';
 import {
-  ATTENTION, COMPLIANCE_SOURCES, allFailed, attentionTotal, counterFor, coverageRows, journeyRows, onboardingOf, portfolioLine, postureOf, sectionRows, targetOf, weakest,
+  ATTENTION, COMPLIANCE_SOURCES, allFailed, attentionTotal, counterFor, coverageRows, journeyRows, onboardingOf, portfolioLine, postureOf, sectionRows, weakest,
   type EvidenceFeed, type ScorecardFeed,
 } from './overviewModel';
 
@@ -43,11 +47,14 @@ export default function ComplianceOverview() {
   const [filter, setFilter] = useState<WorkFilter>('all');
   const [areasOpen, setAreasOpen] = useState(false);
   const [journeysShown, setJourneysShown] = useState(FIRST_JOURNEYS);
+  const [period, setPeriod] = useState(DEFAULT_PERIOD);
 
   const scorecard = useScorecard();
   const evidence = useEvidenceSummary();
   const journeys = useJourneys();
   const register = useOnboardingRegister();
+  const trendTiles = useTrend(HERO_DAYS);                  // the tiles' shape is always the last 90 days; the chart's period is the person's (the default is the same key)
+  const trend = useTrend(daysOf(period));
   const { inbox, refetch: refetchInbox, fetchingSource } = useInbox({ freshOnOpen: true });
   const work = workOf(inbox, COMPLIANCE_SOURCES);
 
@@ -72,7 +79,6 @@ export default function ComplianceOverview() {
   const mode = layoutOf({ refused, workCount: work.state === 'content' || work.state === 'empty' ? work.counts.all : null });
 
   const posture = postureOf(payload?.performance);
-  const target = targetOf(payload?.performance);
   const sections: OverviewSection[] = useMemo(() => sectionRows(payload?.sections).map((r) => payload?.sections?.[r.key] as OverviewSection).filter(Boolean).map((s) => ({ ...s, counts: s.counts ?? {} })), [payload]);
   const weak = weakest(sectionRows(payload?.sections));
 
@@ -82,7 +88,7 @@ export default function ComplianceOverview() {
   const onboarding = onboardingOf(register.data);
 
   const refreshAll = () => {
-    [scorecard, evidence, journeys, register].forEach((q) => { void q.refetch(); });
+    [scorecard, evidence, journeys, register, trendTiles, trend].forEach((q) => { void q.refetch(); });
     refetchInbox();
   };
   const updated = scorecard.dataUpdatedAt > 0 ? `Updated ${clockOf(scorecard.dataUpdatedAt)}` : undefined;
@@ -132,6 +138,8 @@ export default function ComplianceOverview() {
             Your account cannot read the compliance scorecard, so the scores are not shown. Your own work below is unaffected. Ask an administrator for access if you need them.
           </Notice>
         )}
+        hero={<Tiles scorecard={scorecard} journeys={journeys} evidence={evidence} trend={trendTiles} />}
+        visuals={<Charts scorecard={scorecard} journeys={journeys} evidence={evidence} trend={trend} period={period} onPeriod={setPeriod} onOpenAreas={() => setAreasOpen(true)} />}
         band={(
           <CounterBand
             id="attention"
@@ -162,17 +170,7 @@ export default function ComplianceOverview() {
           />
         )}
         posture={(
-          <PostureCard
-            id="posture"
-            scorecard={scorecard}
-            score={posture.score}
-            grade={posture.grade}
-            target={target}
-            weak={weak}
-            journeys={journeys}
-            portfolio={portfolio}
-            onOpenAreas={() => setAreasOpen(true)}
-          />
+          <PostureCard id="posture" scorecard={scorecard} weak={weak} onOpenAreas={() => setAreasOpen(true)} />
         )}
         breakdowns={breakdowns}
       />

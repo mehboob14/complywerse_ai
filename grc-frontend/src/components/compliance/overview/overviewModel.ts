@@ -40,7 +40,12 @@ export const ATTENTION: readonly CounterDef[] = [
 /** What a request is doing, as the page knows it: `failed` = it failed and there is no earlier answer. */
 export interface Feed { pending: boolean; failed: boolean }
 export interface ScorecardFeed extends Feed { queue: Record<string, unknown> | null | undefined }
-export interface EvidenceSummaryLite { lapsed_count?: number; stale_count?: number; expiring_soon_count?: number; pending_review_count?: number }
+export interface EvidenceMonth { month: string; uploaded?: number; approved?: number }
+export interface EvidenceSummaryLite {
+  lapsed_count?: number; stale_count?: number; expiring_soon_count?: number; pending_review_count?: number;
+  /** what the graphs read (the same answer the Evidence library reads): every file, its statuses, the ones in force, and six months of uploads and approvals */
+  total_count?: number; in_force_count?: number; by_status?: Record<string, number>; by_month?: EvidenceMonth[];
+}
 export interface EvidenceFeed extends Feed { summary: EvidenceSummaryLite | null | undefined }
 
 const whole = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);

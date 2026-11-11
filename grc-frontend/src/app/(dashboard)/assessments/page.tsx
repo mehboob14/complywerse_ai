@@ -2,7 +2,8 @@
 
 export const dynamic = 'force-dynamic';
 
-// Assessments > Overview, a worklist-first cockpit (the frame the Governance, Risk and Compliance Overviews use: components/overview): what needs attention as a band of counters that each open
+// Assessments > Overview, a dashboard on the worklist-first cockpit (the frame the Governance, Risk and Compliance Overviews use: components/overview): four tiles and three graphs (_overview/Visuals.tsx:
+// the score by category and by assessment, the gaps by state), what needs attention as a band of counters that each open
 // the list they count, the signed-in person's own work ("Do now") beside one posture card, and the categories and the remediation clock below. Four requests (GET /overview, /my-work, /points,
 // /sla-policy) and each part loads, fails (with Retry) and is empty on its own. Every figure is the SERVER's: the score and its grade (85 / 70 / 50), the SLA score and the gap counts; a figure
 // that is not recorded says so and is never 0. A tenant with no assessment is shown how to start instead of a page of zeros. The strip of tabs (Overview, All assessments, Types) is under the head.
@@ -22,7 +23,8 @@ import { AssessmentTabs } from './_tabs/AssessmentTabs';
 import { AREA } from './_tabs/tabsModel';
 import { StartMenu } from './_types/StartMenu';
 import { useAssessmentCount, useBoard, useMyWork, usePoints, usePolicy, WORK_LIMIT } from './_data/assessmentData';
-import { CategoriesBody, ClockBody, DoNowCard, EmptyOverview, PostureCard, type Load } from './_overview/OverviewParts';
+import { ClockBody, DoNowCard, EmptyOverview, PostureCard, type Load } from './_overview/OverviewParts';
+import { Charts, Tiles } from './_overview/Visuals';
 import { attentionTotal, countersOf, mineTotal, workRows } from './_overview/overviewModel';
 
 function OverviewSkeleton() {
@@ -94,7 +96,6 @@ export default function AssessmentsOverviewPage() {
   const mode = layoutOf({ refused: false, workCount: mine });
 
   const breakdowns: Breakdown[] = [
-    { id: 'categories', title: 'By category', info: 'Every assessment the board scores, grouped as the server groups them, with the average score of the group. A row opens the assessments of that category.', actions: <Button size="sm" variant="link" href="/assessments/register">All assessments</Button>, children: <CategoriesBody board={board.data} load={boardLoad} /> },
     {
       id: 'clock', title: 'Remediation clock', size: 'wide',
       info: 'Gaps are the controls that are not complied with or that have a fix under way. A gap is due on its own date, or when its priority allows from the day it was raised; the days are your organization\'s SLA days. The counts are the server\'s; the due-soon count and the bar are worked out from each gap\'s date.',
@@ -110,6 +111,8 @@ export default function AssessmentsOverviewPage() {
         mode={mode}
         narrow={narrow}
         refusal={null}
+        hero={<Tiles board={board.data} load={boardLoad} />}
+        visuals={<Charts board={board.data} load={boardLoad} />}
         band={(
           <CounterBand
             id="attention"

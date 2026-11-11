@@ -1,9 +1,9 @@
 'use client';
 
 /**
- * The parts of the Compliance Overview the page hands to the cockpit frame (components/overview): the posture card (the score the server computed, the areas that pull it down, the
- * journeys in one line), "How is it scored?" (the six areas with their formulas one press away, the weights for the people who may set them), one row per framework journey, the
- * Coverage card and the Onboarding card. Each part loads, fails and has nothing on its own: a failed request is said where its numbers would be, never read as 0. Every figure of
+ * The parts of the Compliance Overview the page hands to the cockpit frame (components/overview), under the figures (Tiles.tsx) and the graphs (Charts.tsx): the weakest areas beside the
+ * worklist, "How is it scored?" (the six areas with their formulas one press away, the weights for the people who may set them), one row per framework journey, the Coverage card and the
+ * Onboarding card. Each part loads, fails and has nothing on its own: a failed request is said where its numbers would be, never read as 0. Every figure of
  * a journey is lib/journeyModel.ts's (through overviewModel.ts).
  */
 import { useState } from 'react';
@@ -18,7 +18,7 @@ import { formatCount, formatDate } from '@/lib/format';
 import { journeyStatus, readinessBandWords } from '@/lib/statuses/frameworkJourney';
 import { areaBand } from '@/lib/statuses/complianceStatements';
 import {
-  GRADE_LABEL, GRADE_TONE, SECTION_HREF, areaWord, type CoverageRow, type Grade, type JourneyRow, type OnboardingView, type PortfolioLine, type SectionRow,
+  GRADE_LABEL, SECTION_HREF, areaWord, type CoverageRow, type Grade, type JourneyRow, type OnboardingView, type SectionRow,
 } from './overviewModel';
 
 /** A request as a card sees it. */
@@ -36,69 +36,35 @@ function Failed({ title, q }: { title: string; q: QueryView }) {
 export interface PostureCardProps {
   id: string;
   scorecard: QueryView;
-  score: number | null;
-  grade: Grade | null;
-  target: number | null;
   weak: SectionRow[];
-  journeys: QueryView;
-  portfolio: PortfolioLine;
   onOpenAreas: () => void;
 }
 
-export function PostureCard({ id, scorecard, score, grade, target, weak, journeys, portfolio, onOpenAreas }: PostureCardProps) {
+/** What pulls the score down: the three weakest areas, lowest first, each opening the page it is worked on (the score itself is the first tile and the areas are the first chart). */
+export function PostureCard({ id, scorecard, weak, onOpenAreas }: PostureCardProps) {
   return (
-    <SectionCard id={id} title="Compliance posture" info="The score is the weighted mean of six areas, worked out by the server. Ready is the share of requirements whose approved evidence reaches what they ask for; Implemented the share that are implemented; both leave out requirements put out of scope.">
+    <SectionCard
+      id={id} title="Weakest areas"
+      info="The areas that pull the compliance score down most, lowest first. The score is the weighted mean of six areas, worked out by the server; an area with no data yet is not listed."
+      actions={<Button size="sm" leftIcon={<SlidersHorizontal aria-hidden />} aria-haspopup="dialog" onClick={onOpenAreas}>How is it scored?</Button>}
+    >
       {scorecard.isPending && <SkeletonRows rows={3} columns={2} label="Loading the compliance score" />}
       {scorecard.isError && !scorecard.isPending && <Failed title="Couldn't load the compliance score" q={scorecard} />}
       {!scorecard.isPending && !scorecard.isError && (
-        <>
-          <div className="flex flex-wrap items-center gap-x-[16px] gap-y-[8px]">
-            <div>
-              <div className="text-[32px] font-[600] leading-none tabular-nums text-ds-fg">
-                {score ?? '—'}<span className="ml-[4px] text-ds-body font-normal text-ds-fg-muted">{score == null ? 'no score yet' : '/ 100'}</span>
-              </div>
-              <div className="mt-[6px] flex flex-wrap items-center gap-[6px]">
-                {grade && <StatusPill tone={GRADE_TONE[grade]} label={GRADE_LABEL[grade]} />}
-                {target != null && score != null && <span className="text-ds-label text-ds-fg-muted">{`Target ${target}`}</span>}
-              </div>
-            </div>
-            <Button className="ml-auto" leftIcon={<SlidersHorizontal aria-hidden />} aria-haspopup="dialog" onClick={onOpenAreas}>How is it scored?</Button>
-          </div>
-          {weak.length > 0 && (
-            <div className="mt-[12px] border-t border-ds-border pt-[8px]">
-              <h3 className="m-0 !text-ds-label !font-[600] !text-ds-fg-muted">Weakest areas</h3>
-              <ul className="m-0 list-none p-0">
-                {weak.map((w) => (
-                  <li key={w.key} className="flex min-h-ds-control items-center gap-[8px]">
-                    <TitleLink href={SECTION_HREF[w.key] ?? '/compliance'} title={w.label} lines={1} size="body" className="min-w-0 flex-1" />
-                    <span className="tabular-nums text-ds-body text-ds-fg">{Math.round(w.score as number)}</span>
-                    <StatusPill size="sm" tone={areaBand.tone(areaWord(w.score))} label={areaBand.label(areaWord(w.score))} />
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </>
+        weak.length > 0 ? (
+          <ul className="m-0 list-none p-0">
+            {weak.map((w) => (
+              <li key={w.key} className="flex min-h-ds-control items-center gap-[8px]">
+                <TitleLink href={SECTION_HREF[w.key] ?? '/compliance'} title={w.label} lines={1} size="body" className="min-w-0 flex-1" />
+                <span className="tabular-nums text-ds-body text-ds-fg">{Math.round(w.score as number)}</span>
+                <StatusPill size="sm" tone={areaBand.tone(areaWord(w.score))} label={areaBand.label(areaWord(w.score))} />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="m-0 text-ds-body text-ds-fg-muted">No area has a score yet. They appear here once the platform has data to score.</p>
+        )
       )}
-      <div className="mt-[12px] border-t border-ds-border pt-[8px]">
-        <h3 className="m-0 mb-[2px] !text-ds-label !font-[600] !text-ds-fg-muted">Framework journeys</h3>
-        {journeys.isPending && <SkeletonRows rows={1} columns={2} label="Loading the framework journeys" />}
-        {journeys.isError && !journeys.isPending && <Failed title="Couldn't load the framework journeys" q={journeys} />}
-        {!journeys.isPending && !journeys.isError && (
-          portfolio.journeys === 0 && portfolio.missing === 0 ? (
-            <p className="m-0 text-ds-body text-ds-fg-muted">
-              {portfolio.completed > 0 ? `${plural(portfolio.completed, 'journey is', 'journeys are')} finished and none is active.` : 'No framework journey has started yet.'}{' '}
-              <Link href="/frameworks" className={`font-[500] text-ds-primary-text hover:underline ${FOCUS}`}>Start one</Link>
-            </p>
-          ) : (
-            <p className="m-0 text-ds-body text-ds-fg-body">
-              <span className="font-[600] text-ds-fg">{plural(portfolio.journeys, 'active journey', 'active journeys')}</span>
-              {portfolio.journeys > 0 && <>{`: Ready ${portfolio.ready}%, Implemented ${portfolio.implemented}%`}</>}
-              {portfolio.missing > 0 && <span className="text-ds-fg-muted">{` · ${plural(portfolio.missing, 'journey', 'journeys')} not counted (no progress sent)`}</span>}
-            </p>
-          )
-        )}
-      </div>
     </SectionCard>
   );
 }

@@ -2,11 +2,10 @@
 
 /**
  * The parts of the Assessments Overview the cockpit frame (components/overview) arranges: "Do now" (the signed-in person's own controls, drafts to scope and evidence to decide, one action on
- * each row), the posture card (the server's score with its grade, the SLA score), the categories as bars, and the remediation clock of every assessment the board counts. Every figure is the
+ * each row), the posture card (the server's score with its grade, the SLA score), and the remediation clock of every assessment the board counts. Every figure is the
  * server's; each part loads, fails (with Retry) and is empty on its own, and a figure that is not recorded says so and is never 0. Rows and words: overviewModel.ts.
  */
 import { useState, type ReactNode } from 'react';
-import Link from 'next/link';
 import { CheckCircle2, Clock, SlidersHorizontal } from 'lucide-react';
 import { Button, EmptyState, ErrorState, Notice, ProgressBar, SectionCard, SkeletonRows, StatTile, StatusPill, TextInput, WorkRow } from '@/components/ui/ds';
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
@@ -16,10 +15,9 @@ import { grade } from '@/lib/statuses/assessments';
 import { barShares } from '@/components/assessments/workspace/clockModel';
 import type { Board, Point, Policy } from '../_data/types';
 import { SlaDialog } from './SlaDialog';
-import { TARGET, categoryRows, daysOf, mineLine, portfolioClock, postureOf, whatIfBounds, whatIfMs, type WorkRowModel } from './overviewModel';
+import { TARGET, daysOf, mineLine, portfolioClock, postureOf, whatIfBounds, whatIfMs, type WorkRowModel } from './overviewModel';
 
 const MUTED = 'text-ds-fg-muted';
-const ROW_LINK = '-mx-[8px] flex min-h-ds-control items-center justify-between gap-[8px] rounded-ds-control px-[8px] py-[4px] hover:bg-ds-surface-hover focus-visible:outline-none focus-visible:shadow-ds-ring';
 
 export interface Load { loading: boolean; error: unknown; retry: () => void }
 const errorOf = (title: string, load: Load) => <ErrorState compact title={title} message={errorMessage(load.error)} onRetry={canRetry(load.error) ? load.retry : undefined} />;
@@ -103,33 +101,6 @@ export function PostureCard({ board, load }: { board: Board | undefined; load: L
           </div>
         )}
     </SectionCard>
-  );
-}
-
-// ── Categories ────────────────────────────────────────────────────────────────────────────────────────────────────────────
-
-export function CategoriesBody({ board, load }: { board: Board | undefined; load: Load }) {
-  if (load.loading) return <SkeletonRows rows={4} columns={2} label="Loading the categories" />;
-  if (load.error || !board) return errorOf("Couldn't load the categories", load);
-  const rows = categoryRows(board);
-  if (rows.length === 0) return <p className={`text-ds-body ${MUTED}`}>No assessment is scored yet.</p>;
-  return (
-    <ul className="m-0 flex list-none flex-col gap-[4px] p-0">
-      {rows.map((c) => (
-        <li key={c.category}>
-          <Link href={c.href} className={`${ROW_LINK} flex-wrap`} aria-label={`${c.category}: ${c.count} ${c.count === 1 ? 'assessment' : 'assessments'}${c.score != null ? `, score ${Math.round(c.score)}` : ''}. Open them`}>
-            <span className="min-w-0 flex-1 basis-[10rem]">
-              <span className="block break-words text-ds-body font-[500] text-ds-fg">{c.category}</span>
-              <span className={`block text-ds-label ${MUTED}`}>{`${formatCount(c.count)} ${c.count === 1 ? 'assessment' : 'assessments'}`}</span>
-            </span>
-            <span className="inline-flex items-center gap-[8px]">
-              <span className="w-[72px]"><ProgressBar value={c.score} label={`${c.category} score`} showValue={false} /></span>
-              <span className="w-[28px] text-right text-ds-body font-[600] tabular-nums text-ds-fg">{c.score != null ? Math.round(c.score) : EMPTY}</span>
-            </span>
-          </Link>
-        </li>
-      ))}
-    </ul>
   );
 }
 
