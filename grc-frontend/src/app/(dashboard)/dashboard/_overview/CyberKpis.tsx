@@ -12,12 +12,15 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, ChevronRight } from 'lucide-react';
 import apiClient from '@/lib/api';
-import { Button, CountRow, Notice, SectionCard, Skeleton } from '@/components/ui/ds';
+import { Button, Notice, SectionCard, Skeleton } from '@/components/ui/ds';
+import { SegmentBar, Sparkline } from '@/components/overview/charts';
+import { STATUS } from '@/components/overview/charts/palette';
 import { KPI_FORMAT, buildKpis, type LiveMetric } from '@/components/dashboard/kpiShared';
 import { FailedRow, Loading, useSlow } from './parts';
 import { loadOf, retryDashboard } from './overviewModel';
+import { statusOfTone } from './perfCharts';
 import {
-  SNAPSHOT_PATH, UPLOAD_HREF, countChips, furthestFromTarget, kpiCounts, newestNote, panelState, reportHref, rowFacts, shouldKeepSnapshot, snapshotKeeper, stripBody,
+  SNAPSHOT_PATH, UPLOAD_HREF, countChips, furthestFromTarget, historyWords, kpiCounts, newestNote, panelState, reportHref, rowFacts, shouldKeepSnapshot, snapshotKeeper, stripBody,
   type Furthest, type KpiData,
 } from './kpiModel';
 
@@ -38,7 +41,8 @@ function FurthestRow({ f }: { f: Furthest }) {
         <span className="block break-words text-ds-body font-[500] text-ds-fg">{f.topic}</span>
         <span className="block break-words text-ds-label font-normal text-ds-fg-muted">{f.domain}</span>
       </span>
-      <span className="ml-auto flex shrink-0 items-center gap-[8px]">
+      <span className="ml-auto flex shrink-0 items-center gap-[12px]">
+        <Sparkline values={f.history} label={`${f.topic}, readings kept so far`} summary={historyWords(f)} color={STATUS.bad} floor={0} />
         <span className="text-right">
           <span className="block text-ds-body font-[600] tabular-nums text-ds-danger"><span className="sr-only">Actual </span>{facts.value}</span>
           <span className="block text-ds-label font-normal tabular-nums text-ds-fg-muted">{facts.target}<span aria-hidden>{' · '}</span><span className="sr-only">, </span>{facts.gap}</span>
@@ -54,8 +58,9 @@ function FurthestRow({ f }: { f: Furthest }) {
   );
 }
 
-export function CyberKpis() {
-  const query = useQuery({
+/** The strip's one query, under the key the page has always used: the figures at the top of the page (Hero) read the same answer from the cache, so nothing is asked twice. */
+export function useKpiLive() {
+  return useQuery({
     queryKey: ['main-kpi-live'],
     queryFn: async (): Promise<KpiData> => {
       const list = (await apiClient.get('/compliance/assessments', { params: { limit: 50, assessment_format: KPI_FORMAT } })).data;
@@ -73,6 +78,10 @@ export function CyberKpis() {
     staleTime: 60_000,
     retry: retryDashboard,
   });
+}
+
+export function CyberKpis() {
+  const query = useKpiLive();
   const slow = useSlow(query.isPending);
   const panel = panelState(loadOf(query), query.data);
   const retry = () => { void query.refetch(); };
@@ -132,20 +141,30 @@ export function CyberKpis() {
         <Notice tone="warning" title="The live values could not be loaded" action={<Button size="sm" onClick={retry}>Retry</Button>}>
           The KPIs in your report cannot be measured until they load.
         </Notice>
+      ) : body === 'no_live_feed' ? (
+        <p className="text-ds-body text-ds-fg-muted">No KPI in this report is measured by the platform yet.</p>
       ) : (
-        <>
-          <ul aria-label="KPIs by standing" className="flex flex-wrap gap-[8px]">
-            {countChips(counts).map((c) => <CountRow key={c.key} layout="chip" label={c.label} count={c.count} tone={c.tone} />)}
-          </ul>
-          {body === 'rows' && (
-            <div className="mt-[16px]">
-              <p id="cyber-kpis-furthest" className="mb-[4px] text-ds-label font-[600] text-ds-fg-muted">Furthest from target</p>
-              <ul aria-labelledby="cyber-kpis-furthest">{rows.map((f) => <FurthestRow key={f.key} f={f} />)}</ul>
-            </div>
-          )}
-          {body === 'all_on_target' && <p className="mt-[12px] text-ds-body text-ds-fg-muted">Every live KPI is on target.</p>}
-          {body === 'no_live_feed' && <p className="mt-[12px] text-ds-body text-ds-fg-muted">No KPI in this report is measured by the platform yet.</p>}
-        </>
+        <div className="grid items-start gap-x-[24px] gap-y-[16px] lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+          {/* the standing of the live KPIs as one bar: the words are the registry's, the counts are the KPI report's own */}
+          <div className="min-w-0">
+            <p id="cyber-kpis-standing" className="mb-[8px] text-ds-label font-[600] text-ds-fg-muted">{`${counts.live} live ${counts.live === 1 ? 'KPI' : 'KPIs'}`}</p>
+            <SegmentBar
+              label="Live KPIs by standing"
+              noun="KPIs"
+              height={20}
+              parts={countChips(counts).filter((c) => c.key !== 'live').map((c) => ({ key: c.key, label: c.label, value: c.count, color: STATUS[statusOfTone(c.tone)] }))}
+            />
+          </div>
+          <div className="min-w-0">
+            {body === 'rows' && (
+              <>
+                <p id="cyber-kpis-furthest" className="mb-[4px] text-ds-label font-[600] text-ds-fg-muted">Furthest from target</p>
+                <ul aria-labelledby="cyber-kpis-furthest">{rows.map((f) => <FurthestRow key={f.key} f={f} />)}</ul>
+              </>
+            )}
+            {body === 'all_on_target' && <p className="text-ds-body text-ds-fg-muted">Every live KPI is on target.</p>}
+          </div>
+        </div>
       )}
     </SectionCard>
   );

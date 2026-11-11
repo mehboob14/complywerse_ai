@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 
 import { AREAS, AREA_BY_KEY, type Area } from '../../../../lib/perf/moduleFeeds.ts';
 import {
-  SCORED_AREAS, againstTarget, attentionOf, bandChips, belowTarget, everyAreaFailed, failedRows, litCounters, orderRows, overallDefinition, overallLeaves, overallOf, retryable,
+  SCORED_AREAS, againstTarget, attentionOf, belowTarget, failedRows, litCounters, orderRows, overallDefinition, overallLeaves, overallOf, retryable,
   rowOf, scoreLine, targetNote, vsTargetText, waitingOf, waitingText, weakestAreas, weakestThree, type AreaRow,
 } from './perfModel.ts';
 
@@ -93,51 +93,6 @@ test('what needs attention in a row: the most serious counter first, how many mo
   assert.equal(attentionOf(null).top, null);
   const mixed = ready('compliance', card(50, [], {}, { controls_without_evidence: 3 })).read;
   assert.equal(attentionOf(mixed).top?.label, 'Controls without evidence');
-});
-
-test('the band: a chip per counter of every area that answered (a missing number is a dash chip), one "unavailable" chip for the failed areas, one loading chip, none for a refused area; serious first', () => {
-  const rows = [
-    ready('governance', card(50, [], {}, { overdue_reviews: 12, overdue_attestations: 0 })),
-    ready('compliance', card(50, [], {}, { controls_without_evidence: 5 })),
-    rowOf(area('risk'), { load: 'error', error: err(500) }),
-    rowOf(area('issues'), { load: 'error', error: err(403) }),
-    rowOf(area('assurance'), { load: 'loading' }),
-    rowOf(area('assets'), { load: 'loading' }),
-    rowOf(area('cyber'), undefined),
-  ];
-  const chips = bandChips(rows);
-  assert.deepEqual(chips.map((c) => `${c.key}:${c.state}`), [
-    'overdue_reviews:ready', 'overdue_attestations:ready', 'controls_without_evidence:ready', 'unavailable:error', 'loading:loading',
-  ]);
-  assert.equal(chips.find((c) => c.key === 'overdue_reviews')?.value, 12);
-  assert.equal(chips.find((c) => c.key === 'overdue_attestations')?.value, 0, 'a recorded zero stays a zero');
-  assert.deepEqual(chips.find((c) => c.key === 'unavailable')?.areaKeys, ['risk']);
-  assert.equal(chips.find((c) => c.key === 'unavailable')?.label, 'Risk Management', 'one failed area is named');
-  assert.equal(chips.find((c) => c.key === 'loading')?.label, 'Loading 2 areas');
-  const two = bandChips([rowOf(area('risk'), { load: 'error', error: err(500) }), rowOf(area('assets'), { load: 'error', error: err(500) })]);
-  assert.deepEqual(two.map((c) => [c.key, c.label, c.areaKeys]), [['unavailable', '2 areas', ['risk', 'assets']]], 'several failed areas are one chip, counted, not a chip each');
-  const dash = bandChips([ready('governance', card(50))]);
-  assert.deepEqual(dash.map((c) => [c.state, c.value]), [['none', undefined], ['none', undefined]]);
-  assert.equal(bandChips([rowOf(area('risk'), { load: 'loading' })])[0].label, 'Loading 1 area');
-  assert.deepEqual(bandChips([]), []);
-});
-
-test('the band puts the serious (red, answered) chips first and keeps each group in the order the areas are defined in', () => {
-  const rows = [
-    ready('compliance', card(50, [], {}, { controls_without_evidence: 5 })),
-    ready('governance', card(50, [], {}, { overdue_reviews: 0, overdue_attestations: 0 })),
-    ready('issues', card(50, [], {}, { sla_breached_issues: 3, open_critical_incidents: 1 })),
-  ];
-  assert.deepEqual(bandChips(rows).map((c) => c.key), ['overdue_reviews', 'overdue_attestations', 'sla_breached_issues', 'open_critical_incidents', 'controls_without_evidence']);
-});
-
-test('every area failed is said once; a refused area and a link do not count', () => {
-  const failed = (key: string) => rowOf(area(key), { load: 'error', error: err(500) });
-  assert.equal(everyAreaFailed([failed('governance'), failed('compliance')]), true);
-  assert.equal(everyAreaFailed([failed('governance'), ready('compliance', card(1))]), false);
-  assert.equal(everyAreaFailed([failed('governance'), rowOf(area('assets'), { load: 'error', error: err(403) }), rowOf(area('cyber'), undefined)]), true);
-  assert.equal(everyAreaFailed([]), false);
-  assert.equal(everyAreaFailed([rowOf(area('governance'), { load: 'loading' }), failed('compliance')]), false);
 });
 
 test('below target: by the server\'s target, else below the line the server calls good (70)', () => {

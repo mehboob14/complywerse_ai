@@ -1,5 +1,5 @@
 // What the Performance Overview decides, apart from React so `node --test` pins it (perfModel.test.ts): the row of each area from the state of its request, the counters
-// of the band, the weakest areas ("Where to act first"), and Overall readiness with the words that define it. Every score, grade and target is the module's scorecard's
+// of each area, the weakest areas ("Where to act first"), and Overall readiness with the words that define it. Every score, grade and target is the module's scorecard's
 // (lib/perf/moduleFeeds.ts reads them); the page's own arithmetic is the mean in Overall readiness and the difference to a target. A request that failed or has not
 // answered is a state of its own, never 0 and never "no data".
 import { canRetry } from '../../../../components/ui/ds/reportOutcome.ts';
@@ -101,44 +101,6 @@ export function attentionOf(read: ModuleRead | null): Attention {
   const counters = read?.counters ?? [];
   return { top: lit[0] ?? null, more: Math.max(0, lit.length - 1), clear: counters.length > 0 && counters.every((c) => c.value === 0) };
 }
-
-export type ChipState = 'ready' | 'loading' | 'error' | 'none';
-export interface BandChip {
-  key: string;
-  label: string;
-  href: string;
-  tone: Tone;
-  state: ChipState;
-  value?: number;
-  /** the areas whose requests a failed chip asks again */
-  areaKeys?: string[];
-}
-
-/** The chips of the band: one per counter of each area that answered (a counter the answer does not carry is a dash), ONE "unavailable" chip for the areas that failed (named
- *  when it is one, counted when there are more), and ONE loading chip while any are waiting (a chip per area would be a dozen skeletons or a dozen failures). An area the server refused has no chip: the person was never offered it. The serious
- *  ones first, each group in the order the areas are defined in. */
-export function bandChips(rows: readonly AreaRow[]): BandChip[] {
-  const chips: BandChip[] = [];
-  rows.forEach((r) => {
-    if (r.state !== 'ready' || !r.read) return;
-    r.read.counters.forEach((c) => chips.push({
-      key: c.key, label: c.label, href: c.href, tone: c.tone, state: c.value === null ? 'none' : 'ready', value: c.value === null ? undefined : c.value,
-    }));
-  });
-  const failed = rows.filter((r) => r.state === 'error');
-  const waiting = rows.filter((r) => r.state === 'loading').length;
-  const serious = (c: BandChip) => (c.state === 'ready' && c.tone === 'danger' ? 0 : 1);
-  const ordered = chips.map((c, i) => ({ c, i })).sort((a, b) => serious(a.c) - serious(b.c) || a.i - b.i).map((x) => x.c);
-  if (failed.length > 0) ordered.push({ key: 'unavailable', label: failed.length === 1 ? failed[0].area.label : `${failed.length} areas`, href: '#modules', tone: 'neutral', state: 'error', areaKeys: failed.map((r) => r.area.key) });
-  if (waiting > 0) ordered.push({ key: 'loading', label: waiting === 1 ? 'Loading 1 area' : `Loading ${waiting} areas`, href: '#modules', tone: 'neutral', state: 'loading' });
-  return ordered;
-}
-
-/** Every area that was asked failed: said once instead of once per chip. */
-export const everyAreaFailed = (rows: readonly AreaRow[]): boolean => {
-  const asked = rows.filter((r) => r.area.kind !== 'link' && r.state !== 'denied');
-  return asked.length > 0 && asked.every((r) => r.state === 'error');
-};
 
 // ── where to act first ───────────────────────────────────────────────────────
 export interface WeakArea {

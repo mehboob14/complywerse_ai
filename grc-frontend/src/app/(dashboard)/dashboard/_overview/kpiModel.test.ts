@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 import { findViolations } from '../../../../components/ui/ds/kitRules.ts';
 import { loadOf } from './overviewModel.ts';
 import {
-  SNAPSHOT_PATH, UPLOAD_HREF, countChips, furthestFromTarget, gapWords, kpiCounts, newestNote, panelState, reportHref, rowFacts, shouldKeepSnapshot, snapshotKeeper, stripBody,
+  SNAPSHOT_PATH, UPLOAD_HREF, countChips, furthestFromTarget, gapWords, historyWords, kpiCounts, newestNote, panelState, reportHref, rowFacts, shouldKeepSnapshot, snapshotKeeper, stripBody,
   type KpiData,
 } from './kpiModel.ts';
 
@@ -85,6 +85,16 @@ test('two rows of the report on one live measure are named once (the counts stil
   const live = [kpi('Vulnerabilities within remediation SLA', 40, 90, { domain: 'Vulnerability management' }), kpi('Vulnerabilities within remediation SLA', 40, 90, { domain: 'Patching' }), kpi('Assets seen', 70, 90)];
   assert.equal(kpiCounts(live).below, 3);
   assert.deepEqual(furthestFromTarget(live).map((f) => f.topic), ['Vulnerabilities within remediation SLA', 'Assets seen']);
+});
+
+test('the readings kept for a KPI are its sparkline: numbers only, oldest first, a day with no number left out; in words for a screen reader, nothing with under two readings', () => {
+  const [f] = furthestFromTarget([kpi('Patch SLA', 48, 90, { history: [{ date: '2026-05-05', value: 30 }, { date: '2026-05-20', value: null }, { date: '2026-06-05', value: 41.5 }, { date: '2026-06-20', value: 48 }] })]);
+  assert.deepEqual(f.history, [30, 41.5, 48]);
+  assert.equal(historyWords(f), 'From 30% to 48% in 3 readings');
+  const [none] = furthestFromTarget([kpi('No history', 48, 90)]);
+  assert.deepEqual(none.history, []);
+  assert.equal(historyWords(none), '');
+  assert.equal(historyWords({ history: [48] }), '');
 });
 
 test('how far, in words: points, one point, and "just" under half a point; the row says the value, the target and the distance', () => {

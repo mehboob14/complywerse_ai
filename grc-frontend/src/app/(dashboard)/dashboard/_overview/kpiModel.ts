@@ -68,7 +68,10 @@ export function countChips(counts: KpiCounts): CountChip[] {
 }
 
 // ── the KPIs furthest from their target ──────────────────────────────────────
-export interface Furthest { key: string; topic: string; domain: string; actual: number; target: number; gap: number; lowerBetter: boolean; href?: string }
+export interface Furthest { key: string; topic: string; domain: string; actual: number; target: number; gap: number; lowerBetter: boolean; href?: string; /** the readings kept so far, oldest first (empty until the snapshots have grown one) */ history: number[] }
+
+/** The readings of a KPI that were kept, oldest first: a day with no number is left out (the sparkline draws what was recorded, never a 0). */
+const readings = (k: Kpi): number[] => (k.history ?? []).map((p) => p.value).filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
 
 /** The `count` live KPIs furthest below their target (above it, when lower is better), the furthest first, ties by name. A KPI with nothing measured has no distance
  *  and is not ranked. Two rows of the report can map to the same live measure: it is named once (the counts above still count the rows, as the KPI report does). */
@@ -76,7 +79,7 @@ export function furthestFromTarget(live: readonly Kpi[], count = 3): Furthest[] 
   const ranked: Furthest[] = [];
   for (const k of live) {
     if (k.onTarget !== false || k.actual == null || k.target == null) continue;
-    ranked.push({ key: `${k.domain}|${k.topic}`, topic: k.topic, domain: k.domain, actual: k.actual, target: k.target, gap: k.lowerBetter ? k.actual - k.target : k.target - k.actual, lowerBetter: k.lowerBetter, href: k.href || undefined });
+    ranked.push({ key: `${k.domain}|${k.topic}`, topic: k.topic, domain: k.domain, actual: k.actual, target: k.target, gap: k.lowerBetter ? k.actual - k.target : k.target - k.actual, lowerBetter: k.lowerBetter, href: k.href || undefined, history: readings(k) });
   }
   ranked.sort((a, b) => b.gap - a.gap || a.topic.localeCompare(b.topic) || a.domain.localeCompare(b.domain));
   const named = new Set<string>();
@@ -88,6 +91,12 @@ export function gapWords(f: Pick<Furthest, 'gap' | 'lowerBetter'>): string {
   const side = f.lowerBetter ? 'above' : 'below';
   const points = Math.round(f.gap);
   return points < 1 ? `Just ${side}` : `${formatCount(points)} ${points === 1 ? 'point' : 'points'} ${side}`;
+}
+
+/** The sparkline of a row in words, for a screen reader: "From 40% to 48% in 12 readings"; '' with fewer than two readings (no line is drawn then). */
+export function historyWords(f: Pick<Furthest, 'history'>): string {
+  const h = f.history;
+  return h.length < 2 ? '' : `From ${formatPercent(h[0])} to ${formatPercent(h[h.length - 1])} in ${formatCount(h.length)} readings`;
 }
 
 /** The words of a row: the value, the target and how far. */
