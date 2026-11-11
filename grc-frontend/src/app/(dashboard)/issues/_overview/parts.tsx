@@ -2,28 +2,22 @@
 
 /**
  * The parts of the Issue & Incident Overview the page hands to the cockpit frame (components/overview): "My work" (the person's own prioritised work, one button a row, grouped Overdue /
- * This week / To do), the score card (the module score the server computed, its three sections, the target it was scored against), the Module score sheet (the math, the weights for the
- * people who could always adjust them) and the breakdowns of the whole register. Each part loads, fails and has nothing on its own: a failed request is said where its numbers would be,
- * never read as a score or a count of 0. Every row of every breakdown opens the register filtered to what it counts.
+ * This week / To do), the score card (the module score the server computed, as a ring, its three sections, the target it was scored against) and the Module score sheet (the math, the
+ * weights for the people who could always adjust them). The charts are visuals.tsx. Each part loads, fails and has nothing on its own: a failed request is said where its numbers would be,
+ * never read as a score or a count of 0.
  */
 import { useState, type ReactNode } from 'react';
-import Link from 'next/link';
 import { CheckCircle2, RotateCw, SlidersHorizontal } from 'lucide-react';
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import {
-  Button, ChartFrame, CountRow, ErrorState, Notice, ProgressBar, RowHeaderCell, SectionCard, Sheet, SkeletonRows, StatusPill, TBody, Table, TableFrame, Td, Th, THead, Tr, WorkRow,
-} from '@/components/ui/ds';
+import { Button, ErrorState, Notice, ProgressBar, SectionCard, Sheet, SkeletonRows, StatusPill, WorkRow } from '@/components/ui/ds';
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
+import { ScoreRing } from '@/components/overview/charts';
 import { SectionDetailModal, type OverviewSection } from '@/components/dashboard/score-kit';
 import { SectionWeightTuner } from '@/components/dashboard/score-tuning';
 import { SCORECARD_QUERY_KEYS } from '@/components/dashboard/scorecard-query-keys';
 import { EMPTY, formatCount } from '@/lib/format';
 import { statusPill } from '@/lib/status';
 import { gradeStatus } from '@/lib/statuses/dashboard';
-import { useClosing } from './data';
-import {
-  AGE_BUCKETS, URGENCY_LABEL, WORK_KIND, actLabel, closingRows, groupWork, reopenLine, type AgeMatrix, type Posture, type SectionRow, type Slice, type TrendWeek, type WorkAct, type WorkItem,
-} from './overviewModel';
+import { URGENCY_LABEL, WORK_KIND, actLabel, groupWork, type Grade, type Posture, type SectionRow, type WorkAct, type WorkItem } from './overviewModel';
 
 /** What a part needs to know about a request: waiting, failed (with no data to show), the words of the failure and how to ask again. */
 export interface FeedStatus { isPending: boolean; isError: boolean; hasData: boolean; error: unknown; refetch: () => unknown }
@@ -117,6 +111,9 @@ export interface ScoreCardProps {
   onOpen: () => void;
 }
 
+/** The ring's colour is the server's grade (excellent and good green, fair amber, poor red); with none it is the neutral blue. */
+const RING_TONE: Record<Grade | 'none', 'good' | 'warn' | 'bad' | 'progress'> = { excellent: 'good', good: 'good', fair: 'warn', poor: 'bad', none: 'progress' };
+
 export function ScoreCard({ id, feed, posture, sections, onOpen }: ScoreCardProps) {
   return (
     <SectionCard id={id} title="Issue and incident score" info="The weighted mean of three sections (issues, incidents and corrective actions), worked out by the server from the whole register. The target is the one your organisation scores against.">
@@ -125,16 +122,18 @@ export function ScoreCard({ id, feed, posture, sections, onOpen }: ScoreCardProp
           <p className="m-0 text-ds-body text-ds-fg-muted">No score yet. It appears once there are issues, incidents or corrective actions to score.</p>
         ) : (
           <>
-            <div className="flex flex-wrap items-center gap-x-[16px] gap-y-[8px]">
-              <div>
-                <div className="text-[32px] font-[600] leading-none tabular-nums text-ds-fg">{posture.score ?? EMPTY}<span className="ml-[4px] text-ds-body font-normal text-ds-fg-muted">{posture.score === null ? 'no score' : '/ 100'}</span></div>
-                <div className="mt-[6px] flex flex-wrap items-center gap-[6px]">
-                  {posture.grade && <StatusPill {...statusPill(gradeStatus, posture.grade)} />}
-                  {posture.target !== null && posture.score !== null && <span className="text-ds-label text-ds-fg-muted">{`Target ${posture.target}`}</span>}
-                  {posture.customized && <span className="text-ds-label text-ds-fg-muted">· Weights adjusted</span>}
-                </div>
-              </div>
-              <Button className="ml-auto" leftIcon={<SlidersHorizontal aria-hidden />} onClick={onOpen}>How is it scored?</Button>
+            <div className="flex flex-wrap items-center justify-between gap-x-[16px] gap-y-[8px]">
+              <ScoreRing
+                value={posture.score} target={posture.target} tone={RING_TONE[posture.grade ?? 'none']} caption="Issue and incident score" size={116}
+                below={(
+                  <div className="flex flex-wrap items-center justify-center gap-[6px]">
+                    {posture.grade && <StatusPill {...statusPill(gradeStatus, posture.grade)} />}
+                    {posture.target !== null && posture.score !== null && <span className="text-ds-label text-ds-fg-muted">{`Target ${posture.target}`}</span>}
+                    {posture.customized && <span className="text-ds-label text-ds-fg-muted">· Weights adjusted</span>}
+                  </div>
+                )}
+              />
+              <Button leftIcon={<SlidersHorizontal aria-hidden />} onClick={onOpen}>How is it scored?</Button>
             </div>
             <ul className="m-0 mt-[12px] list-none border-t border-ds-border p-0 pt-[4px]">
               {sections.map((s) => (
@@ -185,119 +184,6 @@ export function ScoreSheet({ open, onClose, sections, posture }: { open: boolean
       </Sheet>
       <SectionDetailModal section={section} onClose={() => setSection(null)} tuning={TUNING} />
     </>
-  );
-}
-
-// ── the breakdowns ───────────────────────────────────────────────────────────────────────────────────────────────────────
-
-export function SliceList({ slices, empty, more }: { slices: Slice[]; empty: string; more: string }) {
-  if (slices.length === 0) return <p className="m-0 text-ds-body text-ds-fg-muted">{empty}</p>;
-  return (
-    <ul className="m-0 list-none p-0">
-      {slices.slice(0, 8).map((s) => (
-        <CountRow key={s.key} label={`${s.label}${s.critical + s.high > 0 ? ` · ${s.critical} critical, ${s.high} high` : ''}`} count={s.total} href={s.href} tone={s.tone} />
-      ))}
-      {slices.length > 8 && <li className="px-[8px] pt-[4px] text-ds-label text-ds-fg-muted">{`${slices.length - 8} more in ${more}`}</li>}
-    </ul>
-  );
-}
-
-const GRID = '#e1e6eb';          // --ds-border
-const INK = '#586472';           // --ds-fg-muted
-const BRAND = '#0f766e';         // --ds-primary
-const TIP = { fontSize: 12, border: '1px solid #e1e6eb', borderRadius: 8, boxShadow: '0 8px 24px rgba(15, 23, 42, 0.14)', color: '#1f2933' };
-
-export function TrendChart({ weeks }: { weeks: TrendWeek[] }) {
-  const opened = weeks.reduce((a, w) => a + w.opened, 0);
-  const closed = weeks.reduce((a, w) => a + w.closed, 0);
-  if (opened + closed === 0) return <p className="m-0 text-ds-body text-ds-fg-muted">Nothing was raised or closed in the last 12 weeks.</p>;
-  return (
-    <ChartFrame
-      title="Issues raised and closed, by week"
-      note={`Weeks start on Monday. ${formatCount(opened)} raised and ${formatCount(closed)} closed in 12 weeks.`}
-      height={200}
-      data={{ columns: ['Week of', 'Raised', 'Closed'], rows: weeks.map((w) => [w.label, w.opened, w.closed]) }}
-    >
-      {(focusOff) => (
-        <ResponsiveContainer width="100%" height="100%" minHeight={160}>
-          <BarChart data={weeks.map((w) => ({ label: w.label, Raised: w.opened, Closed: w.closed }))} margin={{ top: 8, right: 8, left: -18, bottom: 0 }} barGap={2} {...focusOff}>
-            <CartesianGrid strokeDasharray="2 2" stroke={GRID} vertical={false} />
-            <XAxis dataKey="label" tick={{ fontSize: 12, fill: INK }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-            <YAxis tick={{ fontSize: 12, fill: INK }} axisLine={false} tickLine={false} allowDecimals={false} />
-            <Tooltip contentStyle={TIP} cursor={{ fill: 'rgba(88, 100, 114, 0.08)' }} />
-            <Bar dataKey="Raised" fill={INK} radius={[2, 2, 0, 0]} isAnimationActive={false} />
-            <Bar dataKey="Closed" fill={BRAND} radius={[2, 2, 0, 0]} isAnimationActive={false} />
-          </BarChart>
-        </ResponsiveContainer>
-      )}
-    </ChartFrame>
-  );
-}
-
-const AGE_SHORT = ['0–7 d', '8–30 d', '31–90 d', '90+ d'] as const;
-const LINK = 'rounded-ds-control text-ds-fg underline-offset-2 hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring';
-
-export function AgeTable({ matrix }: { matrix: AgeMatrix }) {
-  if (matrix.total === 0) return <p className="m-0 text-ds-body text-ds-fg-muted">No open issues.</p>;
-  return (
-    <TableFrame aria-label="Open issues by severity and age">
-      <Table caption={`Open issues by severity and how long ago they were raised: ${AGE_BUCKETS.join(', ')}`}>
-        <THead>
-          <Tr>
-            <Th>Severity</Th>
-            {AGE_SHORT.map((l, i) => <Th key={l} align="right"><span title={AGE_BUCKETS[i]}>{l}</span></Th>)}
-            <Th align="right">Total</Th>
-          </Tr>
-        </THead>
-        <TBody>
-          {matrix.rows.map((r) => (
-            <Tr key={r.severity}>
-              <RowHeaderCell><Link href={`/issues/register?quick=open&severity=${r.severity}`} className={LINK}>{r.label}</Link></RowHeaderCell>
-              {r.cells.map((c, i) => (
-                <Td key={i} align="right" className={`tabular-nums ${c > 0 && i === 3 && (r.severity === 'critical' || r.severity === 'high') ? '!font-[600] !text-ds-danger' : ''}`}>{formatCount(c)}</Td>
-              ))}
-              <Td align="right" className="tabular-nums !font-[600]">{formatCount(r.total)}</Td>
-            </Tr>
-          ))}
-        </TBody>
-      </Table>
-    </TableFrame>
-  );
-}
-
-/** "How well issues close": from the server's aggregate, asked for only while this card is on screen. */
-export function ClosingCard() {
-  const q = useClosing();
-  const feed: FeedStatus = { isPending: q.isPending, isError: q.isError, hasData: !!q.data, error: q.error, refetch: q.refetch };
-  const rows = closingRows(q.data);
-  const reopen = reopenLine(q.data?.reopen_stats);
-  return (
-    <FeedBody feed={feed} what="how issues close">
-      {rows.length === 0 ? (
-        <p className="m-0 text-ds-body text-ds-fg-muted">No issue has been closed yet.</p>
-      ) : (
-        <>
-          <TableFrame aria-label="How well issues close, by severity">
-            <Table caption="Issues closed in the last 90 days, the average days they took, and the share closed by their target date">
-              <THead>
-                <Tr><Th>Severity</Th><Th align="right">Closed in 90 days</Th><Th align="right">Average days to close</Th><Th align="right">Closed by the target date</Th></Tr>
-              </THead>
-              <TBody>
-                {rows.map((r) => (
-                  <Tr key={r.severity}>
-                    <RowHeaderCell>{r.label}</RowHeaderCell>
-                    <Td align="right" className="tabular-nums">{formatCount(r.closed)}</Td>
-                    <Td align="right" className="tabular-nums">{r.meanDays === null ? EMPTY : r.meanDays}</Td>
-                    <Td align="right" className="tabular-nums">{r.onTimePct === null ? EMPTY : `${r.onTimePct}% of ${formatCount(r.onTimeOf)}`}</Td>
-                  </Tr>
-                ))}
-              </TBody>
-            </Table>
-          </TableFrame>
-          <p className="m-0 mt-[8px] text-ds-label text-ds-fg-muted">{[reopen ? `${reopen}.` : null, 'Only issues closed with a closing date are counted.'].filter(Boolean).join(' ')}</p>
-        </>
-      )}
-    </FeedBody>
   );
 }
 

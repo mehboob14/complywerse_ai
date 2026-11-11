@@ -10,6 +10,7 @@ import type { IncidentRow } from '../../erm/_monitoring/incidentModel';
 import { retryLoad as retryIssues, useIssueRows } from '../register/_register/issueData';
 import { useActionRows } from '../actions/_register/actionData';
 import type { Aggregate, Feed, ScorePayload } from './overviewModel';
+import type { MatrixCellLike } from './chartModel';
 
 export { useActionRows, useIssueRows };
 export const retryLoad = retryIssues;
@@ -53,6 +54,16 @@ export function useClosing() {
     queryFn: async () => (await issuesApi.dashboard()).data as Aggregate,
     retry: retryIssues,
     staleTime: 60_000,
+  });
+}
+
+/** The tenant's severity matrix (GET /matrices/severity), under the key the Issue settings page reads it with: the zones of the impact-by-urgency card. A card that cannot read it still draws its counts. */
+export function useSeverityMatrix() {
+  return useQuery({
+    queryKey: ['issues-severity-matrix'],
+    queryFn: async () => (await issuesApi.matrices.getSeverity()).data as { cells: MatrixCellLike[] },
+    staleTime: 60_000,
+    retry: retryIssues,
   });
 }
 
