@@ -99,3 +99,35 @@ class FrameworkExistingCompliance(Base):
     created_by = Column(Integer, ForeignKey("grc_users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
+
+
+class FrameworkVersionBaseline(Base):
+    """What an approved (or underway) onboarding was settled against: the framework version the library held, the control texts, the shape of the
+    questions and the version in use. ONE row per onboarding, moved on only by a person's review ("still correct") or a new approval; the earlier values go to
+    ``history``. It is what a later change is measured against: nothing here is ever an answer, a snapshot or a compliance status, and the approved
+    snapshot is not touched. ``source``: approval | first_check (an onboarding approved before this existed: tracked from then on) | review.
+    Rules: ``modules/framework_onboarding/versioning.py``; design ``docs/framework-version-management.md``."""
+    __tablename__ = "grc_fw_version_baseline"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    onboarding_id = Column(Integer, ForeignKey("grc_framework_onboardings.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    framework_id = Column(Integer, ForeignKey("grc_uploaded_frameworks.id", ondelete="SET NULL"), nullable=True)   # the library row it was taken against
+    framework_name = Column(String(255), nullable=True)
+    library_version = Column(String(60), nullable=True)       # the library row's own version text
+    library_key = Column(String(40), nullable=True)           # the catalog's key for it (catalog framework entry ``versions``), when it names one
+    version_key = Column(String(40), nullable=True)           # the version in use: the answered one, else the library's
+    declared_answer = Column(String(120), nullable=True)      # the version the organisation answered, as it answered
+    catalog_version = Column(Integer, default=1)
+    signature = Column(JSON, default=dict)                    # the questions as they were: {fields: {step.field: shape}, gate: {...}, versions: [...]}
+    controls = Column(JSON, default=dict)                     # {control id: short hash of its text}
+    controls_count = Column(Integer, default=0)
+    source = Column(String(20), nullable=False, default="approval")
+    taken_by = Column(Integer, ForeignKey("grc_users.id", ondelete="SET NULL"), nullable=True)
+    taken_at = Column(DateTime, default=datetime.utcnow)
+    history = Column(JSON, default=list)                      # [{taken_at, source, library_version, version_key}], oldest first
+    notified_change_id = Column(String(40), nullable=True)    # the change the program owner was last told about (never tell twice)
+    notified_at = Column(DateTime, nullable=True)
+    last_check = Column(JSON, nullable=True)                  # what the last check found, for the register: {at, state, reasons, counts}
+    review_state = Column(String(20), nullable=True)          # changes_needed (reopened to change) | migrated (a newer onboarding took over); empty otherwise
+    successor_onboarding_id = Column(Integer, ForeignKey("grc_framework_onboardings.id", ondelete="SET NULL"), nullable=True)
