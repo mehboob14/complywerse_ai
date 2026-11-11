@@ -37,7 +37,7 @@ test('no two files differ only in their case: on Windows and macOS an import of 
 test('every number is a Figure; the cards and the table draw no bare count of their own', () => {
   const drawn = ['_Sections.tsx', '_DepartmentTable.tsx', '_Charts.tsx'].map((n) => code(read(n))).join('\n');
   const figures = drawn.match(/<Figure\b[^>]*>/g) ?? [];
-  assert.ok(figures.length >= 12, `${figures.length} figures`);
+  assert.ok(figures.length >= 10, `${figures.length} figures`);       // the Reviews and Issues cards are the chart kit's now: their numbers are the kit's own links
   for (const tag of figures) assert.ok(/\bnoun=/.test(tag) && /\bvalue=/.test(tag) && /\bhref=/.test(tag), tag);       // each says what it counts, and where it opens (or null: text)
   assert.ok(!/>\s*\{(?:data|row|b|r|i|step|stage|item)\.[A-Za-z_.]*(?:count|pending|overdue|in_force|inForce|dueSoon|documents)\}\s*</.test(drawn), 'a count printed as text, without a Figure');
   const figure = code(read('_Figure.tsx'));
@@ -106,12 +106,14 @@ test('a chart is a picture with its numbers as a table: a ChartFrame, the keyboa
   assert.ok(read('_chart.ts').includes("export const INK = '#"));
 });
 
-test('a bar is only a picture: hidden from a screen reader, the numbers beside it are what is read', () => {
+test('Reviews is a donut and Issues are ranked bars, both the chart kit\'s: a picture whose list is its text, each name a link to the library, a state a status colour with its word', () => {
   const sections = code(read('_Sections.tsx'));
-  const bars = sections.split('\n').filter((l) => /style=\{\{ width:/.test(l));
-  assert.ok(bars.length >= 1, `${bars.length} bars`);                                                                // a review state's segment
-  for (const l of bars) assert.ok(!/role="progressbar"/.test(l));
-  assert.ok((sections.match(/aria-hidden className="mb-\[12px\] flex/g) ?? []).length >= 1, 'their container is aria-hidden');
+  assert.ok(sections.includes('<DonutChart') && sections.includes('label="Documents by review state"') && sections.includes('REVIEW_COLOR[r.key]'));
+  assert.ok(sections.includes('<BarList') && sections.includes('label="Documents with issues, by kind"') && sections.includes('href: r.href ?? undefined'));
+  assert.equal((sections.match(/<ChartCard\b/g) ?? []).length, 2, 'Reviews and Issues; By status and Waiting on people stay section cards');
+  for (const id of ['reviews', 'issues']) assert.ok(sections.includes(`id="${id}"`), `${id}: the tiles and the old anchors land on it`);
+  assert.ok(sections.includes("state={total === 0 ? 'empty' : 'ready'}") && sections.includes("state={data.issues.documents === 0 ? 'empty' : 'ready'}"), 'a card with nothing says what fills it');
+  assert.ok(!/style=\{\{ width:/.test(sections), 'no hand-drawn bar: the kit draws them, with the numbers beside');
 });
 
 test('a wait is a skeleton and a failure is "Unavailable" with Retry, never a 0; a refusal says so and offers the way out', () => {

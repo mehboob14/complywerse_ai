@@ -1,18 +1,21 @@
 'use client';
 
-// The cards of the overview that are lists and figures, each a SectionCard on the kit: By status (the approval flow, what has lapsed, the stages documents in review
-// are at), Waiting on people, Reviews and Issues. (The department table is _DepartmentTable.tsx, the graphs _Charts.tsx, the board _BoardPanel.tsx.) What each number means and
-// where it opens is _model.ts; every number is a Figure (a link to the library, or text). Colours are the kit's tokens; a bar is only a picture, the numbers beside
-// it are what is read. While the answer is on its way each card is a skeleton.
+// The cards of the overview that are lists and figures: By status (the approval flow, what has lapsed, the stages documents in review are at) and Waiting on people,
+// each a SectionCard on the kit, and Reviews (a donut of the four states of a review date) and Issues (ranked bars) as the chart kit's cards
+// (components/overview/charts: a picture whose list is its text, every name a link to the library). (The department table is _DepartmentTable.tsx, the graphs
+// _Charts.tsx, the board _BoardPanel.tsx.) What each number means and where it opens is _model.ts; every number is a Figure (a link to the library, or text) or a
+// row of the kit's lists. Colours are the kit's tokens and palette; a bar is only a picture, the numbers beside it are what is read. While the answer is on its way
+// each card is a skeleton.
 import Link from 'next/link';
 import { clsx } from 'clsx';
+import { BarList, ChartCard, DonutChart, SegmentBar } from '@/components/overview/charts';
+import { STATUS } from '@/components/overview/charts/palette';
 import { RegisterTable, SectionCard, SkeletonLines, type RegisterColumn } from '@/components/ui/ds';
-import { InfoTip } from '@/components/ui/InfoTip';
-import { EMPTY, formatDate } from '@/lib/format';
+import { EMPTY, formatCount, formatDate } from '@/lib/format';
 import { Figure } from './_Figure';
 import {
-  flow, issueRows, lapsed, lateBy, namesText, openHref, requestRows, reviewRows, reviewShares, stages,
-  type Overview, type RequestRow, type Reviews, type WaitingRow,
+  flow, issueRows, lapsed, lateBy, namesText, openHref, requestRows, reviewRows, stages,
+  type IssueRow, type Overview, type RequestRow, type ReviewRow, type Tone, type WaitingRow,
 } from './_model';
 
 const FOCUS = 'focus-visible:outline-none focus-visible:shadow-ds-ring';
@@ -79,6 +82,20 @@ function RequestBlock({ row }: { row: RequestRow }) {
   return (
     <div className="min-w-0 rounded-ds-control border border-ds-border p-[12px]">
       <h3 className="!text-ds-label !text-ds-fg-muted">{row.label}</h3>
+      {row.pending > 0 && (
+        <div className="mt-[8px]">
+          <SegmentBar
+            label={`${row.label} requests pending`}
+            height={8}
+            legend={false}
+            parts={[
+              { key: 'overdue', label: 'Overdue', value: row.overdue, color: STATUS.bad },
+              { key: 'soon', label: 'Due in 7 days', value: row.dueSoon, color: STATUS.warn },
+              { key: 'later', label: 'Later', value: Math.max(0, row.pending - row.overdue - row.dueSoon), color: STATUS.pending },
+            ]}
+          />
+        </div>
+      )}
       <dl className="mt-[8px] grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-[12px] gap-y-[4px]">
         <dt className="text-ds-body text-ds-fg-body">Pending</dt>
         <dd className="text-right"><Figure value={row.pending} href={row.pendingHref} noun={`${noun} requests pending`} /></dd>
@@ -132,54 +149,51 @@ export function Waiting({ data }: { data: Overview }) {
 }
 
 // ── Reviews ──────────────────────────────────────────────────────────────────
-const FILL: Record<keyof Reviews, string> = { overdue: 'bg-ds-danger', due_soon: 'bg-ds-warning', unscheduled: 'bg-ds-border-strong', up_to_date: 'bg-ds-success' };
+// the states of a review date are states: their colours are the status colours, and the words beside them say which
+const REVIEW_COLOR: Record<ReviewRow['key'], string> = { overdue: STATUS.bad, due_soon: STATUS.warn, unscheduled: STATUS.neutral, up_to_date: STATUS.good };
 
 export function ReviewsCard({ data }: { data: Overview }) {
   const rows = reviewRows(data);
-  const shares = reviewShares(data.reviews);
+  const total = rows.reduce((n, r) => n + r.count, 0);
   return (
-    <SectionCard id="reviews" title="Reviews" info="Published or approved documents, by where their next review date stands. A draft, an expired or an archived document owes no review.">
-      {shares.length > 0 && (
-        <div aria-hidden className="mb-[12px] flex h-[8px] overflow-hidden rounded-full bg-ds-surface-hover">
-          {shares.map((s) => <span key={s.key} className={clsx('h-full', FILL[s.key])} style={{ width: `${s.percent}%` }} />)}
-        </div>
-      )}
-      <ul className="flex flex-col">
-        {rows.map((r) => (
-          <li key={r.key} className="flex min-h-[40px] items-center justify-between gap-[12px] border-b border-ds-border last:border-b-0">
-            <span className="flex min-w-0 items-center gap-[8px] text-ds-body text-ds-fg-body">
-              <span aria-hidden className={clsx('h-[8px] w-[8px] shrink-0 rounded-full', FILL[r.key])} />
-              <span className="truncate">{r.label}</span>
-            </span>
-            <Figure value={r.count} href={r.href} noun={r.noun} tone={r.tone} />
-          </li>
-        ))}
-      </ul>
-    </SectionCard>
+    <ChartCard
+      id="reviews"
+      title="Reviews"
+      info="Published or approved documents, by where their next review date stands. A draft, an expired or an archived document owes no review. A state nobody is in is left out. Each name opens the library on it."
+      state={total === 0 ? 'empty' : 'ready'}
+      emptyText="No review is owed yet. Published and approved documents appear here once they have a review date."
+      loadingHeight={160}
+    >
+      <DonutChart
+        label="Documents by review state"
+        slices={rows.map((r) => ({ key: r.key, label: r.label, value: r.count, color: REVIEW_COLOR[r.key], href: r.href ?? undefined }))}
+        centre={{ value: formatCount(total), caption: total === 1 ? 'document' : 'documents' }}
+        noun="documents"
+      />
+    </ChartCard>
   );
 }
 
 // ── Issues ───────────────────────────────────────────────────────────────────
+const ISSUE_COLOR: Record<Tone, string> = { danger: STATUS.bad, warning: STATUS.warn, success: STATUS.good, default: STATUS.neutral };
+
 export function IssuesCard({ data }: { data: Overview }) {
-  const rows = issueRows(data);
+  const rows: IssueRow[] = issueRows(data);
   return (
-    <SectionCard
+    <ChartCard
       id="issues"
       title="Issues"
       meta={`${data.issues.documents} ${data.issues.documents === 1 ? 'document' : 'documents'}`}
-      info="Documents that need attention. One document can be in several of these, so the rows can add up to more than the number of documents."
+      info={`Documents that need attention. One document can be in several of these, so the bars can add up to more than the number of documents. ${rows.map((r) => `${r.label}: ${r.info}`).join(' ')}`}
+      state={data.issues.documents === 0 ? 'empty' : 'ready'}
+      emptyText="No document has an issue."
+      loadingHeight={200}
     >
-      <ul className="flex flex-col">
-        {rows.map((r) => (
-          <li key={r.key} className="flex min-h-[40px] items-center justify-between gap-[12px] border-b border-ds-border last:border-b-0">
-            <span className="flex min-w-0 items-center gap-[4px] text-ds-body text-ds-fg-body">
-              <span className="truncate">{r.label}</span>
-              <InfoTip text={r.info} label={`About ${r.label.toLowerCase()}`} />
-            </span>
-            <Figure value={r.count} href={r.href} noun={r.noun} tone={r.tone} />
-          </li>
-        ))}
-      </ul>
-    </SectionCard>
+      <BarList
+        label="Documents with issues, by kind"
+        rows={rows.map((r) => ({ key: r.key, label: r.label, value: r.count, color: ISSUE_COLOR[r.tone], href: r.href ?? undefined }))}
+        nameWidth={180}
+      />
+    </ChartCard>
   );
 }

@@ -1,8 +1,9 @@
 // node --test "src/app/(dashboard)/governance/_overview/overviewPage.test.ts"
-// What the Governance Overview keeps and how it is built now (a worklist-first cockpit), pinned in the files that carry it (there is no React renderer here;
-// behaviour is checked in a browser): the seven requests with their keys and endpoints (other pages share the keys), the eighth (the posture aggregate), no
-// failure swallowed into zeros, every card with its own loading and error state, a refusal said as "No access", the worklist drawn from the shared inbox, the
-// kit's rules in every file, the shared score dialogs and tuner, the old anchors, and the words for the chart.
+// What the Governance Overview keeps and how it is built now (a dashboard: six figures, the counters, nine chart cards, then the worklist, the posture and the
+// table), pinned in the files that carry it (there is no React renderer here; behaviour is checked in a browser): the seven requests with their keys and
+// endpoints (other pages share the keys), the eighth (the posture aggregate), no failure swallowed into zeros, every card with its own loading and error state, a
+// refusal said as "No access", the worklist drawn from the shared inbox, the kit's rules in every file, the shared score dialogs and tuner, the old anchors, and
+// the words for every chart (a picture always has its numbers as text).
 // A pin that had to change when the page became a cockpit says in its title what contract it now holds.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -14,7 +15,8 @@ const page = read('../page.tsx');
 const code = (text: string) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/\s.*$/gm, '$1');
 const COMPONENTS = '../../../../components/overview';
 const files = {
-  page, parts: read('./parts.tsx'), library: read('./Library.tsx'), throughput: read('./Throughput.tsx'), posture: read('./Posture.tsx'), groups: read('./Groups.tsx'),
+  page, parts: read('./parts.tsx'), library: read('./Library.tsx'), posture: read('./Posture.tsx'), groups: read('./Groups.tsx'),
+  hero: read('./Hero.tsx'), charts: read('./Charts.tsx'), groupCharts: read('./GroupCharts.tsx'), sectionChart: read('./SectionChart.tsx'),
   dialog: read('./PerformanceDialog.tsx'), cockpit: read(`${COMPONENTS}/Cockpit.tsx`), band: read(`${COMPONENTS}/CounterBand.tsx`), workCard: read(`${COMPONENTS}/WorkListCard.tsx`),
 };
 const model = read('./overviewModel.ts');
@@ -61,10 +63,19 @@ test('a failed request is an error state of its own card: nothing swallowed, no 
   assert.match(files.parts, /export function FeedError/);
   assert.match(files.parts, /canRetry\(feed\.error\)/, 'Retry only where asking again can help');
   // every card draws a skeleton while it loads and an error row when it failed
-  for (const name of ['library', 'throughput', 'posture', 'groups', 'workCard'] as const) {
+  for (const name of ['library', 'posture', 'groups', 'workCard'] as const) {
     assert.match(files[name], /Skeleton/, `${name}: a skeleton while it loads`);
     assert.match(files[name], /FeedError|ErrorState/, `${name}: an error row when it failed`);
   }
+  // a chart card is a ChartCard (loading, failed with Retry, no access, empty, ready: the kit's) whose state comes from the requests it rests on
+  assert.equal((files.charts.match(/<ChartCard\b/g) ?? []).length, 7, 'seven cards: sections, status, type, throughput, lapses, exceptions, requests');
+  assert.equal((files.groupCharts.match(/<ChartCard\b/g) ?? []).length, 2);
+  assert.match(files.charts, /cardState\(\.\.\.feeds\)/);
+  assert.match(files.charts, /canRetry\(f\.error\)/, 'Retry only where asking again can help');
+  assert.match(files.groupCharts, /if \(q\.isPending\) return \{ state: 'loading'/);
+  assert.match(files.hero, /loading=\{tile\.state === 'loading'\}/);
+  assert.match(files.hero, /denied=\{tile\.state === 'denied'\}/);
+  assert.match(files.hero, /value=\{tile\.state === 'ready' \? tile\.value : null\}/, 'a tile that is not ready has no figure: never 0');
   assert.match(files.band, /error=\{c\.state === 'error' \? \{ onRetry: c\.onRetry \} : null\}/, 'a counter that failed says so with its own Retry');
   assert.match(files.band, /loading=\{c\.state === 'loading'\}/);
   assert.doesNotMatch(files.band, /\?\? 0|\|\| 0/, 'a counter without an answer is never 0');
@@ -74,7 +85,9 @@ test('a failed request is an error state of its own card: nothing swallowed, no 
 test('a request the server refused is "No access" where its numbers would be, and when the scorecard is refused that is said once and the work takes the page', () => {
   assert.match(files.parts, /export function Denied/);
   assert.match(files.parts, /export const refused = /);
-  for (const name of ['library', 'throughput', 'groups'] as const) assert.match(files[name], /Denied|refused\(feed\)/, `${name}: a refusal is not an error`);
+  for (const name of ['library', 'groups'] as const) assert.match(files[name], /Denied|refused\(feed\)/, `${name}: a refusal is not an error`);
+  assert.match(files.groupCharts, /isRefused\(q\.error\)/, 'the group charts say "No access" for a refusal');
+  assert.match(readFileSync(new URL('./visualsModel.ts', import.meta.url), 'utf8'), /return 'denied'/, 'a card that rests on several requests is refused when any was');
   assert.match(page, /const programmeRefused = refused\(feeds\.scorecard\);/);
   assert.match(page, /layoutOf\(\{ refused: programmeRefused,/);
   assert.match(page, /title="No access to the programme scores"/);
@@ -141,7 +154,7 @@ test('the old anchors still land on something: #attention, #posture, #breakdown,
   assert.match(page, /id="attention"/);
   assert.match(files.posture, /id="posture"/);
   assert.match(files.posture, /id="breakdown"/);
-  assert.match(page, /id: 'throughput'/);
+  assert.match(files.charts, /id="throughput"/);
   assert.match(page, /id="work"/);
   assert.match(files.cockpit, /export function SkipToWork\(\{ href = '#work' \}/);
   assert.match(files.cockpit, /Skip to my work/);
@@ -157,20 +170,34 @@ test('the posture is bars with a target tick and the number beside each bar: no 
   for (const [name, text] of Object.entries(files)) assert.doesNotMatch(code(text), /opacity-0[^'"`\n]*group-hover|group-hover[^'"`\n]*opacity-0/, `${name}: nothing appears only on hover`);
 });
 
-test('the throughput chart has its numbers in words and no keyboard layer of its own; every chart label is 12px', () => {
-  assert.equal((files.throughput.match(/role="img" aria-label=\{trendSummary\(rows\)\}/g) ?? []).length, 1);
-  assert.equal((files.throughput.match(/accessibilityLayer=\{false\}/g) ?? []).length, 1);
-  const sizes = Array.from(files.throughput.matchAll(/fontSize: (\d+)/g), (m) => Number(m[1]));
-  assert.ok(sizes.length >= 3 && sizes.every((n) => n >= 12), `chart text sizes: ${sizes.join(', ')}`);
-  assert.doesNotMatch(files.throughput, /#(2563eb|60a5fa|10b981|3b82f6|bbf7d0)/i, 'no blue or emerald hex: the brand teal and the tone table');
+test('every chart is the kit\'s (a picture with its numbers as text, no keyboard layer of its own), the section chart is a Picture, every label is 12px, and no colour is written in these files', () => {
+  assert.match(files.sectionChart, /<Picture\b/);
+  assert.match(files.sectionChart, /\{\.\.\.focusOff\}/);
+  assert.match(files.sectionChart, /label="Section scores against the target"/);
+  const sizes = Array.from(files.sectionChart.matchAll(/fontSize: (\d+)/g), (m) => Number(m[1]));
+  assert.ok(sizes.length >= 2 && sizes.every((n) => n >= 12), `chart text sizes: ${sizes.join(', ')}`);
+  for (const name of ['hero', 'charts', 'groupCharts', 'sectionChart', 'library'] as const) {
+    assert.deepEqual(code(files[name]).match(/#[0-9a-fA-F]{3,8}\b/g) ?? [], [], `${name}: a colour is the palette's (components/overview/charts/palette.ts), not written here`);
+    assert.doesNotMatch(files[name], /toLocaleDateString|\.toLocaleString\(/, name);
+  }
+  for (const kind of ['TrendChart', 'StackedBars', 'Heatmap', 'BarList', 'SegmentBar', 'DonutChart']) assert.match(files.charts + files.groupCharts + files.library, new RegExp(`<${kind}\\b`), `${kind} is used`);
+  assert.doesNotMatch(files.charts + files.groupCharts, /from 'recharts'/, 'the cards draw with the kit; the one custom chart is SectionChart');
   assert.match(files.posture, /role="img" aria-label=\{trendAlt\(points\)\}/, 'the sparkline is words too');
+});
+
+test('the graphics rest on the requests the page holds and ask for nothing of their own', () => {
+  for (const name of ['hero', 'charts', 'groupCharts', 'sectionChart', 'library'] as const) assert.doesNotMatch(files[name], /useQuery|useInfiniteQuery|apiClient|(?<![A-Za-z])fetch\(/, `${name}: it draws what it is given`);
+  assert.match(page, /hero=\{<Hero inputs=\{heroInputs\} feeds=\{heroFeeds\} \/>\}/);
+  assert.match(page, /visuals=\{visuals\}/);
+  assert.equal((page.match(/<Cell span=/g) ?? []).length, 9, 'nine chart cards');
+  assert.match(page, /query=\{groups\}/, 'the group charts read the posture query the table reads');
 });
 
 test('a score is "No data" or a dash where there is none, never 0, and numbers are counted with the platform\'s formatter', () => {
   assert.doesNotMatch(files.library, /\?\? 0\)\}%|Math\.round\(complianceRate\)/);
-  for (const name of ['library', 'groups', 'workCard'] as const) assert.match(files[name], /formatCount/, name);
+  for (const name of ['groups', 'workCard', 'charts'] as const) assert.match(files[name], /formatCount/, name);
+  assert.match(readFileSync(new URL('./visualsModel.ts', import.meta.url), 'utf8'), /formatCount/);
   assert.doesNotMatch(page, /toLocaleDateString|\.toLocaleString\(/);
-  assert.doesNotMatch(files.throughput, /toLocaleDateString/, 'a month is named from its text (monthLabel), not through a Date');
 });
 
 test('the scorecard\'s answer is read as the shared cache holds it: null (the main dashboard\'s failed request) is an error here, never "no data"', () => {
