@@ -557,28 +557,39 @@ export function fromParams(p: URLSearchParams): LibraryState {
   return { filters: f, sort };
 }
 
-/** How the library is laid out: the register table, or a folder for each department. Not part of LibraryState: a saved view is the
- *  same view in either layout, so views are matched without it. */
-export type LibraryViewId = 'table' | 'folders' | 'board';
+/** How the library is laid out: the register table, a folder for each department, a board by status or by the chosen grouping, a review calendar, or the tracker (a card for
+ *  each document with the steps it has been through). Not part of LibraryState: a saved view is the same view in any layout, so views are matched without it. */
+export type LibraryViewId = 'table' | 'folders' | 'board' | 'calendar' | 'tracker';
+export const LIBRARY_VIEWS: readonly LibraryViewId[] = ['table', 'folders', 'board', 'calendar', 'tracker'];
 
 /** The layout an address asks for (`?view=folders`); null when it says none, so a link without it behaves as it always did. */
 export function viewFromParams(p: URLSearchParams): LibraryViewId | null {
   const v = p.get('view');
-  return v === 'table' || v === 'folders' || v === 'board' ? v : null;
+  return (LIBRARY_VIEWS as readonly string[]).includes(v ?? '') ? (v as LibraryViewId) : null;
+}
+
+/** What the list and the board are grouped by (`?group=owner`): the Workspace's Group by. `none` is a flat list; the board's columns are the life-cycle steps unless a grouping is chosen.
+ *  Not part of LibraryState either: grouping is a way of looking, it never changes which documents match. */
+export type GroupKey = 'none' | 'department' | 'status' | 'owner' | 'classification' | 'type' | 'framework' | 'review';
+export const GROUP_KEYS: readonly GroupKey[] = ['none', 'department', 'status', 'owner', 'classification', 'type', 'framework', 'review'];
+export function groupFromParams(p: URLSearchParams): GroupKey | null {
+  const v = p.get('group');
+  return (GROUP_KEYS as readonly string[]).includes(v ?? '') ? (v as GroupKey) : null;
 }
 
 /** The address keys that are the library's own (a link may carry others, e.g. the AI Studio's "+ Draft" link; they are left alone).
  *  `open` is the document peeked at in the drawer; `view` the layout. */
-export const PARAM_KEYS = ['q', 'type', 'status', 'owner', 'dept', 'fw', 'review', 'att', 'cls', 'mine', 'expiry', 'attn', 'waiting', 'sort', 'open', 'id', 'view'];
+export const PARAM_KEYS = ['q', 'type', 'status', 'owner', 'dept', 'fw', 'review', 'att', 'cls', 'mine', 'expiry', 'attn', 'waiting', 'sort', 'open', 'id', 'view', 'group'];
 
 /** The address with the library's keys replaced by this state (and the open document, and the layout when the person has chosen
  *  one); every other key is kept as it was. */
-export function withLibraryParams(current: URLSearchParams, state: LibraryState, openId: number | null, view: LibraryViewId | null = null): URLSearchParams {
+export function withLibraryParams(current: URLSearchParams, state: LibraryState, openId: number | null, view: LibraryViewId | null = null, group: GroupKey | null = null): URLSearchParams {
   const out = new URLSearchParams();
   current.forEach((value, key) => { if (!PARAM_KEYS.includes(key)) out.append(key, value); });
   toParams(state).forEach((value, key) => out.set(key, value));
   if (openId != null) out.set('open', String(openId));
   if (view) out.set('view', view);
+  if (group) out.set('group', group);
   return out;
 }
 
@@ -594,15 +605,16 @@ export function sameState(a: LibraryState, b: LibraryState): boolean {
 
 // ─── Views ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-export interface SavedView { id: string; name: string; state: LibraryState; builtIn?: boolean }
+/** A view is the filters and the sort, and (the Workspace) the layout and the grouping it is looked at in; a view with neither keeps the page's own. */
+export interface SavedView { id: string; name: string; state: LibraryState; builtIn?: boolean; layout?: LibraryViewId; group?: GroupKey }
 
-const view = (id: string, name: string, filters: Partial<Filters>): SavedView =>
-  ({ id, name, builtIn: true, state: { filters: { ...NO_FILTERS, ...filters }, sort: DEFAULT_SORT } });
+const view = (id: string, name: string, filters: Partial<Filters>, look: { layout?: LibraryViewId; group?: GroupKey } = {}): SavedView =>
+  ({ id, name, builtIn: true, state: { filters: { ...NO_FILTERS, ...filters }, sort: DEFAULT_SORT }, ...look });
 
 /** The views everyone has. */
 export const BUILT_IN_VIEWS: SavedView[] = [
   view('all', 'All documents', {}),
-  view('mine', 'My documents', { mine: true }),
+  view('mine', 'My documents', { mine: true }, { layout: 'tracker' }),
   view('waiting', 'Waiting for me', { waiting: true }),
   view('overdue', 'Review overdue', { review: ['overdue'] }),
   view('drafts', 'Drafts and in review', { statuses: ['draft', 'pending_review', 'pending_approval'] }),

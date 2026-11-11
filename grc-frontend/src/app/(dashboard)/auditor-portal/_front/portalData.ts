@@ -6,6 +6,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import apiClient, { certificationsApi } from '@/lib/api';
 import { canRetry } from '@/components/ui/ds/reportOutcome';
 import type { ObservationMeta, QueuePayload, WorkPayload } from '@/lib/auditorPortal/portalModel';
+import type { ObservationSummary, WorkSummary } from '@/lib/auditorPortal/frontModel';
 import type { CertificationJourney } from '@/types';
 
 /** Try a failed read twice more, and only when trying again can come out differently (not for a refusal). */
@@ -14,12 +15,14 @@ export const retryRule = (failures: number, error: unknown): boolean => failures
 export const portalKeys = {
   work: ['auditor-work'] as const,
   observations: ['auditor-observation-meta'] as const,
+  workSummary: ['auditor-work-summary'] as const,
+  observationSummary: ['auditor-observation-summary'] as const,
   queue: (journeyId: number) => ['auditor-queue', journeyId] as const,
 };
 
 /** Every list a decision on a journey can change, for useReportedMutation's `invalidate`: the queue, the front door, and what the Frameworks page reads. */
 export const afterDecision = (journeyId: number): ReadonlyArray<readonly unknown[]> => [
-  portalKeys.queue(journeyId), portalKeys.work, ['certification', journeyId], ['certification-controls', journeyId], ['certification-progress', journeyId],
+  portalKeys.queue(journeyId), portalKeys.work, portalKeys.workSummary, ['certification', journeyId], ['certification-controls', journeyId], ['certification-progress', journeyId],
   ['applicability'], ['certifications'],
 ];
 
@@ -37,6 +40,26 @@ export function useObservationMeta() {
     queryKey: portalKeys.observations,
     queryFn: async () => (await apiClient.get('/auditor-portal/statutory-audit/observations/meta')).data as ObservationMeta,
     retry: retryRule,
+  });
+}
+
+/** What the front door's review charts draw (requests per month, the waiting ones by age, requirements by scope state). Its own request: a failure here is said on those charts, the worklist is not touched. */
+export function useWorkSummary() {
+  return useQuery<WorkSummary, Error>({
+    queryKey: portalKeys.workSummary,
+    queryFn: async () => (await apiClient.get('/auditor-portal/work/summary')).data as WorkSummary,
+    retry: retryRule,
+    staleTime: 30_000,
+  });
+}
+
+/** What the front door's observation charts draw (priority by status, deadlines, opened and closed per month, regulators), from the register's own definitions. */
+export function useObservationSummary() {
+  return useQuery<ObservationSummary, Error>({
+    queryKey: portalKeys.observationSummary,
+    queryFn: async () => (await apiClient.get('/auditor-portal/statutory-audit/observations/summary')).data as ObservationSummary,
+    retry: retryRule,
+    staleTime: 30_000,
   });
 }
 

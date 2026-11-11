@@ -35,6 +35,10 @@ export interface CockpitProps {
   narrow: boolean;
   /** the counters band (a CounterBand) */
   band: ReactNode;
+  /** the figures a dashboard leads with (a KpiRow of KpiTiles, components/overview/charts), above the band: drawn in every layout but `work-only`, never folded on a phone */
+  hero?: ReactNode;
+  /** the graphical part (a ChartGrid of ChartCards), under the band and above the person's work: drawn in every layout but `work-only`, never folded on a phone */
+  visuals?: ReactNode;
   /** `work-only`: the one notice that says why nothing else is drawn */
   refusal?: ReactNode;
   /** the person's work (a WorkListCard) */
@@ -86,7 +90,7 @@ function BreakdownCard({ b, narrow }: { b: Breakdown; narrow: boolean }) {
   );
 }
 
-export function Cockpit({ mode, narrow, band, refusal, work, posture, breakdowns }: CockpitProps) {
+export function Cockpit({ mode, narrow, band, hero, visuals, refusal, work, posture, breakdowns }: CockpitProps) {
   if (mode === 'work-only') {
     return (
       <div className="flex flex-col gap-[16px]">
@@ -97,7 +101,9 @@ export function Cockpit({ mode, narrow, band, refusal, work, posture, breakdowns
   }
   return (
     <div className="flex flex-col gap-[16px]">
+      {hero}
       {band}
+      {visuals}
       {mode === 'solo' ? (
         <div className="flex flex-col gap-[16px]">
           {work}

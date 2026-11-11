@@ -1,34 +1,29 @@
 'use client';
 
 /**
- * The parts of the Third-Party Vendor Risk Overview that the cockpit frame (components/overview) is handed: "My work" (the person's own work in this module, one row each, the most urgent
- * first), the posture card (the board's thirty-second read: the verdict against the appetite, the residual score on the tenant's bands, the two coverages), and the breakdowns of the
- * whole portfolio (vendors by next step, by tier, by status, the open findings, the highest residual risk, the latest signals, the 12-month trend). Each part loads, fails and has nothing
- * on its own: a failed request is said where its numbers would be, with Retry, and never reads as zero or as "all clear".
+ * The parts of the Third-Party Vendor Risk Overview that the cockpit frame (components/overview) is handed besides its charts (visuals.tsx): "My work" (the person's own work in this module,
+ * one row each, the most urgent first), the posture card (the board's thirty-second read: the residual score as a ring against the appetite, the verdict, the two coverages) and the list of
+ * the latest signals. Each part loads, fails and has nothing on its own: a failed request is said where its numbers would be, with Retry, and never reads as zero or as "all clear".
  */
 import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { CheckCircle2, RotateCw } from 'lucide-react';
 import type { UseQueryResult } from '@tanstack/react-query';
-import { Button, CountRow, ErrorState, Notice, ProgressBar, SectionCard, SkeletonRows, StatusPill, WorkRow, type ProgressTone } from '@/components/ui/ds';
+import { Button, ErrorState, Notice, ProgressBar, SectionCard, SkeletonRows, StatusPill, WorkRow, type ProgressTone } from '@/components/ui/ds';
+import { ScoreRing, type StatusColor } from '@/components/overview/charts';
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { formatCount } from '@/lib/format';
 import { statusPill } from '@/lib/status';
-import { vendorBand, vendorGrade, vendorTier } from '@/lib/statuses/vendor';
-import {
-  VERDICT, attentionRows, barWidth, domainRows, postureView, severitySlices, signalRows, statusBars, tierGaps, tierSlices, topResidual,
-  FINDINGS, REGISTER, type Dashboard, type Scope,
-} from '../_lib/overviewModel';
-import { residualBand, type Band, type Bands } from '../_lib/vendorRules';
+import { vendorBand } from '@/lib/statuses/vendor';
+import { VERDICT, postureView, signalRows, REGISTER, type Dashboard, type Scope } from '../_lib/overviewModel';
+import { residualBand, type Bands } from '../_lib/vendorRules';
 import { lateCount, type WorkItem } from './workModel';
 import type { TrendAnswer } from './overviewData';
-import TrendChart from './TrendChart';
 
 export interface Feed { isPending: boolean; isError: boolean; error: unknown; refetch: () => unknown }
 
 const QUIET = 'm-0 text-ds-body text-ds-fg-muted';
 const LIST = 'm-0 list-none p-0';
-const BAND_BAR: Record<Band, ProgressTone> = { critical: 'danger', high: 'warning', medium: 'primary', low: 'success', none: 'primary' };
 
 /** A request's three states in one place: a skeleton while it runs (or while it shows another scope's answer), the failure with its Retry, else what it answered. */
 export function Loaded<T>({ q, label, rows = 3, children }: { q: UseQueryResult<T>; label: string; rows?: number; children: (data: T) => ReactNode }) {
@@ -111,9 +106,12 @@ function Measure({ label, value, caption, percent, tone, href }: { label: string
   );
 }
 
+const RING: Record<string, StatusColor> = { unset: 'progress', within: 'good', approaching: 'warn', over: 'bad' };
+
+/** The board's thirty-second read: the residual score as a ring with the appetite as its tick, the verdict in words, and the two coverages. */
 export function PostureCard({ id, dash, trend, bands, scope }: { id: string; dash: UseQueryResult<Dashboard>; trend: UseQueryResult<TrendAnswer>; bands: Bands; scope: Scope }) {
   return (
-    <SectionCard id={id} title="Risk posture" info="The residual score is the portfolio's average after controls, against the appetite your organisation set. Critical vendors assessed counts the critical vendors that have a residual score; Reviews in window counts the critical and high vendors that are inside their reassessment window.">
+    <SectionCard id={id} title="Risk posture" info="The residual score is the portfolio's average after controls (0 to 100, lower is better), against the appetite your organisation set, the tick on the ring. Critical vendors assessed counts the critical vendors that have a residual score; Reviews in window counts the critical and high vendors that are inside their reassessment window.">
       <Loaded q={dash} label="the posture" rows={4}>
         {(d) => {
           const p = postureView(d, trend.data?.appetite ?? null);
@@ -121,16 +119,18 @@ export function PostureCard({ id, dash, trend, bands, scope }: { id: string; das
           const v = VERDICT[p.verdict];
           return (
             <>
-              <div className="flex flex-wrap items-center gap-x-[12px] gap-y-[6px]">
-                <div className="text-[32px] font-[600] leading-none tabular-nums text-ds-fg">{p.residual}<span className="ml-[4px] text-ds-body font-normal text-ds-fg-muted">/ 100 residual</span></div>
-                <div className="flex flex-wrap items-center gap-[6px]">
+              <div className="flex flex-wrap items-center gap-x-[16px] gap-y-[8px]">
+                <ScoreRing value={p.scored ? p.residual : null} target={trend.data?.appetite ?? null} tone={RING[p.verdict]} caption="Portfolio residual score" size={112} />
+                {p.scored ? (
+                <div className="flex min-w-[160px] flex-1 flex-col items-start gap-[6px]">
                   <StatusPill {...statusPill(vendorBand, band)} />
                   {trend.isPending ? <span className="text-ds-label text-ds-fg-muted">Reading the appetite…</span>
                     : trend.isError ? <Button size="sm" leftIcon={<RotateCw aria-hidden />} onClick={() => { void trend.refetch(); }}>Appetite unavailable: retry</Button>
-                      : <><StatusPill tone={v.tone} label={v.label} />{p.gap && <span className="text-ds-label text-ds-fg-muted">{p.gap}</span>}</>}
+                      : <><StatusPill tone={v.tone} label={v.label} />{p.gap && <span className="text-ds-label text-ds-fg-muted">{`${p.gap} (appetite ${trend.data?.appetite})`}</span>}</>}
+                  <p className="m-0 text-ds-label text-ds-fg-muted">{`Inherent ${p.inherent}: the controls remove ${p.removed} ${p.removed === 1 ? 'point' : 'points'}.`}</p>
                 </div>
+                ) : <p className="m-0 min-w-[160px] flex-1 text-ds-body text-ds-fg-muted">No vendor has a residual score yet. The ring fills once an assessment is scored.</p>}
               </div>
-              <p className="m-0 mt-[4px] text-ds-label text-ds-fg-muted">{`${p.headline}. Inherent ${p.inherent}: the controls remove ${p.removed} ${p.removed === 1 ? 'point' : 'points'}.`}</p>
               <div className="mt-[8px] border-t border-ds-border pt-[4px]">
                 <Measure
                   label="Critical vendors assessed" value={p.assessed.percent === null ? '—' : `${p.assessed.percent}%`} caption={p.assessed.caption}
@@ -142,11 +142,6 @@ export function PostureCard({ id, dash, trend, bands, scope }: { id: string; das
                   percent={p.window.percent} tone={p.window.percent !== null && p.window.percent >= 85 ? 'success' : 'warning'}
                   href={p.window.outside > 0 ? `${REGISTER}?attention=reassessment_overdue${scope === 'mine' ? '&owner=me' : ''}` : undefined}
                 />
-                <Measure
-                  label="Reviews due in 30 days" value={String(p.reviews.due)}
-                  caption={p.reviews.overdue === null ? 'Overdue not available' : p.reviews.overdue > 0 ? `${p.reviews.overdue} reassessment${p.reviews.overdue === 1 ? ' is' : 's are'} overdue` : 'None overdue'}
-                  percent={null} tone="primary" href={p.reviews.overdue ? `${REGISTER}?attention=reassessment_overdue${scope === 'mine' ? '&owner=me' : ''}` : undefined}
-                />
               </div>
             </>
           );
@@ -156,87 +151,7 @@ export function PostureCard({ id, dash, trend, bands, scope }: { id: string; das
   );
 }
 
-// ── Breakdowns ───────────────────────────────────────────────────────────────────────────────────────────────────────────
-
-export function NextStepList({ d, scope }: { d: Dashboard; scope: Scope }) {
-  const rows = attentionRows(d.attention_counts, scope);
-  if (rows.length === 0) return <p className={QUIET}>Every vendor is where it should be.</p>;
-  return <ul className={LIST}>{rows.map((r) => <CountRow key={r.code} label={r.label} count={r.count} href={r.href} tone={r.tone} />)}</ul>;
-}
-
-export function TierList({ d, scope }: { d: Dashboard; scope: Scope }) {
-  const slices = tierSlices(d.tier_counts, scope);
-  if (slices.length === 0) return <p className={QUIET}>No vendors yet.</p>;
-  return <ul className={LIST}>{slices.map((s) => <CountRow key={s.key} label={s.label} count={s.value} href={s.href} tone={vendorTier.tone(s.key)} />)}</ul>;
-}
-
-export function StatusList({ d }: { d: Dashboard }) {
-  const bars = statusBars(d.by_status);
-  if (bars.length === 0) return <p className={QUIET}>No vendors yet.</p>;
-  return <ul className={LIST}>{bars.map((b) => <CountRow key={b.key} label={`${b.label} · ${b.percent}%`} count={b.count} tone="neutral" />)}</ul>;
-}
-
-export function FindingsList({ d }: { d: Dashboard }) {
-  const severity = severitySlices(d.findings_severity);
-  const domains = domainRows(d.findings_by_domain);
-  if (severity.length === 0) {
-    return <p className="m-0 flex items-center gap-[8px] text-ds-body text-ds-fg-muted"><CheckCircle2 aria-hidden className="h-[16px] w-[16px] shrink-0 text-ds-success" strokeWidth={1.75} />No findings are open.</p>;
-  }
-  return (
-    <>
-      <ul className={LIST}>{severity.map((s) => <CountRow key={s.key} label={s.label} count={s.value} href={s.href} tone={vendorTier.tone(s.key)} />)}</ul>
-      {domains.length > 0 && (
-        <>
-          <h3 className="m-0 mt-[8px] border-t border-ds-border px-[8px] pt-[8px] !text-ds-label !font-[600] !text-ds-fg-muted">Where they gather</h3>
-          <ul className={LIST}>{domains.map((r) => <CountRow key={r.key} label={r.label} count={r.value} href={r.href} />)}</ul>
-        </>
-      )}
-      <p className="m-0 mt-[6px] px-[8px] text-ds-label text-ds-fg-muted">{`${d.kpis.closure_rate}% of every finding ever raised is closed or accepted. `}<Link href={FINDINGS} className="rounded-ds-control text-ds-primary-text hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring">All findings</Link></p>
-    </>
-  );
-}
-
-export function ResidualList({ d, bands }: { d: Dashboard; bands: Bands }) {
-  const rows = topResidual(d.top_residual_vendors);
-  if (rows.length === 0) return <p className={QUIET}>No scored assessments yet.</p>;
-  return (
-    <ol className={LIST}>
-      {rows.map((v) => {
-        const band = residualBand(v.residual, bands);
-        return (
-          <li key={v.id} className="border-b border-ds-border py-[6px] last:border-b-0">
-            <div className="flex flex-wrap items-center gap-x-[8px] gap-y-[2px]">
-              <Link href={`${REGISTER}/${v.id}`} className="min-w-0 flex-1 truncate rounded-ds-control text-ds-body font-[500] text-ds-fg hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring" title={v.name}>{v.name}</Link>
-              <StatusPill size="sm" {...statusPill(vendorTier, v.tier ?? 'not_tiered')} />
-              {v.grade && <StatusPill size="sm" {...statusPill(vendorGrade, v.grade)} />}
-            </div>
-            <div className="mt-[4px] flex items-center gap-[8px]">
-              <ProgressBar value={barWidth(v.residual)} label={`${v.name}: residual score`} showValue={false} tone={BAND_BAR[band]} className="flex-1" />
-              <span className="w-[56px] text-right text-ds-body font-[600] tabular-nums text-ds-fg">{v.residual ?? '—'}</span>
-              <span className="w-[64px] text-ds-label text-ds-fg-muted">{vendorBand.label(band)}</span>
-            </div>
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
-
-export function TierGapList({ d }: { d: Dashboard }) {
-  const rows = tierGaps(d.inherent_vs_residual);
-  if (rows.length === 0) return <p className={QUIET}>No scored assessments yet.</p>;
-  return (
-    <ul className={LIST}>
-      {rows.map((r) => (
-        <li key={r.tier} className="flex min-h-ds-control flex-wrap items-center gap-x-[8px] border-b border-ds-border py-[4px] last:border-b-0">
-          <span className="min-w-0 flex-1 text-ds-body text-ds-fg">{r.label}</span>
-          <span className="text-ds-body tabular-nums text-ds-fg-muted">{`Inherent ${r.inherent}`}</span>
-          <span className="text-ds-body font-[600] tabular-nums text-ds-fg">{`Residual ${r.residual}`}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
+// ── Latest signals ───────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export function SignalList({ d }: { d: Dashboard }) {
   const rows = signalRows(d.monitoring_feed);
@@ -259,14 +174,3 @@ export function SignalList({ d }: { d: Dashboard }) {
     </>
   );
 }
-
-export function TrendCard({ trend }: { trend: UseQueryResult<TrendAnswer> }) {
-  return (
-    <Loaded q={trend} label="the trend" rows={4}>
-      {(t) => (t.series.some((s) => s.residual != null || s.inherent != null)
-        ? <TrendChart trend={t} />
-        : <p className={QUIET}>No history yet. The trend builds up as assessments are scored.</p>)}
-    </Loaded>
-  );
-}
-

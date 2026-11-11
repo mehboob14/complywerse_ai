@@ -80,6 +80,26 @@ test('every counter opens a register FILTERED, never the bare list', () => {
   assert.match(model, /href: `\/issues\/actions\?status=\$\{x\.s\}`/, 'an action row opens the actions with that status');
 });
 
+test("the charts are the kit's: no recharts import and no colour written in a page file; every card and tile says what it rests on, and every card says how it fails", () => {
+  for (const f of FILES.filter((x) => !x.includes('settings'))) {
+    const src = code(read(f));
+    assert.doesNotMatch(src, /from 'recharts'/, `${f}: a chart drawn outside the kit`);
+    assert.doesNotMatch(src, /#[0-9a-fA-F]{6}\b/, `${f}: a colour written here (colours are components/overview/charts/palette.ts)`);
+  }
+  const visuals = code(read(join(ISSUES, '_overview/visuals.tsx')));
+  const cards = Array.from(visuals.matchAll(/<ChartCard\b[\s\S]*?\n\s*>/g)).map((m) => m[0]);
+  assert.ok(cards.length >= 10, `${cards.length} cards`);
+  for (const c of cards) {
+    assert.match(c, /\binfo=/, `a card with no (i): ${c.slice(0, 60)}`);
+    assert.match(c, /\bstate=/, `a card with no state: ${c.slice(0, 60)}`);
+    assert.match(c, /\berror=\{failure\(/, `a card that cannot say it failed: ${c.slice(0, 60)}`);
+    assert.match(c, /\bemptyText=/, `a card with no words for nothing: ${c.slice(0, 60)}`);
+  }
+  const tiles = Array.from(visuals.matchAll(/<KpiTile\b[\s\S]*?\/>/g)).map((m) => m[0]);
+  assert.equal(tiles.length, 6);
+  for (const t of tiles) assert.match(t, /\binfo=/, `a tile with no (i): ${t.slice(0, 60)}`);
+});
+
 test('the rights are the ones the server asks for: Raise issue needs create; Settings and every step need edit; incidents are read with the incident right', () => {
   const page = code(read(join(ISSUES, 'page.tsx')));
   assert.match(page, /hasPermission\('issue_management:issues:create'\)/);

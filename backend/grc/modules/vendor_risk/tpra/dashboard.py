@@ -336,10 +336,15 @@ def risk_trend(
     for s in snaps:
         key = s.captured_at.strftime("%Y-%m")
         buckets[key] = s  # ordered asc, so last write wins = latest in month
+    # The snapshot also keeps the open findings and the vendor count of that moment (portfolio scope), so a page can
+    # draw their history; null where a snapshot did not record them.
     series = [{
         "month": k,
         "inherent": buckets[k].inherent_score,
         "residual": buckets[k].residual_score,
+        "open_findings": buckets[k].open_findings,
+        "critical_findings": buckets[k].critical_findings,
+        "vendor_count": buckets[k].vendor_count,
     } for k in sorted(buckets.keys())]
 
     cfg = get_tiering_config(db, tids[0]) if tids and tids[0] > 0 else {}

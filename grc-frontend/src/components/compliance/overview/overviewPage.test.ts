@@ -19,20 +19,22 @@ const PAGE = readFileSync(fileURLToPath(new URL('../../../app/(dashboard)/compli
 const LAYOUT = readFileSync(fileURLToPath(new URL('../../../app/(dashboard)/compliance/layout.tsx', import.meta.url)), 'utf8');
 
 test('the folder is what the pins read, and the page is a thin shell around the cockpit', () => {
-  assert.deepEqual(SOURCES.map((s) => s.file).sort(), ['ComplianceOverview.tsx', 'ComplianceStrip.tsx', 'OverviewParts.tsx', 'overviewData.ts', 'overviewModel.ts']);
+  assert.deepEqual(SOURCES.map((s) => s.file).sort(), ['Charts.tsx', 'ComplianceOverview.tsx', 'ComplianceStrip.tsx', 'OverviewParts.tsx', 'Tiles.tsx', 'graphModel.ts', 'overviewData.ts', 'overviewModel.ts']);
   assert.match(PAGE, /import ComplianceOverview from '@\/components\/compliance\/overview\/ComplianceOverview';/);
   assert.ok(PAGE.split('\n').length < 12);
   assert.doesNotMatch(PAGE, /ComplianceOverviewCards/, 'the old page is not mounted any more');
 });
 
-test('the four requests keep their keys and endpoints (the scorecard key is shared with the main Dashboard, the others with the pages that already ask)', () => {
+test('the five requests keep their keys and endpoints (the scorecard key is shared with the main Dashboard, the others with the pages that already ask)', () => {
   const data = code(src('overviewData.ts'));
   assert.match(data, /queryKey: \[\.\.\.SCORECARD_QUERY_KEYS\.compliance\],\s*queryFn: async \(\) => \(await complianceApi\.dashboard\.getSectionsOverview\(\)\)\.data as Scorecard/);
   assert.match(data, /queryKey: \['ev-ws-summary'\],\s*queryFn: async \(\) => \(await apiClient\.get\('\/evidence-mgmt\/items\/dashboard\/summary'\)\)\.data/);
   assert.match(data, /queryKey: \['certifications'\]/);
   assert.match(data, /certificationsApi\.getAll\(\)/);
   assert.match(data, /queryKey: \[\.\.\.ONBOARDING_KEYS\.register\]/);
-  assert.equal((data.match(/useQuery\(/g) ?? []).length, 4);
+  assert.match(data, /queryKey: \['compliance-trend', days\]/, 'the Frameworks hub reads the history under the same key and shape');
+  assert.match(data, /complianceApi\.dashboard\.getComplianceTrend\(days\)/);
+  assert.equal((data.match(/useQuery\(/g) ?? []).length, 5);
 });
 
 test('a failed request is an error state of its own card: nothing swallowed into zeros, no gate that waits for all of them', () => {
@@ -41,7 +43,7 @@ test('a failed request is an error state of its own card: nothing swallowed into
   const parts = code(src('OverviewParts.tsx'));
   assert.doesNotMatch(data, /\bcatch\b/, 'the old page caught the scorecard\'s failure and drew a zero payload: "score -, nothing needs attention"');
   assert.doesNotMatch(page, /isLoading/, 'one skeleton for the whole page waited for every request');
-  assert.equal((data.match(/retry: retryRead/g) ?? []).length, 4);
+  assert.equal((data.match(/retry: retryRead/g) ?? []).length, 5);
   assert.match(data, /canRetry\(error\)/, 'Retry only where asking again can help');
   assert.match(page, /failed: scorecard\.isError && !payload/);
   assert.match(page, /failed: evidence\.isError && !evidence\.data/);
@@ -123,4 +125,30 @@ test('the strip links the Overview and the four pages that had no door: the page
   assert.match(strip, /aria-current=\{open \? 'page' : undefined\}/);
   assert.match(strip, /<nav aria-label="Compliance pages"/);
   assert.match(code(src('ComplianceOverview.tsx')), /<ComplianceStrip current="overview" \/>/);
+});
+
+test("the page leads with the figures and the graphs: the cockpit's hero and visuals slots, drawn from the answers the page already has (no request of a chart's own)", () => {
+  const page = code(src('ComplianceOverview.tsx'));
+  assert.match(page, /hero=\{<Tiles /);
+  assert.match(page, /visuals=\{<Charts /);
+  assert.match(page, /useTrend\(HERO_DAYS\)/, "the tiles' shape is always the last 90 days");
+  for (const file of ['Charts.tsx', 'Tiles.tsx', 'graphModel.ts']) assert.doesNotMatch(code(src(file)), /useQuery|apiClient|axios|(?<![\w.])fetch\(/, `${file}: the page asks, the graphs draw`);
+  const charts = code(src('Charts.tsx'));
+  assert.equal((charts.match(/<ChartCard\b/g) ?? []).length, 10, 'ten cards');
+  assert.equal((charts.match(/\{\.\.\.shown\(/g) ?? []).length, 10, 'each card has its own loading, refused, failed and empty state');
+  for (const kind of ['BarList', 'DonutChart', 'SegmentBar', 'StackedBars', 'TrendChart']) assert.match(charts, new RegExp(`<${kind}(?=[\\s>])`), kind);
+  assert.match(code(src('Tiles.tsx')), /<KpiRow>/);
+  assert.equal((code(src('Tiles.tsx')).match(/<KpiTile\b/g) ?? []).length, 6, 'six tiles');
+});
+
+test("no colour but the palette's, no percentage of the graphs' own: every Ready / Implemented figure is the journey model's, the scores are the server's", () => {
+  for (const file of ['Charts.tsx', 'Tiles.tsx', 'graphModel.ts']) {
+    const c = code(src(file));
+    assert.doesNotMatch(c, /#[0-9a-fA-F]{3,8}\b/, `${file}: hex lives in palette.ts`);
+    assert.doesNotMatch(c, /readiness_percentage|completion_percentage|implemented_count|approved_evidence_controls/, `${file}: no raw progress key`);
+  }
+  const graph = code(src('graphModel.ts'));
+  for (const fn of ['journeyNumbers', 'readinessBand']) assert.match(graph, new RegExp(fn));
+  assert.doesNotMatch(graph, /\/\s*(?:n|f\.n)\.(?:applicable|total)/, 'no division of its own: a percentage is the journey model\'s or the server\'s');
+  assert.match(graph, /LEFT_OUT = new Set\(\['evidence:freshness'\]\)/, 'the stale-flag measure is not drawn beside the lapsed count');
 });

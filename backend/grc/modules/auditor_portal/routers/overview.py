@@ -8,10 +8,11 @@ spot pending review work at a glance.
 """
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import Text, func, cast
+from sqlalchemy import Text, and_, case, func, cast, or_
 from sqlalchemy.orm import Session, joinedload
 
 from ....models import (
@@ -33,6 +34,7 @@ from ....models import (
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 from ..helpers import resolve_framework_context, parsed_control_ids_for_context
+from ..months import month_windows
 from .reviews import _iso, _person, _word
 
 
@@ -335,3 +337,119 @@ def get_work(
         "rows": rows[:limit],
         "rows_total": counters["files_to_review"] + counters["scope_to_decide"],
     }
+
+
+# ─── The front door's charts ─────────────────────────────────────────
+
+AGE_EDGES_DAYS = (7, 14, 30, 90)            # a waiting item is under a week, 1-2 weeks, 2-4 weeks, 1-3 months, or older: five buckets
+
+
+def _total(expr):
+    return func.coalesce(func.sum(expr), 0)
+
+
+def _flow(scoped, stamp, decided_at, status_col, windows) -> Dict[str, List[int]]:
+    """Per calendar month, for one kind of request: how many were raised (`sent`), how many a reviewer decided (`decided`: approved or turned down, by the
+    time they decided), and how many were still waiting at the end of the month (`waiting`: raised before it, and not decided yet or decided after it). The
+    last month's `waiting` is the count now. A request decided with no time on record is never counted as waiting in the past (nobody knows when it stopped)."""
+    done = func.lower(func.coalesce(status_col, "pending")).in_(("approved", "rejected"))
+    n = len(windows)
+    cols = (
+        [_total(case((and_(stamp >= s, stamp < e), 1), else_=0)) for _, s, e in windows]
+        + [_total(case((and_(done, decided_at >= s, decided_at < e), 1), else_=0)) for _, s, e in windows]
+        + [_total(case((and_(stamp < e, or_(~done, decided_at >= e)), 1), else_=0)) for _, s, e in windows]
+    )
+    row = [int(v or 0) for v in scoped(cols).one()]
+    return {"sent": row[:n], "decided": row[n:2 * n], "waiting": row[2 * n:]}
+
+
+def _ages(scoped, stamp, status_col, now: datetime) -> Dict[str, Any]:
+    """The waiting ones by how long they have waited (AGE_EDGES_DAYS: under 7 days, 7-13, 14-29, 30-89, 90 and over), and how many have no date at all."""
+    waiting = ~func.lower(func.coalesce(status_col, "pending")).in_(("approved", "rejected"))
+    cuts = [now - timedelta(days=d) for d in AGE_EDGES_DAYS]               # newest cut first: a stamp after cuts[0] is under 7 days old
+    cols = []
+    for i in range(len(cuts) + 1):
+        bucket = [waiting, stamp.isnot(None)]
+        if i < len(cuts):
+            bucket.append(stamp > cuts[i])
+        if i > 0:
+            bucket.append(stamp <= cuts[i - 1])
+        cols.append(_total(case((and_(*bucket), 1), else_=0)))
+    cols.append(_total(case((and_(waiting, stamp.is_(None)), 1), else_=0)))
+    row = [int(v or 0) for v in scoped(cols).one()]
+    return {"buckets": row[:-1], "undated": row[-1]}
+
+
+@router.get("/work/summary")
+def get_work_summary(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """What the front door's charts draw (GET only, writes nothing), over the same journeys `/work` counts (the newest 200 of the organisation).
+
+    `months`: the last 12 calendar months, oldest first. `files` and `scope`: per month `sent`, `decided` and `waiting` (see `_flow`); scope requests count once per
+    framework, the way `/work` counts them. `aging`: the waiting files and scope requests by days waiting, in the buckets `edges_days` cut (under 7, 7-13, 14-29,
+    30-89, 90 and over), `undated` those with no date. `scope_totals`: the requirements of those frameworks by scope state: in scope and out of scope (approved
+    requests), waiting, turned down, and `no_request` (requirements nobody has asked about).
+    """
+    now = datetime.utcnow()
+    windows = month_windows(now)
+    zeros = lambda: [0] * len(windows)                                                    # noqa: E731
+    out: Dict[str, Any] = {
+        "as_of": now.isoformat(), "months": [key for key, _, _ in windows],
+        "files": {"sent": zeros(), "decided": zeros(), "waiting": zeros()},
+        "scope": {"sent": zeros(), "decided": zeros(), "waiting": zeros()},
+        "aging": {"edges_days": list(AGE_EDGES_DAYS), "files": [0] * (len(AGE_EDGES_DAYS) + 1), "scope": [0] * (len(AGE_EDGES_DAYS) + 1), "undated": {"files": 0, "scope": 0}},
+        "scope_totals": {"controls": 0, "in_scope": 0, "out_of_scope": 0, "waiting": 0, "turned_down": 0, "no_request": 0},
+    }
+    tenants = get_user_tenants(current_user, db)
+    if not tenants:
+        return out
+    journeys = db.query(CertificationJourney).filter(CertificationJourney.tenant_id.in_(tenants)).order_by(
+        CertificationJourney.started_at.desc(), CertificationJourney.id.desc()).limit(_JOURNEY_CAP).all()
+    if not journeys:
+        return out
+    journey_ids = [j.id for j in journeys]
+    fw_ids = sorted({j.uploaded_framework_id for j in journeys if j.uploaded_framework_id})     # one count per framework, however many journeys share it
+
+    def files(cols):
+        return db.query(*cols).select_from(ImplementationEvidence).join(
+            ControlImplementation, ImplementationEvidence.implementation_id == ControlImplementation.id,
+        ).filter(ControlImplementation.journey_id.in_(journey_ids))
+
+    out["files"] = _flow(files, ImplementationEvidence.uploaded_at, ImplementationEvidence.reviewed_at, ImplementationEvidence.review_status, windows)
+    ages_files = _ages(files, ImplementationEvidence.uploaded_at, ImplementationEvidence.review_status, now)
+    out["aging"]["files"], out["aging"]["undated"]["files"] = ages_files["buckets"], ages_files["undated"]
+    if not fw_ids:
+        return out
+
+    raised = func.coalesce(ClauseApplicability.requested_at, ClauseApplicability.created_at)
+
+    def scope(cols):
+        return db.query(*cols).select_from(ClauseApplicability).filter(ClauseApplicability.tenant_id.in_(tenants), ClauseApplicability.uploaded_framework_id.in_(fw_ids))
+
+    out["scope"] = _flow(scope, raised, ClauseApplicability.reviewed_at, ClauseApplicability.status, windows)
+    ages_scope = _ages(scope, raised, ClauseApplicability.status, now)
+    out["aging"]["scope"], out["aging"]["undated"]["scope"] = ages_scope["buckets"], ages_scope["undated"]
+
+    totals = out["scope_totals"]
+    asked: Dict[int, int] = {fw: 0 for fw in fw_ids}
+    for fw, value, applicable, count in db.query(
+        ClauseApplicability.uploaded_framework_id, ClauseApplicability.status, ClauseApplicability.is_applicable, func.count(ClauseApplicability.id),
+    ).filter(ClauseApplicability.tenant_id.in_(tenants), ClauseApplicability.uploaded_framework_id.in_(fw_ids)).group_by(
+        ClauseApplicability.uploaded_framework_id, ClauseApplicability.status, ClauseApplicability.is_applicable,
+    ).all():
+        asked[fw] += count
+        word = _word(value)
+        if word == "approved":
+            totals["in_scope" if applicable else "out_of_scope"] += count
+        elif word == "rejected":
+            totals["turned_down"] += count
+        else:
+            totals["waiting"] += count
+    for fw, count in db.query(ParsedFrameworkControl.uploaded_framework_id, func.count(ParsedFrameworkControl.id)).filter(
+        ParsedFrameworkControl.uploaded_framework_id.in_(fw_ids),
+    ).group_by(ParsedFrameworkControl.uploaded_framework_id).all():
+        totals["controls"] += count
+        totals["no_request"] += max(0, count - asked.get(fw, 0))
+    return out

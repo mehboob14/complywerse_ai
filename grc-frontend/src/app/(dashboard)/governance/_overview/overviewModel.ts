@@ -218,7 +218,7 @@ export interface DocumentsTile {
   inReview: number;
 }
 
-export interface DocumentsSummary { total_documents?: number; by_status?: Record<string, number> }
+export interface DocumentsSummary { total_documents?: number; by_status?: Record<string, number>; by_type?: Record<string, number>; by_classification?: Record<string, number> }
 
 export function documentsTile(summary: DocumentsSummary | undefined): DocumentsTile {
   const by = summary?.by_status ?? {};

@@ -1,16 +1,18 @@
 'use client';
 
-// Governance > Overview, a worklist-first cockpit (option A of the Overview design lab): what needs attention across the programme as a band of counters, the
-// person's own prioritised work ("Needs my action", the shared inbox narrowed to Governance, one action per row) beside a compact posture card, and the
-// breakdowns below (by framework or department, the library and exceptions, the throughput). The frame is components/overview (Cockpit, CounterBand,
-// WorkListCard, their rules in cockpitModel.ts and workList.ts); the Governance content is in ./_overview, its rules in overviewModel.ts and postureModel.ts.
-// Seven requests feed the figures and each card loads, fails and has nothing on its own (a failed request is said where its numbers would be, never read as 0,
-// and a refusal is "No access"); a person who may not read the programme scores sees that once and their own work takes the page. The eighth request is the
-// posture aggregate (./_overview/postureApi.ts), the work comes from the inbox queries the top bar already holds.
+// Governance > Overview, a dashboard first: six figures with their trend (the score and how it moved, what needs attention, the documents, the overdue reviews,
+// the coverage, what was published), the counters that open the records, then the charts (section scores against the target, documents by status and by type, the
+// throughput by month, review health and where attention sits per framework or department, what lapses when, the exceptions, the requests and actions), and under
+// them what the person has to do ("Needs my action", the shared inbox narrowed to Governance, one action per row) beside the posture card (how each score is made,
+// the weights) and the table of every framework or department. The frame is components/overview (Cockpit, CounterBand, WorkListCard, their rules in cockpitModel.ts and
+// workList.ts) and the chart kit components/overview/charts; the Governance content is in ./_overview, its rules in overviewModel.ts, postureModel.ts and visualsModel.ts.
+// Seven requests feed the figures and each card loads, fails and has nothing on its own (a failed request is said where its numbers would be, never read as 0, and
+// a refusal is "No access"); a person who may not read the programme scores sees that once and their own work takes the page. The eighth request is the posture
+// aggregate (./_overview/postureApi.ts), the work comes from the inbox queries the top bar already holds.
 // The queries, their keys and the scorecard's formula and weights are what they were: the scorecard is computed by the server
 // (/governance/dashboard/documents-overview) and shared with the main dashboard under SCORECARD_QUERY_KEYS.governance.
 // On the design-system kit: PageHeader variant="page", Button, Menu, SectionCard, SegmentedControl, CountRow, WorkRow, Skeleton / ErrorState / EmptyState.
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { FileCheck, FileText, Lock, RefreshCw } from 'lucide-react';
@@ -22,6 +24,7 @@ import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { SectionDetailModal, type OverviewSection } from '@/components/dashboard/score-kit';
 import { SCORECARD_QUERY_KEYS } from '@/components/dashboard/scorecard-query-keys';
 import { Cockpit, SkipToWork, type Breakdown } from '@/components/overview/Cockpit';
+import { Cell, ChartGrid } from '@/components/overview/charts';
 import { CounterBand, type BandCounter } from '@/components/overview/CounterBand';
 import { WorkListCard } from '@/components/overview/WorkListCard';
 import { layoutOf, workRowLimit } from '@/components/overview/cockpitModel';
@@ -30,18 +33,21 @@ import { workOf, type WorkFilter } from '@/components/overview/workList';
 import { formatCount } from '@/lib/format';
 import { useInbox } from '@/lib/inbox/inboxApi';
 import { clockOf } from '@/lib/inbox/inboxView';
+import { ExceptionsCard, FlowCard, LapseCard, SectionScoresCard, StatusCard, ThroughputCard, TypeCard } from './_overview/Charts';
+import { AttentionHeatCard, ReviewHealthCard } from './_overview/GroupCharts';
+import { Hero, type HeroFeeds } from './_overview/Hero';
 import { LibraryBody } from './_overview/Library';
 import { PerformanceDialog, type OverviewCard } from './_overview/PerformanceDialog';
 import { PostureCard } from './_overview/Posture';
-import { ThroughputBody } from './_overview/Throughput';
 import { GroupRows } from './_overview/Groups';
 import { link, refused, toFeed } from './_overview/parts';
 import { usePosture } from './_overview/postureApi';
 import { groupsMeta, type GroupBy } from './_overview/postureModel';
 import {
   ATTENTION, GOVERNANCE_SOURCES, allUnavailable, attentionTotal, counterFor, retryOverview,
-  type AttentionSources, type DocumentsSummary, type SourceName, type TrendPoint,
+  type AttentionKey, type AttentionSources, type Counter, type DocumentsSummary, type SourceName, type TrendPoint,
 } from './_overview/overviewModel';
+import type { ExceptionsAnswer, HeroInputs } from './_overview/visualsModel';
 
 const GOVERNANCE_TUNING = { configBase: '/governance/dashboard', invalidateKey: [...SCORECARD_QUERY_KEYS.governance] as unknown[] };
 const GROUP_INFO = 'Documents are counted under each framework they are mapped to, or under the department they are filed under. Weakest first: the groups with the lowest share of reviews on time.';
@@ -53,6 +59,7 @@ export default function GovernanceDashboardPage() {
   const [perfOpen, setPerfOpen] = useState(false);
   const [filter, setFilter] = useState<WorkFilter>('all');
   const [by, setBy] = useState<GroupBy>('framework');
+  const now = useMemo(() => new Date(), []);              // the throughput window ends in the month the page was opened in
 
   const summary = useQuery({
     queryKey: ['governance-dashboard-summary'],
@@ -94,7 +101,7 @@ export default function GovernanceDashboardPage() {
   });
   const exceptions = useQuery({
     queryKey: ['governance-policy-exceptions-summary'],
-    queryFn: async () => (await policyExceptionApi.getSummary()).data as { total?: number; pending_approval?: number; approved?: number; expiring_soon?: number },
+    queryFn: async () => (await policyExceptionApi.getSummary()).data as ExceptionsAnswer,
     retry: retryOverview,
   });
 
@@ -128,34 +135,51 @@ export default function GovernanceDashboardPage() {
   };
 
   const first = groups.data?.pages[0];
+  const groupToggle = (
+    <SegmentedControl<GroupBy>
+      label="Group by" name="posture-by" value={by} onChange={setBy}
+      options={[{ value: 'framework', label: 'Framework' }, { value: 'department', label: 'Department' }]}
+    />
+  );
   const breakdowns: Breakdown[] = [
     {
       id: 'by-group',
       title: `By ${by}`,
       info: first ? [first.notes.counting, first.notes.review_health, first.notes.needs_attention, first.notes.open_exceptions].join(' ') : GROUP_INFO,
       meta: first ? groupsMeta(first) : undefined,
-      actions: (
-        <SegmentedControl<GroupBy>
-          label="Group by" name="posture-by" value={by} onChange={setBy}
-          options={[{ value: 'framework', label: 'Framework' }, { value: 'department', label: 'Department' }]}
-        />
-      ),
+      actions: groupToggle,
       size: 'wide',
       children: <GroupRows query={groups} by={by} />,
     },
     {
       id: 'library',
-      title: 'Library and exceptions',
-      children: <LibraryBody summary={feeds.summary} scorecard={feeds.scorecard} exceptions={feeds.exceptions} />,
-    },
-    {
-      id: 'throughput',
-      title: 'Content throughput',
-      info: 'Documents created and published each month, over the last six months.',
-      size: 'band',
-      children: <ThroughputBody feed={feeds.trends} />,
+      title: 'Classification and mappings',
+      children: <LibraryBody summary={feeds.summary} scorecard={feeds.scorecard} />,
     },
   ];
+
+  const heroInputs: HeroInputs = {
+    scorecard: feeds.scorecard, summary: feeds.summary, trends: feeds.trends, total,
+    counters: Object.fromEntries(views.map(({ def, counter }) => [def.key, counter])) as Partial<Record<AttentionKey, Counter>>,
+    now,
+  };
+  const heroFeeds: HeroFeeds = {
+    scorecard: feeds.scorecard, summary: feeds.summary, trends: feeds.trends, pending: feeds.pending, overdue: feeds.overdue, expiring: feeds.expiring, exceptions: feeds.exceptions,
+  };
+  // a zigzag of 7 and 5 columns on a wide screen, which pairs the two 5s on a tablet; the groups take half a row each, the three small cards a third
+  const visuals = (
+    <ChartGrid>
+      <Cell span={7}><SectionScoresCard scorecard={feeds.scorecard} /></Cell>
+      <Cell span={5}><TypeCard summary={feeds.summary} /></Cell>
+      <Cell span={5}><StatusCard summary={feeds.summary} /></Cell>
+      <Cell span={7}><ThroughputCard trends={feeds.trends} now={now} /></Cell>
+      <Cell span={6}><ReviewHealthCard query={groups} by={by} onBy={setBy} /></Cell>
+      <Cell span={6}><AttentionHeatCard query={groups} by={by} /></Cell>
+      <Cell span={4}><LapseCard scorecard={feeds.scorecard} expiring={feeds.expiring} summary={feeds.summary} /></Cell>
+      <Cell span={4}><ExceptionsCard exceptions={feeds.exceptions} /></Cell>
+      <Cell span={4}><FlowCard scorecard={feeds.scorecard} /></Cell>
+    </ChartGrid>
+  );
 
   const updated = scorecard.dataUpdatedAt > 0 ? `Updated ${clockOf(scorecard.dataUpdatedAt)}` : undefined;
   return (
@@ -200,6 +224,8 @@ export default function GovernanceDashboardPage() {
             Your account cannot read the Governance document library, so the programme scores are not shown. Your own work below is unaffected. Ask an administrator for library access if you need them.
           </Notice>
         )}
+        hero={<Hero inputs={heroInputs} feeds={heroFeeds} />}
+        visuals={visuals}
         band={(
           <CounterBand
             id="attention"

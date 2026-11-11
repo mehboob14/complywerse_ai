@@ -1,11 +1,11 @@
 'use client';
 
 // The Summary tab: where the journey stands, in the numbers the Frameworks page shows (Ready and Implemented come from the journey's own figures, so this page and that
-// one never disagree), what was sent and decided, and a door into each tab of the journey in Frameworks. The old Overview's six "linked artifact" tiles (three of them
+// one never disagree), what was sent and decided (as two graphs: the files by decision and the requirements by scope), and a door into each tab of the journey in Frameworks. The old Overview's six "linked artifact" tiles (three of them
 // counted the whole organisation, and none opened anything) are gone: the artifacts of the journey are one link away. A figure that has not answered says so and never
 // reads as 0.
 import type { UseQueryResult } from '@tanstack/react-query';
-import { ErrorState, Fact, FactList, SectionCard, StatTile, StatusPill, TitleLink } from '@/components/ui/ds';
+import { ErrorState, SectionCard, StatTile, StatusPill, TitleLink } from '@/components/ui/ds';
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { formatCount, formatPercent } from '@/lib/format';
 import { statusPill } from '@/lib/status';
@@ -13,6 +13,7 @@ import { readinessBandWords } from '@/lib/statuses/frameworkJourney';
 import { frameworksHref, journeyHref, noun, summaryFigures, type QueuePayload } from '@/lib/auditorPortal/portalModel';
 import type { JourneyProgressPayload } from '@/lib/journeyModel';
 import type { CertificationJourney } from '@/types';
+import { SummaryCharts } from './SummaryCharts';
 
 export interface SummaryTabProps {
   journeyId: number;
@@ -81,17 +82,7 @@ export function SummaryTab({ journeyId, queue, journey }: SummaryTabProps) {
         />
       </div>
 
-      {counts && (
-        <SectionCard id="scope" title="Scope requests" info="Every request to put a requirement in or out of scope. A request waits until a reviewer decides it; the requirement stays as it is until then.">
-          <FactList min={140}>
-            <Fact label="Waiting">{formatCount(counts.scope.pending)}</Fact>
-            <Fact label="In scope">{formatCount(counts.scope.in_scope)}</Fact>
-            <Fact label="Out of scope">{formatCount(counts.scope.out_of_scope)}</Fact>
-            <Fact label="Turned down">{formatCount(counts.scope.rejected)}</Fact>
-            <Fact label="No request yet">{formatCount(counts.untouched)}</Fact>
-          </FactList>
-        </SectionCard>
-      )}
+      <SummaryCharts journeyId={journeyId} queue={queue} />
 
       <SectionCard id="frameworks" title="In Frameworks" info="The requirements, the scope decisions, the documents and the activity of this journey are in Frameworks. The portal does not keep a second copy.">
         <ul className="m-0 grid list-none grid-cols-1 gap-x-[16px] gap-y-[8px] p-0 md:grid-cols-2">

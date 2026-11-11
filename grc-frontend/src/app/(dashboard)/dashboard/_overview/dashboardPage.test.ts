@@ -11,9 +11,10 @@ const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), 'utf8'
 const page = read('../page.tsx');
 const files = {
   parts: read('./parts.tsx'), perf: read('./PerfOverview.tsx'), posture: read('./Posture.tsx'), actFirst: read('./ActFirst.tsx'), modules: read('./Modules.tsx'),
+  hero: read('./Hero.tsx'), bars: read('./Bars.tsx'), scoreBars: read('./ScoreBars.tsx'), attention: read('./Attention.tsx'), trends: read('./Trends.tsx'),
   hook: read('./usePerfFeeds.ts'), kpis: read('./CyberKpis.tsx'),
 };
-const models = { overview: read('./overviewModel.ts'), perf: read('./perfModel.ts'), kpi: read('./kpiModel.ts') };
+const models = { overview: read('./overviewModel.ts'), perf: read('./perfModel.ts'), charts: read('./perfCharts.ts'), kpi: read('./kpiModel.ts') };
 const strip = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' ')).replace(/(^|\s)\/\/\s.*$/gm, '$1');
 
 test('the requests come from lib/perf/moduleFeeds.ts under the module pages\' keys, with the stale time and the retry they had; a failure is thrown, never swallowed into null', () => {
@@ -44,7 +45,7 @@ test('the KPI panel keeps its three requests, its key and its stale time; only t
 
 test('every section loads, fails and has nothing on its own: a skeleton, an error with Retry where asking again can help, never a 0 that stands for a failure', () => {
   for (const [name, text] of Object.entries(files)) {
-    if (name === 'parts' || name === 'hook') continue;
+    if (name === 'parts' || name === 'hook' || name === 'bars') continue;   // the bar list draws what the cards give it: the states are the cards'
     assert.match(text, /Skeleton|loading|Loading/, `${name}: a state while it loads`);
   }
   assert.match(files.parts, /canRetry\(error\) \? onRetry : undefined/, 'Retry only where asking again can help (a refusal cannot be retried)');
@@ -53,16 +54,23 @@ test('every section loads, fails and has nothing on its own: a skeleton, an erro
   assert.match(files.modules, /No access/, 'a refused row says so');
   assert.match(files.modules, /onClick=\{\(\) => onRetry\(row\.area\.key\)\}/, 'a failed row asks again for its own request');
   assert.match(files.modules, /Still loading\. This is taking longer than usual\./);
-  assert.match(files.perf, /Couldn't load what needs attention/, 'every area failed is said once, over the band');
+  assert.match(files.attention, /Couldn't load what needs attention/, 'every area failed is said once, in the card');
+  assert.match(files.attention, /Leaves out \$\{failedNames\}/, 'an area that failed is named, and the bars are not drawn as if it had nothing');
+  assert.match(files.scoreBars, /Couldn't load the scored areas/);
+  assert.match(files.scoreBars, /Leaves out \$\{nameList\(view\.leftOut\)\}/, 'the score picture says which areas it leaves out');
   assert.match(files.actFirst, /Couldn't load the scored areas/);
   assert.match(files.actFirst, /Every scored area is at or above its target\./, 'nothing below target is said in words, not drawn as an empty box');
-  assert.match(files.posture, /Loading overall readiness/);
+  assert.match(files.posture, /state=\{state\}/, "the ring card has the kit's five states (loading, failed, refused, empty, ready)");
+  assert.match(files.trends, /No history yet\./, 'a history that has not grown says so');
+  assert.match(files.trends, /deniedText=/, 'a refused history is its own state');
+  assert.match(files.hero, /loading: overall\.state === 'loading'/, 'a tile waits for its answer');
+  assert.match(files.hero, /error: view\.state === 'error'/);
   for (const [name, text] of Object.entries(files)) assert.doesNotMatch(strip(text), /\?\? 0\)\}%|isLoading \? .*:.*\b0\b/, `${name}: no figure defaults to 0`);
   assert.match(strip(models.perf), /export function rowOf\(area: Area, feed: Feed \| undefined\): AreaRow \{/);
 });
 
 test('every file of the folder follows the kit\'s rules: only the --ds tokens and arbitrary values, 12px floor, no legacy scope, no native dialog, nothing hover-only', () => {
-  const all: Record<string, string> = { ...files, 'overviewModel.ts': models.overview, 'perfModel.ts': models.perf, 'kpiModel.ts': models.kpi };
+  const all: Record<string, string> = { ...files, 'overviewModel.ts': models.overview, 'perfModel.ts': models.perf, 'perfCharts.ts': models.charts, 'kpiModel.ts': models.kpi };
   for (const [name, text] of Object.entries(all)) {
     assert.deepEqual(findViolations(text).map((v) => `${name}:${v.line} ${v.rule}: ${v.text}`), []);
     assert.doesNotMatch(strip(text), /governance-light|docUi|DocPageHeader|PageLoader|ScoreBreakdownCard|\bdash-card\b|\bdash-label\b|\bdash-value\b|className="dash /, name);
@@ -97,19 +105,41 @@ test('a bare <p>, <td>, <th>, <h2> or <h3> gets 11.5px and dark text from the pl
   assert.ok(scanned >= 10, `the scan found ${scanned} elements: the check reads the files`);
 });
 
-test('one Tab stop per row: a work row is its title link and its Open; a table row is the area\'s name, its top counter and its toggle; the band\'s chips are one target each', () => {
-  const rows = strip(files.actFirst);
-  assert.match(rows, /<WorkRow[\s\S]*href=\{w\.href\}[\s\S]*action=\{\{ label: 'Open', href: w\.href \}\}/, 'the kit\'s row: the title is the stretched link, the action sits above it');
+test('every bar and count opens what it counts, from a real link in a list (one Tab stop each); the table is one row per area with its name, its top counter and its toggle', () => {
+  const act = strip(files.actFirst);
+  assert.match(act, /<NamedBars label="Sections furthest below their target" rows=\{bars\}/, 'ranked bars: one list for the page, each name a link');
+  assert.match(act, /href: b\.href/, "a bar opens its section's page, or its module");
+  const att = strip(files.attention);
+  assert.match(att, /<NamedBars label="Items that need attention, by count" rows=\{barRows\}/);
+  assert.match(att, /href: b\.href/);
+  assert.match(att, /<CountRow key=\{c\.key\} layout="chip" label=\{c\.label\} href=\{c\.href\} tone=\{c\.tone\} count=\{0\}/, 'a counter that answered 0 stays one press away');
+  const bars = strip(files.bars);
+  assert.match(bars, /<Link href=\{r\.href\} title=\{r\.label\}/, "each bar's name opens its area, in every list of the page");
+  assert.match(strip(files.scoreBars), /<NamedBars rows=\{view\.bars\.map\(toRow\)\}[^>]*figureWidth=\{112\}/, 'the score bars share one figure column, so equal scores are equal lengths');
   const modules = strip(files.modules);
   assert.match(modules, /<RegisterTable[\s\S]*expand=\{\{ open, onChange: setOpen, label: \(r\) => `Details of \$\{r\.area\.label\}`/, 'the toggle names its row and says "Details"');
   assert.match(modules, /<TitleLink href=\{r\.area\.href\} title=\{r\.area\.label\}/);
-  assert.match(modules, /<CountRow key=\{c\.key\} label=\{c\.label\} count=\{c\.value\} href=\{c\.href\} tone=\{c\.tone\} \/>/, 'an opened row\'s counters are the kit\'s: a number, a word and one target');
-  assert.match(strip(files.perf), /<CounterBand\s+id="attention"/);
-  assert.match(strip(files.perf), /href="#work"/, 'a keyboard skips the band to where to act first');
+  assert.match(modules, /<CountRow key=\{c\.key\} label=\{c\.label\} count=\{c\.value\} href=\{c\.href\} tone=\{c\.tone\} \/>/, "an opened row's counters are the kit's: a number, a word and one target");
+  assert.match(strip(files.perf), /href="#work"/, 'a keyboard skips the figures to where to act first');
   assert.match(files.actFirst, /id="work"/);
+  assert.match(files.attention, /id="attention"/);
   assert.match(files.modules, /id="modules"/);
   assert.match(files.posture, /href="#modules"/);
-  assert.doesNotMatch(Object.values(files).map(strip).join('\n'), /recharts|<ResponsiveContainer|ChartFrame/, 'no picture to read by hand: every number is in words');
+  assert.match(strip(files.hero), /href: view\.state === 'ready' \? '#attention' : undefined/, 'a tile opens the counts it summarises');
+  const everything = Object.values(files).map(strip).join('\n');
+  assert.doesNotMatch(everything, /from 'recharts'|<ResponsiveContainer|ChartFrame/, "every picture is the chart kit's (components/overview/charts): each has its numbers as a table or a list for a screen reader");
+  assert.doesNotMatch(everything, /CounterBand/, 'the band of chips became the ranked bars of Needs attention');
+});
+
+test("the figures and charts read what the requests already hold: no request is added for a chart, and the KPI tile reads the strip's own query", () => {
+  const hero = strip(files.hero);
+  assert.match(hero, /const query = useKpiLive\(\);/, "the strip's query, under its key: a cache hit, nothing asked twice");
+  const others = Object.entries(files).filter(([k]) => k !== 'hook' && k !== 'kpis').map(([, v]) => strip(v)).join('\n');
+  assert.doesNotMatch(others, /apiClient|useQueries\(|useQuery\(/, 'only usePerfFeeds and the KPI strip ask for anything');
+  assert.match(strip(files.kpis), /export function useKpiLive\(\) \{\s*return useQuery\(\{\s*queryKey: \['main-kpi-live'\],/);
+  const perf = strip(files.perf);
+  assert.match(perf, /<Trends rows=\{rows\} payloads=\{\{ governance: feeds\.governance\?\.data, tasks: feeds\.tasks\?\.data \}\}/, 'the histories are in the answers of the Governance scorecard and the tasks summary');
+  assert.match(perf, /<Hero rows=\{rows\} overall=\{overall\} governance=\{feeds\.governance\?\.data\}/);
 });
 
 test('the page: the kit\'s head named by the registry, "N waiting for you" from the shared inbox in place of My requirements, the areas by the sidebar\'s rights, the KPI strip below', () => {
@@ -127,7 +157,7 @@ test('the page: the kit\'s head named by the registry, "N waiting for you" from 
 });
 
 test('one band vocabulary and the server\'s target: no 85 and no strong / fair / weak in the page\'s files, the grade is the registry\'s, the target comes from the answer', () => {
-  const body = [files.perf, files.posture, files.actFirst, files.modules, models.perf].map(strip).join('\n');
+  const body = [files.perf, files.posture, files.actFirst, files.modules, files.hero, files.scoreBars, files.attention, files.trends, models.perf, models.charts].map(strip).join('\n');
   assert.doesNotMatch(body, /\b85\b/, 'the target is the server\'s (moduleFeeds reads it), never a literal here');
   assert.doesNotMatch(body, /scoreBand|score-kit|bandStatus|riskPosture|\bposture\(|Strong|Weak\b/, 'the 80 / 60 words and the Low / Moderate / Elevated words are gone from this page');
   assert.match(body, /gradeStatus/);
