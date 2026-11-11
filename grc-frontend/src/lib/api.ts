@@ -46,7 +46,7 @@ import {
   GovernanceDashboard,
   AssetType,
 } from '@/types';
-import type { ExceptionRule, PreviewAnswer, RulePayload, RulesAnswer, TypesAnswer } from './exceptionRules';
+import type { ExceptionRule, PeopleOptions, PreviewAnswer, RulePayload, RulesAnswer, TypesAnswer } from './exceptionRules';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 
@@ -748,7 +748,9 @@ export const policyExceptionApi = {
   /** the register entries a potential risk can be linked to ({ id, title }), for the person asked at the open step */
   getRiskRegister: (id: number) => apiClient.get(`/governance/policy-exceptions/${id}/risk-register`),
   aiRisks: (id: number) => apiClient.post(`/governance/policy-exceptions/${id}/ai/risks`),
-  // The implementation (after the last approval, when the rule has an implementer): compensating controls, then Mark implemented.
+  // The people and roles to choose from as an exception's implementer (D67: chosen per exception, in the form), for whoever may raise or edit exceptions.
+  implementerOptions: () => apiClient.get<PeopleOptions>('/governance/policy-exceptions/implementer-options'),
+  // The implementation (after the last approval, when the exception has an implementer): compensating controls, then Mark implemented.
   getControls: (id: number) => apiClient.get(`/governance/policy-exceptions/${id}/controls`),
   addControl: (id: number, data: Record<string, unknown>) => apiClient.post(`/governance/policy-exceptions/${id}/controls`, data),
   updateControl: (id: number, controlId: number, data: Record<string, unknown>) =>

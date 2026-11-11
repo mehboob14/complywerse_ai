@@ -337,3 +337,16 @@ test('the owner\'s AI helpers draft, never save: the server\'s own sentence is w
   assert.match(a, /aria-label=\{`Add \$\{a\.name\}`\}/);                                   // a suggested asset is added only by its own Add
   assert.match(a, /toast: 'errors'/);                                                     // the suggestions under the button are their own confirmation
 });
+
+test('D67: who carries an exception out is chosen in its form (people, roles or the unit\'s owners, and the days), read from the server\'s own lists, and shown in its details', () => {
+  const form = src['_ExceptionForm.tsx'];
+  assert.match(form, /<FormField label="Implementer" optional info=\{IMPLEMENTER_NOTE\}/);
+  assert.match(form, /queryFn: async \(\) => \(await policyExceptionApi\.implementerOptions\(\)\)\.data/);
+  assert.match(form, /askOptions\(people\.data \?\? null, exception\?\.implementer\?\.people \?\? \[\]\)/);               // a person the list no longer holds still shows, and can be taken off
+  assert.match(form, /<MultiSelect label="Implementer: who carries it out" options=\{implementerChoices\} value=\{form\.implementer_people\}/);
+  assert.match(form, /form\.implementer_people\.length > 0 && \(\s*<FormField label="Days to implement" optional/);        // days only make sense for somebody
+  assert.match(form, /people\.isError && !people\.data \? <SourceFailed what="people"/);                                // a list that failed to load is said, not shown as "no one"
+  assert.doesNotMatch(form, /implementer_people[^\n]*disabled|disabled[^\n]*implementer_people/);                       // it may change while the exception waits: it is read at the last approval
+  assert.match(src['_ExceptionDetails.tsx'], /<Fact label="Implementer">\{chosenImplementerLine\(e\.implementer\) \|\| <Muted>\{NOT_SET\}<\/Muted>\}<\/Fact>/);
+  assert.doesNotMatch(read('../settings/_RuleDrawer.tsx'), /implementer/i);                                              // the approval rule no longer has one
+});

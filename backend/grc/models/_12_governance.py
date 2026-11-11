@@ -87,6 +87,9 @@ class PolicyException(Base):
     exception_type = Column(String(40), nullable=True, index=True)
     # What it would mean for the business if the exception were refused (the requester's words; AI may draft it): D62
     business_impact = Column(Text, nullable=True)
+    # Who carries it out once it is approved (the coordinator), chosen by the person raising it: {people: [{type, id?}], due_days} (exception_rules.
+    # validate_implementer: a person, a role, the unit's owner or its parent's, any one of whom can act) or None: the last approval ends it.
+    implementer = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     metadata_ = Column("metadata", JSON, default={})

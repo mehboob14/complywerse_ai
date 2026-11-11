@@ -3,7 +3,7 @@
 // The details of one exception, in a drawer: who and when, its document (of any kind) and unit, the justification next to the business impact, the assets with who
 // put each there (_AssetsPanel.tsx), the potential risks the people asked recorded and, for the person asked now, where they record theirs (_RisksPanel.tsx), what was
 // decided and why, the approval under its rule when it has one (_ApprovalPanel.tsx: the steps, who it waits for, and what the person asked may do: Approve waits for their
-// own assessment), then, once it is approved under a rule that has an implementer, the Implementation with its compensating controls and Mark implemented
+// own assessment), then, once it is approved and its requester chose an implementer (D67), the Implementation with its compensating controls and Mark implemented
 // (_ImplementationPanel.tsx, _ControlsPanel.tsx), the requester's own notes (the two long texts the form used to have), the comments, and "Move to risk register".
 // The panels read and write what they need themselves (and refresh LIST_KEYS, so this exception and the lists follow); the page's props are as they were. Without a rule,
 // decisions are not made here (they are in the row's ⋯ menu, as they always were). On the design-system kit: RightSlidePanel, StatusPill, PersonChip, Button, TextInput,
@@ -26,7 +26,7 @@ import type { DecisionKind } from './_Decision';
 import { ImplementationPanel } from './_ImplementationPanel';
 import { RisksPanel } from './_RisksPanel';
 import { implementationTone, implementationWord, statusLine } from './_approval';
-import { dayText, departmentOf, momentDay, momentText, requesterOf } from './_logic';
+import { chosenImplementerLine, dayText, departmentOf, momentDay, momentText, requesterOf } from './_logic';
 import { cleanText, parseListish } from './_text';
 import type { ExceptionComment, ExceptionItem } from './_types';
 
@@ -155,6 +155,7 @@ export function ExceptionDetailsDrawer({ exception: e, onClose, onDecide, onWith
           </Fact>
           <Fact label="Type">{e.exception_type_label || e.exception_type || <Muted>{NOT_SET}</Muted>}</Fact>
           <Fact label="Requester"><PersonChip name={requesterOf(e)} emptyLabel={EMPTY} /></Fact>
+          <Fact label="Implementer">{chosenImplementerLine(e.implementer) || <Muted>{NOT_SET}</Muted>}</Fact>
           <Fact label="Effective date">{e.effective_date ? dayText(e.effective_date) : <Muted>{NOT_SET}</Muted>}</Fact>
           <Fact label="Expiry date">{e.expiry_date ? dayText(e.expiry_date) : <Muted>{NOT_SET}</Muted>}</Fact>
           <Fact label="Created">{momentDay(e.created_at)}</Fact>

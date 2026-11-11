@@ -24,9 +24,6 @@ class ExceptionApprovalRule(Base):
     doc_types = Column(JSON, default=list)           # [] = any kind of policy; else document types (policy, standard, ...)
     exception_types = Column(JSON, default=list)     # [] = any exception type; else values of the organisation's list (module_settings: governance_exceptions)
     steps = Column(JSON, default=list)               # exception_rules.validate_steps: [{position, name, kind, order, rule, min_count, due_days, ...}]
-    # who carries the exception out once it is approved (the coordinator), or None: the last approval ends it (D62). exception_rules.validate_implementer:
-    # {name, people: [{type, id?}], due_days}
-    implementer = Column(JSON, nullable=True)
     is_active = Column(Boolean, default=True)
     created_by = Column(Integer, ForeignKey("grc_users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -52,8 +49,8 @@ class ExceptionApprovalRun(Base):
     current_step = Column(Integer, nullable=True)    # position of the step waiting now
     status = Column(String(20), nullable=False, default="open")   # open | approved | rejected | changes_requested | withdrawn
     asked = Column(JSON, default=list)               # user ids who may decide now
-    implementer = Column(JSON, nullable=True)        # the rule's implementer as it was at submit
-    # once the last approval is given and the rule has an implementer: {name, slots, asked, due_days, due_at, opened_at, completed_by, completed_at, note}
+    implementer = Column(JSON, nullable=True)        # the exception's implementer as it was when the last approval was given (what was used)
+    # once the last approval is given and the exception has an implementer: {name, slots, asked, due_days, due_at, opened_at, completed_by, completed_at, note}
     implementation = Column(JSON, nullable=True)
     implementation_state = Column(String(20), nullable=True, index=True)   # waiting | in_progress | done | cancelled; None: none asked
     started_by = Column(Integer, ForeignKey("grc_users.id", ondelete="SET NULL"), nullable=True)

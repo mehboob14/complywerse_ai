@@ -154,10 +154,17 @@ def approved(w, rule_kw=None, document_id=1, **kw):
     return eid
 
 
+def choose_implementer(w, eid, impl=None, as_user=REQ):
+    """What the requester does in the form: the exception names who carries it out (IMPL1 unless said otherwise)."""
+    r = w.as_(as_user).put(f"{EX}/{eid}", json={"implementer": impl if impl is not None else implementer()})
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
 def implementing(w, impl=None, document_id=1, **kw):
-    """An exception approved under a rule that names an implementer (IMPL1 unless said otherwise): its id, the approver's potential risk recorded."""
-    make_rule(w, implementer=impl if impl is not None else implementer())
-    eid = raise_exception(w, document_id=document_id, **kw)["id"]
+    """An exception approved under a rule, which its requester said IMPL1 (unless said otherwise) carries out: its id, the approver's potential risk recorded."""
+    make_rule(w)
+    eid = raise_exception(w, document_id=document_id, implementer=impl if impl is not None else implementer(), **kw)["id"]
     assert submit(w, eid).status_code == 200
     risk = record(w, eid, APP1)
     r = w.as_(APP1).post(f"{EX}/{eid}/approve", json={})

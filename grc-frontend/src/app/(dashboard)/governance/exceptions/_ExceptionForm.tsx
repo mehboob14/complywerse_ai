@@ -10,22 +10,24 @@
 import { useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { exceptionRulesApi, policyExceptionApi } from '@/lib/api';
-import { TYPES_KEY, typeChoiceLabel, typeChoices } from '@/lib/exceptionRules';
+import { TYPES_KEY, askOptions, typeChoiceLabel, typeChoices } from '@/lib/exceptionRules';
 import { useAutoGrow } from '@/lib/useAutoGrow';
 import { errorMessage } from '@/components/ui/ds/reportOutcome';
 import { MultiSelectDropdown, RightSlidePanel } from '@/components/ui';
 import { InfoTip } from '@/components/ui/InfoTip';
-import { Button, ErrorState, FormField, Notice, Select, Textarea, TextInput, useReportedMutation, type TextareaProps } from '@/components/ui/ds';
+import { Button, ErrorState, FormField, MultiSelect, Notice, Select, Textarea, TextInput, useReportedMutation, type TextareaProps } from '@/components/ui/ds';
 import { DepartmentSelect } from '@/components/governance/DepartmentSelect';
 import { useAdminDepartments } from '@/components/admin/DepartmentForm';
 import { isRuled } from './_approval';
-import { documentUnitPath, formErrors, payloadOf, resolveDocument, sameForm, unitPlaceholder, type DocRef, type DocumentOption, type ExceptionForm } from './_logic';
+import { IMPLEMENTER_NOTE, documentUnitPath, formErrors, payloadOf, resolveDocument, sameForm, unitPlaceholder, type DocRef, type DocumentOption, type ExceptionForm } from './_logic';
 import { AssetAssist, DraftAssist, PeriodAssist } from './_assistOwner';
 import { DocumentPicker } from './_DocumentPicker';
 import { LIST_KEYS, type AssetOption, type ExceptionItem } from './_types';
 
 /** What a query tells the drawer about a list it needs to fill a picker. */
 interface Source<T> { data?: T[]; isLoading: boolean; isError: boolean; error: unknown; refetch: () => unknown }
+
+const IMPLEMENTER_OPTIONS_KEY = ['exception-implementer-options'];
 
 const PRIORITIES = [{ value: 'low', label: 'Low' }, { value: 'medium', label: 'Medium' }, { value: 'high', label: 'High' }, { value: 'critical', label: 'Critical' }];
 
@@ -98,6 +100,10 @@ export function ExceptionFormDrawer({ exception, initial, documents, assets, onC
   // the organisation's types: those in use, and the one the exception holds even if it was taken off the list since
   const types = useQuery({ queryKey: TYPES_KEY, queryFn: async () => (await exceptionRulesApi.types()).data, staleTime: 60_000 });
   const typeOptions = typeChoices(types.data?.types ?? [], form.exception_type ? [form.exception_type] : []);
+  // who can be chosen to carry it out: people, roles and the unit's owners; a person the exception already names who the list no longer holds stays, so it shows and can be taken off
+  const people = useQuery({ queryKey: IMPLEMENTER_OPTIONS_KEY, queryFn: async () => (await policyExceptionApi.implementerOptions()).data, staleTime: 60_000 });
+  const implementerChoices = useMemo(() => askOptions(people.data ?? null, exception?.implementer?.people ?? []), [people.data, exception]);
+  const daysWrong = errors.implementer && !errors.implementer.startsWith('Choose');
 
   // the unit the exception will follow when none is chosen: the chosen document's, or what the exception being changed already follows
   const departments = useAdminDepartments();
@@ -185,6 +191,19 @@ export function ExceptionFormDrawer({ exception, initial, documents, assets, onC
             </FormField>
           </div>
         )}
+        <div className="grid grid-cols-1 gap-[12px] sm:grid-cols-2">
+          <FormField label="Implementer" optional info={IMPLEMENTER_NOTE} error={daysWrong ? undefined : errors.implementer} className="sm:col-span-2">
+            {people.isError && !people.data ? <SourceFailed what="people" source={people} /> : (
+              <MultiSelect label="Implementer: who carries it out" options={implementerChoices} value={form.implementer_people} onChange={(implementer_people) => set({ implementer_people })}
+                display="chips" placeholder={people.isLoading ? 'Loading people…' : 'People, roles or owners'} />
+            )}
+          </FormField>
+          {form.implementer_people.length > 0 && (
+            <FormField label="Days to implement" optional error={daysWrong ? errors.implementer : undefined}>
+              <TextInput type="number" inputMode="numeric" min={1} max={365} step={1} unit="days" className="w-[168px]" value={form.implementer_days} onChange={(e) => set({ implementer_days: e.target.value })} />
+            </FormField>
+          )}
+        </div>
         <div className="grid grid-cols-1 gap-[12px] sm:grid-cols-2">
           <FormField label="Effective date">
             <TextInput type="date" value={form.effective_date} onChange={(e) => set({ effective_date: e.target.value })} />

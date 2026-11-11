@@ -45,12 +45,6 @@ class StepIn(BaseModel):
     people: List[PersonIn] = []
 
 
-class ImplementerIn(BaseModel):
-    name: Optional[str] = None              # "Implementation" when left out
-    due_days: Optional[int] = None
-    people: List[PersonIn] = []             # any one of them carries the exception out
-
-
 class RuleIn(BaseModel):
     name: str
     department_id: Optional[int] = None     # None: the whole organisation
@@ -59,7 +53,6 @@ class RuleIn(BaseModel):
     exception_types: List[str] = []         # values of the organisation's list of exception types ([] = any)
     is_active: bool = True
     steps: List[StepIn] = []
-    implementer: Optional[ImplementerIn] = None   # asked once the last approval is given; None: nobody implements it
 
 
 class PreviewIn(BaseModel):

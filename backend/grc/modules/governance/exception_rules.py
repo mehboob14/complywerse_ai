@@ -4,8 +4,9 @@ A **rule** applies to the whole organisation or to one department at any level (
 some priorities, some kinds of policy or some exception types (the organisation's own list, Governance > Settings), and has
 **steps**: each a Review or an Approval, asking named people, roles, "the owner of
 the unit" or "the owner of its parent", all at once or one after another, everyone / any one / at least N, with days to act and
-whether the step may reject or ask for changes. The last step is an approval: somebody decides. A rule may also name an **implementer** (D62): who carries the exception out once it is
-approved (the coordinator), one or more people, any one of whom can; a rule with none ends at the last approval, as it always did.
+whether the step may reject or ask for changes. The last step is an approval: somebody decides. Who carries the exception out once it is approved (the
+**implementer**, D62) is not the rule's to say: the person raising the exception chooses it for that exception (D67); ``validate_implementer`` and
+``implementer_problems`` below are the checks of what they chose.
 
 The vocabulary is the document route engine's (``routes.py``: orders together / in_turn, rules all / any / at_least); the tables
 are not (that engine is welded to documents, signatures and holds).
@@ -105,7 +106,7 @@ def validate_steps(steps_in: Optional[Sequence[Dict[str, Any]]]) -> List[Dict[st
 
 
 def validate_implementer(raw: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    """The implementer of a rule as saved, or None when the rule has none (nothing given, or an empty block). Who carries the exception out
+    """The implementer of an exception as saved, or None when it has none (nothing given, or an empty block). Who carries the exception out
     after the last approval: people, roles, the owner of the unit or of its parent, any one of whom can; days to implement. Raises ValueError."""
     raw = raw or {}
     given = raw.get("people") or []
@@ -235,7 +236,7 @@ def progress(step: Dict[str, Any], approvers: Set[int]) -> Dict[str, int]:
 
 
 def implementer_problems(implementer: Optional[Dict[str, Any]], unit_name: Optional[str] = None) -> List[str]:
-    """What stops a rule's implementer from working for a unit: nobody who can act (``implementer`` carries its resolved ``slots``)."""
+    """What stops an exception's implementer from working for its unit: nobody who can act (``implementer`` carries its resolved ``slots``)."""
     if not implementer:
         return []
     slots = implementer.get("slots") or []

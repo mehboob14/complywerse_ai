@@ -9,7 +9,7 @@ SQLite (``_exc_world``: Operations > Support > Helpdesk, Finance; documents of f
 """
 from datetime import datetime, timedelta
 
-from _exc_world import (ADMIN, APP1, EX, IMPL1, PLAIN, REQ, _schema, decide, get, implementer, make_rule, raise_exception, submit, w)  # noqa: F401
+from _exc_world import (ADMIN, APP1, EX, IMPL1, PLAIN, REQ, _schema, choose_implementer, decide, get, make_rule, raise_exception, submit, w)  # noqa: F401
 
 import grc.models as m  # noqa: E402
 
@@ -37,7 +37,8 @@ def test_by_unit_rolls_everything_under_a_unit_into_its_row(w):
 
 def test_the_counts_say_what_is_open_approved_expiring_and_waiting_to_be_implemented(w):
     ids = build(w)
-    make_rule(w, implementer=implementer())
+    make_rule(w)
+    choose_implementer(w, ids["support"])
     assert submit(w, ids["support"]).status_code == 200
     assert decide(w, ids["support"], APP1).status_code == 200                                    # approved, waiting for IMPL1
     exc = w.db.get(m.PolicyException, ids["support"])
@@ -65,7 +66,8 @@ def test_by_document_puts_the_documents_under_the_unit_they_were_raised_for(w):
 
 def test_by_document_says_which_exceptions_wait_for_the_person(w):
     ids = build(w)
-    make_rule(w, implementer=implementer())
+    make_rule(w)
+    choose_implementer(w, ids["support"])
     assert submit(w, ids["support"]).status_code == 200
     rows = lambda who: {e["id"]: e["waiting_kind"] for u in w.as_(who).get(f"{EX}/by-document").json()["units"] for d in u["documents"] for e in d["exceptions"]}  # noqa: E731
     assert rows(APP1)[ids["support"]] == "decision" and rows(IMPL1)[ids["support"]] is None

@@ -12,8 +12,10 @@ exceptions decides) is in ``routers/policy_exception_router.py`` and stays as it
 * People are resolved when a step opens (a role's holders, the unit's owner and its parent's owner as they are then), so a person who
   joins the role meanwhile is asked from the next step on.
 * **An approval needs the approver's own assessment** (``exception_risks``: potential risks, or "none identified"), and **after the last
-  approval a rule's implementer is asked** (``open_implementation``; ``exception_controls`` records the compensating controls and marks it
-  implemented). The exception's status is not touched by the implementation (D62).
+  approval the exception's own implementer is asked** (chosen by whoever raises it, not by the rule: ``open_implementation``;
+  ``exception_controls`` records the compensating controls and marks it implemented). The exception's status is not touched by the
+  implementation (D62, D67). An exception no rule matches has no run: its approval writes a closed one so that the implementation has a home
+  (``open_direct_implementation``).
 
 Functions that write only ``flush``: the caller commits.
 """
@@ -105,8 +107,7 @@ def _alone(step: Optional[Dict[str, Any]], user_id: int) -> bool:
 def rule_dict(rule: ExceptionApprovalRule) -> Dict[str, Any]:
     return {"id": rule.id, "name": rule.name, "department_id": rule.department_id, "priorities": list(rule.priorities or []),
             "doc_types": list(rule.doc_types or []), "exception_types": list(rule.exception_types or []),
-            "steps": copy.deepcopy(rule.steps or []), "implementer": copy.deepcopy(rule.implementer) if rule.implementer else None,
-            "is_active": rule.is_active is not False}
+            "steps": copy.deepcopy(rule.steps or []), "is_active": rule.is_active is not False}
 
 
 def rule_dicts(db: Session, tenant_id: int) -> List[Dict[str, Any]]:
@@ -118,32 +119,38 @@ def _unit_name(tree: org_departments.Tree, unit_id: Optional[int]) -> Optional[s
     return tree.rows[unit_id].name if unit_id in tree.rows else None
 
 
+def _person_label(p: Dict[str, Any], users: Dict[int, str], roles: Dict[int, str]) -> str:
+    """Who a step (or an exception's implementer) asks, in words: a person by name, a role, or one of the two owners."""
+    if p["type"] == "user":
+        return users.get(p["id"], f"User #{p['id']}")
+    if p["type"] == "role":
+        return roles.get(p["id"], f"Role #{p['id']}")
+    return "Owner of the unit" if p["type"] == "unit_owner" else "Owner of its parent"
+
+
 def rules_view(db: Session, tenant_id: int) -> List[Dict[str, Any]]:
     """The rules for the Settings page: where each applies, its conditions, its steps with the people named."""
     tree = org_departments.Tree.load(db, tenant_id)
     rules = db.query(ExceptionApprovalRule).filter(ExceptionApprovalRule.tenant_id == tenant_id).order_by(ExceptionApprovalRule.id).all()
-    asked = [[*s.get("people", [])] for r in rules for s in r.steps or []] + [list((r.implementer or {}).get("people") or []) for r in rules]
-    user_ids = {p["id"] for people in asked for p in people if p["type"] == "user"}
-    role_ids = {p["id"] for people in asked for p in people if p["type"] == "role"}
-    users = _names(db, user_ids)
+    people = [p for r in rules for s in r.steps or [] for p in s.get("people", [])]
+    users = _names(db, {p["id"] for p in people if p["type"] == "user"})
+    role_ids = {p["id"] for p in people if p["type"] == "role"}
     roles = {i: n for i, n in db.query(Role.id, Role.name).filter(Role.id.in_(role_ids))} if role_ids else {}
     out = []
     for r in rules:
         steps = copy.deepcopy(r.steps or [])
-        implementer = copy.deepcopy(r.implementer) if r.implementer else None
-        for s in steps + ([implementer] if implementer else []):
+        for s in steps:
             for p in s.get("people", []):
-                p["label"] = (users.get(p["id"], f"User #{p['id']}") if p["type"] == "user" else roles.get(p["id"], f"Role #{p['id']}")
-                              if p["type"] == "role" else "Owner of the unit" if p["type"] == "unit_owner" else "Owner of its parent")
+                p["label"] = _person_label(p, users, roles)
         where = [d.name for d in tree.path(r.department_id)] if r.department_id in tree.rows else []
-        out.append({**rule_dict(r), "steps": steps, "implementer": implementer, "department_path": where,
+        out.append({**rule_dict(r), "steps": steps, "department_path": where,
                     "department_level": tree.level(r.department_id) if where else None,
                     "created_at": _iso(r.created_at), "updated_at": _iso(r.updated_at)})
     return out
 
 
-def _check_people(db: Session, tenant_id: int, steps: Sequence[Dict[str, Any]], implementer: Optional[Dict[str, Any]] = None) -> None:
-    steps = [*steps, *([implementer] if implementer else [])]
+def _check_people(db: Session, tenant_id: int, steps: Sequence[Dict[str, Any]]) -> None:
+    """The people the steps (or an implementer, given as one step) name exist and are active people of this platform: a 400 with a sentence if not."""
     users = {p["id"] for s in steps for p in s["people"] if p["type"] == "user"}
     roles = {p["id"] for s in steps for p in s["people"] if p["type"] == "role"}
     if users:
@@ -167,7 +174,6 @@ def save_rule(db: Session, tenant_id: int, payload: Dict[str, Any], by_user_id: 
     try:
         name = R.clean_name(payload.get("name"))
         steps = R.validate_steps(payload.get("steps"))
-        implementer = R.validate_implementer(payload.get("implementer"))
         priorities, doc_types = R.clean_conditions(payload.get("priorities"), payload.get("doc_types"))
         exception_types = R.clean_types(payload.get("exception_types"))
     except ValueError as exc:
@@ -182,7 +188,7 @@ def save_rule(db: Session, tenant_id: int, payload: Dict[str, Any], by_user_id: 
         raise _problem("The department chosen does not exist.")
     active = payload.get("is_active") is not False
     if active:
-        _check_people(db, tenant_id, steps, implementer)           # a rule that is switched off is never asked: someone who left does not stop it being switched off
+        _check_people(db, tenant_id, steps)                        # a rule that is switched off is never asked: someone who left does not stop it being switched off
         for other in db.query(ExceptionApprovalRule).filter(ExceptionApprovalRule.tenant_id == tenant_id, ExceptionApprovalRule.is_active.is_(True)):
             if (rule is None or other.id != rule.id) and other.department_id == where and \
                     set(other.priorities or []) == set(priorities) and set(other.doc_types or []) == set(doc_types) and \
@@ -195,7 +201,6 @@ def save_rule(db: Session, tenant_id: int, payload: Dict[str, Any], by_user_id: 
         db.add(rule)
     rule.name, rule.department_id, rule.priorities, rule.doc_types, rule.steps = name, where, priorities, doc_types, steps
     rule.exception_types = exception_types
-    rule.implementer = implementer
     rule.is_active, rule.updated_by, rule.updated_at = active, by_user_id, now
     db.flush()
     return rule
@@ -276,11 +281,8 @@ def preview(db: Session, tenant_id: int, unit_id: Optional[int], priority: Optio
     steps = copy.deepcopy(rule["steps"])
     for step in steps:
         step["slots"] = resolve_slots(db, tenant_id, unit_id, step, None, tree)
-    implementer = copy.deepcopy(rule.get("implementer"))
-    if implementer:
-        implementer["slots"] = resolve_slots(db, tenant_id, unit_id, implementer, None, tree)
-    return {"rule": {"id": rule["id"], "name": rule["name"], "department_id": rule["department_id"]}, "steps": steps, "implementer": implementer,
-            "problems": R.problems(steps, _unit_name(tree, unit_id)) + R.implementer_problems(implementer, _unit_name(tree, unit_id))}
+    return {"rule": {"id": rule["id"], "name": rule["name"], "department_id": rule["department_id"]}, "steps": steps,
+            "problems": R.problems(steps, _unit_name(tree, unit_id))}
 
 
 # ── a run ────────────────────────────────────────────────────────────────────
@@ -373,17 +375,13 @@ def start(db: Session, exc: PolicyException, user: GRCUser) -> Optional[Exceptio
     for step in steps:
         step["slots"] = resolve_slots(db, exc.tenant_id, unit, step, exc.requested_by, tree, self_ok=lone_decider_for(db, exc.requested_by))
         step["state"] = "waiting"
-    implementer = copy.deepcopy(rule.get("implementer"))
-    if implementer:
-        implementer["slots"] = resolve_slots(db, exc.tenant_id, unit, implementer, None, tree)
-    bad = R.problems(steps, _unit_name(tree, unit)) + R.implementer_problems(implementer, _unit_name(tree, unit))
+    bad = R.problems(steps, _unit_name(tree, unit))
     if bad:
         raise _problem(f"This exception follows the rule '{rule['name']}', which cannot start: " + " ".join(bad)
                        + " Ask an administrator to change the rule or to set the owners.", status.HTTP_409_CONFLICT)
     last = max((r.round for r in runs_of(db, exc.id)), default=0)
     run = ExceptionApprovalRun(tenant_id=exc.tenant_id, exception_id=exc.id, round=last + 1, rule_id=rule["id"], rule_name=rule["name"],
-                               department_id=unit, steps=steps, status="open", asked=[], started_by=user.id,
-                               implementer={k: v for k, v in implementer.items() if k != "slots"} if implementer else None)
+                               department_id=unit, steps=steps, status="open", asked=[], started_by=user.id)
     db.add(run)
     db.flush()
     _activate(db, run, exc, 1)
@@ -545,7 +543,8 @@ def bulk_views(db: Session, exceptions: Sequence[PolicyException], viewer_id: Op
         return {}
     latest: Dict[int, ExceptionApprovalRun] = {}
     for run in db.query(ExceptionApprovalRun).filter(ExceptionApprovalRun.exception_id.in_(ids)).order_by(ExceptionApprovalRun.round):
-        latest[run.exception_id] = run
+        if not _direct(run):                  # an approval with no rule has no rule to show
+            latest[run.exception_id] = run
     if not latest:
         return {}
     by_run: Dict[int, List[ExceptionApprovalDecision]] = {r.id: [] for r in latest.values()}
@@ -561,7 +560,7 @@ def bulk_views(db: Session, exceptions: Sequence[PolicyException], viewer_id: Op
 
 def history(db: Session, exc: PolicyException, viewer_id: Optional[int]) -> Dict[str, Any]:
     """Every round: the rule, how it ended and who decided what at which step (the audit trail)."""
-    runs = runs_of(db, exc.id)
+    runs = [r for r in runs_of(db, exc.id) if not _direct(r)]
     decisions = db.query(ExceptionApprovalDecision).filter(ExceptionApprovalDecision.exception_id == exc.id) \
         .order_by(ExceptionApprovalDecision.decided_at, ExceptionApprovalDecision.id).all()
     names = _names(db, {d.user_id for d in decisions} | {r.started_by for r in runs if r.started_by})
@@ -609,16 +608,54 @@ def waiting_for(db: Session, user_id: int, tenant_ids: Iterable[int]) -> List[Po
     return [by_id[r.exception_id] for r in sorted(runs, key=lambda r: r.started_at or datetime.min) if r.exception_id in by_id]
 
 
-# ── the implementer (D62) ────────────────────────────────────────────────────
+# ── the implementer (D62; D67: the person raising the exception chooses it, not the rule) ──────────
 OPEN_IMPLEMENTATION = ("waiting", "in_progress")
 
 
+def clean_implementer(db: Session, tenant_id: int, raw: Any) -> Optional[Dict[str, Any]]:
+    """What the person raising an exception chose, as saved: nobody (None), or people and days, checked. A 400 with a sentence if it cannot work."""
+    try:
+        spec = R.validate_implementer(raw)
+    except ValueError as exc:
+        raise _problem(str(exc)) from None
+    if spec:
+        _check_people(db, tenant_id, [spec])
+    return spec
+
+
+def check_implementer(db: Session, exc: PolicyException) -> None:
+    """Submitting: the implementer chosen can act now. A person who left, or the owner of a unit that has none, would leave the exception
+    approved with nobody to carry it out, so it is refused in words (409) and nothing changes."""
+    if not exc.implementer:
+        return
+    tree = org_departments.Tree.load(db, exc.tenant_id)
+    unit = unit_of(db, exc)
+    slots = resolve_slots(db, exc.tenant_id, unit, {"people": exc.implementer.get("people") or []}, None, tree)
+    bad = R.implementer_problems({**exc.implementer, "slots": slots}, _unit_name(tree, unit))
+    if bad:
+        raise _problem(" ".join(bad) + " Choose who implements it, then submit again.", status.HTTP_409_CONFLICT)
+
+
+def bulk_implementer_views(db: Session, exceptions: Sequence[PolicyException]) -> Dict[int, Dict[str, Any]]:
+    """exception id -> the implementer its requester chose, with the people named, for those that have one (a few queries however many)."""
+    given = {e.id: e.implementer for e in exceptions if e.implementer}
+    people = [p for spec in given.values() for p in spec.get("people") or []]
+    if not people:
+        return {}
+    users = _names(db, {p["id"] for p in people if p["type"] == "user"})
+    role_ids = {p["id"] for p in people if p["type"] == "role"}
+    roles = {i: n for i, n in db.query(Role.id, Role.name).filter(Role.id.in_(role_ids))} if role_ids else {}
+    return {eid: {"due_days": spec.get("due_days"), "people": [{**p, "label": _person_label(p, users, roles)} for p in spec.get("people") or []]}
+            for eid, spec in given.items()}
+
+
 def open_implementation(db: Session, run: ExceptionApprovalRun, exc: PolicyException) -> bool:
-    """The last approval is given and the rule has an implementer: its people are read as they are now (the requester is not left out: a small
-    organisation's owner may be its coordinator), its days start, and they are told. False when the rule has none."""
-    spec = run.implementer
+    """The last approval is given and the exception has an implementer: its people are read as they are now (the requester is not left out: a
+    small organisation's owner may be its coordinator), its days start, and they are told. False when the exception has none."""
+    spec = exc.implementer
     if not spec:
         return False
+    run.implementer = copy.deepcopy(spec)
     slots = resolve_slots(db, exc.tenant_id, run.department_id, {"people": spec.get("people") or []}, None)
     members = sorted({m for s in slots for m in s["members"]})
     now = datetime.utcnow()
@@ -629,8 +666,28 @@ def open_implementation(db: Session, run: ExceptionApprovalRun, exc: PolicyExcep
     flag_modified(run, "implementation")
     run.implementation_state = "waiting"
     _alert(db, exc.tenant_id, members, f"Exception to implement: {exc.title}",
-           f"\"{exc.title}\" was approved under '{run.rule_name}'. You are asked to carry it out: record its compensating controls.", exc.id)
+           f"\"{exc.title}\" was approved. You are asked to carry it out: record its compensating controls.", exc.id)
     return True
+
+
+def _direct(run: ExceptionApprovalRun) -> bool:
+    """The closed run an approval with no rule leaves to hold its implementation (``open_direct_implementation``): it has no rule and no steps."""
+    return run.rule_id is None and not run.steps
+
+
+def open_direct_implementation(db: Session, exc: PolicyException, user: GRCUser) -> bool:
+    """An exception approved with no rule (the older flow) that names an implementer: a closed run holds the implementation, and the potential
+    risks its approvers recorded (they had no run) move to it so the implementer sees them. False when it has no implementer."""
+    if not exc.implementer:
+        return False
+    now = datetime.utcnow()
+    run = ExceptionApprovalRun(tenant_id=exc.tenant_id, exception_id=exc.id, round=max((r.round for r in runs_of(db, exc.id)), default=0) + 1,
+                               department_id=unit_of(db, exc), steps=[], status="approved", asked=[], started_by=user.id, started_at=now, finished_at=now)
+    db.add(run)
+    db.flush()
+    db.query(ExceptionRisk).filter(ExceptionRisk.exception_id == exc.id, ExceptionRisk.run_id.is_(None)) \
+        .update({"run_id": run.id, "round": run.round}, synchronize_session=False)
+    return open_implementation(db, run, exc)
 
 
 def cancel_implementation(db: Session, exc: PolicyException) -> None:

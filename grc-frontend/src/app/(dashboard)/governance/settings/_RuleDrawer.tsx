@@ -3,8 +3,8 @@
 // Governance > Settings > Exception approvals: add or change one rule, in a drawer that asks "Discard changes?" before it throws typed input away. A rule says
 // where it applies (the whole organisation, or a department, sub-department or unit), when (a priority, a document type, a type of exception: empty is any) and its steps: each a
 // Review or an Approval that asks people, roles or the owner of the unit and of its parent, together or one after another, everyone / any one / at least N, in
-// so many days, and may reject or ask for changes. The last step is an approval: somebody decides. After the steps a rule may name an implementer (D62): who is asked
-// once the last approval is given (the same chooser as a step; any one of them can carry the exception out) and the days they have. What it checks before it sends and what it sends are in
+// so many days, and may reject or ask for changes. The last step is an approval: somebody decides. (Who carries an approved exception out is not the rule's to say since D67:
+// whoever raises the exception chooses it in the exception's form, because it differs by exception.) What it checks before it sends and what it sends are in
 // lib/exceptionRules.ts; the server checks again and its sentence is said as it is, above the Save button, with everything typed kept. A save is reported by
 // useReportedMutation (the confirmation only: a failure is the sentence in the drawer).
 import { useId, useMemo, useState } from 'react';
@@ -12,9 +12,9 @@ import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
 import { exceptionRulesApi } from '@/lib/api';
 import { moved } from '@/lib/approvalRoutes';
 import {
-  KINDS, MAX_STEPS, NAME_MAX, ORDERS, PRIORITY_ORDER, KIND_ORDER, RULES, RULES_KEY, RULE_NOTES, WHOLE_ORGANISATION, askOptions, blankImplementer, blankStep, emptyRuleForm, formFromRule,
-  hasRuleErrors, kindName, payloadOf, ruleErrors, ruleProblem, sameRuleForm, turnLine, typeChoiceLabel, typeChoices, type DraftImplementer, type DraftStep, type ExceptionRule,
-  type ExceptionTypeOption, type ImplementerErrors, type RuleErrors, type RuleForm, type RuleOptions, type RulePayload,
+  KINDS, MAX_STEPS, NAME_MAX, ORDERS, PRIORITY_ORDER, KIND_ORDER, RULES, RULES_KEY, RULE_NOTES, WHOLE_ORGANISATION, askOptions, blankStep, emptyRuleForm, formFromRule,
+  hasRuleErrors, kindName, payloadOf, ruleErrors, ruleProblem, sameRuleForm, turnLine, typeChoiceLabel, typeChoices, type DraftStep, type ExceptionRule,
+  type ExceptionTypeOption, type RuleErrors, type RuleForm, type RuleOptions, type RulePayload,
 } from '@/lib/exceptionRules';
 import { statusLabel } from '@/lib/format';
 import { RightSlidePanel } from '@/components/ui';
@@ -104,25 +104,6 @@ function StepEditor({ step: s, index, count, choices, errors, onChange, onMove, 
   );
 }
 
-/** The implementer's fields: who carries the exception out (any one of them can) and the days they have. The requester is not left out: a small organisation's owner may be its coordinator. */
-function ImplementerEditor({ implementer: imp, choices, errors, onChange }: {
-  implementer: DraftImplementer;
-  choices: ReturnType<typeof askOptions>;
-  errors: ImplementerErrors | undefined;
-  onChange: (patch: Partial<DraftImplementer>) => void;
-}) {
-  return (
-    <div role="group" aria-label="Implementer" className="grid grid-cols-1 gap-[12px] rounded-ds-card border border-ds-border p-[12px] sm:grid-cols-2">
-      <FormField label="Who implements" required error={errors?.people} className="sm:col-span-2">
-        <MultiSelect label="Implementer: who carries it out" options={choices} value={imp.people} onChange={(people) => onChange({ people })} display="chips" placeholder="People, roles or owners" />
-      </FormField>
-      <FormField label="Days to implement" optional error={errors?.due_days}>
-        <TextInput type="number" inputMode="numeric" min={1} max={365} step={1} unit="days" className="w-[168px]" value={imp.due_days} onChange={(e) => onChange({ due_days: e.target.value })} />
-      </FormField>
-    </div>
-  );
-}
-
 export function RuleDrawer({ rule, options, types, onClose }: {
   /** the rule being changed; null adds a new one */
   rule: ExceptionRule | null;
@@ -137,14 +118,13 @@ export function RuleDrawer({ rule, options, types, onClose }: {
   const [tried, setTried] = useState(false);                              // errors are shown once a save was tried, not while the person is still typing
   const [said, setSaid] = useState<string | null>(null);                  // the server's sentence, as it is
   const errors = tried ? ruleErrors(form) : NO_ERRORS;
-  const choices = useMemo(() => askOptions(options, rule ? [...rule.steps.flatMap((s) => s.people), ...(rule.implementer?.people ?? [])] : []), [options, rule]);
+  const choices = useMemo(() => askOptions(options, rule ? rule.steps.flatMap((s) => s.people) : []), [options, rule]);
   // the types in use, and any this rule already names that were taken off the list since
   const typeOptions = useMemo(() => typeChoices(types, rule?.exception_types ?? []).map((t) => ({ value: t.value, label: typeChoiceLabel(t) })), [types, rule]);
   const set = (patch: Partial<RuleForm>) => { setForm((f) => ({ ...f, ...patch })); setSaid(null); };
   const setStep = (key: string, patch: Partial<DraftStep>) => set({ steps: form.steps.map((s) => (s.key === key ? { ...s, ...patch } : s)) });
   // a new step goes before the last one: the last step is the approval, and a review is what is usually added
   const addStep = () => set({ steps: form.steps.length ? [...form.steps.slice(0, -1), blankStep('review'), form.steps[form.steps.length - 1]] : [blankStep('approval')] });
-  const setImplementer = (patch: Partial<DraftImplementer>) => set({ implementer: form.implementer && { ...form.implementer, ...patch } });
 
   const save = useReportedMutation({
     mutationFn: async (payload: RulePayload) => (rule ? await exceptionRulesApi.update(rule.id, payload) : await exceptionRulesApi.create(payload)).data,
@@ -226,21 +206,6 @@ export function RuleDrawer({ rule, options, types, onClose }: {
                 onChange={(patch) => setStep(s.key, patch)} onMove={(by) => set({ steps: moved(form.steps, i, by) })} onRemove={() => set({ steps: form.steps.filter((x) => x.key !== s.key) })} />
             ))}
           </ol>
-        </div>
-
-        <div className="flex flex-col gap-[8px]">
-          <div className="flex flex-wrap items-center gap-[8px]">
-            <span className="inline-flex items-center gap-[4px]">
-              <span className="text-ds-section text-ds-fg">Implementer</span>
-              <InfoTip text={RULE_NOTES.implementer} label="About the implementer" />
-            </span>
-            {form.implementer ? (
-              <Button size="sm" className="ml-auto" leftIcon={<Trash2 aria-hidden />} onClick={() => set({ implementer: null })}>Remove implementer</Button>
-            ) : (
-              <Button size="sm" className="ml-auto" leftIcon={<Plus aria-hidden />} onClick={() => set({ implementer: blankImplementer() })}>Add implementer</Button>
-            )}
-          </div>
-          {form.implementer && <ImplementerEditor implementer={form.implementer} choices={choices} errors={errors.implementer} onChange={setImplementer} />}
         </div>
       </div>
     </RightSlidePanel>

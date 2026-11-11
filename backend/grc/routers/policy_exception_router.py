@@ -65,6 +65,7 @@ def _viewer(db: Session, user: GRCUser, exceptions) -> SimpleNamespace:
                            alone=lru_cache(maxsize=1)(lambda: exception_approvals.lone_decider(db, user)),     # the organisation's only administrator (asked only for their own exception)
                            approvals=approvals, trees={t: org_departments.Tree.load(db, t) for t in tenants},
                            implementations=exception_approvals.bulk_implementations(db, exceptions, user.id),
+                           implementers=exception_approvals.bulk_implementer_views(db, exceptions),
                            risk_counts=exception_risks.counts_for(db, ids), control_counts=exception_controls.counts_for(db, ids),
                            types={t: exception_types.labels(db, t) for t in tenants if any(e.tenant_id == t and e.exception_type for e in exceptions)})
 
@@ -128,6 +129,7 @@ def _ensure_columns(db: Session) -> None:
         db.execute(text("ALTER TABLE grc_policy_exceptions ADD COLUMN IF NOT EXISTS department_id INTEGER"))
         db.execute(text("ALTER TABLE grc_policy_exceptions ADD COLUMN IF NOT EXISTS exception_type VARCHAR(40)"))
         db.execute(text("ALTER TABLE grc_policy_exceptions ADD COLUMN IF NOT EXISTS business_impact TEXT"))
+        db.execute(text("ALTER TABLE grc_policy_exceptions ADD COLUMN IF NOT EXISTS implementer JSON"))
         db.commit()
         _COLS_ENSURED.add(key)
     except Exception:
@@ -698,7 +700,7 @@ def create_exception(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User is not assigned to any tenant")
     if "create" not in _held(db, current_user):
         _refuse(CREATE_REFUSED)
-    from ..modules.governance import exception_types
+    from ..modules.governance import exception_approvals, exception_types
 
     user_tenants = get_user_tenants(current_user, db)
 
@@ -717,6 +719,7 @@ def create_exception(
         document_id=data.get("document_id"),
         department_id=_clean_department(db, tenant_id, data.get("department_id")),
         exception_type=exception_types.clean(db, tenant_id, data.get("exception_type")),
+        implementer=exception_approvals.clean_implementer(db, tenant_id, data.get("implementer")),      # who carries it out once approved: chosen here, per exception
         title=data.get("title"),
         description=data.get("description"),
         justification=data.get("justification"),
@@ -975,6 +978,8 @@ def update_exception(
         exception.department_id = _clean_department(db, exception.tenant_id, data["department_id"], current=exception.department_id)
     if "exception_type" in data:
         exception.exception_type = exception_types.clean(db, exception.tenant_id, data["exception_type"], current=exception.exception_type)
+    if "implementer" in data:          # read when the last approval is given, so it may change while the exception waits
+        exception.implementer = exception_approvals.clean_implementer(db, exception.tenant_id, data["implementer"])
 
     _aids = _clean_asset_ids(data, db, user_tenants)
     if _aids is not None:
@@ -1055,6 +1060,7 @@ def submit_exception(
 
     from ..modules.governance import exception_approvals
 
+    exception_approvals.check_implementer(db, exception)          # the one chosen to carry it out can act, whichever way it is approved
     # the approval rule that applies (Governance > Settings) asks its steps' people; with none, anyone allowed to approve decides, as before
     if exception_approvals.start(db, exception, current_user) is None:
         exception.status = "pending_approval"
@@ -1116,6 +1122,9 @@ def approve_exception(
     exception.approval_comments = comments
     exception.updated_at = datetime.utcnow()
     _log_decision(db, exception, current_user, "Approved", comments)
+    from ..modules.governance import exception_approvals
+
+    exception_approvals.open_direct_implementation(db, exception, current_user)      # asks the implementer the requester chose, if any
     db.commit()
     db.refresh(exception)
     return _exception_to_dict(exception, db, v)
@@ -1342,6 +1351,7 @@ def _exception_to_dict(exc: PolicyException, db: Session, v: SimpleNamespace) ->
         "risks_count": getattr(v, "risk_counts", {}).get(exc.id, 0),
         "controls_count": getattr(v, "control_counts", {}).get(exc.id, 0),
         "implementation": getattr(v, "implementations", {}).get(exc.id),
+        "implementer": getattr(v, "implementers", {}).get(exc.id),        # who the requester chose to carry it out: {people: [{type, id?, label}], due_days}
         "title": exc.title,
         "description": exc.description,
         "justification": exc.justification,

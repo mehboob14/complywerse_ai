@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 
 import {
   ADDRESS, DATA_COLS, DEFAULT_PAGE_SIZE, DOC_TYPES, HIDDEN_DOCUMENT, NO_DOCUMENT, PAGE_SIZES, PICKER_LIMIT, TITLE_MIN_WIDTH,
-  NARROW_HIDDEN, WIDE_WINDOW, browseDocuments, countLabel, countText, countsSummary, cutNotice, docTypeLabel, documentGroupName, documentOf, draftPatch, emptyForm, formFrom, formForPolicy, formatDate, hiddenColumns, listParams, nextSort,
+  IMPLEMENTER_NOTE, NARROW_HIDDEN, WIDE_WINDOW, browseDocuments, chosenImplementerLine, countLabel, countText, countsSummary, cutNotice, docTypeLabel, formErrors, documentGroupName, documentOf, draftPatch, emptyForm, formFrom, formForPolicy, formatDate, hiddenColumns, listParams, nextSort,
   pagerOf, payloadOf, sameForm, schedulePatch, searchExceptions, serverList, shownCols, sortRows, stillSuggested, tableMinWidth, toCsv, toggleHidden, uniqueDocuments, withDocumentDetail,
   unitChipText, unitPlaceholder, unitText, visibleUnits, waitingKindLabel, waitingRows,
   type DataCol, type ExceptionFields, type Filters,
@@ -413,12 +413,13 @@ test('a closed unit hides the units under it, and only those', () => {
 test('the form has a business impact and no longer the two long texts: Edit starts with what the exception has', () => {
   assert.deepEqual(emptyForm(), {
     title: '', document_id: '', justification: '', business_impact: '', priority: 'medium', department_id: '', exception_type: '', effective_date: '', expiry_date: '', asset_ids: [],
+    implementer_people: [], implementer_days: '',
   });
   const form = formFrom({ title: 'Legacy VPN', document_id: 44, justification: '["Vendor cannot patch"]', business_impact: 'Remote staff lose access', linked_asset_ids: [3, 1],
     effective_date: '2026-10-01T08:22:49', expiry_date: '2026-12-15T08:22:49' });
   assert.deepEqual(form, {
     title: 'Legacy VPN', document_id: 44, justification: 'Vendor cannot patch', business_impact: 'Remote staff lose access', priority: 'medium', department_id: '', exception_type: '',
-    effective_date: '2026-10-01', expiry_date: '2026-12-15', asset_ids: [3, 1],
+    effective_date: '2026-10-01', expiry_date: '2026-12-15', asset_ids: [3, 1], implementer_people: [], implementer_days: '',
   });
   assert.equal(formFrom({ title: 'x', document_id: null, business_impact: null }).business_impact, '');
   assert.equal(formForPolicy(5).business_impact, '');
@@ -427,13 +428,65 @@ test('the form has a business impact and no longer the two long texts: Edit star
 test('what is sent never holds the two long texts, so an edit wipes nothing; the business impact goes when it has words, and an edit clears it with null', () => {
   const form = { ...emptyForm(), title: 'T', justification: 'J', document_id: '44', business_impact: 'Staff lose access', asset_ids: [1] };
   const created = payloadOf(form, false);
-  assert.deepEqual(created, { title: 'T', justification: 'J', priority: 'medium', business_impact: 'Staff lose access', document_id: 44, department_id: null, exception_type: null, asset_ids: [1] });
+  assert.deepEqual(created, { title: 'T', justification: 'J', priority: 'medium', business_impact: 'Staff lose access', document_id: 44, department_id: null, exception_type: null, asset_ids: [1], implementer: null });
   for (const editing of [false, true]) {
     const sent = payloadOf(form, editing);
     assert.ok(!('risk_assessment' in sent) && !('compensating_controls' in sent), `editing ${editing}`);
   }
   assert.ok(!('business_impact' in payloadOf({ ...form, business_impact: '  ' }, false)));
   assert.equal(payloadOf({ ...form, business_impact: '' }, true).business_impact, null);
+});
+
+// ── D67: who carries it out is chosen on the exception ──
+
+test('the form holds the implementer its requester chose: Edit starts with the people as keys and the days as text, a new exception with nobody', () => {
+  const saved = { title: 'T', document_id: 4, implementer: { due_days: 5, people: [{ type: 'user' as const, id: 8, label: 'Chen' }, { type: 'role' as const, id: 3, label: 'Role: Implementers' }, { type: 'unit_owner' as const, label: 'Owner of the unit' }] } };
+  const form = formFrom(saved);
+  assert.deepEqual([form.implementer_people, form.implementer_days], [['user:8', 'role:3', 'unit_owner'], '5']);
+  assert.deepEqual([formFrom({ ...saved, implementer: { due_days: null, people: saved.implementer.people } }).implementer_days], ['']);
+  assert.deepEqual([formFrom({ title: 'x', document_id: 4 }).implementer_people, formFrom({ title: 'x', document_id: 4, implementer: null }).implementer_days], [[], '']);
+  assert.deepEqual([emptyForm().implementer_people, emptyForm().implementer_days], [[], '']);
+  assert.deepEqual([formForPolicy(5).implementer_people, formForPolicy(5).implementer_days], [[], '']);
+});
+
+test('the implementer is sent with the exception: its people as the server takes them and the days as a number, or null for nobody (an edit that emptied it clears it)', () => {
+  const base = { ...emptyForm(), title: 'T', justification: 'J' };
+  const sent = payloadOf({ ...base, implementer_people: ['user:8', 'role:3', 'unit_owner'], implementer_days: ' 5 ' }, false).implementer;
+  assert.deepEqual(sent, { people: [{ type: 'user', id: 8 }, { type: 'role', id: 3 }, { type: 'unit_owner' }], due_days: 5 });
+  assert.deepEqual(payloadOf({ ...base, implementer_people: ['user:8'], implementer_days: '' }, false).implementer, { people: [{ type: 'user', id: 8 }], due_days: null });
+  for (const editing of [false, true]) assert.equal(payloadOf(base, editing).implementer, null, `nobody, editing ${editing}`);
+  assert.equal(payloadOf({ ...base, implementer_people: [], implementer_days: '7' }, true).implementer, null, 'days for nobody are not sent');
+  assert.ok(!JSON.stringify(sent).includes('label'));
+});
+
+test('the implementer is optional: nobody is fine, and its days are none or a whole number from 1 to 365 for somebody, in the server\'s words', () => {
+  const base = { ...emptyForm(), title: 'T', justification: 'J' };
+  assert.deepEqual(formErrors(base), {});
+  assert.deepEqual(formErrors({ ...base, implementer_people: ['user:8'] }), {});
+  for (const fine of ['', ' ', '1', '365']) assert.deepEqual(formErrors({ ...base, implementer_people: ['user:8'], implementer_days: fine }), {}, fine);
+  for (const bad of ['0', '366', '-2', '2.5']) assert.equal(formErrors({ ...base, implementer_people: ['user:8'], implementer_days: bad }).implementer, 'The days to implement must be from 1 to 365.', bad);
+  assert.equal(formErrors({ ...base, implementer_people: ['user:8'], implementer_days: 'soon' }).implementer, 'The days to implement must be a number.');
+  assert.equal(formErrors({ ...base, implementer_days: '5' }).implementer, 'Choose who carries it out.');                     // days with nobody to give them to
+  assert.deepEqual(Object.keys(formErrors({ ...emptyForm(), implementer_people: ['user:8'], implementer_days: '0' })).sort(), ['implementer', 'justification', 'title']);
+});
+
+test('changing who implements it, or in how many days, is a change to lose; the order the people were chosen in is not', () => {
+  const start = formFrom({ title: 'T', document_id: 4, justification: 'J', implementer: { due_days: 5, people: [{ type: 'user', id: 8, label: 'A' }, { type: 'user', id: 9, label: 'B' }] } });
+  assert.ok(sameForm(start, { ...start }));
+  assert.ok(sameForm(start, { ...start, implementer_people: ['user:9', 'user:8'] }), 'any one of them can act');
+  assert.ok(!sameForm(start, { ...start, implementer_people: ['user:8'] }));
+  assert.ok(!sameForm(start, { ...start, implementer_days: '6' }));
+  assert.ok(sameForm(start, { ...start, implementer_days: ' 5 ' }));
+  assert.ok(!sameForm(emptyForm(), { ...emptyForm(), implementer_people: ['role:3'] }));
+});
+
+test('an exception says who its requester chose in a line: people and roles named, the owners in words, the days; nothing for nobody', () => {
+  const people = [{ type: 'user' as const, label: 'Chen' }, { type: 'role' as const, label: 'Implementers' }, { type: 'unit_owner' as const, label: 'Owner of the unit' }];
+  assert.equal(chosenImplementerLine({ due_days: 5, people }), 'Chen, Role: Implementers, Owner of the unit · 5 days');
+  assert.equal(chosenImplementerLine({ due_days: 1, people: people.slice(0, 1) }), 'Chen · 1 day');
+  assert.equal(chosenImplementerLine({ due_days: null, people: people.slice(0, 1) }), 'Chen');
+  for (const none of [null, undefined, { due_days: 3, people: [] }]) assert.equal(chosenImplementerLine(none), '');
+  assert.match(IMPLEMENTER_NOTE, /compensating controls.*Any one of them can act.*empty when nobody needs to/);
 });
 
 test('closing the form has something to lose when the business impact changed', () => {

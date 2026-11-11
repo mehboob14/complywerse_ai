@@ -238,6 +238,7 @@ test('Edit starts with what the exception has: its dates as days, its justificat
   assert.deepEqual(form, {
     title: 'Legacy VPN', document_id: 44, justification: 'Vendor cannot patch', business_impact: 'Remote staff lose access',
     priority: 'medium', department_id: '', exception_type: '', effective_date: '2026-10-01', expiry_date: '2026-12-15', asset_ids: [3, 1],
+    implementer_people: [], implementer_days: '',
   });
   assert.equal(formFrom({ title: 'x', document_id: 4 }).business_impact, '');                                  // an exception raised before it existed
   assert.equal(formFrom({ title: 'x', document_id: null }).document_id, '');
@@ -275,7 +276,7 @@ test('a new exception sends what it always did: a date only when set, the docume
   const form = { ...emptyForm(), title: 'T', justification: 'J', document_id: '44', expiry_date: '2026-12-15', asset_ids: [1, 2] };
   assert.deepEqual(payloadOf(form, false), {
     title: 'T', justification: 'J', priority: 'medium', document_id: 44, department_id: null, exception_type: null,
-    expiry_date: '2026-12-15', asset_ids: [1, 2],
+    expiry_date: '2026-12-15', asset_ids: [1, 2], implementer: null,
   });
   assert.equal(payloadOf({ ...form, business_impact: 'It stops the migration' }, false).business_impact, 'It stops the migration');
   assert.ok(!('business_impact' in payloadOf(form, false)));                                                       // a new exception without it sends none

@@ -186,8 +186,8 @@ def test_the_implementer_helper_suggests_controls_for_the_recorded_risks_and_the
 
 def test_the_implementer_helper_has_nothing_to_cover_when_no_risk_was_recorded(w, ai):
     fake = ai("{}")
-    make_rule(w, implementer={"people": [{"type": "user", "id": IMPL1}]})
-    eid = raise_exception(w)["id"]
+    make_rule(w)
+    eid = raise_exception(w, implementer={"people": [{"type": "user", "id": IMPL1}]})["id"]
     assert submit(w, eid).status_code == 200
     assert w.as_(APP1).post(f"{EX}/{eid}/risks", json={"none_identified": True}).status_code == 201
     assert w.as_(APP1).post(f"{EX}/{eid}/approve", json={}).status_code == 200

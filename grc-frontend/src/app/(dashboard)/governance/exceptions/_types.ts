@@ -1,6 +1,7 @@
 // The shapes the Exceptions page reads, and the query keys its writes refresh. Types only (and the lists of keys): what the server sends is
 // policy_exception_router._exception_to_dict, and, for what D62 adds (risks, controls, the implementation, assets, the two hierarchy views, AI drafts),
 // modules/governance/routers/exception_workflow.py with exception_risks.py, exception_controls.py, exception_assets.py, exception_hierarchy.py, exception_ai.py.
+import type { ChosenImplementer } from '@/lib/exceptionRules';
 import type { ExceptionFields } from './_logic';
 
 export interface LinkedAsset { id: number; name: string; asset_type?: string; criticality?: string }
@@ -47,8 +48,10 @@ export interface ExceptionItem extends ExceptionFields {
   /** the real potential risks recorded by the people asked, and the compensating controls recorded by the implementer */
   risks_count?: number;
   controls_count?: number;
-  /** after the last approval of a rule that has an implementer; null: nothing to implement */
+  /** after the last approval of an exception that has an implementer; null: nothing to implement */
   implementation?: Implementation | null;
+  /** who its requester chose to carry it out once approved (D67), with the people named; null: nobody was chosen */
+  implementer?: ChosenImplementer | null;
   /** the assets with who put each there and when; linked_asset_ids / linked_assets stay the membership */
   asset_links?: AssetLink[];
   /** the person may put assets on it (the requester, someone who may edit exceptions, the implementer while it is open) */
@@ -112,7 +115,7 @@ export interface AssetLink {
   can_remove: boolean;
 }
 
-// ─── The implementation: after the last approval, when the rule has an implementer ──────────────────────────────────────────────────
+// ─── The implementation: after the last approval, when the exception has an implementer ──────────────────────────────────────────────────
 export type ImplementationState = 'waiting' | 'in_progress' | 'done' | 'cancelled';
 export interface Implementation {
   state: ImplementationState; name: string; asked: { id: number; name: string }[]; due_at: string | null; overdue: boolean;

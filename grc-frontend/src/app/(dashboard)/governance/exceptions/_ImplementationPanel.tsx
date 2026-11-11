@@ -1,11 +1,11 @@
 'use client';
 
-// The implementation of an approved exception (D62), after the last approval of a rule that has an implementer: where it stands ("Waiting for compensating
+// The implementation of an approved exception (D62), after the last approval of an exception whose requester chose an implementer (D67): where it stands ("Waiting for compensating
 // controls", "In progress", "Implemented", "Cancelled"), who is asked (any one of them can carry it out), the due day with an overdue mark, a warning when nobody who
 // can act is left, and, once it is done, who did it and their note. The compensating controls are its `children` (_ControlsPanel.tsx). The person asked (`can_complete`,
 // the server's flag) gets "Mark implemented": a note, then the server decides. Marking needs a control (the server's 400 is shown as it is); when some potential risks
 // have no control the server answers 409 with a question, which is asked in a box of its own ("Mark implemented anyway") and sends `confirm_uncovered` only on a yes.
-// Words: _approval.ts. Without an implementer in the rule nothing here is drawn.
+// Words: _approval.ts. Without an implementer chosen on the exception nothing here is drawn.
 import { useId, useState, type ReactNode } from 'react';
 import { clsx } from 'clsx';
 import { CheckCircle2, Clock } from 'lucide-react';

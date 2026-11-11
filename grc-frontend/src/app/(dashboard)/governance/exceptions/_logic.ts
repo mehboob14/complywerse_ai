@@ -8,6 +8,7 @@
 import { apiErrorText, safeDetail } from '../../../../lib/apiError.ts';
 import { flag, oneOf, text, type ParamSpec } from '../../../../lib/addressState.ts';
 import { departmentTree } from '../../../../lib/departments.ts';
+import { daysError, personFromKey, personKey, personLabel, type PersonType } from '../../../../lib/exceptionRules.ts';
 import { parseUtc } from '../../../../lib/serverTime.ts';
 import { EMPTY, NOT_SET, formatCount, formatDate as formatDay, formatDateTime as formatMoment } from '../../../../lib/format.ts';
 import { exceptionStatus, type Tone } from '../../../../lib/status.ts';
@@ -510,11 +511,26 @@ export interface ExceptionForm {
   effective_date: string;
   expiry_date: string;
   asset_ids: number[];
+  /** who carries it out once it is approved, chosen per exception (D67): personKey of each (a person, a role, or one of the two owners); any one of them can act; none: nobody */
+  implementer_people: string[];
+  /** the days they have, as typed; '' is no due date */
+  implementer_days: string;
 }
 
 export const emptyForm = (): ExceptionForm => ({
   title: '', document_id: '', justification: '', business_impact: '', priority: 'medium', department_id: '', exception_type: '', effective_date: '', expiry_date: '', asset_ids: [],
+  implementer_people: [], implementer_days: '',
 });
+
+/** The implementer an exception names, as a line: "Chen Support, Role: Implementers · 5 days"; '' for nobody. */
+export function chosenImplementerLine(imp: { due_days: number | null; people: ReadonlyArray<{ type: PersonType; label: string }> } | null | undefined): string {
+  if (!imp || imp.people.length === 0) return '';
+  const who = imp.people.map(personLabel).join(', ');
+  return imp.due_days ? `${who} · ${imp.due_days} ${imp.due_days === 1 ? 'day' : 'days'}` : who;
+}
+
+/** What the form's Implementer field explains: it moved here from the approval rules, because who implements differs by exception. */
+export const IMPLEMENTER_NOTE = 'Who carries it out once it is approved: they record the compensating controls and mark it implemented. Any one of them can act. Leave it empty when nobody needs to.';
 
 /** A date field's value from what the server stored ("2026-11-15T08:22:49"): the day as written, "YYYY-MM-DD"; '' for none. A date field shows nothing for a value with a time. */
 export const toDateInput = (value: string | null | undefined): string => /^\d{4}-\d{2}-\d{2}/.exec(String(value ?? ''))?.[0] ?? '';
@@ -523,6 +539,7 @@ export const toDateInput = (value: string | null | undefined): string => /^\d{4}
 export function formFrom(e: {
   title: string; document_id: number | null; justification?: unknown; business_impact?: string | null;
   priority?: string; department_id?: number | null; exception_type?: string | null; effective_date?: string | null; expiry_date?: string | null; linked_asset_ids?: number[];
+  implementer?: { due_days: number | null; people: ReadonlyArray<{ type: PersonType; id?: number; label?: string }> } | null;
 }): ExceptionForm {
   return {
     title: e.title,
@@ -535,6 +552,8 @@ export function formFrom(e: {
     effective_date: toDateInput(e.effective_date),
     expiry_date: toDateInput(e.expiry_date),
     asset_ids: e.linked_asset_ids || [],
+    implementer_people: (e.implementer?.people ?? []).map(personKey),
+    implementer_days: e.implementer?.due_days == null ? '' : String(e.implementer.due_days),
   };
 }
 
@@ -543,19 +562,27 @@ export function formForPolicy(documentId: number, opts?: { title?: string; justi
   return { ...emptyForm(), title: opts?.title || '', document_id: documentId || '', justification: toEditableText(opts?.justification), priority: opts?.priority || 'medium' };
 }
 
-/** Whether two forms hold the same: what decides that closing the drawer has something to lose. The assets compare as a set. */
+/** Whether two forms hold the same: what decides that closing the drawer has something to lose. The assets and the implementer's people compare as sets. */
 export function sameForm(a: ExceptionForm, b: ExceptionForm): boolean {
   const ids = (f: ExceptionForm) => [...f.asset_ids].sort((x, y) => x - y).join(',');
+  const who = (f: ExceptionForm) => [...f.implementer_people].sort().join(',');
   return a.title === b.title && String(a.document_id) === String(b.document_id) && a.justification === b.justification && a.business_impact === b.business_impact
     && a.priority === b.priority && String(a.department_id) === String(b.department_id) && a.exception_type === b.exception_type
-    && a.effective_date === b.effective_date && a.expiry_date === b.expiry_date && ids(a) === ids(b);
+    && a.effective_date === b.effective_date && a.expiry_date === b.expiry_date && ids(a) === ids(b)
+    && who(a) === who(b) && a.implementer_days.trim() === b.implementer_days.trim();
 }
 
-/** What is missing before it can be saved: the title and the justification (blank or only spaces is missing). Only the missing ones are keys. */
-export function formErrors(form: ExceptionForm): { title?: string; justification?: string } {
-  const out: { title?: string; justification?: string } = {};
+/**
+ * What is missing or wrong before it can be saved: the title and the justification (blank or only spaces is missing), and the implementer when days were typed
+ * for nobody or are not a number from 1 to 365 (the server's sentences). Only the missing ones are keys; the implementer is optional, so none chosen is fine.
+ */
+export function formErrors(form: ExceptionForm): { title?: string; justification?: string; implementer?: string } {
+  const out: { title?: string; justification?: string; implementer?: string } = {};
   if (!form.title.trim()) out.title = 'Enter a title';
   if (!form.justification.trim()) out.justification = 'Enter a justification';
+  const days = daysError(form.implementer_days, 'implement');
+  if (days) out.implementer = days;
+  else if (form.implementer_days.trim() !== '' && form.implementer_people.length === 0) out.implementer = 'Choose who carries it out.';
   return out;
 }
 
@@ -581,6 +608,10 @@ export function payloadOf(form: ExceptionForm, editing: boolean): Record<string,
   if (form.expiry_date) payload.expiry_date = form.expiry_date;
   else if (editing) payload.expiry_date = null;
   payload.asset_ids = form.asset_ids;
+  // who carries it out once approved: the people chosen with their days, or null for nobody (an edit that emptied it clears it)
+  payload.implementer = form.implementer_people.length
+    ? { people: form.implementer_people.map(personFromKey), due_days: form.implementer_days.trim() === '' ? null : Number(form.implementer_days) }
+    : null;
   return payload;
 }
 

@@ -336,7 +336,7 @@ _COLUMN_ADDS = [
     ("grc_policy_exceptions", "department_id", "INTEGER", "ix_pol_exc_department"),   # the unit it is raised for (approval rules, D58)
     ("grc_policy_exceptions", "exception_type", "VARCHAR(40)", "ix_pol_exc_type"),     # its kind, from the organisation's own list (D59)
     ("grc_policy_exceptions", "business_impact", "TEXT", None),                       # what refusing it would mean for the business (D62)
-    ("grc_exception_approval_rules", "implementer", "JSON", None),                    # who carries an approved exception out (D62)
+    ("grc_policy_exceptions", "implementer", "JSON", None),                           # who carries it out once approved, chosen by its requester (D62, D67)
     ("grc_exception_approval_runs", "implementer", "JSON", None),
     ("grc_exception_approval_runs", "implementation", "JSON", None),
     ("grc_exception_approval_runs", "implementation_state", "VARCHAR(20)", "ix_exc_run_impl_state"),

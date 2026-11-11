@@ -113,8 +113,8 @@ def test_a_control_that_covers_the_risks_needs_no_confirmation(w):
 
 
 def test_an_assessment_that_found_no_risk_leaves_nothing_to_cover(w):
-    make_rule(w, implementer=implementer())
-    eid = raise_exception(w)["id"]
+    make_rule(w)
+    eid = raise_exception(w, implementer=implementer())["id"]
     assert submit(w, eid).status_code == 200
     assert decide(w, eid, APP1).status_code == 200                                    # approved with "none identified"
     assert w.as_(IMPL1).post(controls_url(eid), json={"title": "Review access monthly"}).status_code == 201
@@ -141,7 +141,7 @@ def test_move_to_the_risk_register_carries_the_recorded_risks_and_controls(w):
     assert "Compensating controls:\n1. Daily restore test (in place)" in text
 
 
-def test_a_rule_with_no_implementer_has_no_controls_to_record(w):
+def test_an_exception_with_no_implementer_has_no_controls_to_record(w):
     eid = approved(w)
     r = w.as_(IMPL1).post(controls_url(eid), json={"title": "x"})
     assert r.status_code == 403 and r.json()["detail"] == C.NOT_YOURS

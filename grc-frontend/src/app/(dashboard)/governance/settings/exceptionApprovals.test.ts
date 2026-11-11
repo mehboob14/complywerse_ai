@@ -112,7 +112,7 @@ test('the Types drawer (D59): the organisation\'s own list, for an editor only; 
   assert.match(section, /const typesButton = <Button leftIcon=\{<Tags aria-hidden \/>\} onClick=\{\(\) => setTyping\(true\)\}/);
   assert.match(section, /\{typing && <TypesDrawer types=\{types\} onClose=\{\(\) => setTyping\(false\)\} \/>\}/);
   assert.match(section, /const types = answer\.data\?\.exception_types \?\? \[\]/);
-  assert.match(section, /conditionChips\(r, types\)/);
+  assert.match(section, /conditionChips\(r, types, universe\)/);
   assert.match(types, /exceptionRulesApi\.setTypes\(rows\)/);
   assert.match(types, /invalidate: \[RULES_KEY, TYPES_KEY\]/);                                                         // the card, the rule editor and the exceptions form read the new list
   assert.match(types, /dirty=\{!sameTypes\(drafts, initial\) \|\| adding\.trim\(\) !== ''\}/);
@@ -129,52 +129,42 @@ test('the Types drawer (D59): the organisation\'s own list, for an editor only; 
   assert.match(api, /apiClient\.put<TypesAnswer>\('\/governance\/exception-approval-rules\/types', \{ types \}\)/);
 });
 
-// ── the implementer (D62) and the words ──
+// ── the implementer moved to the exception (D67), a long rule in a cell, and the words ──
 
-test('the implementer is one optional block after the steps: Add and Remove, the steps\' chooser, the days to implement, one (i) note and no sentence under the title', () => {
-  assert.match(drawer, /<span className="text-ds-section text-ds-fg">Implementer<\/span>\s*<InfoTip text=\{RULE_NOTES\.implementer\} label="About the implementer" \/>/);
-  assert.match(drawer, /leftIcon=\{<Plus aria-hidden \/>\} onClick=\{\(\) => set\(\{ implementer: blankImplementer\(\) \}\)\}>Add implementer</);
-  assert.match(drawer, /leftIcon=\{<Trash2 aria-hidden \/>\} onClick=\{\(\) => set\(\{ implementer: null \}\)\}>Remove implementer</);
-  assert.match(drawer, /\{form\.implementer && <ImplementerEditor implementer=\{form\.implementer\} choices=\{choices\} errors=\{errors\.implementer\} onChange=\{setImplementer\} \/>\}/);
-  assert.ok(drawer.indexOf('<ol aria-label="Steps"') < drawer.indexOf('Add implementer'), 'after the steps');
-  assert.match(drawer, /^function ImplementerEditor\(/m);                                                       // at module level: a component defined inside another remounts every render
-  const editor = drawer.slice(drawer.indexOf('function ImplementerEditor'), drawer.indexOf('export function RuleDrawer'));
-  assert.ok(editor.length > 300);
-  assert.match(editor, /role="group" aria-label="Implementer"/);
-  assert.match(editor, /<FormField label="Who implements" required error=\{errors\?\.people\}/);
-  assert.match(editor, /<MultiSelect label="Implementer: who carries it out" options=\{choices\} value=\{imp\.people\}[\s\S]*?display="chips"/);
-  assert.match(editor, /<FormField label="Days to implement" optional error=\{errors\?\.due_days\}/);
-  assert.match(editor, /min=\{1\} max=\{365\}[^>]*unit="days"/);
-  assert.doesNotMatch(editor, /<p[\s>]/);                                                                         // D41: the (i) beside the title says what a sentence under it would
-  assert.doesNotMatch(editor, /label="Name"/);                                                                    // the editor names it nothing: the server calls it "Implementation"
-  assert.match(drawer, /\.\.\.\(rule\.implementer\?\.people \?\? \[\]\)/);                                         // a person the lists no longer hold still shows, and can be taken off
-  assert.match(drawer, /const setImplementer = \(patch: Partial<DraftImplementer>\) => set\(\{ implementer: form\.implementer && \{ \.\.\.form\.implementer, \.\.\.patch \} \}\)/);
-  assert.equal((drawer.match(/RULE_NOTES\.implementer/g) ?? []).length, 1);                                       // one note, not one per field
+test('the rule drawer has no implementer: who carries an approved exception out is chosen on the exception, not by the rule', () => {
+  assert.doesNotMatch(drawer, /implementer/i);
+  assert.doesNotMatch(drawer, /Add implementer|Remove implementer|Days to implement/);
+  assert.doesNotMatch(section, /[^a-z]r.implementer/);                                                          // the table reads no implementer of a rule
+  assert.doesNotMatch(tester, /implementer|Asked to implement/i);
+  assert.ok(drawer.includes('<ol aria-label="Steps"'), 'the steps are still the last block of the editor');
+  assert.ok(drawer.indexOf('</ol>') > drawer.indexOf('<ol aria-label="Steps"'));
 });
 
-test('the implementer is saved with the rule through the one payload and checked the way a step is: errors under its fields after a save was tried, the sentence above Save', () => {
-  assert.match(drawer, /save\.mutate\(payloadOf\(form\)\)/);                                                      // payloadOf carries the block (exceptionRules.test.ts)
-  assert.match(drawer, /const errors = tried \? ruleErrors\(form\) : NO_ERRORS/);                                  // errors.implementer is part of it
+test('a rule is saved through the one payload and checked the way a step is: errors under its fields after a save was tried, the sentence above Save', () => {
+  assert.match(drawer, /save\.mutate\(payloadOf\(form\)\)/);                                                      // payloadOf carries the whole rule (exceptionRules.test.ts)
+  assert.match(drawer, /const errors = tried \? ruleErrors\(form\) : NO_ERRORS/);
   assert.match(drawer, /const problem = said \?\? \(tried \? ruleProblem\(form\) : ''\)/);
-  assert.match(drawer, /dirty=\{!sameRuleForm\(form, initial\)\}/);                                               // an added or removed block is a change to lose
-  assert.match(section, /exceptionRulesApi\.update\(r\.id, payloadOfRule\(r, !r\.is_active\)\)/);                  // a switch sends the rule with its implementer
+  assert.match(drawer, /dirty=\{!sameRuleForm\(form, initial\)\}/);                                               // a change to lose
+  assert.match(section, /exceptionRulesApi\.update\(r\.id, payloadOfRule\(r, !r\.is_active\)\)/);                  // a switch sends the whole rule
 });
 
-test('the table and the cards show the implementer after the approval, the tester says who it would ask now, and its problems are the server\'s', () => {
-  assert.match(section, /title=\{stepsLong\(r\.steps, r\.implementer\)\}>\{stepsLine\(r\.steps, r\.implementer\)\}</);
-  assert.match(section, /cardCell: \(r\) => <span[^>]*>\{stepsLong\(r\.steps, r\.implementer\)\}<\/span>/);
-  assert.match(tester, /previewImplementer\(answer\.data, nameOf\)/);
-  assert.match(tester, /<\/ol>\s*\{implementer && \(\s*<div role="group" aria-label="Implementer"[\s\S]*?\)\}\s*\{answer\.data\.problems\.map\(/);            // after the steps, before the warnings
-  assert.match(tester, /<ul aria-label="Asked to implement"/);
-  assert.match(tester, /\{implementer\.how && <span/);
-  assert.match(tester, /implementer\.who\.map\(\(w, i\) => <li key=\{i\} className=\{CHIP\}>\{w\}<\/li>\)/);
+test('the table says the chain of steps only, and "When" stays short however much a rule names: a count or "All ...", the full sentence as the tooltip and for a screen reader', () => {
+  assert.match(section, /title=\{stepsLong\(r\.steps\)\}>\{stepsLine\(r\.steps\)\}</);
+  assert.match(section, /cardCell: \(r\) => <span[^>]*>\{stepsLong\(r\.steps\)\}<\/span>/);
+  assert.match(section, /const chips = conditionChips\(r, types, universe\)/);
+  assert.match(section, /<span className="sr-only">\{conditionsLong\(r, types, universe\)\}<\/span>/);
+  assert.match(section, /<span aria-hidden title=\{conditionsLong\(r, types, universe\)\} className="flex flex-wrap gap-\[4px\]">/);
+  // what "all" is measured against: the server's lists for someone who can edit, the usual ones for someone who cannot, and the organisation's types in use
+  assert.match(section, /priorities: answer\.data\?\.options\?\.priorities\?\.length \? answer\.data\.options\.priorities : PRIORITY_ORDER/);
+  assert.match(section, /doc_types: answer\.data\?\.options\?\.doc_types\?\.length \? answer\.data\.options\.doc_types : KIND_ORDER/);
+  assert.match(section, /exception_types: types\.filter\(\(t\) => !t\.archived\)\.map\(\(t\) => t\.value\)/);
 });
 
 test('the words: "Document type" for a kind of document, "exception" for a policy exception, in the editor, the tester, the table and the types', () => {
   for (const f of FILES) assert.doesNotMatch(src[f], /polic(y|ies) exception|policy kind|kinds? of policy/i, f);
   assert.match(drawer, /<FormField label="Document type" optional>\s*<MultiSelect label="Document type"/);
   assert.match(tester, /<FormField label="Document type">/);
-  assert.match(section, /conditionsLong\(r, types\)/);                                                            // the table's sentence is the library's ("Document type: Policy")
+  assert.match(section, /conditionsLong\(r, types, universe\)/);                                                            // the table's sentence is the library's ("Document type: Policy")
   assert.match(section, /title="The kinds of exception your organisation tells apart"/);
   assert.match(drawer, /label="Exception type" optional/);                                                                  // the exception type keeps its own word
 });

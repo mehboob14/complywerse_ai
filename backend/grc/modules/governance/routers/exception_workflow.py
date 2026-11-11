@@ -29,6 +29,7 @@ from .. import exception_risks as K
 router = APIRouter(prefix="/policy-exceptions", tags=["Policy Exceptions"])
 
 OWNER_AI_REFUSED = "Only someone allowed to request or edit policy exceptions can ask AI to help with one."
+IMPLEMENTER_REFUSED = "Only someone allowed to request or edit policy exceptions can choose who carries one out."
 
 
 class DraftIn(BaseModel):
@@ -110,6 +111,17 @@ def exceptions_by_document(db: Session = Depends(get_db), current_user: GRCUser 
     """The units as folders, the documents that have exceptions under each, the exceptions under each document."""
     legacy._ensure_columns(db)
     return H.by_document(db, current_user)
+
+
+@router.get("/implementer-options")
+def implementer_options(db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    """The people and roles the person raising an exception can choose to carry it out (the rule editor's lists, for whoever may raise or edit one)."""
+    if not legacy._held(db, current_user) & {"create", "edit"}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=IMPLEMENTER_REFUSED)
+    from .exception_rules import _options
+
+    options = _options(db, _tenant(db, current_user))
+    return {"users": options["users"], "roles": options["roles"]}
 
 
 # ── AI for the person raising an exception ───────────────────────────────────

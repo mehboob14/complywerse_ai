@@ -1,7 +1,8 @@
 'use client';
 
-// Governance > Settings > Exception approvals: who reviews and approves an exception, and who carries it out afterwards, for the whole organisation or for a department,
-// sub-department or unit. A table of the rules (where each applies, when, the chain of its steps and its implementer, on or off) with Add rule, and a row's menu: Edit, Switch off / on, Delete.
+// Governance > Settings > Exception approvals: who reviews and approves an exception, for the whole organisation or for a department,
+// sub-department or unit. A table of the rules (where each applies, when, the chain of its steps, on or off) with Add rule, and a row's menu: Edit, Switch off / on, Delete.
+// "When" is short however much a rule names (a kind with many choices is a count, all of them is "All ..."; the full text is the tooltip). Who carries an approved exception out is chosen per exception, in its form (D67).
 // Adding and changing is a drawer (_RuleDrawer.tsx); a tester below the table says which rule an exception like this would follow (_RuleTester.tsx). Anyone
 // with a governance right reads the rules; changing needs governance:settings:edit, and the server says which (`can_edit`): a person who cannot change them
 // sees the table and "View only". A rule applies when an exception is submitted; one already waiting keeps the steps it started with. With no rules, anyone
@@ -13,7 +14,7 @@ import { clsx } from 'clsx';
 import { Pencil, Plus, Power, ShieldCheck, Tags, Trash2 } from 'lucide-react';
 import { exceptionRulesApi } from '@/lib/api';
 import {
-  RULES_KEY, RULE_NOTES, conditionChips, conditionsLong, payloadOfRule, rulesSummary, scopeOf, stepsLine, stepsLong, type ExceptionRule,
+  KIND_ORDER, PRIORITY_ORDER, RULES_KEY, RULE_NOTES, conditionChips, conditionsLong, payloadOfRule, rulesSummary, scopeOf, stepsLine, stepsLong, type ConditionUniverse, type ExceptionRule,
 } from '@/lib/exceptionRules';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { Button, EmptyState, Menu, ReadOnlyNote, RegisterTable, SectionCard, StatusPill, useConfirm, useReportedMutation, type MenuItem, type RegisterColumn } from '@/components/ui/ds';
@@ -40,6 +41,12 @@ export function ExceptionApprovalsSection() {
   const types = answer.data?.exception_types ?? [];
   const failed = answer.isError && !answer.data;
   const empty = !answer.isLoading && !failed && rules.length === 0;
+  // what a rule's conditions can be chosen from, so that a rule holding all of them reads "All priorities" instead of a chip for each (the server sends the lists to people who can edit; others see the usual ones)
+  const universe: ConditionUniverse = {
+    priorities: answer.data?.options?.priorities?.length ? answer.data.options.priorities : PRIORITY_ORDER,
+    doc_types: answer.data?.options?.doc_types?.length ? answer.data.options.doc_types : KIND_ORDER,
+    exception_types: types.filter((t) => !t.archived).map((t) => t.value),
+  };
 
   const toggle = useReportedMutation({
     mutationFn: (r: ExceptionRule) => exceptionRulesApi.update(r.id, payloadOfRule(r, !r.is_active)),
@@ -86,19 +93,19 @@ export function ExceptionApprovalsSection() {
     {
       key: 'when', header: 'When', priority: 3, width: 'w-[152px]', card: 'meta',
       cell: (r) => {
-        const chips = conditionChips(r, types);
+        const chips = conditionChips(r, types, universe);
         return chips.length === 0 ? <span className="text-ds-fg-muted">Any</span> : (
           <>
-            <span className="sr-only">{conditionsLong(r, types)}</span>
-            <span aria-hidden className="flex flex-wrap gap-[4px]">{chips.map((c, i) => <span key={i} className={CHIP}>{c}</span>)}</span>
+            <span className="sr-only">{conditionsLong(r, types, universe)}</span>
+            <span aria-hidden title={conditionsLong(r, types, universe)} className="flex flex-wrap gap-[4px]">{chips.map((c, i) => <span key={i} className={CHIP}>{c}</span>)}</span>
           </>
         );
       },
     },
     {
       key: 'steps', header: 'Steps', card: 'meta',
-      cell: (r) => <span className="line-clamp-2 [overflow-wrap:anywhere]" title={stepsLong(r.steps, r.implementer)}>{stepsLine(r.steps, r.implementer)}</span>,
-      cardCell: (r) => <span className="block whitespace-pre-line [overflow-wrap:anywhere]">{stepsLong(r.steps, r.implementer)}</span>,       // a phone has no tooltip: every step in full, one to a line, the implementer last
+      cell: (r) => <span className="line-clamp-2 [overflow-wrap:anywhere]" title={stepsLong(r.steps)}>{stepsLine(r.steps)}</span>,
+      cardCell: (r) => <span className="block whitespace-pre-line [overflow-wrap:anywhere]">{stepsLong(r.steps)}</span>,       // a phone has no tooltip: every step in full, one to a line
     },
     { key: 'status', header: 'Status', width: 'w-[88px]', card: 'meta', cell: (r) => <StatusPill size="sm" tone={r.is_active ? 'success' : 'neutral'} label={r.is_active ? 'Active' : 'Off'} /> },
     ...(canEdit ? [{ key: 'actions', header: 'Actions', align: 'right' as const, width: 'w-[56px]', cell: actionsOf }] : []),
