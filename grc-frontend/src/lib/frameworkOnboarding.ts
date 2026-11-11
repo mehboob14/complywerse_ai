@@ -181,11 +181,10 @@ export interface GateDecision {
   unmet: Array<{ key: string; label: string; hint: string | null }>;
 }
 
-export type AiKind = 'scope_draft' | 'exclusions_check' | 'parties_suggest' | 'gap_review';
+export type AiKind = 'scope_draft' | 'exclusions_check' | 'gap_review';
 export interface AiSuggestion<T = Record<string, unknown>> { kind: AiKind; suggestion: T; by: 'ai' | 'rules' }
 export interface ScopeDraft { statement: string }
 export interface ExclusionsCheck { exclusions: Array<{ item: string; reason: string }>; questions: Array<{ item: string; why: string }> }
-export interface PartiesSuggest { rows: Array<{ party: string; kind: string; requirement: string }> }
 export interface GapReview { questions: Array<{ field: string; question: string }> }
 
 /** What a refused call carries (`detail` of the 4xx answer), whatever its shape. `code === 'onboarding_required'` is the gate's 409. */

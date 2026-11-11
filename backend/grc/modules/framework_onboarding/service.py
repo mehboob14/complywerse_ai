@@ -80,6 +80,28 @@ def _saved_event(db: Session, ob: FrameworkOnboarding, actor: int, step: str, ke
 
 
 # --------------------------------------------------------------------------- create and read
+def prefilled(slug: Optional[str], org_values: Dict[str, Any], kn: engine.Known) -> Dict[str, Dict[str, Any]]:
+    """The answers a new onboarding starts with: each field that names ``prefill_from`` (an organisation-profile field of the same type, or the
+    Tenant fact the profile reads) takes what the organisation already told us. Anything that does not fit the field is left empty."""
+    out: Dict[str, Dict[str, Any]] = {}
+    for st in catalog.resolve(slug)["steps"]:
+        for f in st["fields"]:
+            ref = f.get("prefill_from")
+            if not ref:
+                continue
+            group, _, key = ref[4:].partition(".") if ref.startswith("org.") else ref.partition(".")
+            v = (org_values.get(group) or {}).get(key)
+            if v in (None, "", [], {}):
+                continue
+            try:
+                v = engine.normalise(f, v, kn)
+            except engine.FieldError:
+                continue
+            if v not in (None, [], {}):
+                out.setdefault(st["key"], {})[f["key"]] = v
+    return out
+
+
 def create(db: Session, tenant_id: int, user: GRCUser, fw: UploadedFramework) -> FrameworkOnboarding:
     """The draft for a framework; asking again returns the same one."""
     ob = find(db, tenant_id, fw.id)
@@ -87,8 +109,10 @@ def create(db: Session, tenant_id: int, user: GRCUser, fw: UploadedFramework) ->
         return ob
     slug = framework_slug(fw)
     now = datetime.utcnow()
+    org_values = profile.merged_values(db, tenant_id)
     ob = FrameworkOnboarding(tenant_id=tenant_id, uploaded_framework_id=fw.id, framework_slug=slug, family=catalog.family_key_for_slug(slug),
-                             catalog_version=catalog.catalog_version(), state="draft", answers={}, created_by=user.id, created_at=now, updated_at=now)
+                             catalog_version=catalog.catalog_version(), state="draft", answers=prefilled(slug, org_values, profile.known(db, tenant_id, org_values)),
+                             created_by=user.id, created_at=now, updated_at=now)
     db.add(ob)
     db.flush()
     _event(db, ob, "created", user.id)

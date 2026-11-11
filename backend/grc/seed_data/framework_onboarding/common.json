@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "label": "Every framework",
+  "summary": "What every framework's onboarding settles first: why the organisation takes it on, whether and where it applies, what is in scope, what already exists and who owns it. Nothing here asks for the work of the framework itself (policies, risk assessments, evidence): that starts after onboarding.",
+  "steps": [
+    {
+      "key": "objective", "label": "Objective",
+      "source": {"ref": "Scoping practice of certification bodies, regulators and assessors: purpose, starting point and target date come before any assessment", "asked_by": "assessor, certification body, regulator", "confidence": "secondary", "urls": ["https://www.schellman.com/blog/scoping-out-an-iso-27001-certification", "https://www.dataguard.com/knowledge/iso-27001/clause-4-3-how-to-determine-the-scope-of-your-isms/"]},
+      "fields": [
+        {"key": "goal", "label": "Objective", "type": "choice", "level": "required", "options": ["Certification", "Regulatory compliance", "Customer requirement", "Internal assessment"], "note": "Why the organisation takes this framework on. A certification, a regulator's requirement and an internal assessment follow different workflows afterwards."},
+        {"key": "start", "label": "Starting point", "type": "choice", "level": "advised", "options": ["New programme", "Existing programme", "Migrating from another system"], "note": "Whether this is the first implementation, work that is already running, or a move from another tool."},
+        {"key": "target_date", "label": "Target date", "type": "date", "level": "advised", "note": "The audit, certification or regulatory date to work towards, if there is one."},
+        {"key": "required_by", "label": "Required by", "type": "text", "level": "advised", "when": {"field": "objective.goal", "in": ["Regulatory compliance", "Customer requirement"]}, "note": "The regulator or customer that asks for it."}
+      ]
+    },
+    {
+      "key": "applicability", "label": "Applicability",
+      "source": {"ref": "Scoping practice: the legal entity, the countries and whether the framework covers the whole organisation or part of it are the first applicability facts any assessor asks", "asked_by": "assessor, regulator", "confidence": "secondary", "urls": ["https://www.schellman.com/blog/scoping-out-an-iso-27001-certification"]},
+      "fields": [
+        {"key": "entity", "label": "Legal entity", "type": "text", "level": "required", "prefill_from": "org.entities_sites.legal_entity", "note": "The company that implements the framework and whose name appears on the certificate, report or filing."},
+        {"key": "jurisdictions", "label": "Countries", "type": "countries", "level": "required", "prefill_from": "org.regulators_obligations.jurisdictions", "note": "Where that company operates. A country alone does not decide applicability, but it tells which regulators and laws to look at."},
+        {"key": "reach", "label": "Applies to", "type": "choice", "level": "required", "options": ["Whole organisation", "Selected parts only"], "note": "Whether the framework covers everything the entity does, or only some departments, processes, systems or locations."},
+        {"key": "products", "label": "Services covered", "type": "text", "level": "advised", "when": {"field": "applicability.reach", "eq": "Selected parts only"}, "note": "The products or services the framework covers, if only some."}
+      ]
+    },
+    {
+      "key": "scope", "label": "Scope",
+      "source": {"ref": "Scoping practice: departments, processes, systems, locations, third parties and justified exclusions define the boundary an assessor tests", "asked_by": "assessor, certification body", "confidence": "secondary", "urls": ["https://www.schellman.com/blog/scoping-out-an-iso-27001-certification", "https://www.dataguard.com/knowledge/iso-27001/clause-4-3-how-to-determine-the-scope-of-your-isms/"]},
+      "fields": [
+        {"key": "departments", "label": "Departments", "type": "org_pick", "of": "departments", "level": "advised", "when": {"field": "applicability.reach", "eq": "Selected parts only"}, "note": "Departments inside the scope, from the department tree in Governance settings."},
+        {"key": "processes", "label": "Processes", "type": "table", "level": "advised", "when": {"field": "applicability.reach", "eq": "Selected parts only"}, "note": "Business processes inside the scope, with who owns each.", "columns": [
+          {"key": "process", "label": "Process", "type": "text", "required": true},
+          {"key": "owner", "label": "Owner", "type": "person"}
+        ]},
+        {"key": "systems", "label": "Systems", "type": "org_pick", "of": "systems", "level": "advised", "when": {"field": "applicability.reach", "eq": "Selected parts only"}, "note": "Systems and applications inside the scope, picked from the asset inventory."},
+        {"key": "hosting", "label": "Hosting", "type": "multichoice", "level": "advised", "when": {"field": "applicability.reach", "eq": "Selected parts only"}, "options": ["On premises", "AWS", "Microsoft Azure", "Google Cloud", "Other cloud"], "note": "Where the in-scope systems run."},
+        {"key": "locations", "label": "Locations", "type": "org_pick", "of": "sites", "level": "advised", "when": {"field": "applicability.reach", "eq": "Selected parts only"}, "note": "Offices, branches or data centres inside the scope, from the sites in the organisation profile."},
+        {"key": "vendors", "label": "Third parties", "type": "org_pick", "of": "third_parties", "level": "advised", "when": {"field": "org.data_systems.no_third_parties", "ne": true}, "note": "Vendors and service providers the in-scope services depend on."},
+        {"key": "exclusions", "label": "Exclusions", "type": "table", "level": "advised", "note": "Anything left out of the scope, each with the reason. Leave empty if nothing is excluded.", "columns": [
+          {"key": "item", "label": "Item", "type": "text", "required": true},
+          {"key": "reason", "label": "Reason", "type": "text", "required": true}
+        ]},
+        {"key": "statement", "label": "Scope statement", "type": "longtext", "level": "advised", "note": "A short statement of what is covered, where and for whom, if one is drafted. AI can draft one from what is picked above."}
+      ]
+    },
+    {
+      "key": "existing", "label": "Existing work",
+      "source": {"ref": "Gap analysis practice: what already exists decides where the work starts, so the platform does not begin from zero", "asked_by": "assessor", "confidence": "secondary", "urls": ["https://www.schellman.com/blog/scoping-out-an-iso-27001-certification"]},
+      "fields": [
+        {"key": "have", "label": "Already in place", "type": "multichoice", "level": "advised", "options": ["Policies and procedures", "Control assessments", "Previous audit findings", "Evidence repository", "Risk register", "Previous compliance reports", "Open remediation actions", "Nothing yet"], "note": "Tick what already exists for this framework. Nothing is needed to continue; the platform uses it to avoid starting from zero."},
+        {"key": "previous_system", "label": "Previous system", "type": "text", "level": "advised", "when": {"field": "objective.start", "eq": "Migrating from another system"}, "note": "The tool the work is moving from."}
+      ]
+    },
+    {
+      "key": "ownership", "label": "Ownership",
+      "source": {"ref": "Programme governance practice: an accountable owner, an approver of scope and applicability decisions and an independent reviewer are named before work is assigned", "asked_by": "assessor, regulator", "confidence": "secondary", "urls": ["https://www.schellman.com/blog/scoping-out-an-iso-27001-certification"]},
+      "fields": [
+        {"key": "owner", "label": "Programme owner", "type": "person", "level": "required", "prefill_from": "org.risk_people.compliance_lead", "note": "The person accountable for this framework programme."},
+        {"key": "coordinator", "label": "Coordinator", "type": "person", "level": "advised", "note": "Who coordinates assessments day to day, if not the owner."},
+        {"key": "approver", "label": "Approver", "type": "person", "level": "advised", "prefill_from": "org.risk_people.sponsor", "note": "Who approves applicability and scope decisions."},
+        {"key": "teams", "label": "Control teams", "type": "org_pick", "of": "departments", "level": "advised", "note": "Departments that will implement the controls."},
+        {"key": "assessor", "label": "Independent review", "type": "choice", "level": "advised", "options": ["Internal audit", "External assessor", "Not decided yet"], "note": "Who will review the compliance work independently."}
+      ]
+    }
+  ],
+  "gate": [
+    {"key": "scope_named", "label": "The scope names what is covered", "level": "required", "when": {"field": "applicability.reach", "eq": "Selected parts only"}, "check": {"type": "any_filled", "fields": ["scope.departments", "scope.processes", "scope.systems", "scope.locations"]}, "hint": "Pick the departments, processes, systems or locations that are covered, or choose Whole organisation."},
+    {"key": "owner_not_approver", "label": "Owner and approver are different people", "level": "advised", "check": {"type": "distinct", "fields": ["ownership.owner", "ownership.approver"]}, "hint": "Someone other than the owner approves scope decisions."}
+  ]
+}

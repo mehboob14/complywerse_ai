@@ -23,6 +23,7 @@ FAMILY_KEYS = (
     "supplier_certification", "asia_regulators", "general",
 )
 GENERAL = "general"
+COMMON = "common"     # common.json: the steps every framework starts with, before its own (family) questions
 
 FIELD_TYPES = {
     "text", "longtext", "number", "date", "bool", "choice", "multichoice", "person",
@@ -71,7 +72,11 @@ def _load() -> Dict[str, Any]:
     for key in FAMILY_KEYS:
         if (CATALOG_DIR / f"{key}.json").is_file():
             fams[key] = _read(key)
-    return {"profile": _read("org_profile"), "families": fams}
+    return {"profile": _read("org_profile"), "common": _read(COMMON), "families": fams}
+
+
+def common() -> Dict[str, Any]:
+    return _load()["common"]
 
 
 def profile() -> Dict[str, Any]:
@@ -84,7 +89,7 @@ def families() -> Dict[str, Dict[str, Any]]:
 
 def catalog_version() -> int:
     """One number for the whole shipped catalog; a snapshot records the one an approval used."""
-    return max([int(profile().get("version") or 1)] + [int(f.get("version") or 1) for f in families().values()])
+    return max([int(profile().get("version") or 1), int(common().get("version") or 1)] + [int(f.get("version") or 1) for f in families().values()])
 
 
 def family_key_for_slug(slug: Optional[str]) -> str:
@@ -115,9 +120,9 @@ def profile_fields() -> Dict[str, Dict[str, Any]]:
 
 
 def family_fields(fam: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
-    """``step.field`` -> field (with its step key and effective source)."""
+    """``step.field`` -> field (with its step key and effective source): the common steps and the family's own."""
     out: Dict[str, Dict[str, Any]] = {}
-    for s in fam["steps"]:
+    for s in [*common().get("steps", []), *fam.get("steps", [])]:
         for f in s["fields"]:
             out[f"{s.get('key')}.{f.get('key')}"] = {**f, "_step": s.get("key"), "_source": f.get("source") or s.get("source")}
     return out
@@ -129,15 +134,15 @@ def _applies(item: Dict[str, Any], slug: str) -> bool:
 
 
 def resolve(slug: Optional[str]) -> Dict[str, Any]:
-    """The catalog for ONE framework: family steps narrowed by ``applies_to`` (steps left with
-    no field are dropped), each field carrying its effective source, plus gate and org needs."""
+    """The catalog for ONE framework: the common steps, then the family's, each narrowed by ``applies_to`` (steps left with
+    no field are dropped), each field carrying its effective source, plus the gate checks of both."""
     entry = framework_entry(slug)
     fam = families().get(entry["family"]) or families().get(GENERAL)
     if fam is None:
-        return {"slug": slug, "family": GENERAL, "label": entry.get("label"), "steps": [], "gate": [], "requires_org": []}
+        return {"slug": slug, "family": GENERAL, "label": entry.get("label"), "steps": [], "gate": [], "requires_org": []}   # no catalog at all
     s = slug or ""
     steps: List[Dict[str, Any]] = []
-    for st in fam["steps"]:
+    for st in [*common().get("steps", []), *fam.get("steps", [])]:
         fields = []
         for f in st["fields"]:
             if _applies(f, s):
@@ -152,7 +157,7 @@ def resolve(slug: Optional[str]) -> Dict[str, Any]:
         "version": fam.get("version", 1),
         "requires_org": [],               # kept in the answer, empty: the profile gates nothing (a framework asks its own questions)
         "steps": steps,
-        "gate": [copy.deepcopy(g) for g in fam.get("gate") or [] if _applies(g, s)],
+        "gate": [copy.deepcopy(g) for g in [*common().get("gate", []), *fam.get("gate", [])] if _applies(g, s)],
     }
 
 
@@ -425,7 +430,7 @@ def validate(flow_ids: Optional[Set[str]] = None) -> List[str]:
                 errs.append(f"{fw}: flow_id {fid!r} of {s} is not in frameworkFlows.ts")
         if not slugs and key != GENERAL:
             errs.append(f"{fw}: no frameworks")
-        stepkeys: Set[str] = set()
+        stepkeys: Set[str] = {s.get("key") for s in common().get("steps", [])}      # a family step may not reuse a common step's key
         for st in fam.get("steps", []):
             sw = f"{fw}.{st.get('key')}"
             if st.get("key") in stepkeys:
@@ -461,6 +466,42 @@ def validate(flow_ids: Optional[Set[str]] = None) -> List[str]:
                 errs.append(f"{fw}.gate.{g.get('key')}: duplicate gate key")
             gkeys2.add(g.get("key"))
             _check_gate(g, f"{fw}.gate.{g.get('key')}", fam_idx, org_idx, errs, slugs)
+    # ---- the common steps: asked of every framework
+    com = common()
+    all_slugs = set(placed)
+    com_idx = family_fields({"steps": []})
+    cstep: Set[str] = set()
+    for st in com.get("steps", []):
+        sw = f"common.{st.get('key')}"
+        if st.get("key") in cstep:
+            errs.append(f"{sw}: duplicate step key")
+        cstep.add(st.get("key"))
+        if not st.get("label") or _words(st["label"]) > MAX_LABEL_WORDS:
+            errs.append(f"{sw}: step label missing or over {MAX_LABEL_WORDS} words")
+        _check_source(st.get("source"), sw, errs, required=True)
+        if not st.get("fields"):
+            errs.append(f"{sw}: no fields")
+        fkeys = set()
+        for f in st.get("fields", []):
+            fw2 = f"{sw}.{f.get('key')}"
+            if f.get("key") in fkeys:
+                errs.append(f"{fw2}: duplicate field key")
+            fkeys.add(f.get("key"))
+            _check_field(f, fw2, errs, in_profile=False, inherited_source=st.get("source"), slugs=all_slugs)
+            if f.get("when"):
+                _check_when(f["when"], fw2, com_idx, org_idx, errs, f.get("applies_to"))
+            if f.get("prefill_from"):
+                tgt = _ref(f["prefill_from"], com_idx, org_idx)
+                if tgt is None:
+                    errs.append(f"{fw2}: prefill_from {f['prefill_from']!r} not found")
+                elif tgt.get("type") != f.get("type"):
+                    errs.append(f"{fw2}: prefill_from type {tgt.get('type')} differs from {f.get('type')}")
+    gk: Set[str] = set()
+    for g in com.get("gate", []):
+        if g.get("key") in gk:
+            errs.append(f"common.gate.{g.get('key')}: duplicate gate key")
+        gk.add(g.get("key"))
+        _check_gate(g, f"common.gate.{g.get('key')}", com_idx, org_idx, errs, all_slugs)
     # ---- every library framework sits in exactly one family
     for s in registry:
         if s not in placed:
@@ -470,7 +511,9 @@ def validate(flow_ids: Optional[Set[str]] = None) -> List[str]:
 
 def stats() -> Dict[str, Any]:
     out: Dict[str, Any] = {"profile": {"groups": len(profile()["groups"]), "fields": len(profile_fields()),
-                                       "checks": len(profile().get("checks") or [])}, "families": {}}
+                                       "checks": len(profile().get("checks") or [])},
+                           "common": {"steps": len(common().get("steps") or []), "fields": sum(len(s["fields"]) for s in common().get("steps") or []),
+                                      "gate": len(common().get("gate") or [])}, "families": {}}
     for key, fam in families().items():
         out["families"][key] = {
             "frameworks": len(fam.get("frameworks") or []), "steps": len(fam.get("steps") or []),

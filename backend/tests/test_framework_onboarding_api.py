@@ -91,14 +91,18 @@ def fill_onboarding(http, ob_id, slug, profile, overrides=None):
     return last.json()
 
 
-ISO_DATES = {"route": {"stage1_target": "2026-06-01", "stage2_target": "2026-09-01"},
-             "audit_path": {"internal_audit": "2026-07-01", "management_review": "2026-07-15"}}
+ISO_DATES = {}                                    # the catalog asks no dates before work starts
 
 
-def ready_iso(http):
+def selected_parts(prof):
+    """Answers that narrow a framework to part of the organisation and pick one site of the profile: the scope questions then apply."""
+    return {"applicability": {"reach": "Selected parts only"}, "scope": {"locations": rows_of(prof)["sites"][:1]}}
+
+
+def ready_iso(http, selected=True):
     prof = fill_profile(http)
     ob = http.post(O, json={"uploaded_framework_id": ISO}).json()
-    view = fill_onboarding(http, ob["id"], "iso_27001", prof, ISO_DATES)
+    view = fill_onboarding(http, ob["id"], "iso_27001", prof, selected_parts(prof) if selected else ISO_DATES)
     return ob["id"], view
 
 
@@ -123,7 +127,7 @@ def test_writes_need_the_matching_grant_and_a_framework_editor_may_edit_both(w):
     edit = as_(EDITOR)
     assert edit.put(P, json={"values": {"entities_sites.headcount": 5}}).status_code == 200
     ob = edit.post(O, json={"uploaded_framework_id": ISO}).json()
-    assert edit.put(f"{O}/{ob['id']}/answers", json={"step": "route", "values": {"goal": "Aligned, no certificate"}}).status_code == 200
+    assert edit.put(f"{O}/{ob['id']}/answers", json={"step": "objective", "values": {"goal": "Internal assessment"}}).status_code == 200
     # approving and overriding are their own grants: editing frameworks does not give them
     assert edit.post(f"{O}/{ob['id']}/approve", json={}).status_code == 403
     assert edit.post(f"{O}/{ob['id']}/reopen", json={"reason": "a good enough reason"}).status_code == 403
@@ -227,27 +231,27 @@ def test_an_onboarding_is_saved_per_step_submitted_approved_and_locked(w):
     http = as_(ADMIN)
     prof = fill_profile(http)
     ob = http.post(O, json={"uploaded_framework_id": ISO}).json()
-    assert ob["state"] == "draft" and ob["framework"]["family"] == "iso_management" and ob["steps"]
+    assert ob["state"] == "draft" and ob["framework"]["family"] == "iso_management" and [s["key"] for s in ob["steps"]][:5] == ["objective", "applicability", "scope", "existing", "ownership"]
     # nothing is ready, and submitting says what is open
     r = http.post(f"{O}/{ob['id']}/submit")
     assert r.status_code == 422 and r.json()["detail"]["checks"]
     # a wrong answer says which field
-    bad = http.put(f"{O}/{ob['id']}/answers", json={"step": "route", "values": {"goal": "Whenever", "nope": 1}})
-    assert bad.status_code == 422 and {e["field"] for e in bad.json()["detail"]["errors"]} == {"route.goal", "route.nope"}
+    bad = http.put(f"{O}/{ob['id']}/answers", json={"step": "objective", "values": {"goal": "Whenever", "nope": 1}})
+    assert bad.status_code == 422 and {e["field"] for e in bad.json()["detail"]["errors"]} == {"objective.goal", "objective.nope"}
     assert http.put(f"{O}/{ob['id']}/answers", json={"step": "nowhere", "values": {}}).status_code == 422
-    view = fill_onboarding(http, ob["id"], "iso_27001", prof, ISO_DATES)
+    view = fill_onboarding(http, ob["id"], "iso_27001", prof, selected_parts(prof))
     assert view["readiness"]["ready"], [c for c in view["readiness"]["checks"] if c["required"] and not c["ok"]]
-    assert view["state"] == "draft" and view["readiness"]["hidden"] == ["route.prior_cert_ref"]   # only for a transfer or a recertification
+    assert view["state"] == "draft" and "objective.required_by" in view["readiness"]["hidden"]      # asked only of a regulatory or customer objective
     # submit, then editing sends it back to draft, then submit and approve
     assert http.post(f"{O}/{ob['id']}/submit").json()["state"] == "ready"
-    edit = http.put(f"{O}/{ob['id']}/answers", json={"step": "roles", "values": {"policy_status": "Draft"}}).json()
+    edit = http.put(f"{O}/{ob['id']}/answers", json={"step": "ownership", "values": {"assessor": "Internal audit"}}).json()
     assert edit["state"] == "draft"
     assert http.post(f"{O}/{ob['id']}/submit").json()["state"] == "ready"
     done = http.post(f"{O}/{ob['id']}/approve", json={"note": "Scope agreed with the sponsor"}).json()
     assert done["state"] == "complete" and done["locked"] and done["approved_by"] == "Ada" and done["approval_note"] == "Scope agreed with the sponsor"
     row = db.query(m.FrameworkOnboarding).one()
     db.refresh(row)
-    assert row.snapshot["answers"]["scope"]["statement"] and row.snapshot["org_rows"]["sites"] and row.snapshot["catalog_version"] == catalog.catalog_version()
+    assert row.snapshot["answers"]["applicability"]["reach"] == "Selected parts only" and row.snapshot["org_rows"]["sites"] and row.snapshot["catalog_version"] == catalog.catalog_version()
     locked = http.put(f"{O}/{ob['id']}/answers", json={"step": "scope", "values": {"statement": "changed"}})
     assert locked.status_code == 409 and locked.json()["detail"]["locked"] == ["scope.statement"]
     # reopening needs a reason and goes back to draft; the history says what happened
@@ -263,29 +267,33 @@ def test_an_org_row_that_is_not_in_the_profile_cannot_be_picked(w):
     http = as_(ADMIN)
     fill_profile(http)
     ob = http.post(O, json={"uploaded_framework_id": ISO}).json()
-    r = http.put(f"{O}/{ob['id']}/answers", json={"step": "scope", "values": {"sites": ["r-not-there"], "systems": [999]}})
-    assert r.status_code == 422 and {e["field"] for e in r.json()["detail"]["errors"]} == {"scope.sites", "scope.systems"}
+    r = http.put(f"{O}/{ob['id']}/answers", json={"step": "scope", "values": {"locations": ["r-not-there"], "systems": [999]}})
+    assert r.status_code == 422 and {e["field"] for e in r.json()["detail"]["errors"]} == {"scope.locations", "scope.systems"}
 
 
-def test_an_aligned_only_goal_hides_what_only_a_certificate_needs(w):
+def test_the_scope_questions_are_asked_only_of_a_framework_that_covers_part_of_the_organisation(w):
     db, as_, http = w
     http = as_(ADMIN)
     prof = fill_profile(http)
     ob = http.post(O, json={"uploaded_framework_id": ISO}).json()
-    view = fill_onboarding(http, ob["id"], "iso_27001", prof, {**ISO_DATES, "route": {"goal": "Aligned, no certificate"}})
-    assert "route.cert_body" in view["readiness"]["hidden"] and "audit_path.internal_audit" in view["readiness"]["hidden"]
-    assert view["readiness"]["ready"]
+    whole = fill_onboarding(http, ob["id"], "iso_27001", prof, ISO_DATES)
+    assert {"scope.departments", "scope.processes", "scope.systems", "scope.locations"} <= set(whole["readiness"]["hidden"]) and whole["readiness"]["ready"]
+    assert "scope_named" not in {c["key"] for c in whole["readiness"]["checks"]}
+    part = http.put(f"{O}/{ob['id']}/answers", json={"step": "applicability", "values": {"reach": "Selected parts only"}}).json()
+    assert not part["readiness"]["hidden"] or "scope.locations" not in part["readiness"]["hidden"]
+    named = next(c for c in part["readiness"]["checks"] if c["key"] == "scope_named")
+    assert not named["ok"] and named["required"] and not part["readiness"]["ready"]                 # something must be named
+    done = http.put(f"{O}/{ob['id']}/answers", json={"step": "scope", "values": {"locations": rows_of(prof)["sites"][:1]}}).json()
+    assert done["readiness"]["ready"]
 
 
-def test_a_custom_framework_gets_the_general_steps(w):
+def test_a_custom_framework_gets_the_common_steps_and_nothing_else(w):
     db, as_, http = w
     http = as_(ADMIN)
     prof = fill_profile(http)
     ob = http.post(O, json={"uploaded_framework_id": CUSTOM}).json()
-    assert ob["framework"]["family"] == "general" and [s["key"] for s in ob["steps"]] == ["why", "scope", "people", "assessment"]
+    assert ob["framework"]["family"] == "general" and [s["key"] for s in ob["steps"]] == ["objective", "applicability", "scope", "existing", "ownership"]
     view = fill_onboarding(http, ob["id"], None, prof)
-    assert not view["readiness"]["ready"] and [c["key"] for c in view["readiness"]["checks"] if c["required"] and not c["ok"]] == ["scope_has_target"]
-    view = fill_onboarding(http, ob["id"], None, prof, {"scope": {"sites": rows_of(prof)["sites"][:1]}})        # the scope must name a site, a system or a unit
     assert view["readiness"]["ready"], [c for c in view["readiness"]["checks"] if c["required"] and not c["ok"]]
 
 
@@ -465,11 +473,25 @@ def test_a_framework_that_picks_from_an_empty_list_waits_for_that_list_only(w):
     db, as_, http = w
     http = as_(ADMIN)
     ob = http.post(O, json={"uploaded_framework_id": ISO}).json()
-    view = http.get(f"{O}/{ob['id']}").json()
+    view = http.put(f"{O}/{ob['id']}/answers", json={"step": "applicability", "values": {"reach": "Selected parts only"}}).json()
     open_now = {c["key"] for c in view["readiness"]["checks"] if c["required"] and not c["ok"]}
-    assert "scope.sites" in open_now and "scope.statement" in open_now      # its own questions, the sites it picks...
-    assert not any(k.startswith("org.") for k in open_now)                  # ...and nothing the organisation profile asks
+    assert "scope_named" in open_now and "objective.goal" in open_now        # its own questions, and something to pick from an empty profile...
+    assert not any(k.startswith("org.") for k in open_now)                   # ...and nothing the organisation profile asks
     assert view["requires_org"] == [] and view["readiness"]["org_checks"] == []
+
+
+def test_a_new_onboarding_starts_with_what_the_organisation_already_told_us(w):
+    db, as_, http = w
+    http = as_(ADMIN)
+    http.put(P, json={"values": {"entities_sites.legal_entity": "Acme Bank Ltd", "regulators_obligations.jurisdictions": ["Pakistan"],
+                                 "risk_people.compliance_lead": {"user_id": 7}, "risk_people.sponsor": {"user_id": 8}}})
+    ob = http.post(O, json={"uploaded_framework_id": ISO}).json()
+    assert ob["answers"]["applicability"] == {"entity": "Acme Bank Ltd", "jurisdictions": ["Pakistan"]}
+    assert ob["answers"]["ownership"] == {"owner": {"user_id": 7}, "approver": {"user_id": 8}}
+    again = http.post(O, json={"uploaded_framework_id": ISO}).json()
+    assert again["id"] == ob["id"] and again["answers"] == ob["answers"]                                 # starting twice changes nothing
+    bare = http.post(O, json={"uploaded_framework_id": SOC2}).json()
+    assert bare["answers"]["applicability"]["entity"] == "Acme Bank Ltd"
 
 
 def test_an_organisation_administrator_may_edit_the_profile_that_now_lives_in_administration(w):

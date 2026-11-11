@@ -19,7 +19,7 @@ const PANEL = 'rounded-ds-card border border-ds-border bg-ds-surface-hover p-[12
 const LIST = 'list-disc space-y-[4px] pl-[18px] text-ds-body text-ds-fg-body';
 const HEAD = 'text-ds-label font-[600] text-ds-fg';
 
-const isTable = (k: AiKind): k is 'exclusions_check' | 'parties_suggest' => k === 'exclusions_check' || k === 'parties_suggest';
+const isTable = (k: AiKind): k is 'exclusions_check' => k === 'exclusions_check';
 
 export default function AiPanel({ id, kind, current, steps, onAccept, onJump }: {
   id: number;
@@ -96,7 +96,7 @@ export default function AiPanel({ id, kind, current, steps, onAccept, onJump }: 
             ? <p className="text-ds-body text-ds-fg-muted">Nothing to suggest.</p>
             : <ul className="space-y-[6px]">
               {rows.map((r, i) => {
-                const words = kind === 'exclusions_check' ? [r.item, r.reason].filter(Boolean).join(': ') : `${r.party} (${r.kind}): ${r.requirement}`;
+                const words = [r.item, r.reason].filter(Boolean).join(': ');
                 return (
                   <li key={i} className="text-ds-body text-ds-fg-body">
                     {editing

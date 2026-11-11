@@ -1,8 +1,7 @@
 """AI help inside a framework onboarding (plan section 7.5): drafts the person accepts, edits or dismisses. The call never saves anything.
 
-Four kinds, each started by a click: ``scope_draft`` (a scope statement from the sites, systems and units picked), ``exclusions_check``
-(what was left out that an auditor will ask about), ``parties_suggest`` (interested parties from the regulators and third parties already in
-the profile) and ``gap_review`` (what an auditor of this family would ask next, quoting the field).
+Three kinds, each started by a click: ``scope_draft`` (a scope statement from the sites, systems and units picked), ``exclusions_check``
+(what was left out that an auditor will ask about) and ``gap_review`` (what an auditor of this family would ask next, quoting the field).
 
 The prompt carries the organisation's own rows (names, kinds, countries) and the catalog's field labels; no SCF text and no licensed text. The
 data-protection guard in the OpenAI shim replaces names before the call and restores them after (``AIBlocked`` is its refusal and is never
@@ -22,7 +21,7 @@ from . import catalog, engine, profile, service
 
 logger = logging.getLogger(__name__)
 
-KINDS = ("scope_draft", "exclusions_check", "parties_suggest", "gap_review")
+KINDS = ("scope_draft", "exclusions_check", "gap_review")
 SYSTEM = ("You are an experienced compliance consultant helping an organisation prepare to start a compliance programme. Use only the facts you are given, "
           "do not invent sites, systems, people, regulators or figures, write plainly and briefly, and answer with valid JSON only, in exactly the shape asked.")
 ROWS_CAP = 40
@@ -162,35 +161,6 @@ def exclusions_check(db: Session, ob: FrameworkOnboarding, ctx: Dict[str, Any]) 
         return {"suggestion": rules(), "by": "rules"}
 
 
-def parties_suggest(db: Session, ob: FrameworkOnboarding, ctx: Dict[str, Any]) -> Dict[str, Any]:
-    org = ctx["org"]
-    regs = (org.get("regulators_obligations") or {}).get("regulators") or []
-    third = (org.get("data_systems") or {}).get("third_parties") or []
-    kinds = ["Customer", "Regulator", "Employee", "Supplier", "Owner or board", "Partner", "Public"]
-
-    def rules() -> Dict[str, Any]:
-        rows = [{"party": _clip(r.get("regulator"), 120), "kind": "Regulator", "requirement": "Compliance with its requirements and filings."}
-                for r in regs if r.get("regulator")]
-        rows += [{"party": _clip(r.get("name"), 120), "kind": "Supplier", "requirement": _clip(r.get("service"), 160) or "Secure delivery of the service."}
-                 for r in third if r.get("name")]
-        rows.append({"party": "Employees", "kind": "Employee", "requirement": "Clear responsibilities and protection of their data."})
-        return {"rows": rows[:12]}
-
-    try:
-        out = _ask_json("Suggest the interested parties of this organisation's management system and, for each, its requirement. Base them on the regulators and "
-                        f"third parties listed; kind must be one of {kinds}. Answer as {{\"rows\": [{{\"party\": ..., \"kind\": ..., \"requirement\": ...}}]}}.\n"
-                        + json.dumps({"organisation": ctx["legal_entity"], "industry": ctx["industry"], "regulators": _names(regs, "regulator", "country"),
-                                      "third_parties": _names(third, "name", "service")}, ensure_ascii=False))
-        rows = [{"party": _clip(r.get("party"), 120), "kind": r.get("kind") if r.get("kind") in kinds else "Partner",
-                 "requirement": _clip(r.get("requirement"), 240)}
-                for r in out.get("rows") or [] if isinstance(r, dict) and _clip(r.get("party"), 120) and _clip(r.get("requirement"), 240)]
-        if not rows:
-            raise AIUnusable("nothing usable")
-        return {"suggestion": {"rows": rows[:12]}, "by": "ai"}
-    except AIUnusable:
-        return {"suggestion": rules(), "by": "rules"}
-
-
 def gap_review(db: Session, ob: FrameworkOnboarding, ctx: Dict[str, Any]) -> Dict[str, Any]:
     res, org = ctx["res"], ctx["org"]
     ev = engine.evaluate(res, ob.answers or {}, org)
@@ -221,5 +191,5 @@ def run(db: Session, ob: FrameworkOnboarding, user: GRCUser, kind: str) -> Dict[
     if kind not in KINDS:
         raise service.OnboardingError(404, "Unknown kind of help.")
     ctx = _context(db, ob)
-    out = {"scope_draft": scope_draft, "exclusions_check": exclusions_check, "parties_suggest": parties_suggest, "gap_review": gap_review}[kind](db, ob, ctx)
+    out = {"scope_draft": scope_draft, "exclusions_check": exclusions_check, "gap_review": gap_review}[kind](db, ob, ctx)
     return {"kind": kind, **out}

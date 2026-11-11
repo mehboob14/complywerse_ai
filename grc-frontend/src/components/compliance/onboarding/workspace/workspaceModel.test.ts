@@ -158,7 +158,6 @@ test('names a picker has just been told show before the next read', () => {
 test('AI help sits beside its field, and only where the framework has that field', () => {
   assert.deepEqual(aiKindsAfter(steps, 'scope', 'statement'), ['scope_draft']);
   assert.deepEqual(aiKindsAfter(steps, 'scope', 'exclusions'), ['exclusions_check']);
-  assert.deepEqual(aiKindsAfter(steps, 'context', 'interested_parties'), ['parties_suggest']);
   assert.deepEqual(aiKindsAfter(steps, 'route', 'goal'), []);
   assert.deepEqual(aiKindsAfter([steps[0]] as never, 'scope', 'statement'), []);
   assert.deepEqual(aiOrigin('ai').tag, 'AI');
@@ -179,14 +178,11 @@ test('accepting a suggestion is a change of one field: a statement replaces, row
   assert.deepEqual(out.value, [{ id: 'a1', item: 'Lahore', reason: 'Closed' }, { item: 'Karachi', reason: 'Separate entity' }]);   // the existing row keeps its id; the new one gets its id from the server
   assert.equal(aiChange('exclusions_check', { exclusions: [{ item: 'Lahore', reason: '' }] }, current), null);               // nothing new: nothing to write
 
-  const parties = { rows: [{ party: 'Regulator', kind: 'Regulator', requirement: 'Filings' }, { party: 'Staff', kind: 'Employee', requirement: 'Clear roles' }] };
-  assert.deepEqual(aiChange('parties_suggest', parties, undefined, { rows: [1] })?.value, [{ party: 'Staff', kind: 'Employee', requirement: 'Clear roles' }]);
-  assert.deepEqual(aiChange('parties_suggest', parties, null)?.added, 2);
   assert.deepEqual(appendRows('not rows', [{ k: 'a' }], 'k'), { value: [{ k: 'a' }], added: 1 });
 });
 
 test('suggestions are read defensively', () => {
-  assert.deepEqual(suggestedRows('parties_suggest', { rows: [{ party: ' A ', kind: 'Customer', requirement: 'x', junk: 1 }, 'text', null] }), [{ party: 'A', kind: 'Customer', requirement: 'x' }]);
+  assert.deepEqual(suggestedRows('exclusions_check', { exclusions: [{ item: ' A ', reason: 'x', junk: 1 }, 'text', null] }), [{ item: 'A', reason: 'x' }]);
   assert.deepEqual(suggestedRows('exclusions_check', undefined), []);
   assert.deepEqual(exclusionQuestions({ questions: [{ item: 'Lahore', why: 'Is data processed there?' }, { item: 'x' }] }), [{ item: 'Lahore', why: 'Is data processed there?' }]);
   assert.deepEqual(gapQuestions({ questions: [{ field: 'scope.statement', question: 'What does it leave out?' }, { question: 'Anything else?' }, { field: 'x' }] }),
