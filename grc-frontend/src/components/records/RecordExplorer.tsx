@@ -4,6 +4,8 @@
 // (List / Folders / Board ...), the filters that are on as chips, the records, a floating bulk bar and a details panel that opens over the list. It lays the parts out and carries the
 // keyboard layer; WHAT the facets, columns, rows, views and bulk actions are is the page's configuration (records/types of the props below), so another module can plug in its own.
 // A "skip" link lets the keyboard pass the rail.
+// Where the filters live is the page's choice (`railPlacement`): "side" (the default, what every register has) is the rail beside the list; "top" is a bar above the list (TopFilterBar:
+// one button per group that opens its options, nested where the group is a tree) so the list has the whole width, and a phone-sized explorer keeps its Filters button and sheet.
 // The room decides the layout, not the window: the explorer measures its OWN box (useContainerWidth) and explorerFit says whether the rail has room beside a list worth reading or is a
 // Filters button that opens it as a sheet, whether the chips scroll sideways, and whether the toolbar can afford its words. A page that wants the same answer for its own buttons takes
 // `head` and `actions` as functions of the fit. Nothing here is as tall as the window: the page scrolls.
@@ -12,7 +14,8 @@ import { Search, SlidersHorizontal, X } from 'lucide-react';
 import { Button, FilterChips, IconButton, SegmentedControl, Sheet, TextInput, type FilterChip, type SegmentedOption } from '@/components/ui/ds';
 import { formatCount } from '@/lib/format';
 import { FacetRail, type FacetGroupView } from './FacetRail';
-import { MIN_LIST_WITH_RAIL, RAIL_WIDTH, fitExplorer, type ExplorerFit } from './explorerFit';
+import { MIN_LIST_WITH_RAIL, RAIL_WIDTH, fitExplorer, fitExplorerTop, type ExplorerFit } from './explorerFit';
+import { TopFilterBar } from './TopFilterBar';
 import { useContainerWidth } from './useContainerWidth';
 
 type WithFit = ReactNode | ((fit: ExplorerFit) => ReactNode);
@@ -55,13 +58,15 @@ export interface RecordExplorerProps {
   detail?: ReactNode;
   /** the rail waits (the data has not arrived) */
   ready: boolean;
-  /** the narrowest list worth drawing beside the rail (default: what the Documents list needs) */
+  /** the narrowest list worth drawing beside the rail (default: what the Documents list needs); not read when the filters are on top */
   minList?: number;
+  /** where the filters are: a rail beside the list ("side", the default) or a bar above it ("top": the list takes the whole width) */
+  railPlacement?: 'side' | 'top';
 }
 
 export function RecordExplorer({
   label, noun, head, notices, quick, onQuick, quickLabel, quickExtra, search, onSearch, searchLabel, searchRef, views, actions, groups, onToggle, onClear, onClearAll, filtering,
-  railHead, shown, applied, body, bulk, detail, ready, minList = MIN_LIST_WITH_RAIL,
+  railHead, shown, applied, body, bulk, detail, ready, minList = MIN_LIST_WITH_RAIL, railPlacement = 'side',
 }: RecordExplorerProps) {
   const uid = useId();
   const bodyId = `${uid}-body`;
@@ -70,17 +75,20 @@ export function RecordExplorer({
   const [sheet, setSheet] = useState(false);
   const width = useContainerWidth(root);
   const railWas = useRef(true);
-  const fit = fitExplorer(width, railWas.current, minList);
+  const onTop = railPlacement === 'top';
+  const fit = onTop ? fitExplorerTop(width) : fitExplorer(width, railWas.current, minList);
   railWas.current = fit.rail;
   const put = (x: WithFit) => (typeof x === 'function' ? x(fit) : x);
-  useEffect(() => { if (fit.rail) setSheet(false); }, [fit.rail]);       // the room grew a rail: the sheet that held its place closes
-  const rail = ready ? <FacetRail groups={groups} onToggle={onToggle} onClear={onClear} idPrefix="rail" /> : (
-    <p role="status" className="px-[12px] py-[8px] text-ds-label text-ds-fg-muted">The filters, with their counts, appear when the {noun.other} have loaded.</p>
-  );
+  // the filters are a rail beside the list, a bar above it, or (a phone's room) a Filters button that opens them as a sheet
+  const bar = onTop && !fit.compact;
+  const button = onTop ? fit.compact : !fit.rail;
+  useEffect(() => { if (!button) setSheet(false); }, [button]);         // the room grew a rail or a bar: the sheet that held its place closes
+  const waiting = <p role="status" className="px-[12px] py-[8px] text-ds-label text-ds-fg-muted">The filters, with their counts, appear when the {noun.other} have loaded.</p>;
+  const rail = ready ? <FacetRail groups={groups} onToggle={onToggle} onClear={onClear} idPrefix="rail" /> : waiting;
   return (
     <div ref={root} className="flex min-w-0 flex-col gap-[12px]" role="region" aria-label={label}>
-      {/* with the rail beside the list there are filters to skip; behind a button there are none */}
-      {fit.rail && (
+      {/* with the rail beside the list or the bar above it there are filters to skip; behind a button there are none */}
+      {(fit.rail || bar) && (
         <a
           href={`#${bodyId}`}
           onClick={(e) => {
@@ -129,7 +137,7 @@ export function RecordExplorer({
               leftAdornment={<Search aria-hidden className="h-[14px] w-[14px]" />}
               rightAdornment={search ? <IconButton label="Clear the search" onClick={() => { onSearch(''); searchRef.current?.focus(); }}><X aria-hidden /></IconButton> : undefined}
             />
-            {!fit.rail && (
+            {button && (
               <Button leftIcon={<SlidersHorizontal aria-hidden />} aria-haspopup="dialog" onClick={() => setSheet(true)}>
                 {filtering > 0 ? `Filters (${filtering})` : 'Filters'}
               </Button>
@@ -137,6 +145,7 @@ export function RecordExplorer({
             {views && <SegmentedControl label={views.label} name={views.name} options={views.options} value={views.value} onChange={views.onChange} />}
             <div className="ml-auto flex items-center gap-[8px]">{put(actions)}</div>
           </div>
+          {bar && <TopFilterBar groups={groups} onToggle={onToggle} onClear={onClear} onClearAll={onClearAll} filtering={filtering} clearAll={!applied} railHead={railHead} ready={ready} waiting={waiting} idPrefix="top" />}
           {applied}
           <div id={bodyId} ref={bodyRef} tabIndex={-1} className="min-w-0 focus-visible:outline-none">{body}</div>
         </div>
@@ -145,14 +154,16 @@ export function RecordExplorer({
       {put(bulk)}
       {detail}
       <Sheet
-        open={sheet && !fit.rail}
+        open={sheet && button}
         onClose={() => setSheet(false)}
         title="Filters"
         padded={false}
         actions={filtering > 0 ? <Button variant="link" size="sm" onClick={onClearAll}>Clear all</Button> : undefined}
         footer={<Button variant="primary" fullWidth onClick={() => setSheet(false)}>{`Show ${formatCount(shown)} ${shown === 1 ? noun.one : noun.other}`}</Button>}
       >
-        {sheet && ready && <FacetRail groups={groups} onToggle={onToggle} onClear={onClear} idPrefix="sheet" />}
+        {/* with the filters on top the sheet is the same nested groups, and holds the check the bar starts with (the side rail's sheet never had it) */}
+        {sheet && ready && onTop && railHead && <div className="border-b border-ds-border px-[8px] py-[2px]">{railHead}</div>}
+        {sheet && ready && <FacetRail groups={groups} onToggle={onToggle} onClear={onClear} idPrefix="sheet" nested={onTop} />}
       </Sheet>
     </div>
   );

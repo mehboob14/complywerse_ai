@@ -1,5 +1,6 @@
 // The decisions of a facet explorer that are not drawing, apart from React so `node --test` pins them (explorerModel.test.ts): the selection (ticks on a page, "select all N
-// matching", what stays ticked), where the j / k cursor goes, what a key does and does not do, how a board groups records, and what an option list shows before "Show N more".
+// matching", what stays ticked), where the j / k cursor goes, what a key does and does not do, how a board groups records, what an option list shows before "Show N more", and the tree an
+// indented option list (the departments) is read as.
 import { formatCount } from '../../lib/format.ts';
 
 // ── the selection ────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -108,4 +109,56 @@ export function shownOptions<T extends { value: string }>(options: readonly T[],
   const kept = rest.filter((o) => chosen.includes(o.value));                         // a choice is never hidden behind "Show more"
   const shown = head.concat(kept);
   return { shown, hidden: options.length - shown.length };
+}
+
+// ── an option tree ───────────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** One option of an indented list, with its place in the tree the indent describes. */
+export interface OptionNode<T> {
+  option: T;
+  /** how many ancestors it has (the indent, with any skipped level closed up) */
+  depth: number;
+  /** index of its parent in the list, -1 for a top option */
+  parent: number;
+  /** indexes of its children, in list order */
+  children: number[];
+}
+
+/**
+ * The tree an option list describes by its `indent`: the list is in pre-order (a parent, then everything under it), and an option's parent is the nearest option above it with a smaller
+ * indent. A level the data skips (an indent of 2 under an indent of 0) is closed up, never an empty step; no indent is a top option. The nodes keep the list's order and indexes.
+ */
+export function optionTree<T extends { indent?: number }>(options: readonly T[]): OptionNode<T>[] {
+  const nodes: OptionNode<T>[] = [];
+  const levels: number[] = [];
+  const stack: number[] = [];                                                     // the path from the top to the option before this one
+  options.forEach((option, i) => {
+    const level = Math.max(0, option.indent ?? 0);
+    while (stack.length > 0 && levels[stack[stack.length - 1]] >= level) stack.pop();
+    const parent = stack.length > 0 ? stack[stack.length - 1] : -1;
+    nodes.push({ option, depth: stack.length, parent, children: [] });
+    levels.push(level);
+    if (parent >= 0) nodes[parent].children.push(i);
+    stack.push(i);
+  });
+  return nodes;
+}
+
+/** The values of every option above the ones in `values` (their parents, their parents' parents ...): what a tree opens so a chosen option is not hidden inside a shut branch. */
+export function ancestorValues<T extends { value: string }>(nodes: readonly OptionNode<T>[], values: Iterable<string>): Set<string> {
+  const want = new Set(values);
+  const out = new Set<string>();
+  nodes.forEach((n) => {
+    if (!want.has(n.option.value)) return;
+    for (let p = n.parent; p >= 0; p = nodes[p].parent) out.add(nodes[p].option.value);
+  });
+  return out;
+}
+
+/** What a hit found out of its tree says under its name: the whole name of the option (`title`, "Security › Cyber Defence › Access") without the option's own part at its end. A title that
+ *  is only the label, or says nothing, gives ''. */
+export function pathAbove(title: string | undefined, label: string): string {
+  const t = (title ?? '').trim();
+  if (!t || t === label) return '';
+  return (t.endsWith(label) ? t.slice(0, t.length - label.length) : t).replace(/[\s>›»/·,:-]+$/, '');
 }

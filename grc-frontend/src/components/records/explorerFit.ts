@@ -2,6 +2,7 @@
 // never the window's: under the application shell the rail takes 88px and the docked Work and context panel another 320 (a window of 1440 leaves the page 986px, a window of 1024
 // leaves it 890), and a media query cannot know that. Two decisions, both from a width in px:
 //   fitExplorer  the facet rail beside the list, or behind a Filters button; which labels the toolbar can afford
+//   fitExplorerTop  the same for an explorer whose filters are a bar above the list (railPlacement "top"): the list has the whole width, the bar stands down to a Filters button on a phone
 //   fitColumns   which columns of a table stay, and how wide: the first column (the title) keeps `titleMin` and the others give way in `dropRank` order, then the list is cards
 
 /** The facet rail and the gap between it and the list. */
@@ -39,6 +40,13 @@ export function fitExplorer(width: number | null, railWas = true, minList = MIN_
   const rail = width >= (railWas ? need - RAIL_KEEP : need);
   const list = rail ? width - RAIL_WIDTH - RAIL_GAP : width;
   return { rail, list, compact: width < COMPACT_BELOW, tight: list < (rail ? TIGHT_BELOW : TIGHT_BELOW_NO_RAIL) };
+}
+
+/** The explorer with its filters in a bar ABOVE the list (RecordExplorer railPlacement "top"): there is no rail, so the list has the whole box; `compact` (a phone's room) is where the bar gives
+ *  way to the Filters button and its sheet, and the toolbar has no Filters button of its own to afford while the bar is there, so its row is tight at the same width as a rail's list. */
+export function fitExplorerTop(width: number | null): ExplorerFit {
+  if (width == null) return { rail: false, list: null, compact: false, tight: false };
+  return { rail: false, list: width, compact: width < COMPACT_BELOW, tight: width < TIGHT_BELOW };
 }
 
 export interface FitColumn {
