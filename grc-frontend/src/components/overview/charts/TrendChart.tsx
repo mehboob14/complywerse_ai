@@ -39,7 +39,7 @@ export function TrendChart({ label, firstColumn, rows, series, variant = 'area',
   const axes = (
     <>
       <CartesianGrid stroke={GRID} strokeDasharray="2 2" vertical={false} />
-      <XAxis dataKey="label" tick={AXIS} axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={16} />
+      <XAxis dataKey="label" tick={AXIS} axisLine={false} tickLine={false} interval={variant === 'bars' && rows.length <= 6 ? 0 : 'preserveStartEnd'} minTickGap={16} />
       <YAxis tick={AXIS} axisLine={false} tickLine={false} allowDecimals={false} domain={[0, yMax === 'auto' ? 'auto' : yMax]} width={40} />
       <Tooltip cursor={variant === 'bars' ? { fill: HOVER } : { stroke: GRID }} contentStyle={TIP} formatter={(v: unknown) => (typeof v === 'number' ? `${formatCount(v)}${unit}` : String(v))} />
       {target && <ReferenceLine y={target.value} stroke={INK} strokeDasharray="4 4" label={{ value: target.label, position: 'insideTopRight', fontSize: 12, fill: INK }} />}

@@ -86,7 +86,7 @@ export type DeltaTone = 'good' | 'bad' | 'neutral';
 export function deltaOf(change: Change | null, goodWhen?: 'up' | 'down', unit: string | readonly [string, string] = ''): { text: string; direction: Direction; tone: DeltaTone } | null {
   if (!change) return null;
   const n = Math.abs(Math.round(change.change * 10) / 10);
-  const size = `${formatCount(n)}${typeof unit === 'string' ? unit : n === 1 ? unit[0] : unit[1]}`;
+  const size = `${n < 10 ? String(n) : formatCount(n)}${typeof unit === 'string' ? unit : n === 1 ? unit[0] : unit[1]}`;
   const text = change.direction === 'flat' ? 'No change' : `${change.direction === 'up' ? 'Up' : 'Down'} ${size}`;
   const tone: DeltaTone = change.direction === 'flat' || !goodWhen ? 'neutral' : change.direction === goodWhen ? 'good' : 'bad';
   return { text, direction: change.direction, tone };

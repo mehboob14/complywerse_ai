@@ -61,6 +61,9 @@ test('deltaOf says which way is good for THIS figure, and says it in words as we
   assert.equal(deltaOf(changeOf([3, 3]), 'down')?.tone, 'neutral');
   assert.equal(deltaOf(null, 'up'), null);
   assert.equal(deltaOf(changeOf([80, 83]), 'up', ' pts')?.text, 'Up 3 pts');
+  assert.equal(deltaOf(changeOf([67, 67.1]), 'up')?.text, 'Up 0.1', 'a small change is not rounded to nothing');
+  assert.equal(deltaOf(changeOf([67.4, 63]), 'up')?.text, 'Down 4.4');
+  assert.equal(deltaOf(changeOf([1000, 2500]), 'up')?.text, 'Up 1,500');
   assert.equal(deltaOf(changeOf([80, 81]), 'up', [' point', ' points'])?.text, 'Up 1 point');
   assert.equal(deltaOf(changeOf([80, 83]), 'up', [' point', ' points'])?.text, 'Up 3 points');
 });
