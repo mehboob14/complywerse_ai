@@ -188,6 +188,20 @@ export function eventSentence(ev: Pick<OnboardingEvent, 'kind' | 'by' | 'detail'
       return `Marked underway${by}${kind ? ` (${kind})` : ''}${str(d.reason) ? `: ${str(d.reason)}` : ''}`;
     }
     case 'journey_started': return `Journey started${by}`;
+    case 'programme_started': {
+      const controls = typeof d.controls === 'number' ? d.controls : 0;
+      const offered = typeof d.offered === 'number' ? d.offered : 0;
+      return `Compliance programme started${by}: journey ${d.journey_made ? 'made' : 'linked'}, ${controls} ${controls === 1 ? 'control' : 'controls'} loaded${offered > 0 ? `, ${offered} ${offered === 1 ? 'item' : 'items'} offered as evidence` : ''}`;
+    }
+    case 'programme_updated': {
+      const words: Record<string, string> = { scope: 'scope', people: 'people', evidence: 'evidence offered', journey: 'journey' };
+      const what = (Array.isArray(d.changed) ? d.changed : []).map((k) => words[String(k)]).filter(Boolean).join(', ');
+      return `Compliance programme updated${by}${what ? `: ${what}` : ''}`;
+    }
+    case 'owners_applied': {
+      const n = typeof d.controls === 'number' ? d.controls : 0;
+      return `${str(d.owner) || 'The programme owner'} made owner of ${n} ${n === 1 ? 'control' : 'controls'}${by}`;
+    }
     case 'journey_blocked': {
       const n = typeof d.unmet === 'number' ? d.unmet : 0;
       return n > 0 ? `Journey blocked: ${n} required ${n === 1 ? 'item was' : 'items were'} open` : 'Journey blocked: waiting for approval';

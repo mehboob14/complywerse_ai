@@ -84,7 +84,7 @@ Status: **Done**, **Partly**, **Not built**.
 | Separate applicability, scope, requirement, control, implementation, compliance | Partly | Onboarding stores the initial applicability and scope context only. Nothing writes a requirement, control or compliance status (tested). Requirement and control applicability belong to compliance execution, which is not wired. |
 | Exclusions justified and approved | Done | Exclusions need a reason; the whole onboarding is approved (one approver; four-eyes not built). No per-exclusion approval. |
 | A claim of existing compliance never marks controls compliant | Done | Items are claims kept in their own table; a test checks that nothing else is started or changed. |
-| Compliance execution after onboarding (load controls, assignments, evidence collection, workflows, dashboards, reassessment) | Not built | Approval lets the journey start (the gate); the journey is started by the existing Frameworks flow. The answers (owner, teams, scope systems, existing evidence) are not passed into it. |
+| Compliance execution after onboarding (load controls, assignments, evidence collection, workflows, dashboards, reassessment) | Partly | Approval lets the journey start (the gate). The hand-off (`programme.py`, "Compliance programme" card on Review) links or makes the journey, records the scope, proposes the programme owner as control owner and offers the "What exists" items as evidence candidates; it marks nothing. Assessments, testing, findings, dashboards and reassessment run in the journey as before. Per-control scope and applicability are not set. |
 | Framework version management | Not built | The catalog version an onboarding was approved under is recorded and a current catalog version is exposed. Nothing detects a changed framework version, flags stale answers or notifies owners. |
 | Frameworks missing from the library or the canonical catalog | Partly | Listed in section 1 (NCA ECC/CCC/DCC/OTCC/TCC and KSA PDPL are catalog only; UAE IA and GCRF are not in the canonical catalog). No action beyond listing. |
 | Custom and uploaded frameworks configurable beyond the common five steps | Not built | They get the common five steps with the general kinds of existing work. There is no way to add questions for a custom framework. |
@@ -140,7 +140,7 @@ Recommended, not built:
 | 1 | Common five steps, framework-specific questions for every framework, gate, "already underway" | Done |
 | 2 | "What exists": per-framework kinds, items, documents, verification status, approval snapshot | Done (this round) |
 | 3 | Framework version management | Proposed as its own piece of work |
-| 4 | Compliance initialisation from an approved onboarding | Proposed as its own piece of work |
+| 4 | Compliance initialisation from an approved onboarding | Vertical slice built (see `docs/framework-onboarding-programme-handoff.md`): journey, scope, proposed owners, evidence candidates; per-control scoping and the rest stay with the journey |
 | 5 | Reading uploaded documents: extraction, matching, carry forward | Proposed as its own piece of work |
 | 6 | Configurable questions for custom and uploaded frameworks | Proposed as its own piece of work |
 | 7 | Verification of every question set against the issuing bodies | Needs the source texts from the product owner |

@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from ...models import GRCUser, get_db
 from ...routers.auth_router import get_user_primary_tenant, require_auth, require_tenant_permission
-from . import ai, catalog, files, gate, profile, service
+from . import ai, catalog, files, gate, profile, programme, service
 
 router = APIRouter(prefix="/compliance", tags=["Framework Onboarding"])
 
@@ -197,6 +197,35 @@ def existing_verify(onboarding_id: int, record_id: int, body: VerifyBody, db: Se
                     _p: bool = Depends(APPROVE)):
     try:
         return service.existing_verify(db, service.get(db, _tenant(db, user), onboarding_id), user, record_id, body.status)
+    except service.OnboardingError as exc:
+        db.rollback()
+        raise _fail(exc)
+
+
+# --------------------------------------------------------------------------- the hand-off into compliance execution (programme.py)
+@router.get("/framework-onboarding/{onboarding_id}/programme")
+def programme_view(onboarding_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    try:
+        return programme.view(db, service.get(db, _tenant(db, user), onboarding_id))
+    except service.OnboardingError as exc:
+        raise _fail(exc)
+
+
+@router.post("/framework-onboarding/{onboarding_id}/programme")
+def programme_start(onboarding_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth), _p: bool = Depends(EDIT_ONBOARDING)):
+    """Start (or refresh) the compliance programme of an approved or underway onboarding. Safe to repeat: nothing new, nothing changed."""
+    try:
+        return programme.start(db, service.get(db, _tenant(db, user), onboarding_id), user)
+    except service.OnboardingError as exc:
+        db.rollback()
+        raise _fail(exc)
+
+
+@router.post("/framework-onboarding/{onboarding_id}/programme/owners")
+def programme_owners(onboarding_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth), _p: bool = Depends(EDIT_ONBOARDING)):
+    """The programme owner becomes the owner of the journey's controls that nobody owns."""
+    try:
+        return programme.apply_owner(db, service.get(db, _tenant(db, user), onboarding_id), user)
     except service.OnboardingError as exc:
         db.rollback()
         raise _fail(exc)

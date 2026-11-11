@@ -218,6 +218,45 @@ export interface GateDecision {
   unmet: Array<{ key: string; label: string; hint: string | null }>;
 }
 
+/** The compliance programme an approved (or underway) onboarding starts: what was started, what is only proposed, what is offered. Never a compliance status. */
+export interface ProgrammeNamed { id: number | string; name: string }
+export interface ProgrammeScope {
+  reach: string | null;
+  whole_organisation: boolean;
+  entity: string | null;
+  countries: string[];
+  services: string | null;
+  defined: string | null;
+  documents: FileRef[];
+  statement: string | null;
+  departments: ProgrammeNamed[];
+  systems: Array<ProgrammeNamed & { type: string | null }>;
+  locations: ProgrammeNamed[];
+  third_parties: ProgrammeNamed[];
+  processes: Array<{ process: string; owner: string | null }>;
+  hosting: string[];
+  exclusions: Array<{ item: string; reason: string }>;
+  target_date: string | null;
+}
+export interface ProgrammePerson { role: string; user_id: number | null; name: string; account: boolean; email?: string }
+/** An item of "What exists", offered as evidence: a claim with its source, never accepted evidence. */
+export interface ProgrammeCandidate extends ExistingRecord { source: string; has_document: boolean }
+export interface ProgrammeView {
+  started: boolean;
+  can_start: boolean;
+  why_not: string | null;
+  state: Exclude<OnboardingState, 'not_started'>;
+  journey: { id: number; name: string; status: string; target_date: string | null; made_here: boolean } | null;
+  controls: { total: number; not_started: number; begun: number; without_owner: number } | null;
+  scope: ProgrammeScope | null;
+  proposals: { people: ProgrammePerson[]; teams: ProgrammeNamed[]; assessor: string | null; control_owner: number | null } | null;
+  owner: { name: string | null; can_apply: boolean; without_owner: number; why_not: string | null } | null;
+  candidates: ProgrammeCandidate[];
+  note: string | null;
+  /** set by the two calls that write: did this call change anything */
+  changed?: boolean | number;
+}
+
 export type AiKind = 'scope_draft' | 'exclusions_check' | 'gap_review';
 export interface AiSuggestion<T = Record<string, unknown>> { kind: AiKind; suggestion: T; by: 'ai' | 'rules' }
 export interface ScopeDraft { statement: string }
@@ -297,6 +336,11 @@ export const onboardingApi = {
   existingRemove: async (id: number, recordId: number): Promise<OnboardingView> => (await apiClient.delete(`${O}/${id}/existing/${recordId}`)).data,
   /** a person who may approve: 'reviewed' or 'verified' (refused without a document) */
   existingVerify: async (id: number, recordId: number, status: 'reviewed' | 'verified'): Promise<OnboardingView> => (await apiClient.post(`${O}/${id}/existing/${recordId}/verify`, { status })).data,
+  programme: async (id: number): Promise<ProgrammeView> => (await apiClient.get(`${O}/${id}/programme`)).data,
+  /** starts (or refreshes) the compliance programme; safe to repeat: with nothing new, nothing changes */
+  startProgramme: async (id: number): Promise<ProgrammeView> => (await apiClient.post(`${O}/${id}/programme`)).data,
+  /** the programme owner becomes the owner of the journey's controls that nobody owns */
+  applyProgrammeOwner: async (id: number): Promise<ProgrammeView> => (await apiClient.post(`${O}/${id}/programme/owners`)).data,
   ai: async <T = Record<string, unknown>>(id: number, kind: AiKind): Promise<AiSuggestion<T>> => (await apiClient.post(`${O}/${id}/ai/${kind}`, {})).data,
   submit: async (id: number): Promise<OnboardingView> => (await apiClient.post(`${O}/${id}/submit`)).data,
   approve: async (id: number, note?: string): Promise<OnboardingView> => (await apiClient.post(`${O}/${id}/approve`, { note: note || null })).data,
@@ -305,7 +349,7 @@ export const onboardingApi = {
 };
 
 /** Query keys, so every screen that shows onboarding state reads again after a change. */
-export const ONBOARDING_KEYS = { profile: ['org-profile'], register: ['fw-onboarding-register'], detail: (id: number) => ['fw-onboarding', id], gate: (fwId: number) => ['fw-onboarding-gate', fwId] } as const;
+export const ONBOARDING_KEYS = { profile: ['org-profile'], register: ['fw-onboarding-register'], detail: (id: number) => ['fw-onboarding', id], programme: (id: number) => ['fw-onboarding', id, 'programme'], gate: (fwId: number) => ['fw-onboarding-gate', fwId] } as const;
 
 export function refreshOnboarding(qc: QueryClient): void {
   for (const key of ['org-profile', 'fw-onboarding-register', 'fw-onboarding', 'fw-onboarding-gate']) void qc.invalidateQueries({ queryKey: [key] });

@@ -3,7 +3,7 @@ onboarding every library framework goes through before its compliance journey ma
 Rules and shapes: ``modules/framework_onboarding/``."""
 from datetime import datetime
 
-from sqlalchemy import JSON, Column, Date, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Column, Date, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 
 from ._00_base import Base
 
@@ -99,3 +99,25 @@ class FrameworkExistingCompliance(Base):
     created_by = Column(Integer, ForeignKey("grc_users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
+
+
+class FrameworkProgramme(Base):
+    """The hand-off from an approved onboarding into compliance execution, one row per onboarding. It records WHAT WAS STARTED (the journey it linked or
+    made) and WHAT WAS CARRIED OVER as written-out facts: ``scope`` (the boundary the onboarding chose) and ``proposals`` (the people named under Ownership).
+    It holds no requirement, control or compliance status: those belong to the journey's own work. ``offered`` keeps the evidence candidates as they stood,
+    so running the hand-off again compares with what is here and, with nothing new, changes nothing. Rules: ``modules/framework_onboarding/programme.py``."""
+    __tablename__ = "grc_fw_programmes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    onboarding_id = Column(Integer, ForeignKey("grc_framework_onboardings.id", ondelete="CASCADE"), nullable=False, index=True)
+    journey_id = Column(Integer, ForeignKey("grc_certification_journeys.id", ondelete="SET NULL"), nullable=True, index=True)
+    journey_created = Column(Boolean, default=False)         # the hand-off made the journey (False: it was already there)
+    scope = Column(JSON, default=dict)
+    proposals = Column(JSON, default=dict)
+    offered = Column(JSON, default=list)                     # the evidence candidates as they stood (what a later run compares with)
+    created_by = Column(Integer, ForeignKey("grc_users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("onboarding_id", name="uq_fw_programme_onboarding"),)
