@@ -210,6 +210,7 @@ test('rights: a leaf has the sidebar\'s, a page navAccess lists has those, a pag
     '/admin/integrations/connect': { permissions: ['compliance:agents:manage'] },                  // "Connect Wizard is locked" without it
     '/admin/integrations/connect/ad-discover': { permissions: ['compliance:agents:manage'] },      // "AD Discovery is locked" without it
     '/governance/documents/overview': { permissions: null },       // At a glance: the owner of a department who reads no library opens it (ownerDoor); the server answers 403 to anyone else
+    '/governance/documents/directory': { permissions: null },      // Directory: the tree of departments reads to anyone signed in (GET /admin/departments); what may be changed is decided per unit by the page and the server
     '/cyber-assurance/admin': { permissions: null, adminOnly: true },
     '/cyber-assurance/admin/agents': { permissions: ['compliance:agents:manage'] },
     '/cyber-assurance/admin/discover': { permissions: ['compliance:discover:execute', 'compliance:agents:manage'] },
@@ -264,7 +265,7 @@ test('ownHeading is on exactly the pages that draw the kit head (PageHeader vari
     '/admin/users', '/admin/roles', '/users',      // Administration > People & access: the Users register (also the page behind the user menu's Users) and the Roles register draw theirs from a component
     '/reports', '/reports/dashboards',            // Reports: the library (_library/ReportsLibrary) and the dashboards (_library/dashboards/DashboardsPage) draw theirs
     '/reports/trends', '/reports/analytics'];     // Reports: the Trends board (_trends/TrendsPage) and the Analytics launcher (_analytics/AnalyticsPage) draw theirs (rpt-trends-analytics)
-  const DOCUMENTS_AREA_STRIP = ['/governance/documents/attestation', '/governance/documents/studio', '/governance/documents/overview', '/governance/exceptions', '/governance/reviews', '/governance/settings'];
+  const DOCUMENTS_AREA_STRIP = ['/governance/documents/attestation', '/governance/documents/studio', '/governance/documents/overview', '/governance/documents/directory', '/governance/exceptions', '/governance/reviews', '/governance/settings'];
   const drawing = pages.filter((p) => /<PageHeader[\s\S]{0,60}variant="page"/.test(read(p.file))).map((p) => p.route).sort();
   const flagged = routes.filter((e) => e.ownHeading).map((e) => e.path).sort();
   assert.deepEqual(flagged, drawing.filter((r) => !DOCUMENTS_AREA_STRIP.includes(r)).concat(HEAD_FROM_A_COMPONENT).sort());

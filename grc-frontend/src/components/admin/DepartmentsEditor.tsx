@@ -220,6 +220,7 @@ export function DepartmentsEditor({ title = 'Departments' }: { title?: string } 
         meta={list.data && !empty ? departmentsSummary(list.data) : undefined}
         actions={canEdit ? (
           <>
+            <Button href="/governance/documents/directory">Open directory</Button>
             <Button leftIcon={<ListTree aria-hidden />} onClick={() => setNaming(true)} disabled={levels.isLoading}>Level names</Button>
             {!empty && !failed && add}
           </>

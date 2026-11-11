@@ -40,7 +40,7 @@ function hasPage(at: string, segments: string[]): boolean {
 
 test('every page of the Governance folder is exactly one entry, and every Governance URL of the registry is a page', () => {
   const pages = pagesOf('(dashboard)/governance', '/governance');
-  assert.equal(pages.length, 27, 'the folder holds the 26 pages of the URL contract and the Documents Overview');
+  assert.equal(pages.length, 28, 'the folder holds the 26 pages of the URL contract, the Documents Overview and the Directory');
   for (const page of pages) assert.equal(routes.filter((e) => e.path === page).length, 1, page);
   for (const e of routes.filter((r) => r.path.startsWith('/governance'))) assert.ok(pages.includes(e.path), `${e.path} has no page.tsx`);
 });
@@ -83,7 +83,7 @@ test("the rights of a page without a menu entry are those of the page it hangs u
   assert.deepEqual(unguarded, [
     '/governance/documents/:id', '/governance/documents/overview', '/governance/documents/studio', '/governance/documents/studio/:sessionId', '/governance/documents/attestation',
     '/governance/attestations', '/governance/attestations/campaigns', '/governance/attestations/campaigns/:id', '/governance/attestations/my',
-    '/governance/attestations/complete/:id', '/governance/exceptions', '/governance/settings', '/governance/reviews', '/governance/reviews/calendar',
+    '/governance/attestations/complete/:id', '/governance/exceptions', '/governance/documents/directory', '/governance/settings', '/governance/reviews', '/governance/reviews/calendar',
     '/governance/mappings', '/governance/workflows', '/governance/committees/:id', '/governance/committees/meetings/:id', '/governance/committees/actions',
     '/governance/regulatory-changes/:id', '/is-projects/dashboard', '/is-projects/my-projects', '/is-projects/:id', '/attest/:token', '/governance/regulatory-feeds', '/documents',
   ]);
@@ -325,18 +325,18 @@ test('an unknown or odd path falls back (undefined, an empty trail) and never th
 
 // ---- tabs (the full pin of the Documents tab bar is documentsTabs.test.ts) ----
 
-test('the Documents strip: seven tabs in order; the Studio only where it is on, Settings only to those who hold its right', () => {
+test('the Documents strip: eight tabs in order; the Studio only where it is on, Settings only to those who hold its right', () => {
   assert.deepEqual(tabsFor('documents').map((t) => t.path), [
     '/governance/documents', '/governance/documents/overview', '/governance/documents/studio', '/governance/documents/attestation', '/governance/reviews',
-    '/governance/exceptions', '/governance/settings',
+    '/governance/exceptions', '/governance/documents/directory', '/governance/settings',
   ]);
   const labels = (studio: boolean, can: boolean) => tabsFor('documents', { studio, can: () => can }).map((t) => t.label);
-  assert.deepEqual(labels(true, true), ['Documents', 'At a glance', 'Comply AI Studio', 'Attestation', 'Document Reviews', 'Exceptions', 'Governance settings']);
-  assert.deepEqual(labels(false, true), ['Documents', 'At a glance', 'Attestation', 'Document Reviews', 'Exceptions', 'Governance settings']);
-  assert.deepEqual(labels(true, false), ['Documents', 'At a glance', 'Comply AI Studio', 'Attestation', 'Document Reviews', 'Exceptions']);
-  assert.deepEqual(labels(false, false), ['Documents', 'At a glance', 'Attestation', 'Document Reviews', 'Exceptions']);
-  assert.equal(tabsFor('documents', { studio: true, can: (p) => p === 'governance:settings:*' }).length, 7, 'the right asked for is governance:settings:*');
-  assert.equal(tabsFor('documents', { studio: true, can: (p) => p === 'governance:settings:view' }).length, 6);
+  assert.deepEqual(labels(true, true), ['Documents', 'At a glance', 'Comply AI Studio', 'Attestation', 'Document Reviews', 'Exceptions', 'Directory', 'Governance settings']);
+  assert.deepEqual(labels(false, true), ['Documents', 'At a glance', 'Attestation', 'Document Reviews', 'Exceptions', 'Directory', 'Governance settings']);
+  assert.deepEqual(labels(true, false), ['Documents', 'At a glance', 'Comply AI Studio', 'Attestation', 'Document Reviews', 'Exceptions', 'Directory']);
+  assert.deepEqual(labels(false, false), ['Documents', 'At a glance', 'Attestation', 'Document Reviews', 'Exceptions', 'Directory']);
+  assert.equal(tabsFor('documents', { studio: true, can: (p) => p === 'governance:settings:*' }).length, 8, 'the right asked for is governance:settings:*');
+  assert.equal(tabsFor('documents', { studio: true, can: (p) => p === 'governance:settings:view' }).length, 7);
   assert.deepEqual(tabsFor('nowhere'), []);
 });
 
@@ -380,8 +380,8 @@ test('Reviews is a door of its own: a tab of the Documents strip for everyone wh
   }
   assert.deepEqual(breadcrumbFor('/governance/reviews/calendar').map((c) => c.label), ['Governance', 'Documents', 'Document Reviews']);
   // the tabs on either side keep their places
-  assert.deepEqual(tabsFor('documents').map((t) => t.tab.order), [1, 2, 3, 4, 5, 6, 7]);
-  assert.deepEqual(tabsFor('documents').map((t) => t.tab.id), ['documents', 'overview', 'studio', 'attestation', 'reviews', 'exceptions', 'settings']);
+  assert.deepEqual(tabsFor('documents').map((t) => t.tab.order), [1, 2, 3, 4, 5, 6, 7, 8]);
+  assert.deepEqual(tabsFor('documents').map((t) => t.tab.id), ['documents', 'overview', 'studio', 'attestation', 'reviews', 'exceptions', 'directory', 'settings']);
 });
 
 test('a short label is only what the tab shows; the tooltip and the accessible name are the label', () => {
@@ -439,13 +439,27 @@ test('a page that draws its own heading is flagged in the registry, and only its
   assert.equal(ownHeadingSection(null), undefined);
 });
 
-test('the owner of a department with no governance right gets the library and At a glance, and no other tab', () => {
+test('the owner of a department with no governance right gets the library, At a glance and the Directory, and no other tab', () => {
   const owner = { studio: true, can: () => false, ownerOnly: true };
-  assert.deepEqual(tabsFor('documents', owner).map((t) => t.label), ['Documents', 'At a glance']);
-  assert.deepEqual(tabsFor('documents', { ...owner, studio: false }).map((t) => t.label), ['Documents', 'At a glance']);
-  assert.equal(tabsFor('documents', { studio: true, can: () => true }).length, 7, 'without the flag nothing changes');
-  assert.equal(tabsFor('documents').length, 7);
-  for (const tab of tabsFor('documents')) assert.equal(!!tab.tab.ownerDoor, ['documents', 'overview'].includes(tab.tab.id), tab.tab.id);
+  assert.deepEqual(tabsFor('documents', owner).map((t) => t.label), ['Documents', 'At a glance', 'Directory']);
+  assert.deepEqual(tabsFor('documents', { ...owner, studio: false }).map((t) => t.label), ['Documents', 'At a glance', 'Directory']);
+  assert.equal(tabsFor('documents', { studio: true, can: () => true }).length, 8, 'without the flag nothing changes');
+  assert.equal(tabsFor('documents').length, 8);
+  for (const tab of tabsFor('documents')) assert.equal(!!tab.tab.ownerDoor, ['documents', 'overview', 'directory'].includes(tab.tab.id), tab.tab.id);
+});
+
+test('the Directory is a tab of the Documents strip before the Settings gear, for everyone who sees the strip (no right of its own), and its page lights it', () => {
+  const directory = entry('/governance/documents/directory');
+  assert.deepEqual([directory.tab?.area, directory.tab?.id, directory.tab?.order, directory.tab?.permission, directory.tab?.studio, directory.tab?.ownerDoor], ['documents', 'directory', 7, undefined, undefined, true]);
+  assert.equal(directory.label, 'Directory');
+  assert.equal(directory.permissions, null, 'reading the tree takes no right (the server lists the departments to anyone signed in); what may be changed is decided per unit');
+  for (const url of ['/governance/documents/directory', '/governance/documents/directory?unit=4&view=details', '/governance/documents/directory/']) {
+    assert.equal(isInArea('documents', url), true, url);
+    assert.equal(activeTab('documents', url)?.path, '/governance/documents/directory', url);
+    assert.equal(titleFor(url), 'Directory', url);
+  }
+  assert.deepEqual(breadcrumbFor('/governance/documents/directory').map((c) => c.label), ['Governance', 'Documents', 'Directory']);
+  assert.ok(existsSync(`${APP}(dashboard)/governance/documents/directory/page.tsx`));
 });
 
 // ---- the other modules' groups of pages (lib/navPages/<group>.ts): the rules every builder's entries must keep ----

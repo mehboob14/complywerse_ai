@@ -37,6 +37,7 @@
 //   /governance/documents/studio             -                  tabs                                     Comply AI Studio              tab Comply AI Studio                     Comply AI Studio
 //   /governance/documents/studio/:sessionId  -                  tabs                                     the draft's title (editable)  back "Studio"                            Studio draft
 //   /governance/documents/attestation        -                  tabs                                     Attestation                   tab Attestation                          Attestation
+//   /governance/documents/directory          -                  tabs                                     Directory                     tab Directory (before the Settings gear) Directory (the department tree: browse, edit in a popup, add, move, deactivate)
 //   /governance/attestations                 -                  "Attestation" (a flash, then a redirect) Attestation (after it)        -                                        Attestation (an alias)
 //   /governance/attestations/campaigns       -                  (none)                                   Attestation Campaigns         -                                        Attestation Campaigns
 //   /governance/attestations/campaigns/:id   -                  (none)                                   the campaign's name           back "Campaigns"                         Attestation Campaign
@@ -193,7 +194,9 @@ const pages: Draft[] = [
   gov('/governance/attestations/my', 'My Attestations', { parent: ATTEST, hidden: 'legacy page: no link opens it, kept for a typed or bookmarked URL' }),
   gov('/governance/attestations/complete/:id', 'Complete Attestation', { parent: '/governance/attestations/my', hidden: 'opens from the legacy My Attestations list' }),
   gov('/governance/exceptions', 'Exceptions', { parent: DOCS, tab: { area: 'documents', id: 'exceptions', order: 6 } }),
-  gov('/governance/settings', 'Governance settings', { shortLabel: 'Settings', parent: DOCS, tab: { area: 'documents', id: 'settings', order: 7, permission: 'governance:settings:*' } }),
+  // the organisation's departments as a tree to browse (Windows-Explorer style); reading takes no right (like At a glance), so the head of a unit reaches it too: what a person may change there is decided per unit by the page and the server
+  gov(`${DOCS}/directory`, 'Directory', { parent: DOCS, permissions: null, tab: { area: 'documents', id: 'directory', order: 7, ownerDoor: true }, keywords: ['Departments', 'Units', 'Organisation', 'Organization', 'Org chart', 'Sub-departments'] }),
+  gov('/governance/settings', 'Governance settings', { shortLabel: 'Settings', parent: DOCS, tab: { area: 'documents', id: 'settings', order: 8, permission: 'governance:settings:*' } }),
   gov('/governance/reviews', 'Document Reviews', { shortLabel: 'Reviews', parent: DOCS, tab: { area: 'documents', id: 'reviews', order: 5 }, keywords: ['Reviews', 'Review Calendar'] }),
   gov('/governance/reviews/calendar', 'Document Reviews', { aliasOf: '/governance/reviews' }),
   gov('/governance/mappings', 'Policy-Control Mappings', { parent: DOCS, hidden: 'no link opens it; a document shows the same view as its Mappings tab', ownHeading: true }),

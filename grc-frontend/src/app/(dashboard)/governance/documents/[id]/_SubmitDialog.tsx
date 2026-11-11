@@ -22,7 +22,9 @@ import {
   KIND_OPTIONS, blankStage, isDefaultShape, moved, picked, routeProblem, routeSummary, stagesOf, toApi, used,
   type DraftStage, type StageKind, type Target,
 } from '@/lib/approvalRoutes';
+import { keepLocked, requiredIn } from '@/lib/approvalDefaults';
 import { AssigneeMultiSelect, useAssigneeOptions, useSignoff, type Participant } from '../_SignoffControl';
+import { DefaultsNotice, requiredLine, useDocumentDefaults } from './_DefaultsNotice';
 
 const ids = (list: Participant[]) => list.map(({ target_type, target_id }) => ({ target_type, target_id }));
 const keyOf = (p: Target) => `${p.target_type}:${p.target_id}`;
@@ -34,6 +36,7 @@ export default function SubmitDialog({ documentId, doc, open, onClose }: { docum
   const qc = useQueryClient();
   const options = useAssigneeOptions(doc?.tenant_id);
   const { data } = useSignoff(documentId);
+  const defaults = useDocumentDefaults(doc, data, open);              // the unit's approval defaults: what Send would copy in, and who a lock keeps in
   const [stages, setStages] = useState<DraftStage[]>([]);
   const [filled, setFilled] = useState(false);
   const [snapshot, setSnapshot] = useState<string | null>(null);       // the route as it was when the popup opened: what "changed" is measured against
@@ -49,6 +52,14 @@ export default function SubmitDialog({ documentId, doc, open, onClose }: { docum
     }
   }, [open, data, filled]);
   const dirty = filled && snapshot !== null && JSON.stringify(stages) !== snapshot;
+  // nobody named: the defaults of the unit are copied in when it is sent; the author may name people instead. Named: a locked default's people stay in (they are put back, never removed).
+  const named = used(stages).length > 0;
+  const fromDefaults = !!defaults.available && !named;
+  useEffect(() => {
+    if (!filled || !named) return;
+    const kept = keepLocked(stages, defaults.needs);
+    if (kept !== stages) setStages(kept);
+  }, [stages, filled, named, defaults.needs]);
 
   const names = useMemo(() => new Map(options.map((o) => [o.value, o.label])), [options]);
   const nameOf = (t: Target) => t.display || names.get(keyOf(t)) || `${t.target_type} ${t.target_id}`;
@@ -67,7 +78,9 @@ export default function SubmitDialog({ documentId, doc, open, onClose }: { docum
 
   const send = useMutation({
     mutationFn: async () => {
-      if (isDefaultShape(stages)) {               // today's flow: kept as reviewers and approvers
+      if (fromDefaults) {                      // nobody named: the server copies the unit's defaults in when it sends
+        if (data?.route?.custom) await governanceApi.setSignoffRoute(documentId, { stages: [] });
+      } else if (isDefaultShape(stages)) {        // today's flow: kept as reviewers and approvers
         const review = used(stages).find((s) => s.kind === 'review');
         const approval = used(stages).find((s) => s.kind === 'approval');
         if (data?.route?.custom) await governanceApi.setSignoffRoute(documentId, { stages: [] });
@@ -86,8 +99,9 @@ export default function SubmitDialog({ documentId, doc, open, onClose }: { docum
     onSuccess: (sent: any) => {
       // the server names reviewers or approvers nobody can sign for (a role or department without users of this platform)
       const first = used(stages)[0];
-      const said = sentToast(sent, isDefaultShape(stages) ? (first?.kind === 'review' ? 'Reviewers were asked' : 'Approvers were asked')
-        : `Its first stage (${first?.name ?? 'Review'}) was asked.`);
+      const said = sentToast(sent, fromDefaults ? 'The defaults of its unit were applied and their people asked.'
+        : isDefaultShape(stages) ? (first?.kind === 'review' ? 'Reviewers were asked' : 'Approvers were asked')
+          : `Its first stage (${first?.name ?? 'Review'}) was asked.`);
       toast(said);                                       // titled by where it went: for review, or straight for approval
       refresh();
       if (said.title !== 'Not sent') onClose();          // still a draft: it stays open to choose others
@@ -102,8 +116,8 @@ export default function SubmitDialog({ documentId, doc, open, onClose }: { docum
     },
   });
 
-  const problem = routeProblem(stages);
-  const summary = routeSummary(stages, nameOf);
+  const problem = fromDefaults ? '' : routeProblem(stages);
+  const summary = fromDefaults ? defaults.line : routeSummary(stages, nameOf);
   const version = doc?.version ?? data?.version;
 
   return (
@@ -132,6 +146,7 @@ export default function SubmitDialog({ documentId, doc, open, onClose }: { docum
       }
     >
       <div className="max-h-[65vh] space-y-3 overflow-y-auto px-5 py-4 max-sm:max-h-none">
+        <DefaultsNotice defaults={defaults} named={named} />
         <ol className="space-y-3">
           {stages.map((s, i) => (
             <li key={s.key} className="rounded-xl border border-[#d5dbe1] bg-white p-3">
@@ -155,6 +170,7 @@ export default function SubmitDialog({ documentId, doc, open, onClose }: { docum
               <div className="mt-2">
                 <AssigneeMultiSelect label={s.kind === 'information' ? 'Who is told' : 'Who is asked'} value={s.people} options={options}
                   onChange={(next) => update(i, { people: picked(next.map(keyOf), s.people) })} />
+                {requiredIn(s, defaults.needs).length > 0 && <p className="mt-1 text-ds-label text-ds-fg-muted">{requiredLine(requiredIn(s, defaults.needs))}</p>}
               </div>
               {s.order === 'in_turn' && s.people.length > 1 && (
                 <ol className="mt-2 space-y-1" aria-label={`Stage ${i + 1}: the order they are asked in`}>
