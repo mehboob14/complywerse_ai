@@ -186,3 +186,16 @@ def test_an_upload_cannot_be_required_or_asked_without_a_yes_and_not_in_the_prof
     _broken(monkeypatch, mutate)
     text = "\n".join(catalog.validate())
     assert "an upload is never required" in text and "needs a 'when'" in text
+
+
+def test_every_supported_framework_asks_what_is_particular_to_it():
+    """Not only the five common steps: a few dropdowns, yes/no and ticks of its own, and an upload after a yes wherever a document would already exist."""
+    NO_DOCUMENT_TO_ATTACH = {"ksa_pdp_transfer", "doh_adhie_policy"}       # nothing they ask about is a document
+    for slug in _all_slugs():
+        if slug == "gcrf":                                                 # a synthetic library entry the canonical catalog excludes (it has no questions of its own)
+            continue
+        own = [f for s in catalog.resolve(slug)["steps"][len(catalog.common()["steps"]):] for f in s["fields"]]
+        asked = [f for f in own if f["type"] != "files"]
+        assert len(asked) >= 3, f"{slug} asks only {len(asked)} questions of its own"            # a floor, not a target: no filler question to reach it
+        assert any(f["type"] == "files" for f in own) or slug in NO_DOCUMENT_TO_ATTACH, f"{slug} offers no upload"
+
