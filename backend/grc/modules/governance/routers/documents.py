@@ -1117,6 +1117,8 @@ def update_document(
         update_data.pop("status")       # not a status change: an edit of a published text is reviewed again (changed_after_review)
     if update_data.get("status") in ("approved", "published"):
         permissions.ensure_publisher(db, current_user)
+    if update_data.get("status") in ("pending_review", "pending_approval"):      # a review starts with Send for review: its people, its department's defaults
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=BULK_STATUS_REFUSED[update_data["status"]])
     if update_data.get("parent_document_id") is not None and update_data["parent_document_id"] != document.parent_document_id:
         from ..doc_details import check_details
         try:

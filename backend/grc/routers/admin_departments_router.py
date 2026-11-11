@@ -3,7 +3,12 @@
 Owns /admin/departments. A department's people are the ones added by hand, its head, and everyone who holds one of its roles
 (computed, never stored); every rule lives in ``services/org_departments.py``. Reading is open to anyone signed in (the list is a
 picker for every module and for the documents' Department dropdown); changing a department needs ``admin:organization:edit``
-(an administrator holds it), like the department routes of the vulnerability module.
+(an administrator holds it), like the department routes of the vulnerability module - or the manage level on that department,
+given on it or on one above it (``services/department_rights.py``, the Directory): then only that department and what is under it
+(a department made under it, a unit moved to a parent the person also manages); a top department needs the global right.
+
+The Directory (Governance > Documents > Directory) reads ``GET /directory`` (every department, flat, in tree order, with what the
+caller may do) and ``GET /{id}/access`` (who has a way in and why), and writes ``PUT /{id}/grants`` and ``DELETE /{id}/grants/{grant_id}``.
 """
 from __future__ import annotations
 
@@ -16,12 +21,31 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from ..models import GovernanceDocument, GRCDepartment, GRCUser, get_db
-from ..services import org_departments
+from ..services import department_rights, org_departments
 from .auth_router import get_user_primary_tenant, get_user_tenants, require_auth, require_tenant_permission
 
 router = APIRouter(prefix="/admin/departments", tags=["Departments"])
 
 _manage = Depends(require_tenant_permission("admin:organization:edit"))
+DENIED = "Permission denied"
+
+
+def _unit_manager(department_id: int, db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)) -> bool:
+    """A route of one department: the global right, or the manage level on it (given on it or above it)."""
+    if not department_rights.can_manage(db, current_user, department_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=DENIED)
+    return True
+
+
+def _manager_somewhere(db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)) -> bool:
+    """A route a person who runs any department may need (the roles a department can take people from)."""
+    if not department_rights.manages_somewhere(db, current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=DENIED)
+    return True
+
+
+_manage_unit = Depends(_unit_manager)
+_manage_some = Depends(_manager_somewhere)
 
 
 # ─── Schemas ─────────────────────────────────────────────────────────────────
@@ -127,6 +151,12 @@ class MemberRoleIn(BaseModel):
     role: str
 
 
+class GrantIn(BaseModel):
+    principal_type: str                     # user | role
+    principal_id: int
+    level: str                              # none | view | edit | manage
+
+
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
 def _department(db: Session, user: GRCUser, department_id: int) -> GRCDepartment:
@@ -220,7 +250,7 @@ def list_departments(
 def role_options(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
-    _perm: bool = _manage,
+    _perm: bool = _manage_some,
 ):
     """The roles a department can take its members from, with how many people hold each: the roles an access-review connector made
     (every link imported) are left out, as they are for a document's reviewers and approvers."""
@@ -261,8 +291,9 @@ def create_department(
     payload: DepartmentCreate,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
-    _perm: bool = _manage,
 ):
+    if not department_rights.can_manage(db, current_user, payload.parent_department_id or None):    # a top department needs the global right
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=DENIED)
     tenant_id = get_user_primary_tenant(current_user, db)
     if not tenant_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User is not assigned to any tenant.")
@@ -273,6 +304,51 @@ def create_department(
     db.commit()
     db.refresh(row)
     return _views(db, [row], current_user)[0]
+
+
+@router.get("/directory")
+def directory(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Every department of the organisation for the Directory, flat and in tree order (the top ones by name, each followed by what
+    is under it), switched-off ones included and marked. ``counts``: its documents the caller may read (archived ones left out;
+    ``documents_total`` takes in everything under it), its people, the departments directly under it. ``can_manage``: the caller
+    may run it (the global right, or the manage level on it or above it); ``can_create_top``: the caller may make a top department."""
+    everything = department_rights.has_global_manage(db, current_user)
+    out = {"levels": list(org_departments.DEFAULT_LEVEL_LABELS), "max_depth": org_departments.MAX_DEPTH,
+           "can_create_top": everything, "nodes": []}               # a top department needs the global right
+    held = {} if everything else department_rights.levels_for(db, current_user)
+    for tenant_id in get_user_tenants(current_user, db):
+        tree = org_departments.Tree.load(db, tenant_id)
+        rows = list(tree.rows.values())
+        labels = org_departments.level_labels(db, tenant_id)
+        out["levels"] = labels
+        info = org_departments.overview(db, rows)
+        documents = _document_counts(db, rows, current_user)
+        head_ids = {r.department_head_user_id for r in rows if r.department_head_user_id}
+        heads = ({u.id: u.display_name or u.username for u in db.query(GRCUser).filter(GRCUser.id.in_(head_ids))} if head_ids else {})
+
+        def by_name(node_id: int):
+            return (tree.rows[node_id].name.casefold(), node_id)
+
+        def walk(node_id: int) -> None:
+            r, level = tree.rows[node_id], tree.level(node_id)
+            out["nodes"].append({
+                "id": r.id, "parent_id": tree.parent.get(r.id), "name": r.name, "code": r.code, "level": level,
+                "level_label": labels[min(level, org_departments.MAX_DEPTH) - 1],
+                "head": ({"id": r.department_head_user_id, "name": heads.get(r.department_head_user_id, "")}
+                         if r.department_head_user_id else None),
+                "is_active": r.is_active is not False,
+                "counts": {"documents": documents.get(r.id, 0), "documents_total": sum(documents.get(i, 0) for i in tree.subtree(r.id)),
+                           "members": info[r.id]["member_count"], "children": len(tree.children.get(r.id, []))},
+                "can_manage": everything or held.get(r.id) == "manage"})
+            for child in sorted(tree.children.get(node_id, []), key=by_name):
+                walk(child)
+
+        for top in sorted((n for n in tree.rows if tree.parent.get(n) is None), key=by_name):
+            walk(top)
+    return out
 
 
 @router.get("/{department_id}", response_model=DepartmentDetailOut)
@@ -290,10 +366,16 @@ def update_department(
     payload: DepartmentUpdate,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
-    _perm: bool = _manage,
+    _perm: bool = _manage_unit,
 ):
     row = _department(db, current_user, department_id)
-    org_departments.update_department(db, row, payload.model_dump(exclude_unset=True), by_user_id=current_user.id)
+    changes = payload.model_dump(exclude_unset=True)
+    moved_to = changes.get("parent_department_id") or None
+    if "parent_department_id" in changes and moved_to != row.parent_department_id and not department_rights.can_manage(db, current_user, moved_to):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="A department can only be moved under a department you also manage; a top department needs the "
+                                   "right to administer the organisation.")
+    org_departments.update_department(db, row, changes, by_user_id=current_user.id)
     db.commit()
     db.refresh(row)
     return _views(db, [row], current_user)[0]
@@ -304,7 +386,7 @@ def delete_department(
     department_id: int,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
-    _perm: bool = _manage,
+    _perm: bool = _manage_unit,
 ):
     """Departments are never deleted: documents and assignments keep pointing at them. This stops offering it."""
     row = _department(db, current_user, department_id)
@@ -319,7 +401,7 @@ def set_department_roles(
     payload: RolesIn,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
-    _perm: bool = _manage,
+    _perm: bool = _manage_unit,
 ):
     row = _department(db, current_user, department_id)
     org_departments.set_roles(db, row, payload.role_ids, by_user_id=current_user.id)
@@ -333,7 +415,7 @@ def add_member(
     payload: MemberIn,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
-    _perm: bool = _manage,
+    _perm: bool = _manage_unit,
 ):
     row = _department(db, current_user, department_id)
     org_departments.add_member(db, row, payload.user_id, payload.role, by_user_id=current_user.id)
@@ -348,7 +430,7 @@ def update_member(
     payload: MemberRoleIn,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
-    _perm: bool = _manage,
+    _perm: bool = _manage_unit,
 ):
     row = _department(db, current_user, department_id)
     org_departments.update_member(db, row, user_id, payload.role)
@@ -362,7 +444,7 @@ def remove_member(
     user_id: int,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
-    _perm: bool = _manage,
+    _perm: bool = _manage_unit,
 ):
     """Take a person out of the members added by hand. Someone who belongs only through a role or as head is not removed here
     (409 says how to)."""
@@ -370,3 +452,59 @@ def remove_member(
     still = org_departments.remove_member(db, row, user_id)
     db.commit()
     return {"message": "Removed from the members added by hand." + (f" {still}" if still else ""), "id": user_id}
+
+
+# ─── Who has access (the Directory's Access tab) ─────────────────────────────
+
+@router.get("/{department_id}/access")
+def department_access(
+    department_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Everyone with a way into the department and why, the level each has and where it comes from, the grants on the department
+    and the ones it inherits from the departments above (``department_rights.access_of``). Open to anyone signed in, like the
+    department and its members."""
+    return department_rights.access_of(db, _department(db, current_user, department_id).id)
+
+
+@router.get("/{department_id}/principals")
+def department_principals(
+    department_id: int,
+    q: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = _manage_unit,
+):
+    """The people and roles a grant on this department can name, by name (the first 25 of each that match ``q``)."""
+    return department_rights.principals(db, _department(db, current_user, department_id), q)
+
+
+@router.put("/{department_id}/grants")
+def set_department_grant(
+    department_id: int,
+    payload: GrantIn,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = _manage_unit,
+):
+    """Give a person or a role a level on the department and everything under it (view, edit, manage), or block what a department
+    above gave them (none). A row that exists takes the new level."""
+    row = _department(db, current_user, department_id)
+    grant = department_rights.set_grant(db, row, payload.principal_type, payload.principal_id, payload.level, by_user_id=current_user.id)
+    db.commit()
+    return department_rights.grant_view(grant, department_rights.labels(db, [grant])[(grant.principal_type, grant.principal_id)])
+
+
+@router.delete("/{department_id}/grants/{grant_id}")
+def remove_department_grant(
+    department_id: int,
+    grant_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = _manage_unit,
+):
+    """Take a row off this department: what it gave, or blocked, comes from the departments above again."""
+    department_rights.remove_grant(db, _department(db, current_user, department_id), grant_id)
+    db.commit()
+    return {"message": "Access entry removed.", "id": grant_id}

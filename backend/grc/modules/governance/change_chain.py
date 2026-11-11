@@ -51,7 +51,7 @@ EVENT_LABEL = {"created": "Created", "sent_for_review": "Sent for review", "sent
                "owner_assigned": "Owner changed", "department_changed": "Department changed", "escalated": "Escalated", "delegated": "Delegated", "submitted": "Submitted",
                "changes_requested": "Changes requested", "resubmitted": "Resubmitted", "withdrawn": "Withdrawn from review",
                "review_again_requested": "Asked again after changes",
-               "route_set": "Approval route set",
+               "route_set": "Approval route set", "defaults_applied": "Department defaults applied",
                # a change by someone who is not the owner or author, waiting for their accept (proposals.py)
                "change_proposed": "Change proposed", "proposal_accepted": "Proposed change accepted",
                "proposal_rejected": "Proposed change not accepted", "proposal_withdrawn": "Proposed change withdrawn"}

@@ -14,6 +14,7 @@ from ..models import (
     AuditLog as GlobalAuditLog,
     GRCUser,
     GRCUser as TenantUser,
+    GRCDepartmentGrant,
     GRCDepartmentRole,
     Permission,
     Role,
@@ -1161,6 +1162,7 @@ def delete_role(
                                                     "Reviews, so the role cannot be deleted here.")
     
     tenant_db.query(GRCDepartmentRole).filter(GRCDepartmentRole.role_id == role_id).delete(synchronize_session=False)   # departments that took members from it
+    tenant_db.query(GRCDepartmentGrant).filter(GRCDepartmentGrant.principal_type == "role", GRCDepartmentGrant.principal_id == role_id).delete(synchronize_session=False)   # access it was given on departments
     tenant_db.delete(role)
     tenant_db.commit()
     

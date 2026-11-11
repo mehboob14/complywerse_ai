@@ -51,6 +51,8 @@ router.include_router(exception_workflow_router, tags=["Policy Exceptions"])    
 router.include_router(policy_exception_router.router, tags=["Policy Exceptions"])
 from .routers.exception_rules import router as exception_rules_router  # noqa: E402 - who reviews and approves an exception (D58)
 router.include_router(exception_rules_router, tags=["Policy Exceptions"])
+from .routers.approval_defaults import router as approval_defaults_router  # noqa: E402 - who reviews and approves by default in a unit (the Directory)
+router.include_router(approval_defaults_router, tags=["Governance Approval Defaults"])
 
 
 @router.get("")

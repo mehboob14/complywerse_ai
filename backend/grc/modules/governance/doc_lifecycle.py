@@ -873,10 +873,15 @@ def start_round(db, doc, by: Optional[int] = None) -> Optional[str]:
     signatures given before no longer count). With nobody who can sign that stage (none set, or only roles, teams or accounts
     without users of this platform: ``_members``) it goes to the stage that has someone, as Send would, or back to draft to be
     sent. A route of its own starts again at its first stage (a draft when nobody there can sign). Runs for every organisation,
-    with or without the life cycle. Returns why it moved (also written to the history)."""
+    with or without the life cycle. Returns why it moved (also written to the history).
+
+    First, the unit's default (the Directory, services/approval_defaults.py): a sign-off nobody named is filled from it, and the
+    people a locked default asks for are put back, so a document of a unit with defaults always has them."""
+    from ...services import approval_defaults
     from .routers.document_signoff import _assignments
     from .routers.versions import create_audit_log
 
+    approval_defaults.on_round(db, doc, by)
     route = routes.stages(db, doc)
     if routes.is_custom(route):
         everyone = _assignments(db, doc.id)
