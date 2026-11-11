@@ -27,7 +27,7 @@ COMMON = "common"     # common.json: the steps every framework starts with, befo
 
 FIELD_TYPES = {
     "text", "longtext", "number", "date", "bool", "choice", "multichoice", "person",
-    "country", "countries", "table", "asset_refs", "vendor_ref", "org_pick", "departments_derived", "files",
+    "country", "countries", "table", "asset_refs", "vendor_ref", "org_pick", "departments_derived", "files", "existing",
 }
 # What a table column may hold (no nested tables or org picks).
 CELL_TYPES = {
@@ -139,7 +139,8 @@ def resolve(slug: Optional[str]) -> Dict[str, Any]:
     entry = framework_entry(slug)
     fam = families().get(entry["family"]) or families().get(GENERAL)
     if fam is None:
-        return {"slug": slug, "family": GENERAL, "label": entry.get("label"), "steps": [], "gate": [], "requires_org": []}   # no catalog at all
+        return {"slug": slug, "family": GENERAL, "label": entry.get("label"), "steps": [], "gate": [], "requires_org": [],      # no catalog at all
+                "existing_types": list(common().get("existing_types_default") or []), "existing_confidence": "secondary"}
     s = slug or ""
     steps: List[Dict[str, Any]] = []
     for st in [*common().get("steps", []), *fam.get("steps", [])]:
@@ -156,6 +157,9 @@ def resolve(slug: Optional[str]) -> Dict[str, Any]:
         "label": entry.get("label"), "flow_id": entry.get("flow_id"), "not_in_library": bool(entry.get("not_in_library")),
         "version": fam.get("version", 1),
         "requires_org": [],               # kept in the answer, empty: the profile gates nothing (a framework asks its own questions)
+        # what a person may list as already existing for THIS framework (certificates, reports, plans): its own kinds, else the general ones
+        "existing_types": list(entry.get("existing_types") or common().get("existing_types_default") or []),
+        "existing_confidence": entry.get("existing_confidence") or common().get("existing_confidence") or "secondary",
         "steps": steps,
         "gate": [copy.deepcopy(g) for g in [*common().get("gate", []), *fam.get("gate", [])] if _applies(g, s)],
     }
@@ -240,6 +244,9 @@ def _check_field(f: Dict[str, Any], where: str, errs: List[str], *, in_profile: 
         errs.append(f"{where}: 'of' on a {t} field")
     if t == "departments_derived" and not in_profile:
         errs.append(f"{where}: departments_derived belongs to the profile")
+    if t == "existing":
+        if in_profile or f.get("level") != "advised":
+            errs.append(f"{where}: the list of what already exists is advised and belongs to the common steps")
     if t == "files":
         if in_profile:
             errs.append(f"{where}: files are for family steps, not the profile")
@@ -298,6 +305,23 @@ def _check_when(when: Any, where: str, fam_idx, org_idx, errs: List[str], applie
     if "in" in when:
         for v in when["in"]:
             _check_value(target, v, where, errs)
+
+
+def _check_existing_types(types: Any, confidence: Any, where: str, errs: List[str], required: bool) -> None:
+    if types is None:
+        if required:
+            errs.append(f"{where}: existing_types is missing")
+        return
+    if not isinstance(types, list) or not 2 <= len(types) <= 12:
+        errs.append(f"{where}: existing_types needs 2 to 12 entries")
+        return
+    if len(set(types)) != len(types):
+        errs.append(f"{where}: existing_types has duplicates")
+    for x in types:
+        if not isinstance(x, str) or not x.strip() or len(x) > 70:
+            errs.append(f"{where}: existing_types entry {x!r} is empty or over 70 characters")
+    if confidence is not None and confidence not in CONFIDENCE:
+        errs.append(f"{where}: existing_confidence {confidence!r} not in {sorted(CONFIDENCE)}")
 
 
 def _check_gate(g: Dict[str, Any], where: str, fam_idx, org_idx, errs: List[str], slugs: Set[str]) -> None:
@@ -432,6 +456,7 @@ def validate(flow_ids: Optional[Set[str]] = None) -> List[str]:
                 errs.append(f"{fw}: {s} is flagged not_in_library but is in the registry")
             if not entry.get("not_in_library") and s not in registry:
                 errs.append(f"{fw}: {s} is not in the library registry and not flagged not_in_library")
+            _check_existing_types(entry.get("existing_types"), entry.get("existing_confidence"), f"{fw}.{s}", errs, required=False)
             fid = entry.get("flow_id")
             if flow_ids is not None and fid and fid not in flow_ids:
                 errs.append(f"{fw}: flow_id {fid!r} of {s} is not in frameworkFlows.ts")
@@ -475,6 +500,7 @@ def validate(flow_ids: Optional[Set[str]] = None) -> List[str]:
             _check_gate(g, f"{fw}.gate.{g.get('key')}", fam_idx, org_idx, errs, slugs)
     # ---- the common steps: asked of every framework
     com = common()
+    _check_existing_types(com.get("existing_types_default"), com.get("existing_confidence"), "common", errs, required=True)
     all_slugs = set(placed)
     com_idx = family_fields({"steps": []})
     cstep: Set[str] = set()

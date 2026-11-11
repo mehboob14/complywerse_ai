@@ -509,19 +509,19 @@ def test_a_document_is_uploaded_kept_in_evidence_attached_to_an_answer_and_read_
     db, as_, http = w
     http = as_(EDITOR)
     ob = http.post(O, json={"uploaded_framework_id": ISO}).json()
-    assert "iso.soa_file" in ob["readiness"]["hidden"]                               # asked only after a yes
+    assert "scope.defined_file" in ob["readiness"]["hidden"]                               # asked only after a yes
     up = http.post(f"{O}/files", files={"file": ("soa.pdf", b"%PDF-1.4 the statement", "application/pdf")})
     assert up.status_code == 201, up.text
     doc = up.json()
     assert doc["name"] == "soa.pdf"
-    view = http.put(f"{O}/{ob['id']}/answers", json={"step": "iso", "values": {"soa": "Yes", "soa_file": [doc]}}).json()
-    assert view["answers"]["iso"]["soa_file"] == [{"id": doc["id"], "name": "soa.pdf"}]
-    assert "iso.soa_file" not in view["readiness"]["hidden"]
+    view = http.put(f"{O}/{ob['id']}/answers", json={"step": "scope", "values": {"defined": "Yes", "defined_file": [doc]}}).json()
+    assert view["answers"]["scope"]["defined_file"] == [{"id": doc["id"], "name": "soa.pdf"}]
+    assert "scope.defined_file" not in view["readiness"]["hidden"]
     row = db.get(m.Evidence, doc["id"])
     assert (row.tenant_id, row.source_system, row.uploaded_by) == (1, "Framework onboarding", EDITOR) and os.path.isfile(row.file_path)
     got = as_(PLAIN).get(f"{O}/files/{doc['id']}")                                    # reading needs a sign-in only, like the rest
     assert got.status_code == 200 and got.content == b"%PDF-1.4 the statement" and "attachment" in got.headers["content-disposition"]
-    assert "soa_file" not in as_(EDITOR).put(f"{O}/{ob['id']}/answers", json={"step": "iso", "values": {"soa_file": []}}).json()["answers"].get("iso", {})   # taken off the answer
+    assert "defined_file" not in as_(EDITOR).put(f"{O}/{ob['id']}/answers", json={"step": "scope", "values": {"defined_file": []}}).json()["answers"].get("scope", {})   # taken off the answer
 
 
 def test_an_upload_needs_the_edit_grant_a_known_file_type_and_a_file(w, monkeypatch, tmp_path):
@@ -545,6 +545,79 @@ def test_only_documents_uploaded_here_by_this_organisation_can_be_attached_or_re
     http = as_(EDITOR)
     ob = http.post(O, json={"uploaded_framework_id": ISO}).json()
     for evidence_id in (70, 71, 999):
-        r = http.put(f"{O}/{ob['id']}/answers", json={"step": "iso", "values": {"soa": "Yes", "soa_file": [{"id": evidence_id}]}})
-        assert r.status_code == 422 and r.json()["detail"]["errors"][0]["field"] == "iso.soa_file", (evidence_id, r.text)
+        r = http.put(f"{O}/{ob['id']}/answers", json={"step": "scope", "values": {"defined": "Yes", "defined_file": [{"id": evidence_id}]}})
+        assert r.status_code == 422 and r.json()["detail"]["errors"][0]["field"] == "scope.defined_file", (evidence_id, r.text)
         assert http.get(f"{O}/files/{evidence_id}").status_code == 404
+
+
+# ---------------------------------------------------------------- what already exists (one section, the framework's own kinds, documents kept in Evidence)
+def _upload(http, name="soa.pdf", body=b"%PDF-1.4 the statement"):
+    r = http.post(f"{O}/files", files={"file": (name, body, "application/pdf")})
+    assert r.status_code == 201, r.text
+    return r.json()
+
+
+def test_what_already_exists_is_listed_by_kind_with_its_documents_and_never_marks_anything_compliant(w, monkeypatch, tmp_path):
+    import grc.modules.evidence.routers.evidence as evidence_router
+    from grc.modules.framework_onboarding import existing
+    monkeypatch.setattr(evidence_router, "EVIDENCE_UPLOAD_DIR", str(tmp_path))
+    db, as_, http = w
+    db.add(m.Tenant(id=2, name="Other", slug="other", primary_contact_email="x@other.test"))
+    db.add(m.Evidence(id=71, tenant_id=2, name="Theirs.pdf", file_name="Theirs.pdf", source_system="Framework onboarding", status="draft"))
+    db.commit()
+    http = as_(EDITOR)
+    ob = http.post(O, json={"uploaded_framework_id": ISO}).json()
+    assert "Statement of Applicability (SoA)" in ob["existing"]["types"] and ob["existing"]["records"] == []
+    assert "existing.records" in ob["readiness"]["hidden"]                                                       # asked only after a Yes
+    http.put(f"{O}/{ob['id']}/answers", json={"step": "existing", "values": {"status": "Yes"}})
+    # only the kind is required, and it is one of THIS framework's kinds
+    assert http.post(f"{O}/{ob['id']}/existing", json={"assessment_type": "Type II report"}).status_code == 422
+    made = http.post(f"{O}/{ob['id']}/existing", json={"assessment_type": "Statement of Applicability (SoA)"})
+    assert made.status_code == 201, made.text
+    rec = made.json()["existing"]["records"][0]
+    assert (rec["verification_status"], rec["files"], rec["scope_coverage"]) == ("declared", [], None)
+    rid = rec["id"]
+    # dates, issuer, scope coverage and a document are all optional details; they must make sense
+    assert http.put(f"{O}/{ob['id']}/existing/{rid}", json={"assessment_date": "2026-03-01", "valid_until": "2025-03-01"}).status_code == 422
+    assert http.put(f"{O}/{ob['id']}/existing/{rid}", json={"scope_coverage": "Mostly"}).status_code == 422
+    assert http.put(f"{O}/{ob['id']}/existing/{rid}", json={"evidence_ids": [71]}).status_code == 422             # another organisation's file
+    doc = _upload(http)
+    r = http.put(f"{O}/{ob['id']}/existing/{rid}", json={"assessment_date": "2026-03-01", "valid_until": "2027-03-01", "assessor_or_issuer": "NQA",
+                                                          "scope_coverage": "Partially", "evidence_ids": [doc["id"]]})
+    assert r.status_code == 200, r.text
+    rec = r.json()["existing"]["records"][0]
+    assert (rec["verification_status"], rec["assessor_or_issuer"], rec["scope_coverage"], rec["expired"]) == ("evidence_received", "NQA", "Partially", False)
+    assert rec["files"] == [{"id": doc["id"], "name": "soa.pdf"}]
+    # a person who may approve reviews it; editing alone cannot, and a claim without a document cannot be reviewed
+    assert http.post(f"{O}/{ob['id']}/existing/{rid}/verify", json={"status": "reviewed"}).status_code == 403
+    other = http.post(f"{O}/{ob['id']}/existing", json={"assessment_type": "Internal audit results"}).json()["existing"]["records"][-1]["id"]
+    approver = as_(APPROVER)
+    assert approver.post(f"{O}/{ob['id']}/existing/{other}/verify", json={"status": "reviewed"}).status_code == 422
+    assert approver.post(f"{O}/{ob['id']}/existing/{rid}/verify", json={"status": "verified"}).json()["existing"]["records"][0]["verification_status"] == "verified"
+    # the document changes: the review no longer stands
+    as_(EDITOR)
+    back = http.put(f"{O}/{ob['id']}/existing/{rid}", json={"evidence_ids": []}).json()["existing"]["records"][0]
+    assert (back["verification_status"], back["verified_by"], back["files"]) == ("declared", None, [])
+    assert http.delete(f"{O}/{ob['id']}/existing/{other}").status_code == 200 and len(http.get(f"{O}/{ob['id']}").json()["existing"]["records"]) == 1
+    # a claim is not compliance: nothing was started or assessed, and the readiness did not change
+    assert db.query(m.CertificationJourney).count() == 0
+    assert all(len(v) <= 20 for v in (existing.COVERAGE, existing.VERIFICATION))
+    assert max(len(x) for x in existing.COVERAGE) <= m.FrameworkExistingCompliance.__table__.c.scope_coverage.type.length
+    assert max(len(x) for x in existing.VERIFICATION) <= m.FrameworkExistingCompliance.__table__.c.verification_status.type.length
+    assert max(len(x) for fam in catalog.families().values() for fw in fam["frameworks"] for x in fw.get("existing_types", [])) <= m.FrameworkExistingCompliance.__table__.c.assessment_type.type.length
+
+
+def test_what_exists_is_frozen_with_the_approval_and_cannot_be_changed_once_approved(w):
+    db, as_, http = w
+    ob_id, _ = ready_iso(as_(ADMIN))
+    http = as_(EDITOR)
+    http.put(f"{O}/{ob_id}/answers", json={"step": "existing", "values": {"status": "Yes"}})
+    rid = http.post(f"{O}/{ob_id}/existing", json={"assessment_type": "External certification", "assessor_or_issuer": "BSI"}).json()["existing"]["records"][0]["id"]
+    assert as_(EDITOR).post(f"{O}/{ob_id}/submit").status_code == 200
+    assert as_(APPROVER).post(f"{O}/{ob_id}/approve", json={}).status_code == 200
+    frozen = db.get(m.FrameworkOnboarding, ob_id).snapshot["existing"]
+    assert [(x["assessment_type"], x["assessor_or_issuer"]) for x in frozen] == [("External certification", "BSI")]
+    editor = as_(EDITOR)
+    assert editor.post(f"{O}/{ob_id}/existing", json={"assessment_type": "Internal audit results"}).status_code == 409
+    assert editor.put(f"{O}/{ob_id}/existing/{rid}", json={"note": "late"}).status_code == 409
+    assert editor.delete(f"{O}/{ob_id}/existing/{rid}").status_code == 409

@@ -44,7 +44,7 @@ class Sampler:
             return ["Pakistan"]
         if t == "asset_refs":
             return list(self.systems)
-        if t in ("vendor_ref", "files"):            # a document is uploaded, never made up
+        if t in ("vendor_ref", "files", "existing"):            # a document is uploaded, never made up; what exists is listed as rows of its own
             return None
         if t == "table":
             return [{c["key"]: self.value(c) for c in f["columns"] if c.get("required") and c["type"] != "vendor_ref"} for _ in range(max(int(f.get("min_rows") or 1), 1))]

@@ -177,6 +177,9 @@ export default function OnboardingWorkspace({ id }: { id: number }) {
     orgRows: v.org_rows,
     departments: profile.data?.departments ?? [],
     readOnly: locked,
+    onboardingId: id,
+    existing: v.existing,
+    onView: (next) => { qc.setQueryData(key, next); void qc.invalidateQueries({ queryKey: ONBOARDING_KEYS.register }); },
   };
   const title = v.framework.label || v.framework.name || 'Framework';
   const actions = actionsOf(v.state, v.readiness);

@@ -13,7 +13,8 @@ from sqlalchemy.orm import Session
 
 from ...models import CertificationJourney, FrameworkOnboarding, FrameworkOnboardingEvent, GRCUser, UploadedFramework
 from ..scf.registry import slug_for_framework
-from . import catalog, engine, files, profile
+from . import catalog, engine, existing, files, profile
+from .errors import OnboardingError
 
 UNDERWAY_KINDS = [
     "Running before onboarding existed",
@@ -27,14 +28,6 @@ LEGACY_REASON = "A journey existed before framework onboarding."
 STATES = ("draft", "ready", "complete", "underway")
 AVAILABLE_STATUSES = ["published", "completed", "parsed", "classified"]
 STATUS_PRIORITY = {"classified": 7, "published": 6, "completed": 5, "parsed": 4, "classifying": 3, "text_extracted": 2, "draft": 1}
-
-
-class OnboardingError(Exception):
-    """A refusal that carries its HTTP status and the body to show (a person-readable message, optionally the unmet checks)."""
-
-    def __init__(self, status: int, message: str, **more: Any):
-        super().__init__(message)
-        self.status, self.body = status, {"message": message, **more}
 
 
 def framework_slug(fw: UploadedFramework) -> Optional[str]:
@@ -176,7 +169,7 @@ def view(db: Session, ob: FrameworkOnboarding) -> Dict[str, Any]:
         "state": ob.state, "locked": ob.state == "complete", **summary(ob),
         "approved_by": _person(db, ob.approved_by), "submitted_by": _person(db, ob.submitted_by), "approval_note": ob.approval_note,
         "underway_by": _person(db, ob.underway_by),
-        "steps": res["steps"], "requires_org": res.get("requires_org") or [], "answers": ob.answers or {},
+        "steps": res["steps"], "requires_org": res.get("requires_org") or [], "answers": ob.answers or {}, "existing": existing.view_of(db, ob),
         "readiness": readiness,
         "refs": refs, "org_rows": _org_rows(org_values), "journey": _journey(db, ob.tenant_id, ob.uploaded_framework_id),
         "events": _events(db, ob), "catalog_version": ob.catalog_version, "current_catalog_version": catalog.catalog_version(),
@@ -307,6 +300,27 @@ def save_answers(db: Session, ob: FrameworkOnboarding, user: GRCUser, step_key: 
     return view(db, ob)
 
 
+# --------------------------------------------------------------------------- what already exists (see existing.py)
+def existing_add(db: Session, ob: FrameworkOnboarding, user: GRCUser, body: Dict[str, Any]) -> Dict[str, Any]:
+    existing.create(db, ob, user, body, _event)
+    return view(db, ob)
+
+
+def existing_update(db: Session, ob: FrameworkOnboarding, user: GRCUser, rid: int, body: Dict[str, Any]) -> Dict[str, Any]:
+    existing.update(db, ob, user, existing.get(db, ob, rid), body, _event)
+    return view(db, ob)
+
+
+def existing_remove(db: Session, ob: FrameworkOnboarding, user: GRCUser, rid: int) -> Dict[str, Any]:
+    existing.delete(db, ob, user, existing.get(db, ob, rid), _event)
+    return view(db, ob)
+
+
+def existing_verify(db: Session, ob: FrameworkOnboarding, user: GRCUser, rid: int, status: str) -> Dict[str, Any]:
+    existing.verify(db, ob, user, existing.get(db, ob, rid), status, _event)
+    return view(db, ob)
+
+
 # --------------------------------------------------------------------------- transitions
 def submit(db: Session, ob: FrameworkOnboarding, user: GRCUser) -> Dict[str, Any]:
     if ob.state != "draft":
@@ -333,7 +347,7 @@ def _snapshot(db: Session, ob: FrameworkOnboarding, org_values: Dict[str, Any]) 
                 picked.setdefault(f["of"], [])
                 picked[f["of"]].extend(r for r in org_rows[f["of"]] if r.get("id") in ids and r not in picked[f["of"]])
     return {"catalog_version": catalog.catalog_version(), "family": ob.family, "slug": ob.framework_slug,
-            "answers": copy.deepcopy(ob.answers or {}), "org_rows": picked, "approved_at": datetime.utcnow().isoformat()}
+            "answers": copy.deepcopy(ob.answers or {}), "org_rows": picked, "existing": existing.snapshot_of(db, ob), "approved_at": datetime.utcnow().isoformat()}
 
 
 def approve(db: Session, ob: FrameworkOnboarding, user: GRCUser, note: Optional[str]) -> Dict[str, Any]:

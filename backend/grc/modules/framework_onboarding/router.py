@@ -145,6 +145,63 @@ def put_answers(onboarding_id: int, body: AnswersBody, db: Session = Depends(get
         raise _fail(exc)
 
 
+class ExistingBody(BaseModel):
+    """What an organisation already has: only ``assessment_type`` is asked; every other key is optional and a key left out is left as it was."""
+    assessment_type: Optional[str] = None
+    framework_version: Optional[str] = None
+    assessment_date: Optional[str] = None
+    valid_until: Optional[str] = None
+    period_start: Optional[str] = None
+    period_end: Optional[str] = None
+    assessor_or_issuer: Optional[str] = None
+    scope_coverage: Optional[str] = None
+    scope_note: Optional[str] = None
+    evidence_ids: Optional[list] = None
+    note: Optional[str] = None
+
+
+@router.post("/framework-onboarding/{onboarding_id}/existing", status_code=201)
+def existing_add(onboarding_id: int, body: ExistingBody, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth), _p: bool = Depends(EDIT_ONBOARDING)):
+    try:
+        return service.existing_add(db, service.get(db, _tenant(db, user), onboarding_id), user, body.dict(exclude_unset=True))
+    except service.OnboardingError as exc:
+        db.rollback()
+        raise _fail(exc)
+
+
+@router.put("/framework-onboarding/{onboarding_id}/existing/{record_id}")
+def existing_update(onboarding_id: int, record_id: int, body: ExistingBody, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth),
+                    _p: bool = Depends(EDIT_ONBOARDING)):
+    try:
+        return service.existing_update(db, service.get(db, _tenant(db, user), onboarding_id), user, record_id, body.dict(exclude_unset=True))
+    except service.OnboardingError as exc:
+        db.rollback()
+        raise _fail(exc)
+
+
+@router.delete("/framework-onboarding/{onboarding_id}/existing/{record_id}")
+def existing_remove(onboarding_id: int, record_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth), _p: bool = Depends(EDIT_ONBOARDING)):
+    try:
+        return service.existing_remove(db, service.get(db, _tenant(db, user), onboarding_id), user, record_id)
+    except service.OnboardingError as exc:
+        db.rollback()
+        raise _fail(exc)
+
+
+class VerifyBody(BaseModel):
+    status: str = ""
+
+
+@router.post("/framework-onboarding/{onboarding_id}/existing/{record_id}/verify")
+def existing_verify(onboarding_id: int, record_id: int, body: VerifyBody, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth),
+                    _p: bool = Depends(APPROVE)):
+    try:
+        return service.existing_verify(db, service.get(db, _tenant(db, user), onboarding_id), user, record_id, body.status)
+    except service.OnboardingError as exc:
+        db.rollback()
+        raise _fail(exc)
+
+
 class AiBody(BaseModel):
     step: Optional[str] = None
     field: Optional[str] = None

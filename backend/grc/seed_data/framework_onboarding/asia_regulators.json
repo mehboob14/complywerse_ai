@@ -4,12 +4,12 @@
   "label": "South and South-East Asia regulators",
   "summary": "Configures which State Bank of Pakistan, PISF, Central Bank of Sri Lanka or MAS regime binds the entity and in which variant (entity type, cloud or internet banking use, CII status, conditional modules, D-SIB status, notices followed); governance, critical systems, scores and incident reporting are the work after onboarding.",
   "frameworks": [
-    {"slug": "sbp_etgrmf", "label": "SBP ETGRMF", "flow_id": "sbpetgrmf"},
-    {"slug": "sbp_cloud", "label": "SBP Cloud Framework", "flow_id": "sbpcloud"},
-    {"slug": "sbp_internet_banking", "label": "SBP Internet Banking", "flow_id": "sbpib"},
-    {"slug": "pisf_2026", "label": "PISF 2026"},
-    {"slug": "sl_csf", "label": "Sri Lanka CBSL standard", "flow_id": "cbslbss"},
-    {"slug": "mas_trm", "label": "MAS TRM Guidelines", "flow_id": "mastrm"}
+    {"slug": "sbp_etgrmf", "label": "SBP ETGRMF", "flow_id": "sbpetgrmf", "existing_types": ["SBP inspection report or letter", "Independent assessment", "Internal assessment", "Previous compliance program"], "existing_confidence": "unverified"},
+    {"slug": "sbp_cloud", "label": "SBP Cloud Framework", "flow_id": "sbpcloud", "existing_types": ["SBP approval or acknowledgement", "Independent assessment", "Internal assessment", "Previous compliance program"], "existing_confidence": "unverified"},
+    {"slug": "sbp_internet_banking", "label": "SBP Internet Banking", "flow_id": "sbpib", "existing_types": ["Independent security review", "SBP inspection report or letter", "Internal assessment", "Previous compliance program"], "existing_confidence": "unverified"},
+    {"slug": "pisf_2026", "label": "PISF 2026", "existing_types": ["PISF assessment report", "Internal assessment", "Self-assessment", "Previous compliance program"], "existing_confidence": "unverified"},
+    {"slug": "sl_csf", "label": "Sri Lanka CBSL standard", "flow_id": "cbslbss", "existing_types": ["CBSL review report or letter", "Independent assessment", "Internal assessment", "Previous compliance program"], "existing_confidence": "unverified"},
+    {"slug": "mas_trm", "label": "MAS TRM Guidelines", "flow_id": "mastrm", "existing_types": ["TRM review report", "Independent assessment", "Internal assessment", "Previous compliance program"], "existing_confidence": "unverified"}
   ],
   "steps": [
     {
@@ -35,20 +35,11 @@
       "source": {"ref": "Regulator practice: whether an inspection, review or assessment already took place decides where the work starts. The option wording was written from the regulators' public circulars and was not checked line by line.", "asked_by": "regulator", "confidence": "unverified"},
       "fields": [
         {"key": "sbp_inspection", "label": "Latest inspection", "type": "choice", "level": "advised", "applies_to": ["sbp_etgrmf"], "options": ["None yet", "Under way", "Completed, findings open", "Completed, no open findings"], "note": "Where the latest State Bank inspection of technology risk stands, if there was one."},
-        {"key": "sbp_inspection_file", "label": "Inspection report", "type": "files", "level": "advised", "applies_to": ["sbp_etgrmf"], "when": {"field": "position.sbp_inspection", "in": ["Completed, findings open", "Completed, no open findings"]}, "note": "Optional: attach the inspection report or letter. It is kept in Evidence."},
         {"key": "sbp_outsourcing", "label": "Outsourced IT", "type": "choice", "level": "advised", "applies_to": ["sbp_etgrmf"], "options": ["Yes", "No"], "note": "Whether critical IT services are outsourced. It tells which outsourcing requirements to review."},
         {"key": "cloud_providers", "label": "Cloud providers", "type": "multichoice", "level": "advised", "applies_to": ["sbp_cloud"], "options": ["AWS", "Microsoft Azure", "Google Cloud", "Local provider", "Other"], "when": {"field": "regime.cloud_use", "in": ["Cloud in use", "Planned"]}, "note": "The cloud providers in use or planned."},
         {"key": "cloud_approval", "label": "Offshore approval", "type": "choice", "level": "advised", "applies_to": ["sbp_cloud"], "options": ["Obtained", "Applied for", "Not yet", "Not sure"], "when": {"field": "regime.cloud_offshore", "eq": true}, "note": "Whether the State Bank approved hosting material workloads outside Pakistan."},
-        {"key": "cloud_approval_file", "label": "Approval letter", "type": "files", "level": "advised", "applies_to": ["sbp_cloud"], "when": {"field": "position.cloud_approval", "eq": "Obtained"}, "note": "Optional: attach the approval or acknowledgement. It is kept in Evidence."},
         {"key": "ib_channels", "label": "Channels", "type": "multichoice", "level": "advised", "applies_to": ["sbp_internet_banking"], "options": ["Web", "Mobile app", "SMS or USSD", "APIs for partners"], "when": {"field": "regime.ib_offered", "in": ["Live", "Planned"]}, "note": "The internet banking channels in use or planned."},
-        {"key": "ib_review", "label": "Security review", "type": "choice", "level": "advised", "applies_to": ["sbp_internet_banking"], "options": ["Yes", "No"], "note": "Whether the internet banking channels had an independent security review."},
-        {"key": "ib_review_file", "label": "Review file", "type": "files", "level": "advised", "applies_to": ["sbp_internet_banking"], "when": {"field": "position.ib_review", "eq": "Yes"}, "note": "Optional: attach the review report. It is kept in Evidence."},
-        {"key": "pisf_prior", "label": "Earlier assessment", "type": "choice", "level": "advised", "applies_to": ["pisf_2026"], "options": ["Yes", "No"], "note": "Whether an assessment against PISF, or an earlier national security framework, was done before."},
-        {"key": "pisf_prior_file", "label": "Assessment file", "type": "files", "level": "advised", "applies_to": ["pisf_2026"], "when": {"field": "position.pisf_prior", "eq": "Yes"}, "note": "Optional: attach the assessment report. It is kept in Evidence."},
         {"key": "sl_exam", "label": "Latest CBSL review", "type": "choice", "level": "advised", "applies_to": ["sl_csf"], "options": ["None yet", "Under way", "Completed, findings open", "Completed, no open findings"], "note": "Where the latest Central Bank of Sri Lanka review of cyber security stands, if there was one."},
-        {"key": "sl_exam_file", "label": "Review report", "type": "files", "level": "advised", "applies_to": ["sl_csf"], "when": {"field": "position.sl_exam", "in": ["Completed, findings open", "Completed, no open findings"]}, "note": "Optional: attach the review report or letter. It is kept in Evidence."},
-        {"key": "mas_review", "label": "Earlier TRM review", "type": "choice", "level": "advised", "applies_to": ["mas_trm"], "options": ["Yes", "No"], "note": "Whether the technology risk controls were reviewed before, by internal audit or an external firm."},
-        {"key": "mas_review_file", "label": "Review file", "type": "files", "level": "advised", "applies_to": ["mas_trm"], "when": {"field": "position.mas_review", "eq": "Yes"}, "note": "Optional: attach the review report. It is kept in Evidence."},
         {"key": "mas_cloud", "label": "Cloud use", "type": "choice", "level": "advised", "applies_to": ["mas_trm"], "options": ["Yes", "Planned", "No"], "note": "Whether cloud services support the in-scope systems."}
       ]
     }

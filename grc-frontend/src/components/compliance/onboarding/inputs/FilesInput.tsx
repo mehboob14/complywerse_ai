@@ -14,7 +14,7 @@ import { filesOf, MAX_FILES } from '../fieldModel';
 const ROW = 'flex items-center gap-[8px] rounded-ds-control border border-ds-border bg-ds-surface py-[2px] pl-[10px] pr-[2px]';
 const ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.png,.jpg,.jpeg';
 
-export default function FilesInput({ id, label, value, onChange, readOnly = false }: Pick<FieldInputProps, 'id' | 'value' | 'onChange' | 'readOnly'> & { id: string; label: string }) {
+export default function FilesInput({ id, label, value, onChange, readOnly = false, max = MAX_FILES }: Pick<FieldInputProps, 'id' | 'value' | 'onChange' | 'readOnly'> & { id: string; label: string; max?: number }) {
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -49,7 +49,7 @@ export default function FilesInput({ id, label, value, onChange, readOnly = fals
         </ul>
       )}
       {files.length === 0 && readOnly && <span className="block text-ds-body text-ds-fg-muted">Nothing attached</span>}
-      {!readOnly && files.length < MAX_FILES && (
+      {!readOnly && files.length < max && (
         <>
           <input ref={input} type="file" accept={ACCEPT} className="hidden" tabIndex={-1} aria-label={`Choose a file for ${label}`}
             onChange={(e) => { const f = e.target.files?.[0]; if (f) void attach(f); e.target.value = ''; }} />

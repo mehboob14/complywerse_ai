@@ -197,6 +197,8 @@ def normalise(f: Dict[str, Any], value: Any, known: Optional[Known] = None, *, k
         if valid_rows is not None and not set(picked) <= valid_rows:
             raise FieldError("Choose from the organisation profile.")
         return picked
+    if t == "existing":
+        raise FieldError("What already exists is added with Add existing work.")
     if t == "files":
         if not isinstance(value, list):
             raise FieldError("Attach a file with Upload.")
@@ -441,6 +443,8 @@ def evaluate(resolved: Dict[str, Any], answers: Dict[str, Any], org_values: Dict
             ref = f"{st['key']}.{f['key']}"
             if not visible(ref):
                 hidden.append(ref)
+                continue
+            if f["type"] == "existing":                  # rows kept apart (existing.py), not an answer: never an open item
                 continue
             v = (answers.get(st["key"]) or {}).get(f["key"])
             good = answered(f, v)

@@ -235,3 +235,11 @@ def test_a_document_is_one_the_organisation_uploaded_and_an_answer_holds_at_most
     with pytest.raises(F):
         engine.normalise(f, [7, 8, 9, 10], kn)
     assert engine.has_value(f, [{"id": 7, "name": "soa.pdf"}]) and not engine.has_value(f, [])
+
+
+def test_the_list_of_what_exists_is_not_an_answer_and_never_an_open_item():
+    f = fld("existing", level="advised")
+    with pytest.raises(F):
+        engine.normalise(f, [1])
+    out = engine.evaluate({"steps": [{"key": "existing", "label": "Existing work", "fields": [{**f, "key": "records"}]}], "gate": []}, {}, {})
+    assert out["checks"] == [] and out["ready"] is True and out["counts"]["advised_open"] == 0

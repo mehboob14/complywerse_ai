@@ -2,6 +2,8 @@
   "version": 1,
   "label": "Every framework",
   "summary": "What every framework's onboarding settles first: why the organisation takes it on, whether and where it applies, what is in scope, what already exists and who owns it. Nothing here asks for the work of the framework itself (policies, risk assessments, evidence): that starts after onboarding.",
+  "existing_types_default": ["External certification or attestation", "Independent assessment", "Internal assessment", "Self-assessment", "Previous compliance program"],
+  "existing_confidence": "secondary",
   "steps": [
     {
       "key": "objective", "label": "Objective",
@@ -49,7 +51,9 @@
       "key": "existing", "label": "Existing work",
       "source": {"ref": "Gap analysis practice: what already exists decides where the work starts, so the platform does not begin from zero", "asked_by": "assessor", "confidence": "secondary", "urls": ["https://www.schellman.com/blog/scoping-out-an-iso-27001-certification"]},
       "fields": [
-        {"key": "have", "label": "Already in place", "type": "multichoice", "level": "advised", "options": ["Policies and procedures", "Control assessments", "Previous audit findings", "Evidence repository", "Risk register", "Previous compliance reports", "Open remediation actions", "Nothing yet"], "note": "Tick what already exists for this framework. Nothing is needed to continue; the platform uses it to avoid starting from zero."},
+        {"key": "status", "label": "Existing compliance", "type": "choice", "level": "advised", "options": ["Yes", "No", "In progress", "Not sure"], "note": "Whether the organisation has already implemented, assessed or had external validation against this framework. Choose No and carry on if nothing exists; the work itself is assessed after onboarding."},
+        {"key": "records", "label": "What exists", "type": "existing", "level": "advised", "when": {"field": "existing.status", "eq": "Yes"}, "note": "Add each certificate, report, assessment or document that exists. Only the kind is asked; dates, issuer and files are optional. Nothing here marks a control compliant: the platform assesses that after onboarding."},
+        {"key": "have", "label": "Other material", "type": "multichoice", "level": "advised", "options": ["Policies and procedures", "Risk register", "Evidence repository", "Open remediation actions", "Nothing yet"], "note": "Tick what else already exists for this framework and could be reused. Nothing is needed to continue."},
         {"key": "previous_system", "label": "Previous system", "type": "text", "level": "advised", "when": {"field": "objective.start", "eq": "Migrating from another system"}, "note": "The tool the work is moving from."}
       ]
     },

@@ -4,8 +4,8 @@
   "label": "Supplier certification",
   "summary": "Onboarding records the classification the client (Saudi Aramco or SABIC) assigned, the standard version, the certificate type and whether this is a first certification or a renewal; the audit firm's validation and the evidence work start after onboarding.",
   "frameworks": [
-    {"slug": "aramco_ccc", "label": "Saudi Aramco CCC", "flow_id": "aramco"},
-    {"slug": "sabic_cybertrust", "label": "SABIC CyberTrust", "flow_id": "sabic"}
+    {"slug": "aramco_ccc", "label": "Saudi Aramco CCC", "flow_id": "aramco", "existing_types": ["Current CCC certificate", "Previous assessment report", "Self-assessment", "Previous compliance program"], "existing_confidence": "unverified"},
+    {"slug": "sabic_cybertrust", "label": "SABIC CyberTrust", "flow_id": "sabic", "existing_types": ["Current certificate", "Previous assessment report", "Self-assessment", "Previous compliance program"], "existing_confidence": "unverified"}
   ],
   "steps": [
     {
@@ -25,7 +25,6 @@
       "fields": [
         {"key": "cert_type", "label": "Certificate type", "type": "choice", "level": "required", "applies_to": ["aramco_ccc"], "options": ["CCC", "CCC+", "Not decided yet"], "note": "CCC is a self-assessment with a remote check; CCC+ adds an on-site assessment. Aramco requires CCC+ for the Network Connectivity and Critical Data Processor classifications. Choose from what Aramco told you."},
         {"key": "cert_status", "label": "Certificate status", "type": "choice", "level": "required", "options": ["First certification", "Renewal of a valid certificate", "Lapsed, recertifying"], "note": "A first certification, a renewal and a recertification after a lapse follow different routes. Certificates are valid for two years."},
-        {"key": "cert_file", "label": "Certificate file", "type": "files", "level": "advised", "when": {"field": "cert_route.cert_status", "eq": "Renewal of a valid certificate"}, "note": "Optional: attach the current certificate. It is kept in Evidence."},
         {"key": "aramco_assessor", "label": "Assessor", "type": "choice", "level": "advised", "applies_to": ["aramco_ccc"], "options": ["Engaged", "Being selected", "Not yet"], "note": "Whether the third-party assessor for the on-site CCC+ assessment has been chosen.", "when": {"field": "cert_route.cert_type", "in": ["CCC+", "Not decided yet"]}},
         {"key": "sabic_assessor", "label": "Assessor", "type": "choice", "level": "advised", "applies_to": ["sabic_cybertrust"], "options": ["Engaged", "Being selected", "Not yet"], "note": "Whether the third-party assessor for the certificate has been chosen.", "source": {"ref": "SABIC's assessor route was not confirmed from a SABIC publication", "asked_by": "SABIC", "confidence": "unverified"}}
       ]

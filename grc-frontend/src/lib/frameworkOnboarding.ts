@@ -7,7 +7,7 @@ import apiClient from '@/lib/api';
 
 export type FieldType =
   | 'text' | 'longtext' | 'number' | 'date' | 'bool' | 'choice' | 'multichoice' | 'person' | 'country' | 'countries'
-  | 'table' | 'asset_refs' | 'vendor_ref' | 'org_pick' | 'departments_derived' | 'files';
+  | 'table' | 'asset_refs' | 'vendor_ref' | 'org_pick' | 'departments_derived' | 'files' | 'existing';
 export type Level = 'required' | 'advised' | 'optional';
 export type Confidence = 'verified' | 'secondary' | 'unverified';
 /** org_pick `of`: which rows of the organisation profile a framework scope picks from. */
@@ -19,7 +19,7 @@ export interface When { field: string; eq?: unknown; ne?: unknown; in?: unknown[
 export interface Column {
   key: string;
   label: string;
-  type: Exclude<FieldType, 'table' | 'org_pick' | 'departments_derived' | 'files'>;
+  type: Exclude<FieldType, 'table' | 'org_pick' | 'departments_derived' | 'files' | 'existing'>;
   required?: boolean;
   options?: string[];
   suggestions?: string[];
@@ -45,6 +45,39 @@ export interface Field {
   maps_to?: string;
   /** The field's own source, else its step's/group's (the server fills `source` in for a framework's fields). */
   source?: Source | null;
+}
+
+/** One thing the organisation says it already has for a framework (a certificate, a report, a plan). A claim with its documents: never a compliance status. */
+export interface ExistingRecord {
+  id: number;
+  assessment_type: string;
+  framework_version: string | null;
+  assessment_date: string | null;
+  valid_until: string | null;
+  period_start: string | null;
+  period_end: string | null;
+  assessor_or_issuer: string | null;
+  scope_coverage: string | null;
+  scope_note: string | null;
+  files: FileRef[];
+  verification_status: 'declared' | 'evidence_received' | 'reviewed' | 'verified';
+  verified_by: string | null;
+  verified_at: string | null;
+  note: string | null;
+  expired: boolean;
+  created_by: string | null;
+  updated_at: string | null;
+}
+/** What the server takes for an item: every key optional (a key left out stays as it was); only `assessment_type` is needed to add one. */
+export type ExistingInput = Partial<Pick<ExistingRecord, 'assessment_type' | 'framework_version' | 'assessment_date' | 'valid_until' | 'period_start' | 'period_end' | 'assessor_or_issuer' | 'scope_coverage' | 'scope_note' | 'note'>> & { evidence_ids?: number[] };
+/** The framework's own kinds of existing work, the choices, and the items. */
+export interface ExistingView {
+  types: string[];
+  confidence: Confidence;
+  coverage: string[];
+  verification: Record<string, string>;
+  limits: { records: number; files: number };
+  records: ExistingRecord[];
 }
 
 export interface Step { key: string; label: string; source: Source | null; fields: Field[] }
@@ -163,6 +196,8 @@ export interface OnboardingView {
   /** always empty (kept in the answer) */
   requires_org: Array<{ field: string; reason: string }>;
   answers: Record<string, Record<string, unknown>>;
+  /** what already exists for the framework (rows kept apart from the answers) */
+  existing: ExistingView;
   readiness: Readiness;
   refs: Refs;
   org_rows: OrgRows;
@@ -257,6 +292,11 @@ export const onboardingApi = {
     a.remove();
     window.URL.revokeObjectURL(url);
   },
+  existingAdd: async (id: number, body: ExistingInput): Promise<OnboardingView> => (await apiClient.post(`${O}/${id}/existing`, body)).data,
+  existingUpdate: async (id: number, recordId: number, body: ExistingInput): Promise<OnboardingView> => (await apiClient.put(`${O}/${id}/existing/${recordId}`, body)).data,
+  existingRemove: async (id: number, recordId: number): Promise<OnboardingView> => (await apiClient.delete(`${O}/${id}/existing/${recordId}`)).data,
+  /** a person who may approve: 'reviewed' or 'verified' (refused without a document) */
+  existingVerify: async (id: number, recordId: number, status: 'reviewed' | 'verified'): Promise<OnboardingView> => (await apiClient.post(`${O}/${id}/existing/${recordId}/verify`, { status })).data,
   ai: async <T = Record<string, unknown>>(id: number, kind: AiKind): Promise<AiSuggestion<T>> => (await apiClient.post(`${O}/${id}/ai/${kind}`, {})).data,
   submit: async (id: number): Promise<OnboardingView> => (await apiClient.post(`${O}/${id}/submit`)).data,
   approve: async (id: number, note?: string): Promise<OnboardingView> => (await apiClient.post(`${O}/${id}/approve`, { note: note || null })).data,
