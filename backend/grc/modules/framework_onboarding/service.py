@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from ...models import CertificationJourney, FrameworkOnboarding, FrameworkOnboardingEvent, GRCUser, UploadedFramework
 from ..scf.registry import slug_for_framework
-from . import catalog, engine, profile
+from . import catalog, engine, files, profile
 
 UNDERWAY_KINDS = [
     "Running before onboarding existed",
@@ -275,6 +275,7 @@ def save_answers(db: Session, ob: FrameworkOnboarding, user: GRCUser, step_key: 
         raise OnboardingError(409, "Approved and locked. Reopen it to change it.", locked=[f"{step_key}.{k}" for k in values])
     org_values = profile.merged_values(db, ob.tenant_id)
     kn = profile.known(db, ob.tenant_id, org_values)
+    kn.files = files.known(db, ob.tenant_id)
     errors: List[Dict[str, str]] = []
     clean: Dict[str, Any] = {}
     for key, raw in (values or {}).items():

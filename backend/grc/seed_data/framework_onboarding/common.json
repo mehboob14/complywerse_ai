@@ -27,6 +27,8 @@
       "key": "scope", "label": "Scope",
       "source": {"ref": "Scoping practice: departments, processes, systems, locations, third parties and justified exclusions define the boundary an assessor tests", "asked_by": "assessor, certification body", "confidence": "secondary", "urls": ["https://www.schellman.com/blog/scoping-out-an-iso-27001-certification", "https://www.dataguard.com/knowledge/iso-27001/clause-4-3-how-to-determine-the-scope-of-your-isms/"]},
       "fields": [
+        {"key": "defined", "label": "Scope defined", "type": "choice", "level": "advised", "options": ["Yes", "In progress", "No"], "note": "Whether the scope is already written down as a scope statement or document. If not, set it below."},
+        {"key": "defined_file", "label": "Scope document", "type": "files", "level": "advised", "when": {"field": "scope.defined", "eq": "Yes"}, "note": "Optional: attach the scope statement or document. It is kept in Evidence."},
         {"key": "departments", "label": "Departments", "type": "org_pick", "of": "departments", "level": "advised", "when": {"field": "applicability.reach", "eq": "Selected parts only"}, "note": "Departments inside the scope, from the department tree in Governance settings."},
         {"key": "processes", "label": "Processes", "type": "table", "level": "advised", "when": {"field": "applicability.reach", "eq": "Selected parts only"}, "note": "Business processes inside the scope, with who owns each.", "columns": [
           {"key": "process", "label": "Process", "type": "text", "required": true},

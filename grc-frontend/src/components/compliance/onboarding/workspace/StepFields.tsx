@@ -25,7 +25,7 @@ export const fieldBoxId = (base: string, step: string, field: string): string =>
 function renderField(field: Field, value: unknown, onChange: (v: unknown) => void, error: string | null, ctx: FieldContext, id: string): ReactNode {
   return (
     <FieldBlock
-      field={field} value={value} onChange={onChange} error={error} readOnly={ctx.readOnly} id={id} source={field.source}
+      field={field} value={value} onChange={onChange} error={error} readOnly={ctx.readOnly} id={id} source={field.type === 'files' ? null : field.source}
       refs={ctx.refs} onRefs={ctx.onRefs} orgRows={ctx.orgRows} departments={ctx.departments}
     />
   );

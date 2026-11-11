@@ -15,6 +15,8 @@
       "source": {"ref": "Certification-body quote forms and service procedures: Stage 1, Stage 2, 3-year certificate, annual surveillance", "asked_by": "certification body", "confidence": "secondary", "urls": ["https://www.nsai.ie/download/certification/AD-27-01_ISO_27001_RFQ_Rev.6.docx", "https://www.tuev-nord.de/fileadmin/Sites/TUEV_NORD/Dienstleistungen/Certification/Files/service_descriptions/tuev-nord-cert-iso-27001-22301-20000-1-service-description.pdf"]},
       "fields": [
         {"key": "cert_kind", "label": "Certificate type", "type": "choice", "level": "advised", "when": {"field": "objective.goal", "eq": "Certification"}, "options": ["Initial certification", "Transfer from another body", "Recertification"], "note": "A first certificate, a transfer from another body and a recertification follow different audit routes."},
+        {"key": "prev_audit", "label": "Previous audit", "type": "choice", "level": "advised", "options": ["Yes", "No"], "note": "Whether the organisation has been audited against this standard before, by a certification body or internally."},
+        {"key": "prev_audit_file", "label": "Audit report", "type": "files", "level": "advised", "when": {"field": "cert.prev_audit", "eq": "Yes"}, "note": "Optional: attach the latest audit report or certificate. It is kept in Evidence."},
         {"key": "headcount", "label": "People in scope", "type": "number", "level": "advised", "min": 1, "note": "People inside the scope, including contractors and freelancers (workers on site for ISO 45001). Certification bodies size the audit from this number."}
       ]
     },
@@ -24,8 +26,11 @@
       "fields": [
         {"key": "ai_role", "label": "AI role", "type": "choice", "level": "required", "applies_to": ["iso_42001"], "options": ["AI producer", "AI provider", "AI user", "More than one role"], "source": {"ref": "ISO/IEC 42001 clause 4.1 and ISO/IEC 22989 roles, as explained by certification and audit firms", "asked_by": "auditor", "confidence": "secondary", "urls": ["https://www.schellman.com/blog/ai-governance/iso-42001-roles-and-responsibilities", "https://isoqar.com/wp-content/uploads/2025/09/ISOQAR-ISO-42001-2023-Gap-Analysis-CLAUSES.pdf"]}, "note": "The organisation's role towards its AI systems decides which controls matter. One organisation can hold several roles."},
         {"key": "risk_method", "label": "Risk method", "type": "choice", "level": "advised", "options": ["Yes", "In progress", "No"], "note": "Whether a method for assessing risk already exists (hazards and OH&S risks for ISO 45001). Only its existence is asked; building it is the framework's work."},
+        {"key": "risk_method_file", "label": "Method document", "type": "files", "level": "advised", "when": {"field": "iso.risk_method", "eq": "Yes"}, "note": "Optional: attach the risk assessment method as written. It is kept in Evidence."},
         {"key": "soa", "label": "Existing SoA", "type": "choice", "level": "advised", "applies_to": ["iso_27001", "iso_42001"], "options": ["Yes", "In progress", "No"], "note": "Whether a Statement of Applicability already exists. Only its existence is asked; the in-or-out decisions inside it are made in the framework's work."},
-        {"key": "bia", "label": "Existing BIA", "type": "choice", "level": "advised", "applies_to": ["iso_22301"], "options": ["Yes", "In progress", "No"], "note": "Whether a business impact analysis already exists. Only its existence is asked; its content is the framework's work."}
+        {"key": "soa_file", "label": "SoA document", "type": "files", "level": "advised", "when": {"field": "iso.soa", "eq": "Yes"}, "applies_to": ["iso_27001", "iso_42001"], "note": "Optional: attach the current Statement of Applicability. It is kept in Evidence."},
+        {"key": "bia", "label": "Existing BIA", "type": "choice", "level": "advised", "applies_to": ["iso_22301"], "options": ["Yes", "In progress", "No"], "note": "Whether a business impact analysis already exists. Only its existence is asked; its content is the framework's work."},
+        {"key": "bia_file", "label": "BIA document", "type": "files", "level": "advised", "when": {"field": "iso.bia", "eq": "Yes"}, "applies_to": ["iso_22301"], "note": "Optional: attach the business impact analysis. It is kept in Evidence."}
       ]
     }
   ],

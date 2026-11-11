@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  answered, askedByText, choiceLayout, cleanRow, cleanRows, confidenceWord, departmentTree, draftOfPerson, fromYesNo, hasSingleControl, hasValue, isBlank, levelWord,
+  answered, askedByText, choiceLayout, cleanRow, cleanRows, confidenceWord, departmentTree, draftOfPerson, filesOf, fromYesNo, hasSingleControl, hasValue, isBlank, levelWord,
   makeVisible, newRowId, orgRowsOf, parseNumberText, personFromDraft, personKind, rowAbout, rowComplete, rowMissing, rowStarted, rowTitle, safeUrls, sameRows,
   tableLayout, toYesNo, toggleId, toggleOption, whenHolds, withSaved, type AnyField, type Lookup,
 } from './fieldModel.ts';
@@ -217,7 +217,7 @@ test('the words around a field: required says nothing, a weak source says so, a 
 test('a label points at a single control only where there is one', () => {
   const f = (type: string, extra: Record<string, unknown> = {}) => ({ key: 'k', label: 'K', type, level: 'required', note: '', ...extra }) as AnyField;
   for (const t of ['text', 'longtext', 'number', 'date', 'country', 'countries', 'vendor_ref']) assert.equal(hasSingleControl(f(t)), true, t);
-  for (const t of ['bool', 'multichoice', 'person', 'table', 'asset_refs', 'org_pick', 'departments_derived']) assert.equal(hasSingleControl(f(t)), false, t);
+  for (const t of ['bool', 'multichoice', 'person', 'table', 'asset_refs', 'org_pick', 'departments_derived', 'files']) assert.equal(hasSingleControl(f(t)), false, t);
   assert.equal(hasSingleControl(f('choice', { options: ['Averse', 'Minimal', 'Cautious', 'Open', 'Hungry'] })), true, 'a list');
   assert.equal(hasSingleControl(f('choice', { options: ['Maintained', 'Partial', 'None'] })), false, 'segments name themselves');
 });
@@ -233,4 +233,12 @@ test('the countries are one list of unique names, and a saved value outside it i
   for (const must of ['Pakistan', 'Saudi Arabia', 'United Arab Emirates', 'Qatar', 'Sri Lanka', 'Singapore', 'United States', 'Germany']) assert.ok(COUNTRIES.includes(must), must);
   assert.deepEqual(countryChoices(['Pakistan', 'Atlantis', 'Atlantis']).slice(-2), [COUNTRIES[COUNTRIES.length - 1], 'Atlantis']);
   assert.equal(countryChoices().length, COUNTRIES.length);
+});
+
+test('documents on an answer: a list of an id and a name each; anything else is left out; one counts as a value', () => {
+  const docs = { key: 'soa_file', label: 'SoA document', type: 'files', level: 'advised', note: '' } as AnyField;
+  assert.deepEqual(filesOf([{ id: 7, name: 'soa.pdf' }, { id: 'x', name: 'bad' }, null, { id: 8 }, 'soa.pdf']), [{ id: 7, name: 'soa.pdf' }]);
+  assert.deepEqual(filesOf(undefined), []);
+  assert.deepEqual([undefined, [], [{ id: 7, name: 'soa.pdf' }]].map((v) => hasValue(docs, v)), [false, false, true]);
+  assert.deepEqual([undefined, [], [{ id: 7, name: 'soa.pdf' }]].map((v) => answered(docs, v)), [false, false, true]);
 });

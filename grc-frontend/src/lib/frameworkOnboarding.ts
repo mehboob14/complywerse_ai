@@ -7,7 +7,7 @@ import apiClient from '@/lib/api';
 
 export type FieldType =
   | 'text' | 'longtext' | 'number' | 'date' | 'bool' | 'choice' | 'multichoice' | 'person' | 'country' | 'countries'
-  | 'table' | 'asset_refs' | 'vendor_ref' | 'org_pick' | 'departments_derived';
+  | 'table' | 'asset_refs' | 'vendor_ref' | 'org_pick' | 'departments_derived' | 'files';
 export type Level = 'required' | 'advised' | 'optional';
 export type Confidence = 'verified' | 'secondary' | 'unverified';
 /** org_pick `of`: which rows of the organisation profile a framework scope picks from. */
@@ -19,7 +19,7 @@ export interface When { field: string; eq?: unknown; ne?: unknown; in?: unknown[
 export interface Column {
   key: string;
   label: string;
-  type: Exclude<FieldType, 'table' | 'org_pick' | 'departments_derived'>;
+  type: Exclude<FieldType, 'table' | 'org_pick' | 'departments_derived' | 'files'>;
   required?: boolean;
   options?: string[];
   suggestions?: string[];
@@ -52,6 +52,8 @@ export interface Group { key: string; label: string; source: Source | null; fiel
 
 /** A person: a user of the platform, or someone outside. */
 export type Person = { user_id: number } | { name: string; email?: string; organisation?: string };
+/** A document on an answer (a `files` field): the Evidence record it is kept in, and its file name. */
+export interface FileRef { id: number; name: string }
 /** A row of a table field: its columns' values plus a stable id the server generates (a framework scope picks rows by it). */
 export type Row = { id: string } & Record<string, unknown>;
 
@@ -238,6 +240,23 @@ export const onboardingApi = {
   /** one step's fields; each key replaces that field whole (422 with `errors` saves nothing; 409 with `locked` when approved) */
   saveAnswers: async (id: number, step: string, values: Record<string, unknown>): Promise<OnboardingView> =>
     (await apiClient.put(`${O}/${id}/answers`, { step, values })).data,
+  /** One document, kept in Evidence. The answer that carries it is saved with `saveAnswers` like any other. */
+  uploadFile: async (file: File): Promise<FileRef> => {
+    const form = new FormData();
+    form.append('file', file);
+    return (await apiClient.post(`${O}/files`, form, { headers: { 'Content-Type': 'multipart/form-data' } })).data;
+  },
+  downloadFile: async (doc: FileRef): Promise<void> => {
+    const res = await apiClient.get(`${O}/files/${doc.id}`, { responseType: 'blob' });
+    const url = window.URL.createObjectURL(res.data as Blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = doc.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  },
   ai: async <T = Record<string, unknown>>(id: number, kind: AiKind): Promise<AiSuggestion<T>> => (await apiClient.post(`${O}/${id}/ai/${kind}`, {})).data,
   submit: async (id: number): Promise<OnboardingView> => (await apiClient.post(`${O}/${id}/submit`)).data,
   approve: async (id: number, note?: string): Promise<OnboardingView> => (await apiClient.post(`${O}/${id}/approve`, { note: note || null })).data,

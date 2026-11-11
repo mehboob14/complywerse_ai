@@ -500,3 +500,51 @@ def test_an_organisation_administrator_may_edit_the_profile_that_now_lives_in_ad
     db.add_all([perm, m.Role(id=9, tenant_id=1, name="Organisation editors"), m.RolePermission(role_id=9, permission_id=9), m.UserRole(user_id=PLAIN, role_id=9, tenant_id=1)])
     db.commit()
     assert as_(PLAIN).put(P, json={"values": {"entities_sites.headcount": 40}}).status_code == 200
+
+
+# ---------------------------------------------------------------- documents on an answer
+def test_a_document_is_uploaded_kept_in_evidence_attached_to_an_answer_and_read_back(w, monkeypatch, tmp_path):
+    import grc.modules.evidence.routers.evidence as evidence_router
+    monkeypatch.setattr(evidence_router, "EVIDENCE_UPLOAD_DIR", str(tmp_path))
+    db, as_, http = w
+    http = as_(EDITOR)
+    ob = http.post(O, json={"uploaded_framework_id": ISO}).json()
+    assert "iso.soa_file" in ob["readiness"]["hidden"]                               # asked only after a yes
+    up = http.post(f"{O}/files", files={"file": ("soa.pdf", b"%PDF-1.4 the statement", "application/pdf")})
+    assert up.status_code == 201, up.text
+    doc = up.json()
+    assert doc["name"] == "soa.pdf"
+    view = http.put(f"{O}/{ob['id']}/answers", json={"step": "iso", "values": {"soa": "Yes", "soa_file": [doc]}}).json()
+    assert view["answers"]["iso"]["soa_file"] == [{"id": doc["id"], "name": "soa.pdf"}]
+    assert "iso.soa_file" not in view["readiness"]["hidden"]
+    row = db.get(m.Evidence, doc["id"])
+    assert (row.tenant_id, row.source_system, row.uploaded_by) == (1, "Framework onboarding", EDITOR) and os.path.isfile(row.file_path)
+    got = as_(PLAIN).get(f"{O}/files/{doc['id']}")                                    # reading needs a sign-in only, like the rest
+    assert got.status_code == 200 and got.content == b"%PDF-1.4 the statement" and "attachment" in got.headers["content-disposition"]
+    assert "soa_file" not in as_(EDITOR).put(f"{O}/{ob['id']}/answers", json={"step": "iso", "values": {"soa_file": []}}).json()["answers"].get("iso", {})   # taken off the answer
+
+
+def test_an_upload_needs_the_edit_grant_a_known_file_type_and_a_file(w, monkeypatch, tmp_path):
+    import grc.modules.evidence.routers.evidence as evidence_router
+    monkeypatch.setattr(evidence_router, "EVIDENCE_UPLOAD_DIR", str(tmp_path))
+    db, as_, http = w
+    pdf = {"file": ("a.pdf", b"x", "application/pdf")}
+    assert as_(PLAIN).post(f"{O}/files", files=pdf).status_code == 403
+    edit = as_(EDITOR)
+    assert edit.post(f"{O}/files", files={"file": ("run.exe", b"MZ", "application/octet-stream")}).status_code == 400
+    assert edit.post(f"{O}/files", files={"file": ("empty.pdf", b"", "application/pdf")}).status_code == 400
+    assert db.query(m.Evidence).count() == 0 and list(tmp_path.iterdir()) == []
+
+
+def test_only_documents_uploaded_here_by_this_organisation_can_be_attached_or_read(w):
+    db, as_, http = w
+    db.add(m.Tenant(id=2, name="Other", slug="other", primary_contact_email="x@other.test"))
+    db.add_all([m.Evidence(id=70, tenant_id=1, name="Policy.pdf", file_name="Policy.pdf", evidence_type="document", status="draft"),            # evidence, not uploaded here
+                m.Evidence(id=71, tenant_id=2, name="Theirs.pdf", file_name="Theirs.pdf", source_system="Framework onboarding", status="draft")])  # another organisation's
+    db.commit()
+    http = as_(EDITOR)
+    ob = http.post(O, json={"uploaded_framework_id": ISO}).json()
+    for evidence_id in (70, 71, 999):
+        r = http.put(f"{O}/{ob['id']}/answers", json={"step": "iso", "values": {"soa": "Yes", "soa_file": [{"id": evidence_id}]}})
+        assert r.status_code == 422 and r.json()["detail"]["errors"][0]["field"] == "iso.soa_file", (evidence_id, r.text)
+        assert http.get(f"{O}/files/{evidence_id}").status_code == 404

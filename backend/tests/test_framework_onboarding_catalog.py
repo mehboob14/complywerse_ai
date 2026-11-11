@@ -133,10 +133,56 @@ def test_no_family_asks_for_what_the_framework_work_produces():
         for st in fam["steps"]:
             for f in st["fields"]:
                 assert f["key"] not in CLAUSE_WORK, f"{key}.{st['key']}.{f['key']} is the framework's own work"
-                assert f["type"] not in ("table", "person", "org_pick", "asset_refs", "vendor_ref"), f"{key}.{st['key']}.{f['key']}: a {f['type']} is an inventory or a named role, which is work"
+                if f["type"] == "org_pick":              # "which systems support it" is applicability when it is a pick and never required
+                    assert f["of"] == "systems" and f["level"] == "advised", f"{key}.{st['key']}.{f['key']}: only an advised pick of systems is asked"
+                else:
+                    assert f["type"] not in ("table", "person", "asset_refs", "vendor_ref"), f"{key}.{st['key']}.{f['key']}: a {f['type']} is an inventory or a named role, which is work"
                 if f["level"] == "required":
                     assert f["type"] not in ("date", "longtext", "text"), f"{key}.{st['key']}.{f['key']}: a required {f['type']} is something prepared, not applicability"
         for g in fam["gate"]:
             if g["level"] == "required":
                 assert g["check"]["type"] not in ("before", "span_at_least_days", "distinct", "count_at_least"), f"{key}.gate.{g['key']} asks for something prepared"
 
+
+# ---- the questions people expect for a framework, as yes / no / a type / a list, and an optional upload after a yes
+def _keys(slug):
+    return {f["key"] for s in catalog.resolve(slug)["steps"] for f in s["fields"]}
+
+
+def _field(slug, key):
+    return next(f for s in catalog.resolve(slug)["steps"] for f in s["fields"] if f["key"] == key)
+
+
+def test_each_framework_asks_its_own_applicability_questions():
+    assert {"goal", "start", "reach", "defined", "prev_audit", "risk_method", "soa", "cert_kind"} <= _keys("iso_27001")        # new or existing, scope, risk method, SoA, earlier audit, certification
+    assert {"role", "channels", "chd", "cde", "cde_systems", "level", "existing_report"} <= _keys("pci_dss")
+    assert {"swift_user", "type", "swift_systems", "cscf_version", "attest_kind", "prior_assessment"} <= _keys("swift_cscf")
+    assert {"sama_category", "sama_activities", "start", "sama_assessed", "sama_exam"} <= _keys("sama_csf")                    # regulated or not is the first choice of sama_category
+    assert "Not a SAMA member (voluntary)" in _field("sama_csf", "sama_category")["options"]
+    assert "cde" not in _keys("iso_27001") and "soa" not in _keys("pci_dss")                                                  # nothing of another framework
+
+
+def test_an_upload_follows_a_yes_and_is_never_asked_or_required_before_it():
+    uploads = []
+    for fam in (*catalog.families().values(), catalog.common()):
+        for st in fam["steps"]:
+            by_key = {f["key"]: f for f in st["fields"]}
+            for f in st["fields"]:
+                if f["type"] != "files":
+                    continue
+                uploads.append(f["key"])
+                assert f["level"] == "advised" and f.get("when"), f["key"]
+                target = by_key.get(f["when"]["field"].split(".", 1)[1])
+                assert target is not None and target["type"] in ("choice", "bool"), f"{f['key']} follows {f['when']['field']}"
+    for expected in ("soa_file", "risk_method_file", "prev_audit_file", "existing_report_file", "prior_assessment_file", "sama_assessed_file", "defined_file"):
+        assert expected in uploads, expected
+
+
+def test_an_upload_cannot_be_required_or_asked_without_a_yes_and_not_in_the_profile(monkeypatch):
+    def mutate(d):
+        f = next(x for x in d["families"]["iso_management"]["steps"][1]["fields"] if x["key"] == "soa_file")
+        f["level"] = "required"
+        del f["when"]
+    _broken(monkeypatch, mutate)
+    text = "\n".join(catalog.validate())
+    assert "an upload is never required" in text and "needs a 'when'" in text

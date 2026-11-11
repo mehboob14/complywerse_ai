@@ -27,7 +27,7 @@ COMMON = "common"     # common.json: the steps every framework starts with, befo
 
 FIELD_TYPES = {
     "text", "longtext", "number", "date", "bool", "choice", "multichoice", "person",
-    "country", "countries", "table", "asset_refs", "vendor_ref", "org_pick", "departments_derived",
+    "country", "countries", "table", "asset_refs", "vendor_ref", "org_pick", "departments_derived", "files",
 }
 # What a table column may hold (no nested tables or org picks).
 CELL_TYPES = {
@@ -240,6 +240,13 @@ def _check_field(f: Dict[str, Any], where: str, errs: List[str], *, in_profile: 
         errs.append(f"{where}: 'of' on a {t} field")
     if t == "departments_derived" and not in_profile:
         errs.append(f"{where}: departments_derived belongs to the profile")
+    if t == "files":
+        if in_profile:
+            errs.append(f"{where}: files are for family steps, not the profile")
+        if f.get("level") == "required":
+            errs.append(f"{where}: an upload is never required")
+        if not f.get("when"):
+            errs.append(f"{where}: an upload is asked only after a yes, so it needs a 'when'")
     if "min_rows" in f and t not in ("table", "org_pick", "asset_refs", "countries", "departments_derived"):
         errs.append(f"{where}: min_rows on a {t} field")
     if ("min" in f or "max" in f) and t != "number":

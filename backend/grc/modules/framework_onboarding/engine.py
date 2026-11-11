@@ -16,6 +16,7 @@ from . import catalog
 
 LONG = 8000
 SHORT = 500
+MAX_FILES = 3          # documents on one answer
 
 
 class FieldError(ValueError):
@@ -30,6 +31,7 @@ class Known:
     vendors: Optional[Set[int]] = None
     departments: Optional[Set[int]] = None
     row_ids: Dict[str, Set[str]] = dc_field(default_factory=dict)   # org_pick of -> ids of the profile rows
+    files: Optional[Dict[int, str]] = None                          # documents uploaded here: id -> file name
 
 
 def new_row_id() -> str:
@@ -195,6 +197,24 @@ def normalise(f: Dict[str, Any], value: Any, known: Optional[Known] = None, *, k
         if valid_rows is not None and not set(picked) <= valid_rows:
             raise FieldError("Choose from the organisation profile.")
         return picked
+    if t == "files":
+        if not isinstance(value, list):
+            raise FieldError("Attach a file with Upload.")
+        docs: List[Dict[str, Any]] = []
+        for x in value:
+            try:
+                i = int(x["id"] if isinstance(x, dict) else x)
+            except (TypeError, ValueError, KeyError):
+                raise FieldError("Attach a file with Upload.")
+            if any(d["id"] == i for d in docs):
+                continue
+            if known.files is not None and i not in known.files:
+                raise FieldError("Attach a file with Upload.")
+            name = (known.files or {}).get(i) or (str(x.get("name") or "") if isinstance(x, dict) else "") or "File"
+            docs.append({"id": i, "name": name[:200]})
+        if len(docs) > MAX_FILES:
+            raise FieldError(f"Attach at most {MAX_FILES} files here.")
+        return docs
     if t == "departments_derived":
         raise FieldError("Departments come from Governance settings.")
     raise FieldError("Unsupported field.")
@@ -213,7 +233,7 @@ def answered(f: Dict[str, Any], v: Any) -> bool:
     need = int(f.get("min_rows", 1))               # 0 = no minimum
     if t == "table":
         return sum(1 for r in v or [] if row_complete(f, r)) >= need
-    if t in ("asset_refs", "org_pick", "countries", "multichoice", "departments_derived"):
+    if t in ("asset_refs", "org_pick", "countries", "multichoice", "departments_derived", "files"):
         return len(v or []) >= need
     if t == "person":
         return isinstance(v, dict) and bool(v.get("user_id") or v.get("name"))
@@ -227,7 +247,7 @@ def has_value(f: Dict[str, Any], v: Any) -> bool:
         return v is True
     if t == "table":
         return any(row_complete(f, r) for r in v or [])
-    if t in ("asset_refs", "org_pick", "countries", "multichoice", "departments_derived"):
+    if t in ("asset_refs", "org_pick", "countries", "multichoice", "departments_derived", "files"):
         return bool(v)
     if t == "person":
         return answered(f, v)

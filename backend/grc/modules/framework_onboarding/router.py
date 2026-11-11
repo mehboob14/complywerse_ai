@@ -9,13 +9,14 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from ...models import GRCUser, get_db
 from ...routers.auth_router import get_user_primary_tenant, require_auth, require_tenant_permission
-from . import ai, catalog, gate, profile, service
+from . import ai, catalog, files, gate, profile, service
 
 router = APIRouter(prefix="/compliance", tags=["Framework Onboarding"])
 
@@ -105,6 +106,19 @@ def start(body: StartBody, db: Session = Depends(get_db), user: GRCUser = Depend
         return service.view(db, service.create(db, tid, user, fw))
     except service.OnboardingError as exc:
         raise _fail(exc)
+
+
+# --------------------------------------------------------------------------- documents on an answer
+@router.post("/framework-onboarding/files", status_code=201)
+async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db), user: GRCUser = Depends(require_auth), _p: bool = Depends(EDIT_ONBOARDING)):
+    """Stores one document (kept in Evidence) and answers ``{id, name}``; the answer that carries it is saved with the usual PUT .../answers."""
+    return await files.save(db, _tenant(db, user), user, file)
+
+
+@router.get("/framework-onboarding/files/{evidence_id}")
+def download_file(evidence_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    ev = files.find(db, _tenant(db, user), evidence_id)
+    return FileResponse(ev.file_path, filename=ev.file_name or "file", media_type=ev.file_type or "application/octet-stream")
 
 
 # --------------------------------------------------------------------------- one onboarding

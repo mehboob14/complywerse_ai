@@ -24,7 +24,8 @@
       "source": {"ref": "Aramco CCC program page and SABIC CyberTrust program page: validation by an authorised audit firm; certificate valid two years", "asked_by": "client (Aramco, SABIC)", "confidence": "verified", "urls": ["https://www.aramco.com/en/what-we-do/suppliers/supplier-resources/cybersecurity-compliance-certificate-program", "https://supplier.sabic.com/CyberTrustProgram.aspx"]},
       "fields": [
         {"key": "cert_type", "label": "Certificate type", "type": "choice", "level": "required", "applies_to": ["aramco_ccc"], "options": ["CCC", "CCC+", "Not decided yet"], "note": "CCC is a self-assessment with a remote check; CCC+ adds an on-site assessment. Aramco requires CCC+ for the Network Connectivity and Critical Data Processor classifications. Choose from what Aramco told you."},
-        {"key": "cert_status", "label": "Certificate status", "type": "choice", "level": "required", "options": ["First certification", "Renewal of a valid certificate", "Lapsed, recertifying"], "note": "A first certification, a renewal and a recertification after a lapse follow different routes. Certificates are valid for two years."}
+        {"key": "cert_status", "label": "Certificate status", "type": "choice", "level": "required", "options": ["First certification", "Renewal of a valid certificate", "Lapsed, recertifying"], "note": "A first certification, a renewal and a recertification after a lapse follow different routes. Certificates are valid for two years."},
+        {"key": "cert_file", "label": "Certificate file", "type": "files", "level": "advised", "when": {"field": "cert_route.cert_status", "eq": "Renewal of a valid certificate"}, "note": "Optional: attach the current certificate. It is kept in Evidence."}
       ]
     }
   ],
