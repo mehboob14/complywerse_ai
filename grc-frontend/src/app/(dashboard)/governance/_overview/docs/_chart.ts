@@ -1,36 +1,28 @@
-// What the graphs of At a glance draw, without React (_chart.test.ts): the colours (a chart is SVG, which cannot read a class: the hex of the --ds / tone tokens,
-// lib/status.ts TONE), and the rows and series of each chart from the server's answer. A graph never shows a number the table does not: every row is `by_department`,
-// one level at a time (the scope's own documents, then each department directly under it, so no document is drawn twice), and every chart has its table of numbers
-// for a screen reader (ChartFrame).
-import type { ChartData } from '../../../../../components/ui/ds/chartText.ts';
+// What the graphs of the Overview draw, without React (_chart.test.ts): the colours (the chart kit's palette: components/overview/charts/palette.ts), and the rows
+// and series of each chart from the server's answer. A graph never shows a number the table does not: every row is `by_department`, one level at a time (the
+// scope's own documents, then each department directly under it, so no document is drawn twice); the kit's charts carry their numbers as a table for a screen reader.
+import { OTHER, SERIES, STATUS } from '../../../../../components/overview/charts/palette.ts';
 import { documentStatus } from '../../../../../lib/status.ts';
-import { STAGE_ORDER } from '../_workspace/libraryModel.ts';
+import { STAGE_ORDER } from '../../documents/_workspace/libraryModel.ts';
 import { ownOf } from './_matrix.ts';
-import { figureHref, rowValue, type DepartmentRow, type Overview } from './_model.ts';
+import { rowValue, type DepartmentRow, type Overview } from './_model.ts';
 
-// tokens, as hex
-export const INK = '#586472';          // --ds-fg-muted
-export const GRID = '#e1e6eb';         // --ds-border
-export const HOVER = '#f3f6f8';        // --ds-surface-hover
-export const FG = '#1f2933';           // --ds-fg
-export const TIP = { fontSize: 12, border: '1px solid #e1e6eb', borderRadius: 8, boxShadow: '0 8px 24px rgba(15, 23, 42, 0.14)', color: '#1f2933' };
-
-/** Each status its own colour (the tone's dot, lib/status.ts TONE; the two that share the pending tone are told apart by their shade). */
+/** Each status its own colour: the status tones of the chart kit's palette, and a categorical hue for the two that would share one (the two review and approval steps, the two that need attention). */
 export const STATUS_COLOR: Readonly<Record<string, string>> = {
-  draft: '#64748B',
-  pending_review: '#7C5CD6',
-  pending_approval: '#5B3FB8',
-  approved: '#0284C7',
-  published: '#059669',
-  expired: '#E11D48',
-  exception_applied: '#D97706',
-  review_required: '#B45309',
-  archived: '#94A3B8',
+  draft: STATUS.neutral,
+  pending_review: STATUS.pending,
+  pending_approval: SERIES[6],
+  approved: STATUS.progress,
+  published: STATUS.good,
+  expired: STATUS.bad,
+  exception_applied: STATUS.warn,
+  review_required: SERIES[3],
+  archived: OTHER,
 };
-export const OTHER_STATUS_COLOR = '#94A3B8';
-/** The kinds of document, in the order the server lists them (the most first). */
-export const TYPE_COLORS = ['#0F766E', '#0284C7', '#7C5CD6', '#D97706', '#059669', '#E11D48', '#64748B', '#0891B2'] as const;
-export const WAITING_COLOR = { overdue: '#E11D48', pending: '#7C5CD6' } as const;
+export const OTHER_STATUS_COLOR = OTHER;
+/** The kinds of document, in the order the server lists them (the most first): the kit's categorical hues, in their order. */
+export const TYPE_COLORS = SERIES;
+export const WAITING_COLOR = { overdue: STATUS.bad, pending: STATUS.pending } as const;
 
 export interface Series { key: string; label: string; color: string }
 export interface StackRow {
@@ -91,6 +83,13 @@ export function departmentStack(data: Pick<Overview, 'by_department' | 'scope' |
     : stack(data, typeSeries(data), (r, k) => r.by_type[k] ?? 0);
 }
 
+/** The biggest `max` bars of a stack (the Summary shows five and opens the Departments view for the rest): ranked by size, a tie by name, the departments left out counted in `more`. */
+export function capStack(s: Stack, max: number): Stack {
+  const ranked = s.rows.slice().sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+  const kept = ranked.slice(0, Math.max(1, Math.floor(max)));
+  return { ...s, rows: kept, more: s.more + (ranked.length - kept.length) };
+}
+
 export const WAITING_SERIES: readonly Series[] = [
   { key: 'overdue', label: 'Overdue', color: WAITING_COLOR.overdue },
   { key: 'pending', label: 'Not yet due', color: WAITING_COLOR.pending },
@@ -101,18 +100,3 @@ export function waitingStack(data: Pick<Overview, 'by_department' | 'scope'>): S
   const kinds = ['review', 'approval', 'acknowledgement'] as const;
   return stack(data, [...WAITING_SERIES], (r, k) => kinds.reduce((n, kind) => n + (k === 'overdue' ? r.waiting[kind].overdue : r.waiting[kind].pending - r.waiting[kind].overdue), 0));
 }
-
-export interface Slice { key: string; label: string; value: number; color: string; href: string | null }
-
-/** The kinds of document as the slices of a donut, with where each opens in the library. A kind has the colour it has in the stacks (its place in the server's list). */
-export const typeSlices = (data: Pick<Overview, 'by_type' | 'links'>): Slice[] =>
-  data.by_type.map((t, i) => ({ key: t.key, label: t.label, value: t.count, color: TYPE_COLORS[i % TYPE_COLORS.length], href: figureHref(data, t.key) })).filter((s) => s.value > 0);
-
-/** The steps of the approval flow (and the others that are there) as the bars of a status chart. */
-export const statusBars = (data: Pick<Overview, 'by_status' | 'links'>): Slice[] =>
-  data.by_status.filter((s) => FLOW.includes(s.status) || s.count > 0)
-    .map((s) => ({ key: s.key, label: documentStatus.label(s.status), value: s.count, color: STATUS_COLOR[s.status] ?? OTHER_STATUS_COLOR, href: figureHref(data, s.key) }));
-
-/** The numbers a stack draws, as the table a screen reader reads in place of the picture. */
-export const stackTable = (s: Stack, first = 'Department'): ChartData => ({ columns: [first, ...s.series.map((x) => x.label)], rows: s.rows.map((r) => [r.name, ...s.series.map((x) => r.cells[x.key] ?? 0)]) });
-export const sliceTable = (slices: readonly Slice[], first: string): ChartData => ({ columns: [first, 'Documents'], rows: slices.map((s) => [s.label, s.value]) });

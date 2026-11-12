@@ -21,7 +21,7 @@ export interface NavItem {
   exact?: boolean;
   /** A client-specific module the tenant must have (/auth/me tenant.features) — admins included. */
   requiredFeature?: string;
-  /** Also shown to the owner (head) of a department, whatever their rights: the Documents area is theirs to read (D59). Their group opens with it,
+  /** Also shown to the owner (head) of a department, whatever their rights: the Overview and the Documents area are theirs to read (D59). Their group opens with it,
    *  showing only the entries that have this. */
   ownerDoor?: true;
   /** Shown to every signed-in person, whatever their rights: the page is the person's own queue, and each source it reads answers only for them (Needs my action). */
@@ -71,7 +71,8 @@ export const navigation: NavEntry[] = [
     rail: 'Governance',
     requiredModules: ['governance'],
     items: [
-      { name: 'Overview', href: '/governance', exact: true, icon: LayoutDashboard, requiredPermissions: ['governance:policies:*'] },
+      // the one Overview of Governance (it holds what was Documents > At a glance): its Departments and Board views are the owner's of a department to read, so it is a door too
+      { name: 'Overview', href: '/governance', exact: true, icon: LayoutDashboard, requiredPermissions: ['governance:policies:*'], ownerDoor: true },
       // the Documents area: its tabs (Studio, Attestation, Exceptions, Settings) and the pages that sit with a document
       { name: 'Documents', href: '/governance/documents', activeMatch: ['/governance/exceptions', '/governance/settings', '/governance/reviews', '/governance/mappings', '/governance/workflows', '/governance/attestations', '/documents'], icon: ScrollText, requiredPermissions: ['governance:policies:*'], ownerDoor: true },
       { name: 'Committees', href: '/governance/committees', icon: Users, requiredPermissions: ['governance:committees:*'] },

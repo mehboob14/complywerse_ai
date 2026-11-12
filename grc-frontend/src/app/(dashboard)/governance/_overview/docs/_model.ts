@@ -1,4 +1,4 @@
-// The Documents Overview's rules, in one place and without React, so `node --test` checks them (_model.test.ts): the shape the server answers
+// The document figures of the Governance Overview, in one place and without React, so `node --test` checks them (_model.test.ts): the shape the server answers
 // (GET /governance/document-overview, backend modules/governance/documents_overview.py), the library address every figure opens, the words and
 // the bars, and what a failed request says. The components only draw what this decides.
 //
@@ -6,7 +6,7 @@
 // libraryModel.ts PARAM_KEYS); a figure the server gave no address is plain text. A number the library cannot reproduce exactly says so in its (i).
 import { formatCount, formatDateTime } from '../../../../../lib/format.ts';
 import { documentStatus } from '../../../../../lib/status.ts';
-import { REVIEW_BUCKET_LABEL, STAGE_ORDER } from '../_workspace/libraryModel.ts';
+import { REVIEW_BUCKET_LABEL, STAGE_ORDER } from '../../documents/_workspace/libraryModel.ts';
 
 // ─── What the server answers ───────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -36,7 +36,6 @@ export interface Scope {
 export interface Totals { documents: number; in_force: number; in_progress: number; expired: number; exception_applied: number; archived: number }
 export interface TypeRow { key: string; doc_type: string; label: string; count: number; in_force: number; in_force_key: string }
 export interface StatusRow { key: string; status: string; count: number }
-export interface StageRow { key: string; name: string; kind: string; count: number }
 /** One department of the scope: what is filed in it and under it (documents_overview.py `_by_department`); `own` is what is filed in it alone. */
 export interface DepartmentRow {
   key: string;
@@ -100,7 +99,6 @@ export interface Overview {
   by_type: TypeRow[];
   by_status: StatusRow[];
   by_department: DepartmentRow[];
-  stages: StageRow[];
   requests: Record<RequestKind, RequestFigures>;
   waiting: WaitingRow[];
   reviews: Reviews;
@@ -111,7 +109,8 @@ export interface Overview {
 // ─── Addresses ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export const LIBRARY = '/governance/documents';
-export const OVERVIEW = `${LIBRARY}/overview`;
+/** The Overview itself: the old At a glance address (/governance/documents/overview) forwards here. */
+export const OVERVIEW = '/governance';
 export const ENDPOINT = '/governance/document-overview';
 /** The address key that carries the scope, here and in the library. */
 export const DEPT = 'dept';
@@ -161,57 +160,15 @@ export function lateBy(days: number): { short: string; long: string } {
   return { short: `${y} y`, long: `${y} ${y === 1 ? 'year' : 'years'} late` };
 }
 
-/** The people a step waits for: the names the server sent, and how many more there are. */
-export function namesText(row: Pick<WaitingRow, 'waiting_for' | 'waiting_count'>): string {
-  const more = Math.max(0, row.waiting_count - row.waiting_for.length);
-  return row.waiting_for.join(', ') + (more ? ` +${more}` : '');
-}
-
 /** "As of 4 Nov 2026, 14:05" (the server's time is naive UTC: the viewer's own clock). */
 export const asOfText = (asOf: string): string => `As of ${formatDateTime(asOf)}`;
 
 /** "3 overdue reviews. Open in the library": what a figure's link is called for a screen reader. */
 export const figureName = (n: number, noun: string): string => `${formatCount(n)} ${noun}. Open in the library`;
 
-// ─── The six tiles ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+// ─── The tone of a figure ──────────────────────────────────────────────────────────────────────────────────────────────────
 
 export type Tone = 'default' | 'success' | 'warning' | 'danger';
-
-export interface Tile {
-  id: string;
-  label: string;
-  /** what the figure counts, for the name of its link: "overdue reviews" */
-  noun: string;
-  value: number;
-  /** the library on this figure; or, for the two that add up several things, a place on this page */
-  href: string | null;
-  tone: Tone;
-  /** what the figure counts, from its (i) */
-  info: string;
-}
-
-/** Requests past their due date, all kinds: people asked, not documents. */
-export const lateRequests = (d: Pick<Overview, 'requests'>): number => (['review', 'approval', 'acknowledgement'] as const).reduce((n, k) => n + d.requests[k].overdue, 0);
-
-/** What a tile's link is called for a screen reader: the library for a figure that opens it, "the list below" for one that jumps to a section. */
-export const tileLinkName = (t: Pick<Tile, 'value' | 'noun' | 'href'>): string =>
-  t.href?.startsWith('#') ? `${formatCount(t.value)} ${t.noun}. Go to the list below` : figureName(t.value, t.noun);
-
-export function tiles(d: Overview): Tile[] {
-  const late = lateRequests(d);
-  return [
-    { id: 'documents', label: 'Documents', noun: 'documents', value: d.totals.documents, href: figureHref(d, 'totals.documents'), tone: 'default', info: 'Every document that is not archived.' },
-    { id: 'in_force', label: 'Published', noun: 'published documents', value: d.totals.in_force, href: figureHref(d, 'totals.in_force'), tone: 'success', info: 'Documents with the status Published.' },
-    { id: 'in_progress', label: 'In progress', noun: 'documents in progress', value: d.totals.in_progress, href: figureHref(d, 'totals.in_progress'), tone: 'default',
-      info: 'Drafts, and documents in review, in approval or approved.' },
-    { id: 'overdue_reviews', label: 'Overdue reviews', noun: 'overdue reviews', value: d.reviews.overdue, href: figureHref(d, 'reviews.overdue'), tone: d.reviews.overdue ? 'danger' : 'default',
-      info: 'Published or approved documents whose review date has passed.' },
-    { id: 'late_requests', label: 'Late requests', noun: 'late requests', value: late, href: '#waiting', tone: late ? 'danger' : 'default',
-      info: 'Reviews, approvals and acknowledgements past their due date, one for each person asked. Opens the list below.' },
-    { id: 'issues', label: 'Issues', noun: 'documents with issues', value: d.issues.documents, href: '#issues', tone: d.issues.documents ? 'warning' : 'default',
-      info: 'Documents with at least one of the issues below, each counted once. Opens the list below.' },
-  ];
-}
 
 /** Nothing to show: no document in this scope, not even an archived one. */
 export const isEmpty = (d: Pick<Overview, 'totals'>): boolean => d.totals.documents === 0 && d.totals.archived === 0;
@@ -226,14 +183,7 @@ export const rowIsHere = (row: Pick<DepartmentRow, 'department_id'>, scope: Pick
 /** The table is worth a card on the summary when there is more than one row to compare: a unit with nothing under it is the six figures above. */
 export const hasDepartmentTable = (d: Pick<Overview, 'by_department'>): boolean => d.by_department.length > 1;
 
-// ─── By type, by status, by stage ──────────────────────────────────────────────────────────────────────────────────────────
-
-export interface TypeLine { key: string; label: string; count: number; inForce: number; href: string | null; inForceHref: string | null }
-
-/** The kinds of document, each with how many and how many of them are in force, and where both open (the server's order: the most first). */
-export const typeLines = (d: Pick<Overview, 'by_type' | 'links'>): TypeLine[] => d.by_type.map((t) => ({
-  key: t.key, label: t.label, count: t.count, inForce: t.in_force, href: figureHref(d, t.key), inForceHref: figureHref(d, t.in_force_key),
-}));
+// ─── By status ──────────────────────────────────────────────────────────────────────────────────────────
 
 export interface Step { key: string; status: string; label: string; noun: string; count: number; href: string | null }
 
@@ -252,11 +202,6 @@ export function lapsed(d: Pick<Overview, 'by_status' | 'links'>): Step[] {
   const others = d.by_status.filter((s) => !known.has(s.status) && s.status !== 'expired' && s.status !== 'exception_applied' && s.count > 0).map((s) => s.status);
   return ['expired', 'exception_applied', ...others].map((s) => stepOf(d, s));
 }
-
-export interface Stage { key: string; name: string; kind: string; noun: string; count: number; href: string | null }
-
-/** The stages documents in review or approval are at, as the server grouped them (its order: by kind, then name). */
-export const stages = (d: Pick<Overview, 'stages' | 'links'>): Stage[] => d.stages.map((s) => ({ ...s, noun: `documents in ${s.name}`, href: figureHref(d, s.key) }));
 
 // ─── Waiting on people ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -304,13 +249,6 @@ export function reviewRows(d: Pick<Overview, 'reviews' | 'links'>): ReviewRow[] 
     { key: 'unscheduled', label: REVIEW_BUCKET_LABEL.unscheduled, noun: 'documents with no review date', count: r.unscheduled, tone: 'default', href: figureHref(d, 'reviews.unscheduled') },
     { key: 'up_to_date', label: REVIEW_BUCKET_LABEL.ok, noun: 'documents with a review up to date', count: r.up_to_date, tone: 'success', href: figureHref(d, 'reviews.up_to_date') },
   ];
-}
-
-/** The reviews as one bar, each state as wide as its share of the documents a review is owed on; none when none is owed. The bar is only a picture: the rows say the numbers. */
-export function reviewShares(r: Reviews): { key: keyof Reviews; percent: number }[] {
-  const total = r.overdue + r.due_soon + r.unscheduled + r.up_to_date;
-  if (total <= 0) return [];
-  return (['overdue', 'due_soon', 'unscheduled', 'up_to_date'] as const).filter((k) => r[k] > 0).map((k) => ({ key: k, percent: (r[k] / total) * 100 }));
 }
 
 // ─── Issues ────────────────────────────────────────────────────────────────────────────────────────────────────────────────

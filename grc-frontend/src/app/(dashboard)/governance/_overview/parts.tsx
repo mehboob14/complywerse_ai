@@ -13,9 +13,10 @@ import { withFrom } from '@/components/shell/withFrom';
 import { isRefused, loadOf, type Source } from './overviewModel';
 
 /** The page the Overview's cards are on. Every link out of them remembers it (`?from=`), so the shell keeps the Overview lit in the rail and in the trail when
- *  the person arrives on a document or a list. */
+ *  the person arrives on a document or a list; a link to a view or a place of this page itself needs no memory of it. */
 export const HERE = '/governance';
-export const link = (href: string): string => withFrom(href, HERE);
+const ownPage = (href: string): boolean => href.startsWith('#') || href === HERE || href.startsWith(`${HERE}?`) || href.startsWith(`${HERE}#`);
+export const link = (href: string): string => (ownPage(href) ? href : withFrom(href, HERE));
 
 export interface Feed<T> extends Source<T> {
   error: unknown;

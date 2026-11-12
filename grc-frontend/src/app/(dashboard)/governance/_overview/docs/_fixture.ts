@@ -1,4 +1,4 @@
-// A small, internally consistent answer of GET /governance/document-overview for the tests of the redesigned At a glance (the numbers are worked out by hand here).
+// A small, internally consistent answer of GET /governance/document-overview for the tests of the document figures of the Overview (the numbers are worked out by hand here).
 //   Operations (10) > Support (11) > Helpdesk (12); Finance (13); no department.
 //   filed in it: Operations 1 (a draft policy), Support 2 (a policy and a procedure in force), Helpdesk 2 (a standard in review, a policy in approval),
 //   Finance 1 (a guideline in force), none 1 (a policy in force): 7 documents, 1 draft, 1 in review, 1 in approval, 4 in force; 4 policies, 1 guideline,
@@ -55,7 +55,6 @@ export const WHOLE: Overview = {
   by_type: TYPE_ROWS.map(([doc_type, label, count]) => ({ key: `type:${doc_type}`, doc_type, label, count, in_force: 0, in_force_key: `type:${doc_type}:in_force` })),
   by_status: STATUS_ROWS.map(([status, count]) => ({ key: `status:${status}`, status, count })),
   by_department: [FINANCE, OPERATIONS, SUPPORT, HELPDESK, NOBODY],
-  stages: [],
   requests: {
     review: { pending: 1, overdue: 1, due_soon: 0, oldest_days_late: 30 },
     approval: { pending: 1, overdue: 0, due_soon: 1, oldest_days_late: null },

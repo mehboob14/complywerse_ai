@@ -1,20 +1,22 @@
 // node --test "src/app/(dashboard)/governance/_overview/visualsModel.test.ts"
-// What the Governance Overview's graphics draw: the six figures (each says loading, failed, refused or nothing recorded and never 0; a score moves by one decimal;
-// a line needs two months), the series of every chart built from the answers the page holds (the months run to the current one with the quiet ones as real 0s,
-// the windows of what lapses are differences of the server's cumulative counts, a number the server did not send is null and not 0), and the address each
-// bar, slice and cell opens, which the library reads back as the same filter. The scorecard below is a trimmed copy of what the scratch tenant sent on 2026-11-11.
+// What the Governance Overview's graphics draw: the five figures (each says loading, failed, refused or nothing recorded and never 0; a score moves by one decimal;
+// a line needs two months; the ones the server cannot narrow to a department say they are the whole organisation), the series of every card built from the answers
+// the page holds (the months run to the current one with the quiet ones as real 0s, the expiry windows are differences of the server's cumulative counts, a number
+// the server did not send is left out and not 0), and the address each bar, slice and cell opens, which the library reads back as the same filter. The scorecard
+// below is a trimmed copy of what the scratch tenant sent on 2026-11-11.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  BANDS, GROUP_BARS, REVIEW_SERIES, archivedCount, cardState, classificationParts, exceptionParts, flowBars, flowIsEmpty, groupHeat, groupStacks, groupsDrawn, hasReviewBars,
-  heroTiles, lapseIsEmpty, lapseRows, mappingRows, monthSeries, monthWindow, priorityRows, publishingScore, scoreDelta, sectionChart, statusRows, toneColor, typeSlices,
+  GROUP_BARS, WHOLE_ORGANISATION, cardState, exceptionParts, expiringIsEmpty, expiringRows, groupHeat, groupsDrawn,
+  heroTiles, monthSeries, monthWindow, scoreDelta, sectionTarget, sectionTiles, toneColor, wholeOrganisation,
   type Answer, type HeroInputs,
 } from './visualsModel.ts';
-import { ATTENTION, counterFor, attentionTotal, type AttentionKey, type Counter, type Scorecard } from './overviewModel.ts';
-import { groupHref, type PostureApiRow } from './postureModel.ts';
+import type { Scorecard } from './overviewModel.ts';
+import { type PostureApiRow } from './postureModel.ts';
 import { fromParams } from '../documents/_workspace/libraryModel.ts';
-import { STATUS } from '../../../../components/overview/charts/palette.ts';
+import { WHOLE } from './docs/_fixture.ts';
+import type { Overview } from './docs/_model.ts';
 
 const metric = (key: string, label: string, weight: number, score: number | null, numerator: number, denominator: number) => ({ key, label, weight, score, numerator, denominator, formula: `${label} formula` });
 const CARD: Scorecard = {
@@ -63,21 +65,24 @@ test('a month the server left out is a true 0 and the line runs to the month tha
   assert.equal(monthSeries(undefined, new Date('2026-11-11T00:00:00Z')).length, 6, 'no answer: six months of 0, which the card never draws (it says "no data")');
 });
 
-// ── the six figures ──────────────────────────────────────────────────────────
-const sources = { scorecard: ok(CARD), summary: ok(SUMMARY), pending: ok({}), overdue: ok({}), expiring: ok({}), exceptions: ok({}) };
+// ── the five figures ─────────────────────────────────────────────────────────
+/** A scope of 57 documents, 3 archived, 9 of them with something wrong. */
+const DOC: Overview = {
+  ...WHOLE,
+  totals: { ...WHOLE.totals, documents: 57, archived: 3 },
+  issues: { no_owner: 2, expired: 1, exception_applied: 0, stuck: 3, on_hold: 1, late_acknowledgements: 4, late_approvals: 2, documents: 9 },
+  links: { ...WHOLE.links, 'totals.documents': { dept: '11' } },
+};
 function inputs(over: Partial<HeroInputs> = {}): HeroInputs {
-  const scorecard = over.scorecard ?? ok(CARD);
-  const s = { ...sources, scorecard: { ...scorecard, data: scorecard.data } };
-  const counters = Object.fromEntries(ATTENTION.map((def) => [def.key, counterFor(def, s as never)])) as Partial<Record<AttentionKey, Counter>>;
-  return { scorecard, summary: ok(SUMMARY), trends: ok({ created: [{ month: '2026-10', count: 7 }], published: [{ month: '2026-10', count: 5 }, { month: '2026-11', count: 3 }] }), total: attentionTotal(s as never), counters, now: new Date('2026-11-11T00:00:00Z'), ...over };
+  return { scorecard: ok(CARD), doc: ok(DOC), trends: ok({ created: [{ month: '2026-10', count: 7 }], published: [{ month: '2026-10', count: 5 }, { month: '2026-11', count: 3 }] }), scoped: false, now: new Date('2026-11-11T00:00:00Z'), ...over };
 }
 const tile = (i: HeroInputs, key: string) => heroTiles(i).find((t) => t.key === key)!;
 
-test('six figures in the order the page opens with them', () => {
-  assert.deepEqual(heroTiles(inputs()).map((t) => t.key), ['score', 'attention', 'documents', 'reviews', 'coverage', 'published']);
+test('five figures in the order the Summary opens with them: no tile is a slice of a chart below it', () => {
+  assert.deepEqual(heroTiles(inputs()).map((t) => t.key), ['score', 'documents', 'coverage', 'attention', 'published']);
 });
 
-test('the score: the server\'s own number and grade, its line over the months, and how it moved with one decimal (the kit\'s whole-number delta would say "Up 0")', () => {
+test('the score: the server own number and grade, its line over the months, and how it moved with one decimal (the kit whole-number delta would say "Up 0")', () => {
   const t = tile(inputs(), 'score');
   assert.equal(t.state, 'ready');
   assert.equal(t.value, '67');
@@ -86,7 +91,7 @@ test('the score: the server\'s own number and grade, its line over the months, a
   assert.equal(t.progress, 66.6);
   assert.deepEqual(t.spark?.values, [58.4, 66.7, 66.6]);
   assert.deepEqual(t.delta, { text: 'Down 0.1 points', direction: 'down', tone: 'bad', since: 'since Oct' });
-  assert.equal(t.href, '#posture');
+  assert.equal(t.href, '#section-scores');
 });
 
 test('a change of a point is singular, no change is no change, and one month of history is no line and no change', () => {
@@ -110,46 +115,51 @@ test('loading, failed and refused are three different states of a tile, and a fa
   const failed = inputs({ scorecard: { load: 'error', error: failure } });
   assert.equal(tile(failed, 'score').state, 'error');
   assert.deepEqual(tile(failed, 'score').retry, ['scorecard']);
-  assert.equal(tile(failed, 'documents').state, 'ready', 'the documents tile rests on the summary, which answered');
+  assert.equal(tile(failed, 'documents').state, 'ready', 'the documents tile rests on the document figures, which answered');
+  assert.equal(tile(failed, 'attention').state, 'ready');
   const refused = inputs({ scorecard: { load: 'error', error: refusal } });
   assert.equal(tile(refused, 'score').state, 'denied');
   assert.equal(tile(refused, 'coverage').state, 'denied');
   assert.equal(tile(inputs({ trends: { load: 'error', error: failure } }), 'published').state, 'error');
+  const noDocs = inputs({ doc: { load: 'error', error: failure } });
+  for (const key of ['documents', 'attention']) {
+    assert.equal(tile(noDocs, key).state, 'error', key);
+    assert.deepEqual(tile(noDocs, key).retry, ['doc'], key);
+    assert.equal(tile(noDocs, key).value, null, `${key}: never a 0`);
+  }
+  assert.equal(tile(inputs({ doc: { load: 'error', error: refusal } }), 'documents').state, 'denied');
+  assert.equal(tile(inputs({ doc: { load: 'loading' } }), 'attention').state, 'loading');
 });
 
-test('what needs attention is the server\'s total, with how many of the eight areas have something', () => {
-  const t = tile(inputs(), 'attention');
-  assert.equal(t.value, '46');
-  assert.equal(t.tone, 'warning');
-  assert.equal(t.note, 'In 6 of 8 areas');
-  assert.equal(t.href, '#attention');
-  const none = tile(inputs({ scorecard: ok({ ...CARD, attention_queue: { ...CARD.attention_queue!, documents_awaiting_approval: 0, overdue_reviews: 0, expiring_documents_30d: 0, exceptions_attention: 0, overdue_attestations: 0, overdue_actions: 0, total: 0 } }) }), 'attention');
-  assert.equal(none.value, '0');
-  assert.equal(none.tone, 'success');
-  assert.equal(none.note, 'Nothing needs attention');
-});
-
-test('the documents are the ones that are not archived, with the server\'s Publishing share as the bar when the scorecard answered', () => {
+test('the documents are the ones that are not archived, with the archived ones said apart, and open the library on the scope', () => {
   const t = tile(inputs(), 'documents');
   assert.equal(t.value, '57');
-  assert.equal(t.note, '30 published · 11 in review');
-  assert.equal(t.progress, 52.6);
-  assert.equal(publishingScore(CARD), 52.6);
-  assert.equal(tile(inputs({ scorecard: { load: 'error', error: failure } }), 'documents').progress, null, 'no scorecard, no bar (never a guess)');
+  assert.equal(t.note, '3 archived');
+  assert.equal(t.href, '/governance/documents?dept=11');
+  assert.equal(tile(inputs({ doc: ok({ ...DOC, totals: { ...DOC.totals, archived: 0 }, links: {} }) }), 'documents').note, undefined);
+  assert.equal(tile(inputs({ doc: ok({ ...DOC, links: {} }) }), 'documents').href, '/governance/documents', 'a scope the server gave no address opens the whole library');
 });
 
-test('overdue reviews: the counter\'s number, red while above 0, and the ones that fall due next', () => {
-  const t = tile(inputs(), 'reviews');
-  assert.equal(t.value, '12');
-  assert.equal(t.tone, 'danger');
-  assert.equal(t.note, '7 more due in 30 days');
-  assert.equal(t.href, '/governance/documents?review=overdue');
+test('the one needs-attention tile counts the documents once, opens the board of the scope, and has a thin bar of what is urgent and what is to follow up', () => {
+  const t = tile(inputs(), 'attention');
+  assert.equal(t.value, '9');
+  assert.equal(t.tone, 'warning');
+  assert.equal(t.href, '/governance?view=board');
+  assert.equal(t.note, '46% urgent', 'one word for the colour of the bar: its share that is urgent');
+  assert.deepEqual(t.severity?.map((p) => [p.key, p.value]), [['urgent', 6], ['follow', 7]], 'stuck 3, late approvals 2, expired 1 are urgent; on hold 1, late acknowledgements 4, no owner 2 are to follow up');
+  const inDept = tile(inputs({ doc: ok({ ...DOC, scope: { ...DOC.scope, value: '11' } }) }), 'attention');
+  assert.equal(inDept.href, '/governance?dept=11&view=board');
+  const none = tile(inputs({ doc: ok({ ...DOC, issues: { ...DOC.issues, documents: 0, stuck: 0, no_owner: 0, expired: 0, on_hold: 0, late_acknowledgements: 0, late_approvals: 0 } }) }), 'attention');
+  assert.equal(none.value, '0');
+  assert.equal(none.tone, 'success');
+  assert.equal(none.severity, null, 'a bar of nothing is no bar');
+  assert.equal(none.note, 'Nothing is stuck or late');
 });
 
-test('coverage is the server\'s "Docs mapped" with its numbers and its formula; none mapped yet is no figure', () => {
+test('coverage is the server "Docs mapped" with its numbers and its formula; none mapped yet is no figure', () => {
   const t = tile(inputs(), 'coverage');
   assert.equal(t.value, '86%');
-  assert.equal(t.note, '49 of 57 documents mapped');
+  assert.equal(t.note, '49 of 57 mapped');
   assert.equal(t.info, 'Docs mapped formula');
   const empty = { ...CARD, sections: { ...CARD.sections!, mappings: { ...CARD.sections!.mappings, metrics: [metric('document_coverage', 'Docs mapped', 0.35, null, 0, 0)] } } };
   assert.equal(tile(inputs({ scorecard: ok(empty) }), 'coverage').state, 'none');
@@ -162,118 +172,52 @@ test('published: the sum over the six months with its line, and the share publis
   assert.equal(t.note, '7 created · 114% published', 'published can outrun created in a window: documents created earlier are published later');
   assert.deepEqual(t.spark?.values, [0, 0, 0, 0, 5, 3]);
   assert.equal(tile(inputs({ trends: ok({ created: [], published: [] }) }), 'published').spark, null, 'six months of nothing is no line');
+  assert.equal(t.href, '/governance/documents?status=published');
+});
+
+test('with a department picked, the score, the coverage and the published figure say they are the whole organisation; the document figures do not', () => {
+  const scoped = inputs({ scoped: true });
+  for (const key of ['score', 'coverage', 'published']) {
+    assert.ok(tile(scoped, key).note?.endsWith(WHOLE_ORGANISATION), `${key}: the tile says it`);
+    assert.ok(tile(scoped, key).info?.includes('whatever department is picked'), `${key}: and so does its (i)`);
+    assert.ok(!tile(inputs(), key).note?.includes(WHOLE_ORGANISATION), `${key}: not when no department is picked`);
+  }
+  for (const key of ['documents', 'attention']) assert.ok(!(tile(scoped, key).note ?? '').includes(WHOLE_ORGANISATION), key);
+  assert.deepEqual(wholeOrganisation(false, 'Facts.'), { info: 'Facts.' });
+  assert.equal(wholeOrganisation(true, 'Facts.').meta, WHOLE_ORGANISATION);
 });
 
 // ── section scores ───────────────────────────────────────────────────────────
-test('the section bars are weakest first, in their band\'s colour, and a section with nothing to score is named and not drawn', () => {
-  const c = sectionChart(CARD);
-  assert.deepEqual(c.bars.map((b) => [b.name, b.score, b.band]), [
-    ['Committees', 17, 'Weak'], ['Approvals & Sign-off', 57, 'Weak'], ['Documents', 62, 'Fair'], ['Attestations', 64, 'Fair'], ['Reviews', 74, 'Fair'], ['Mappings', 86, 'Strong'], ['Key Risk Indicators', 100, 'Strong'],
+test('the section tiles are in the breakdown order, in their band tone, a section with nothing to score is "not scored" and not a 0, and each opens its page', () => {
+  const t = sectionTiles(CARD);
+  assert.deepEqual(t.map((x) => [x.label, x.value, x.tone]), [
+    ['Documents', 62.1, 'warn'], ['Mappings', 86, 'good'], ['Approvals & Sign-off', 56.9, 'bad'], ['Reviews', 73.8, 'warn'], ['Attestations', 63.8, 'warn'],
+    ['Committees', 16.7, 'bad'], ['Key Risk Indicators', 100, 'good'], ['KPI Report', null, 'neutral'],
   ]);
-  assert.deepEqual(c.noData, ['KPI Report']);
-  assert.equal(c.target, 85);
-  assert.equal(c.bars[0].color, toneColor('danger'));
-  assert.equal(c.bars[2].color, toneColor('warning'));
-  assert.equal(c.bars[6].color, toneColor('success'));
-  assert.deepEqual(BANDS.map((b) => b.color), [STATUS.good, STATUS.warn, STATUS.bad]);
-  assert.equal(c.bars.every((b) => b.page.startsWith('/')), true);
+  assert.equal(t.every((x) => x.href?.startsWith('/')), true);
+  assert.equal(sectionTarget(CARD), 85);
+  assert.deepEqual(sectionTiles(undefined), []);
 });
 
-test('no scorecard is no bars', () => {
-  assert.deepEqual(sectionChart(undefined).bars, []);
-});
-
-// ── status and type ──────────────────────────────────────────────────────────
-test('the status rows run along the approval flow with a step nobody is at saying 0, then the states outside it that some document is in', () => {
-  const rows = statusRows(SUMMARY);
-  assert.deepEqual(rows.map((r) => [r.key, r.value]), [['draft', 8], ['pending_review', 5], ['pending_approval', 6], ['approved', 4], ['published', 30], ['expired', 2], ['archived', 3]]);
-  assert.equal(rows[0].label, 'Draft');
-  assert.equal(rows[1].label, 'In review');
-  assert.equal(rows[4].color, toneColor('success'));
-  assert.equal(rows[5].color, toneColor('danger'));
-  assert.equal(statusRows({ by_status: {} }).length, 5, 'the five steps of the flow are always there');
-  assert.ok(statusRows({ by_status: { on_hold: 2 } }).some((r) => r.key === 'on_hold'), 'a status nobody registered is still a row');
-});
-
-test('every status bar opens the library on that status, and the library reads it back', () => {
-  for (const r of statusRows(SUMMARY)) assert.deepEqual(fromParams(new URLSearchParams(r.href!.split('?')[1])).filters.statuses, [r.key], r.key);
-});
-
-test('the types are the five biggest, the rest folded into Other, and a type opens the library on it', () => {
-  const s = typeSlices(SUMMARY);
-  assert.deepEqual(s.map((x) => [x.label, x.value]), [['Policy', 30], ['Standard', 12], ['Procedure', 10], ['Guideline', 5], ['Charter', 2], ['Other', 1]]);
-  const many = typeSlices({ by_type: { a: 9, b: 8, c: 7, d: 6, e: 5, f: 4, g: 3 } });
-  assert.equal(many.length, 6);
-  assert.equal(many[5].label, 'Other');
-  assert.equal(many[5].value, 7);
-  assert.equal(many[5].href, undefined, 'a folded tail opens nothing');
-  assert.equal(new URLSearchParams(s[0].href!.split('?')[1]).get('type'), 'policy');
-  assert.deepEqual(typeSlices({ by_type: {} }), []);
-  assert.equal(archivedCount(SUMMARY), 3);
-  assert.equal(archivedCount(undefined), 0);
-});
-
-test('classification is an ordered scale in one hue that darkens, in the order public to restricted', () => {
-  const p = classificationParts(SUMMARY);
-  assert.deepEqual(p.map((x) => [x.label, x.value]), [['Public', 10], ['Internal', 30], ['Confidential', 15], ['Restricted', 5]]);
-  assert.equal(new Set(p.map((x) => x.color)).size, 4);
-  assert.equal(new URLSearchParams(p[3].href.split('?')[1]).get('cls'), 'restricted');
-  assert.deepEqual(classificationParts({ by_classification: {} }), []);
-});
-
-test('the mappings are documents linked to each kind of record out of the documents that are not archived; no mapping counts is no answer', () => {
-  const m = mappingRows(CARD)!;
-  assert.equal(m.of, 57);
-  assert.deepEqual(m.rows.map((r) => [r.label, r.value, r.text]), [['Frameworks', 52, '52 of 57'], ['Controls', 0, '0 of 57'], ['Risks', 0, '0 of 57'], ['Assets', 0, '0 of 57']]);
-  assert.equal(mappingRows(undefined), null);
-  assert.deepEqual(mappingRows({ sections: { documents: { key: 'documents', label: 'Documents', weight: 1, score: null, metrics: [], counts: { active: 0 } }, mappings: { key: 'mappings', label: 'Mappings', weight: 1, score: null, metrics: [], counts: {} } } })?.rows, []);
-});
-
-// ── what lapses when ─────────────────────────────────────────────────────────
-test('the windows are the differences of the server\'s cumulative counts, past due is what has lapsed already, and a number the server did not send is null', () => {
-  const rows = lapseRows(CARD, { by_timeframe: { '30_days': 6, '60_days': 8, '90_days': 17 } }, SUMMARY);
-  assert.deepEqual(rows, [
-    { label: 'Past due', reviews: 12, expiring: 2 },
-    { label: '30 days', reviews: 7, expiring: 6 },
-    { label: '60 days', reviews: 6, expiring: 2 },
-    { label: '90 days', reviews: 3, expiring: 9 },
-  ]);
-  const half = lapseRows(undefined, { by_timeframe: { '30_days': 1, '60_days': 1, '90_days': 3 } }, undefined);
-  assert.deepEqual(half.map((r) => r.reviews), [null, null, null, null]);
-  assert.deepEqual(half.map((r) => r.expiring), [null, 1, 0, 2]);
-  assert.equal(lapseIsEmpty(half), false);
-  assert.equal(lapseIsEmpty(lapseRows({ ...CARD, sections: { ...CARD.sections!, reviews: { ...CARD.sections!.reviews, counts: { overdue: 0, due_30d: 0, due_60d: 0, due_90d: 0 } } } }, { by_timeframe: { '30_days': 0, '60_days': 0, '90_days': 0 } }, { by_status: {} })), true);
-  assert.equal(lapseIsEmpty(lapseRows(undefined, undefined, undefined)), false, 'no answer is not an empty calendar');
+// ── what expires when ───────────────────────────────────────────────────────
+test('the expiry windows are the differences of the server cumulative counts, only the first opens the library, and a number the server did not send is left out', () => {
+  const rows = expiringRows({ by_timeframe: { '30_days': 6, '60_days': 8, '90_days': 17 } });
+  assert.deepEqual(rows.map((r) => [r.label, r.value, r.href]), [['Within 30 days', 6, '/governance/documents?expiry=30d'], ['31 to 60 days', 2, undefined], ['61 to 90 days', 9, undefined]]);
+  assert.deepEqual(expiringRows({ by_timeframe: { '30_days': 1, '60_days': 1 } }).map((r) => [r.key, r.value]), [['30', 1], ['60', 0]]);
+  assert.deepEqual(expiringRows(undefined), []);
+  assert.equal(expiringIsEmpty(expiringRows({ by_timeframe: { '30_days': 0, '60_days': 0, '90_days': 0 } })), true);
+  assert.equal(expiringIsEmpty(expiringRows(undefined)), false, 'no answer is not an empty calendar');
+  const f = fromParams(new URLSearchParams(rows[0].href!.split('?')[1])).filters;
+  assert.equal(f.expiring, true, 'the library reads the address back');
 });
 
 // ── exceptions ───────────────────────────────────────────────────────────────
-test('exceptions run along their route and then how they ended, each in its status colour; priorities most serious first; nothing at 0', () => {
+test('exceptions run along their route and then how they ended, each in its status colour; nothing at 0', () => {
   const parts = exceptionParts({ approved: 7, revoked: 1, expired: 1, pending_approval: 3, rejected: 1, draft: 2, withdrawn: 0 });
   assert.deepEqual(parts.map((p) => [p.key, p.value]), [['draft', 2], ['pending_approval', 3], ['approved', 7], ['rejected', 1], ['revoked', 1], ['expired', 1]]);
   assert.equal(parts[2].color, toneColor('success'));
   assert.equal(parts[3].color, toneColor('danger'));
-  assert.deepEqual(priorityRows({ high: 5, medium: 4, critical: 2, low: 4 }, '#x').map((r) => [r.label, r.value]), [['Critical', 2], ['High', 5], ['Medium', 4], ['Low', 4]]);
   assert.deepEqual(exceptionParts(undefined), []);
-});
-
-// ── requests and actions ─────────────────────────────────────────────────────
-test('the three things people are asked to do are each done, waiting and overdue, and the waiting never counts the overdue twice', () => {
-  const bars = flowBars(CARD);
-  assert.deepEqual(bars.map((b) => b.key), ['approvals', 'attestations', 'actions']);
-  const v = (b: (typeof bars)[number]) => b.parts.map((p) => [p.key, p.value]);
-  assert.deepEqual(v(bars[0]), [['done', 20], ['waiting', 11], ['overdue', 6]]);
-  assert.deepEqual(v(bars[1]), [['done', 33], ['waiting', 3], ['overdue', 8]]);
-  assert.deepEqual(v(bars[2]), [['done', 0], ['waiting', 6], ['overdue', 3]]);
-  assert.deepEqual(bars.map((b) => b.total), [37, 44, 9]);
-  assert.deepEqual(bars[0].parts.map((p) => p.color), [STATUS.good, STATUS.pending, STATUS.bad]);
-  assert.equal(flowIsEmpty(bars), false);
-});
-
-test('a bar whose numbers the scorecard did not send is left out, and nothing asked yet is empty', () => {
-  assert.deepEqual(flowBars({ sections: { approvals: CARD.sections!.approvals } }).map((b) => b.key), ['approvals']);
-  assert.deepEqual(flowBars(undefined), []);
-  const zero: Scorecard = { sections: { approvals: { ...CARD.sections!.approvals, counts: { pending_steps: 0, overdue_steps: 0 } } } };
-  assert.equal(flowIsEmpty(flowBars(zero)), true);
 });
 
 // ── the groups ───────────────────────────────────────────────────────────────
@@ -282,33 +226,19 @@ const row = (id: number | null, name: string, over: Partial<PostureApiRow> = {})
   attention: { overdue_reviews: 4, awaiting_approval: 2, expiring_30d: 1, exceptions: 0 }, open_exceptions: 1, ...over,
 });
 
-test('review health is one stack a group, in the order the server sends (weakest first), each document in one state only, and the bar opens the group in the library', () => {
-  const rows = [row(12, 'ISO/IEC 27001:2022'), row(null, 'Not mapped to a framework', { current: 0, due: 0, overdue: 0, no_review_date: 0 })];
-  const s = groupStacks(rows, 'framework');
-  assert.deepEqual(s[0].cells, { current: 3, due: 2, overdue: 4, none: 1 });
-  assert.equal(s[0].href, groupHref('framework', 12));
-  assert.equal(s[1].href, groupHref('framework', null));
-  assert.deepEqual(REVIEW_SERIES.map((x) => x.color), [STATUS.good, STATUS.warn, STATUS.bad, STATUS.neutral]);
-  assert.deepEqual(REVIEW_SERIES.map((x) => x.label), ['Up to date', 'Due in 30 days', 'Overdue', 'No review date'], 'the library\'s own words');
-  assert.equal(hasReviewBars(s), true);
-  assert.equal(hasReviewBars(s.slice(1)), false, 'groups of drafts only draw nothing, and the card says so instead of an empty chart');
-  const many = Array.from({ length: 30 }, (_, i) => row(i, `F${i}`));
-  assert.equal(groupStacks(many, 'framework').length, GROUP_BARS);
-  assert.equal(groupsDrawn(8, 36, 'frameworks'), 'Weakest 8 of 36 frameworks');
-  assert.equal(groupsDrawn(5, 5, 'departments'), '5 departments');
-});
-
-test('where attention sits has a cell for each of the four kinds, a link only where the library can list exactly those documents, and the library reads the link back', () => {
+test('where attention sits has a cell for each of the three kinds the framework table does not show, a link only where the library can list exactly those documents, and the library reads the link back', () => {
   const h = groupHeat([row(12, 'ISO/IEC 27001:2022'), row(null, 'Not mapped to a framework')], 'framework');
-  assert.deepEqual(h.cols, ['Overdue', 'Approval', 'Expiring', 'Exceptions']);
-  assert.deepEqual(h.cells[0], [4, 2, 1, 0]);
-  assert.equal(h.hrefs[0][3], undefined, 'exceptions have no list');
+  assert.deepEqual(h.cols, ['Approval', 'Expiring', 'Exceptions'], 'the overdue reviews are the Overdue column of the table beside it: drawn once');
+  assert.deepEqual(h.cells[0], [2, 1, 0]);
+  assert.equal(h.hrefs[0][2], undefined, 'exceptions have no list');
   const f = (href: string) => fromParams(new URLSearchParams(href.split('?')[1])).filters;
   assert.deepEqual(f(h.hrefs[0][0]!).frameworks, ['12']);
-  assert.deepEqual(f(h.hrefs[0][0]!).review, ['overdue']);
-  assert.deepEqual(f(h.hrefs[0][1]!).statuses, ['pending_review', 'pending_approval']);
-  assert.equal(f(h.hrefs[0][2]!).expiring, true);
+  assert.deepEqual(f(h.hrefs[0][0]!).statuses, ['pending_review', 'pending_approval']);
+  assert.equal(f(h.hrefs[0][1]!).expiring, true);
   assert.ok(h.hrefs[1][0]!.includes('fw=none'), 'the row with no framework is "none"');
+  assert.equal(groupsDrawn(8, 36, 'frameworks'), 'Weakest 8 of 36 frameworks');
+  assert.equal(groupsDrawn(5, 5, 'departments'), '5 departments');
+  assert.equal(GROUP_BARS, 8);
 });
 
 test('a long name is clipped, and two groups of one name stay two rows', () => {

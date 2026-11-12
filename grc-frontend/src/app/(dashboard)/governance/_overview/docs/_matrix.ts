@@ -3,7 +3,7 @@
 // and the CSV of the whole matrix. Every number is the server's (`by_department`, documents_overview.py); an address is the library's own vocabulary
 // (libraryModel.PARAM_KEYS) with `dept` first; a figure the library cannot filter on has none and is text.
 import { documentStatus } from '../../../../../lib/status.ts';
-import { STAGE_ORDER } from '../_workspace/libraryModel.ts';
+import { STAGE_ORDER } from '../../documents/_workspace/libraryModel.ts';
 import { csvText, type CsvCell } from './_csv.ts';
 import { libraryHref, rowIsHere, rowValue, overviewHref, type DepartmentRow, type Overview, type Tone } from './_model.ts';
 

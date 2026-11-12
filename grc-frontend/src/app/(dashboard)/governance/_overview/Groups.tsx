@@ -1,6 +1,6 @@
 'use client';
 
-// "By framework / By department": the groups that are weakest on reviews first, from the posture aggregate (true totals over every document the person may
+// "By framework" (the Departments view; the departments are the matrix beside it): the groups that are weakest on reviews first, from the posture aggregate (true totals over every document the person may
 // read). A group's name opens the library on it; the overdue figure opens that group's overdue reviews, so a figure always opens the records it counts.
 // Documents, how many reviews are on time, overdue, what needs attention and open exceptions are plain figures (the last two have no list that holds exactly
 // them). Ten groups at first, "Show all N" for the rest. It reads as a table to a screen reader (ARIA table roles on a grid: a compact row on a screen, the
@@ -83,7 +83,6 @@ export function GroupRows({ query, by }: { query: PostureQuery; by: GroupBy }) {
         <span role="status">{`Showing ${formatCount(rows.length)} of ${formatCount(total)} ${groupNoun(by, total)}, weakest first`}</span>
         <span className="flex flex-wrap items-center gap-[8px]">
           {query.hasNextPage && <Button size="sm" loading={query.isFetchingNextPage} onClick={() => { void query.fetchNextPage(); }}>{showMoreLabel(rows.length, total)}</Button>}
-          {by === 'department' && <TitleLink href={link('/governance/documents/overview')} title="Open At a glance" lines={1} tone="text" size="label" />}
         </span>
       </div>
       {query.isError && (

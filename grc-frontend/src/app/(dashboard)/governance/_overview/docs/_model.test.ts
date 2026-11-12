@@ -1,15 +1,15 @@
-// node --test "src/app/(dashboard)/governance/documents/overview/_model.test.ts"
-// The Documents Overview's rules (_model.ts): the library address every figure opens, the scope picker, the words and bars, the six tiles, the department
-// table, the flow and stages, the request blocks, the reviews and issues, and what a failed request says. The numbers a person reads are never invented here: they are the server's, and a
+// node --test "src/app/(dashboard)/governance/_overview/docs/_model.test.ts"
+// The document figures of the Governance Overview (_model.ts): the library address every figure opens, the scope picker, the words and bars, the department
+// table, the flow, the request blocks, the reviews and issues, and what a failed request says. The numbers a person reads are never invented here: they are the server's, and a
 // figure with no address is plain text. The last tests hold the model to the backend that answers it (the keys it asks of `links`) and to the library it opens.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 
-import { PARAM_KEYS } from '../_workspace/libraryModel.ts';
+import { PARAM_KEYS } from '../../documents/_workspace/libraryModel.ts';
 import {
-  hasDepartmentTable, rowIsHere, rowValue, choiceLabel, failureOf, figureHref, figureName, flow, isEmpty, issueRows, lapsed, lateBy, lateRequests, libraryHref, namesText, openHref,
-  overviewHref, pickedValue, requestRows, retryOverview, reviewRows, reviewShares, scopeOptions, scopeParams, stages, statusOf, tileLinkName, tiles, typeLines,
+  hasDepartmentTable, rowIsHere, rowValue, choiceLabel, failureOf, figureHref, figureName, flow, isEmpty, issueRows, lapsed, lateBy, libraryHref, openHref,
+  overviewHref, pickedValue, requestRows, retryOverview, reviewRows, scopeOptions, scopeParams, statusOf,
   type Choice, type Overview,
 } from './_model.ts';
 
@@ -46,7 +46,6 @@ const OVERVIEW: Overview = {
     { key: 'dept:12', department_id: 12, name: 'Helpdesk', path: ['Operations', 'Support', 'Helpdesk'], level: 3, level_label: 'Unit', depth: 1, is_active: true, owner: null,
       own: 15, documents: 15, in_force: 8, in_progress: 5, overdue_reviews: 2, issues: 3, ...BREAKDOWN },
   ],
-  stages: [{ key: 'stage:review:Review', name: 'Review', kind: 'review', count: 5 }, { key: 'stage:approval:CISO sign-off', name: 'CISO sign-off', kind: 'approval', count: 3 }],
   requests: {
     review: { pending: 9, overdue: 3, due_soon: 2, oldest_days_late: 12 },
     approval: { pending: 4, overdue: 1, due_soon: 0, oldest_days_late: 0 },
@@ -101,8 +100,8 @@ test('the scope is the address of this page and the one parameter the server is 
   assert.deepEqual(scopeParams('  '), {});
   assert.deepEqual(scopeParams('11'), { department_id: '11' });
   assert.deepEqual(scopeParams('none'), { department_id: 'none' });
-  assert.equal(overviewHref(''), '/governance/documents/overview');
-  assert.equal(overviewHref('11'), '/governance/documents/overview?dept=11');
+  assert.equal(overviewHref(''), '/governance');
+  assert.equal(overviewHref('11'), '/governance?dept=11');
 });
 
 // ── the picker ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -137,34 +136,12 @@ test('how late is said compactly and in words', () => {
   assert.deepEqual(lateBy(548), { short: '1.5 y', long: '1.5 years late' });
 });
 
-test('the people a step waits for: the names, and how many more', () => {
-  assert.equal(namesText({ waiting_for: ['Ana', 'Bob'], waiting_count: 2 }), 'Ana, Bob');
-  assert.equal(namesText({ waiting_for: ['Ana', 'Bob', 'Cara', 'Dan', 'Eve'], waiting_count: 8 }), 'Ana, Bob, Cara, Dan, Eve +3');
-  assert.equal(namesText({ waiting_for: [], waiting_count: 0 }), '');
+test('a figure is named by what it opens', () => {
   assert.equal(figureName(3, 'overdue reviews'), '3 overdue reviews. Open in the library');
   assert.equal(figureName(1200, 'documents'), '1,200 documents. Open in the library');
 });
 
-// ── the six tiles ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-
-test('the tiles: four open the library on what they count, two jump to their list; late requests are people asked, and issues count each document once', () => {
-  const t = tiles(OVERVIEW);
-  assert.deepEqual(t.map((x) => x.label), ['Documents', 'Published', 'In progress', 'Overdue reviews', 'Late requests', 'Issues']);
-  assert.deepEqual(t.map((x) => x.value), [40, 22, 14, 6, 4, 9]);                                     // 3 + 1 + 0 overdue requests; 9 documents with an issue
-  assert.equal(lateRequests(OVERVIEW), 4);
-  assert.deepEqual(t.map((x) => x.href), [
-    '/governance/documents?dept=11', '/governance/documents?dept=11&status=published', '/governance/documents?dept=11&status=draft%2Cpending_review%2Cpending_approval%2Capproved',
-    '/governance/documents?dept=11&review=overdue', '#waiting', '#issues',
-  ]);
-  assert.deepEqual(t.map((x) => x.tone), ['default', 'success', 'default', 'danger', 'danger', 'warning']);
-  assert.equal(tileLinkName(t[3]), '6 overdue reviews. Open in the library');
-  assert.equal(tileLinkName(t[4]), '4 late requests. Go to the list below');
-  assert.ok(t.every((x) => x.info.length > 10 && !/\s{2,}/.test(x.info)));
-  const quiet = tiles({ ...OVERVIEW, reviews: { ...OVERVIEW.reviews, overdue: 0 }, issues: { ...OVERVIEW.issues, documents: 0 },
-    requests: { review: { ...OVERVIEW.requests.review, overdue: 0 }, approval: { ...OVERVIEW.requests.approval, overdue: 0 }, acknowledgement: OVERVIEW.requests.acknowledgement } });
-  assert.deepEqual(quiet.map((x) => x.tone), ['default', 'success', 'default', 'default', 'default', 'default']);
-  assert.equal(quiet[4].value, 0);
-});
+// ── an empty scope ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 test('a scope with no documents, not even an archived one, is empty; an archived-only one is not', () => {
   const none = { archived: 0, documents: 0, in_force: 0, in_progress: 0, expired: 0, exception_applied: 0 };
@@ -173,15 +150,7 @@ test('a scope with no documents, not even an archived one, is empty; an archived
   assert.equal(isEmpty(OVERVIEW), false);
 });
 
-// ── by type, by status, by stage ───────────────────────────────────────────────────────────────────────────────────────────────────────
-
-test('the kinds of document keep the server\'s order, each number with its own address', () => {
-  const lines = typeLines(OVERVIEW);
-  assert.deepEqual(lines.map((b) => [b.label, b.count, b.inForce]), [['Policy', 20, 12], ['Standard', 10, 6], ['Risk register', 1, 0]]);
-  assert.equal(lines[0].href, '/governance/documents?dept=11&type=policy');
-  assert.equal(lines[0].inForceHref, '/governance/documents?dept=11&type=policy&status=published');
-  assert.deepEqual(typeLines({ by_type: [], links: {} }), []);
-});
+// ── by status ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 test('the approval flow is the five steps in order with their counts, a step nobody is at says 0, and what fell out of it is listed apart', () => {
   assert.deepEqual(flow(OVERVIEW).map((s) => [s.label, s.count]), [['Draft', 4], ['In review', 5], ['In approval', 3], ['Approved', 2], ['Published', 22]]);
@@ -193,14 +162,6 @@ test('the approval flow is the five steps in order with their counts, a step nob
   const other = { ...OVERVIEW, by_status: OVERVIEW.by_status.map((s) => (s.status === 'review_required' ? { ...s, count: 2 } : s)) };
   assert.deepEqual(lapsed(other).map((s) => [s.label, s.count]), [['Expired', 3], ['Exception', 1], ['Review required', 2]]);
   assert.deepEqual(lapsed({ by_status: [], links: {} }).map((s) => [s.label, s.count]), [['Expired', 0], ['Exception', 0]]);
-});
-
-test('the stages keep the server\'s order and open the documents of their status', () => {
-  const s = stages(OVERVIEW);
-  assert.deepEqual(s.map((x) => [x.name, x.count, x.href]), [
-    ['Review', 5, '/governance/documents?dept=11&status=pending_review'], ['CISO sign-off', 3, '/governance/documents?dept=11&status=pending_approval'],
-  ]);
-  assert.equal(s[1].noun, 'documents in CISO sign-off');
 });
 
 // ── waiting on people ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -227,10 +188,6 @@ test('the reviews use the library\'s own words, worst first, and the bar is each
     '/governance/documents?dept=11&review=overdue', '/governance/documents?dept=11&review=due_soon', '/governance/documents?dept=11&review=unscheduled',
     '/governance/documents?dept=11&review=ok',
   ]);
-  const shares = reviewShares(OVERVIEW.reviews);
-  assert.deepEqual(shares.map((s) => s.key), ['overdue', 'due_soon', 'up_to_date'], 'a state nobody is in has no segment');
-  assert.ok(Math.abs(shares.reduce((n, s) => n + s.percent, 0) - 100) < 1e-9);
-  assert.deepEqual(reviewShares({ overdue: 0, due_soon: 0, unscheduled: 0, up_to_date: 0 }), [], 'no review owed: no bar, never a full one');
 });
 
 test('the department table is worth a card when there is more than one row, and each row\'s total opens the library on that department and what is under it', () => {
@@ -304,9 +261,4 @@ test('every address the page asks the server for is one the server writes, and e
   assert.ok(names.size >= 5, `read ${Array.from(names).join(',')}`);
   for (const name of Array.from(names)) assert.ok(PARAM_KEYS.includes(name), `the server writes ?${name}= and the library does not read it`);
   assert.ok(PARAM_KEYS.includes('dept') && PARAM_KEYS.includes('attn'));
-});
-
-test('the tiles that jump on the page point at sections that exist', () => {
-  const sections = readFileSync(new URL('./_Sections.tsx', import.meta.url), 'utf8');
-  for (const t of tiles(OVERVIEW).filter((x) => x.href?.startsWith('#'))) assert.ok(sections.includes(`id="${t.href!.slice(1)}"`), t.href!);
 });

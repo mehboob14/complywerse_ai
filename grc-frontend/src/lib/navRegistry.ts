@@ -30,10 +30,10 @@
 // THE NAMES BEFORE THIS FILE (read from the code and from a browser pass over every route, 2026-10-31) and the label chosen. "bar" is the top bar's title,
 // "tabs" the Documents tab bar that replaces it in the Documents area, "back" the page's own back link (no Governance page renders a breadcrumb).
 //   destination                              sidebar            bar before                               page heading                  tab / back link                          LABEL (what changes where)
-//   /governance                              Overview           Governance Overview + subtitle           Governance Overview           -                                        Overview; title "Governance Overview" (same)
+//   /governance                              Overview           Governance Overview + subtitle           Governance Overview           -                                        Overview; title "Governance Overview" (same); since 2026-11-12 the one Overview of Governance: Summary, Departments and Board views (it holds what was At a glance)
 //   /governance/documents                    Documents          tabs                                     Document library              tab Documents; back "Documents"          Documents
 //   /governance/documents/:id                -                  tabs                                     the document's title          back "Documents"                         Document
-//   /governance/documents/overview           -                  tabs                                     At a glance                   tab At a glance, after Documents         At a glance (the library by department, type and stage; was "Overview", which the sidebar's Governance Overview already is)
+//   /governance/documents/overview           -                  (a server redirect)                      -                             -                                        Overview (an alias of /governance: the old At a glance address, with its dept, view, group and measure, forwards to it)
 //   /governance/documents/studio             -                  tabs                                     Comply AI Studio              tab Comply AI Studio                     Comply AI Studio
 //   /governance/documents/studio/:sessionId  -                  tabs                                     the draft's title (editable)  back "Studio"                            Studio draft
 //   /governance/documents/attestation        -                  tabs                                     Attestation                   tab Attestation                          Attestation
@@ -80,7 +80,7 @@ export interface TabSpec {
   studio?: true;
   /** listed only to people who hold this right */
   permission?: string;
-  /** also listed to the owner (head) of a department who holds no governance right: the library and its overview are theirs to read (D59) */
+  /** also listed to the owner (head) of a department who holds no governance right: the library is theirs to read (D59) */
   ownerDoor?: true;
   /** a route pattern whose pages light this tab (where it is listed) instead of the tab their path is under */
   claims?: string;
@@ -158,7 +158,7 @@ const PROJECTS = '/is-projects';
 
 // what the sidebar's own leaves add (by href)
 const OF_LEAF: Record<string, Extra> = {
-  '/governance': { title: 'Governance Overview', subtitle: 'Real-time policy, framework, and review posture', ownHeading: true },
+  '/governance': { title: 'Governance Overview', subtitle: 'Real-time policy, framework, and review posture', ownHeading: true, keywords: ['At a glance', 'Documents overview'] },
   '/governance/kpi-report': { ownHeading: true },
   // the strip's first tab says Library ("Documents" under "Documents" read twice); the leaf keeps its sidebar name and the tab's accessible name holds both (tabName)
   [DOCS]: { tab: { area: 'documents', id: 'documents', order: 1, ownerDoor: true }, shortLabel: 'Library', keywords: ['Document library'] },
@@ -183,8 +183,8 @@ const gov = (path: string, label: string, rest: Extra & { aliasOf?: string }): D
 
 const pages: Draft[] = [
   gov(`${DOCS}/:id`, 'Document', { parent: DOCS, hidden: 'opens from a library row or its drawer, a task, a notification or an e-mail link' }),
-  // `permissions: null` is its own say, not "not said": the owner of a department who reads no library opens this page (`ownerDoor`), so it must not take the library's right
-  gov(`${DOCS}/overview`, 'At a glance', { parent: DOCS, permissions: null, tab: { area: 'documents', id: 'overview', order: 2, ownerDoor: true }, keywords: ['Overview', 'Documents overview'] }),
+  // the old At a glance address: a server redirect to the Overview (with its department, view, grouping and columns), kept for bookmarks, e-mails and other pages' links
+  gov(`${DOCS}/overview`, 'Overview', { aliasOf: '/governance' }),
   gov(`${DOCS}/studio`, 'Comply AI Studio', { parent: DOCS, tab: { area: 'documents', id: 'studio', order: 3, studio: true, claims: `${DOCS}/:id` } }),
   gov(`${DOCS}/studio/:sessionId`, 'Studio draft', { parent: `${DOCS}/studio`, hidden: 'opens from the Studio start page ("Your work") or from a document' }),
   gov(ATTEST, 'Attestation', { parent: DOCS, tab: { area: 'documents', id: 'attestation', order: 4 } }),
@@ -194,7 +194,7 @@ const pages: Draft[] = [
   gov('/governance/attestations/my', 'My Attestations', { parent: ATTEST, hidden: 'legacy page: no link opens it, kept for a typed or bookmarked URL' }),
   gov('/governance/attestations/complete/:id', 'Complete Attestation', { parent: '/governance/attestations/my', hidden: 'opens from the legacy My Attestations list' }),
   gov('/governance/exceptions', 'Exceptions', { parent: DOCS, tab: { area: 'documents', id: 'exceptions', order: 6 } }),
-  // the organisation's departments as a tree to browse (Windows-Explorer style); reading takes no right (like At a glance), so the head of a unit reaches it too: what a person may change there is decided per unit by the page and the server
+  // the organisation's departments as a tree to browse (Windows-Explorer style); reading takes no right (like the Overview), so the head of a unit reaches it too: what a person may change there is decided per unit by the page and the server
   gov(`${DOCS}/directory`, 'Directory', { parent: DOCS, permissions: null, tab: { area: 'documents', id: 'directory', order: 7, ownerDoor: true }, keywords: ['Departments', 'Units', 'Organisation', 'Organization', 'Org chart', 'Sub-departments'] }),
   gov('/governance/settings', 'Governance settings', { shortLabel: 'Settings', parent: DOCS, tab: { area: 'documents', id: 'settings', order: 8, permission: 'governance:settings:*' } }),
   gov('/governance/reviews', 'Document Reviews', { shortLabel: 'Reviews', parent: DOCS, tab: { area: 'documents', id: 'reviews', order: 5 }, keywords: ['Reviews', 'Review Calendar'] }),

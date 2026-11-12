@@ -2,21 +2,38 @@
 
 // The Performance Score dialog: how the overall number is made (each section's score and weight, the formula) and, for the people who could always, the
 // weights (the shared tuner). It draws what the server computed: every score, weight, target and formula comes from /governance/dashboard/documents-overview;
-// nothing here scores anything. The dialog and the section weight tuner are the shared ones; the Overview's posture card opens it from "How is it scored?".
+// nothing here scores anything. The dialog and the section weight tuner are the shared ones; the Overview's section scores card opens it from "How scored".
 import { useState } from 'react';
 import { SlidersHorizontal } from 'lucide-react';
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
 import { Button, StatusPill } from '@/components/ui/ds';
 import { EMPTY } from '@/lib/format';
-import { TONE } from '@/lib/status';
+import { TONE, type Tone } from '@/lib/status';
 import type { OverviewSection } from '@/components/dashboard/score-kit';
 import { SectionWeightTuner } from '@/components/dashboard/score-tuning';
 import { breakdownSections, performanceTile, scoreText, type Scorecard } from './overviewModel';
-import { Ring } from './Posture';
 import { bandOf, postureHead } from './postureModel';
 
 /** The payload as the page reads it: the model's Scorecard with the sections typed as score-kit's (the detail dialog takes more than the model does). */
 export type OverviewCard = Scorecard & { sections?: Record<string, OverviewSection> };
+
+/** The score as a ring in the grade's colour; a real 0 still draws a sliver ("weak" is not "no data"). */
+function Ring({ score, tone, size = 72 }: { score: number | null; tone: Tone; size?: number }) {
+  const stroke = 6;
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const arc = score === null ? 0 : score === 0 ? c * 0.06 : (Math.max(0, Math.min(100, score)) / 100) * c;
+  const colour = TONE[tone];
+  return (
+    <span role="img" aria-label={score === null ? 'Performance score: not available' : `Performance score ${Math.round(score)} of 100`} className="relative inline-grid shrink-0 place-items-center" style={{ width: size, height: size }}>
+      <svg aria-hidden width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={colour.tint} strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={colour.dot} strokeWidth={stroke} strokeLinecap="round" strokeDasharray={`${arc} ${c}`} />
+      </svg>
+      <span aria-hidden className="absolute text-ds-title font-[600] tabular-nums" style={{ color: colour.text }}>{score === null ? '—' : Math.round(score)}</span>
+    </span>
+  );
+}
 
 function Bar({ score }: { score: number | null }) {
   return (

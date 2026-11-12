@@ -1,10 +1,10 @@
-// node --test "src/app/(dashboard)/governance/documents/overview/_matrix.test.ts"
+// node --test "src/app/(dashboard)/governance/_overview/docs/_matrix.test.ts"
 // The department table as data: the columns of each measure, a line for every department with its cells and where each figure opens, the totals, what is filed in
 // a department itself, and the CSV of the whole matrix.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { PARAM_KEYS } from '../_workspace/libraryModel.ts';
+import { PARAM_KEYS } from '../../documents/_workspace/libraryModel.ts';
 import { IN_OPERATIONS, OPERATIONS, SUPPORT, WHOLE, row } from './_fixture.ts';
 import { ISSUE_COLUMNS, MEASURE_IDS, MEASURES, REVIEW_COLUMNS, TABLE_MEASURE_IDS, WAITING_COLUMNS, columnsFor, csvLabel, matrixCsv, matrixLines, matrixTotals, ownOf, statusColumns, typeColumns } from './_matrix.ts';
 const BOM = String.fromCharCode(0xfeff);                                         // the byte-order mark: Excel reads the file as UTF-8
@@ -67,9 +67,9 @@ test('every address a column can open is a parameter the library reads', () => {
 test('a line for every department, in the tree\'s order: its cells, where its name and its figures open', () => {
   const lines = matrixLines(WHOLE, columnsFor('status', WHOLE));
   assert.deepEqual(lines.map((l) => [l.row.name, l.here, l.open]), [
-    ['Finance', false, '/governance/documents/overview?dept=13'], ['Operations', false, '/governance/documents/overview?dept=10'],
-    ['Support', false, '/governance/documents/overview?dept=11'], ['Helpdesk', false, '/governance/documents/overview?dept=12'],
-    ['No department', false, '/governance/documents/overview?dept=none'],
+    ['Finance', false, '/governance?dept=13'], ['Operations', false, '/governance?dept=10'],
+    ['Support', false, '/governance?dept=11'], ['Helpdesk', false, '/governance?dept=12'],
+    ['No department', false, '/governance?dept=none'],
   ]);
   const ops = lines[1];
   assert.deepEqual(cells(ops), [1, 1, 1, 0, 2]);
@@ -80,7 +80,7 @@ test('a line for every department, in the tree\'s order: its cells, where its na
   assert.equal(lines[3].title, 'Operations › Support › Helpdesk · Unit');
   // the scope's own row is the page itself
   const mine = matrixLines(IN_OPERATIONS, columnsFor('status', IN_OPERATIONS));
-  assert.deepEqual(mine.map((l) => [l.row.name, l.here, l.open]), [['Operations', true, null], ['Support', false, '/governance/documents/overview?dept=11'], ['Helpdesk', false, '/governance/documents/overview?dept=12']]);
+  assert.deepEqual(mine.map((l) => [l.row.name, l.here, l.open]), [['Operations', true, null], ['Support', false, '/governance?dept=11'], ['Helpdesk', false, '/governance?dept=12']]);
   // a figure the library cannot filter on is text; the others are addresses
   const waiting = matrixLines(WHOLE, columnsFor('waiting', WHOLE))[0];
   assert.deepEqual(waiting.cells.map((c) => [c.value, c.href !== null]), [[0, true], [0, true], [0, true], [0, true], [2, false], [1, true]]);

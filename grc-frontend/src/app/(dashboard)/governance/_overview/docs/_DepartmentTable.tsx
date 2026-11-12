@@ -1,6 +1,6 @@
 'use client';
 
-// The department table of At a glance: a row for each department of the view, from the top down, with the documents filed in it and in the ones under it, and the
+// The department table of the Departments view: a row for each department of the view, from the top down, with the documents filed in it and in the ones under it, and the
 // columns of the group the person chose: by status, by type, waiting on people, reviews, or issues. A department's name opens its own view; every figure
 // opens the library on exactly what it counts (or is text, where the library cannot filter on it). Which columns there are and what each opens is _matrix.ts
 // (tested). On the whole organisation the last row adds the departments up. Below 768px each department is a card.
@@ -12,7 +12,7 @@ import { EMPTY } from '@/lib/format';
 import { Figure } from './_Figure';
 import { TABLE_MEASURES, columnsFor, matrixLines, matrixTotals, type MatrixCell, type MatrixColumn, type MatrixLine, type MeasureId } from './_matrix';
 import { figureHref, type Overview } from './_model';
-import { viewHref, type GroupId, type ViewId } from './_views';
+import { viewHref } from './_views';
 
 const FOCUS = 'focus-visible:outline-none focus-visible:shadow-ds-ring';
 const NAME_LINK = `rounded-ds-control font-medium text-ds-fg hover:underline ${FOCUS}`;
@@ -68,16 +68,14 @@ function columnsOf(measure: readonly MatrixColumn[]): RegisterColumn<Item>[] {
   ];
 }
 
-export function MatrixCard({ data, measure, onMeasure, view, group }: {
+export function MatrixCard({ data, measure, onMeasure }: {
   data: Overview;
   measure: MeasureId;
   onMeasure: (next: MeasureId) => void;
-  /** the view the person is in, so opening a department stays in it */
-  view: ViewId;
-  group: GroupId;
 }) {
   const columns = columnsFor(measure, data);
-  const items = itemsOf(data, columns, (dept) => viewHref(dept, view, group, measure));
+  // opening a department stays in this view, with the same columns
+  const items = itemsOf(data, columns, (dept) => viewHref(dept, 'departments', 'status', measure));
   return (
     <SectionCard
       id="departments"

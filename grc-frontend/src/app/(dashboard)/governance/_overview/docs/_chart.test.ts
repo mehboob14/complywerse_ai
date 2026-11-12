@@ -1,11 +1,11 @@
-// node --test "src/app/(dashboard)/governance/documents/overview/_chart.test.ts"
-// What the graphs draw: one level of departments at a time (so no document is drawn twice), the series of each stack, the slices, the table a screen reader gets.
+// node --test "src/app/(dashboard)/governance/_overview/docs/_chart.test.ts"
+// What the graphs draw: one level of departments at a time (so no document is drawn twice), the series of each stack and their colours.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { chartTable } from '../../../../../components/ui/ds/chartText.ts';
+import { OTHER, SERIES, STATUS } from '../../../../../components/overview/charts/palette.ts';
 import { IN_OPERATIONS, WHOLE, row } from './_fixture.ts';
-import { MAX_BARS, STATUS_COLOR, TYPE_COLORS, departmentStack, sliceTable, stackTable, statusBars, statusSeries, typeSeries, typeSlices, waitingStack } from './_chart.ts';
+import { MAX_BARS, STATUS_COLOR, TYPE_COLORS, capStack, departmentStack, statusSeries, typeSeries, waitingStack } from './_chart.ts';
 
 const names = (s: { rows: { name: string }[] }) => s.rows.map((r) => r.name);
 
@@ -13,7 +13,7 @@ test('every status has a colour of its own and the series are the steps of the f
   const series = statusSeries(WHOLE);
   assert.deepEqual(series.map((s) => s.label), ['Draft', 'In review', 'In approval', 'Approved', 'Published']);
   assert.equal(new Set(Object.values(STATUS_COLOR)).size, Object.keys(STATUS_COLOR).length, 'no two statuses share a colour');
-  assert.ok(series.every((s) => /^#[0-9A-F]{6}$/i.test(s.color)));
+  assert.ok(series.every((s) => Object.values(STATUS).concat(SERIES as never, OTHER as never).includes(s.color as never)), 'the colours are those of the kit palette, none written here');
   assert.equal(statusSeries({ by_status: [...WHOLE.by_status.slice(0, 5), { key: 'status:expired', status: 'expired', count: 1 }] }).length, 6);
   assert.deepEqual(typeSeries(WHOLE).map((s) => [s.label, s.color]), [['Policy', TYPE_COLORS[0]], ['Guideline', TYPE_COLORS[1]], ['Procedure', TYPE_COLORS[2]], ['Standard', TYPE_COLORS[3]]]);
 });
@@ -62,19 +62,15 @@ test('waiting on people by department: the requests overdue and the ones not yet
   assert.deepEqual(waitingStack(IN_OPERATIONS).rows[0].cells, { overdue: 0, pending: 0 });   // Operations' own documents are asked of nobody
 });
 
-test('the slices and bars carry where they open, and the table a screen reader reads has every number the chart draws', () => {
-  const slices = typeSlices(WHOLE);
-  assert.deepEqual(slices.map((s) => [s.label, s.value, s.href]), [
-    ['Policy', 4, '/governance/documents?type=policy'], ['Guideline', 1, '/governance/documents?type=guideline'],
-    ['Procedure', 1, '/governance/documents?type=procedure'], ['Standard', 1, '/governance/documents?type=standard'],
-  ]);
-  assert.deepEqual(statusBars(WHOLE).map((s) => [s.label, s.value]), [['Draft', 1], ['In review', 1], ['In approval', 1], ['Approved', 0], ['Published', 4]]);
-  // a kind nobody has is no slice, and the kinds after it keep their colours: a slice and its bar in the stacks are one colour
-  const gap = { ...WHOLE, by_type: [WHOLE.by_type[0], { ...WHOLE.by_type[1], count: 0 }, WHOLE.by_type[2]] };
-  assert.deepEqual(typeSlices(gap).map((s) => [s.label, s.color]), [['Policy', TYPE_COLORS[0]], ['Procedure', TYPE_COLORS[2]]]);
-  assert.deepEqual(typeSeries(gap).map((s) => s.color), [TYPE_COLORS[0], TYPE_COLORS[1], TYPE_COLORS[2]]);
-  const table = chartTable(stackTable(departmentStack(WHOLE, 'status')));
-  assert.deepEqual(table.columns, ['Department', 'Draft', 'In review', 'In approval', 'Approved', 'Published']);
-  assert.deepEqual(table.rows[0], ['Operations', '1', '1', '1', '0', '2']);
-  assert.deepEqual(chartTable(sliceTable(slices, 'Type')).rows[0], ['Policy', '4']);
+test('the Summary draws the biggest five departments, ranked by size with a tie by name, and counts the ones it leaves for the Departments view', () => {
+  const many = Array.from({ length: 9 }, (_, i) => row({ department_id: 100 + i, name: `D${i}`, documents: 1 + (i % 3), by_status: { published: 1 + (i % 3) } }));
+  const stack = departmentStack({ ...WHOLE, by_department: many }, 'status');
+  const top = capStack(stack, 5);
+  assert.equal(top.rows.length, 5);
+  assert.deepEqual(top.rows.map((r) => r.total), [3, 3, 3, 2, 2]);
+  assert.deepEqual(top.rows.slice(0, 3).map((r) => r.name), ['D2', 'D5', 'D8'], 'a tie is by name');
+  assert.equal(top.more, 4);
+  assert.deepEqual(capStack(departmentStack(WHOLE, 'status'), 5).rows.length, 3, 'fewer departments than the cap: all of them, none left out');
+  assert.equal(capStack(departmentStack(WHOLE, 'status'), 5).more, 0);
+  assert.equal(capStack(stack, 0).rows.length, 1, 'never an empty chart because of a bad cap');
 });

@@ -1,4 +1,4 @@
-// node --test "src/app/(dashboard)/governance/documents/overview/_csv.test.ts"
+// node --test "src/app/(dashboard)/governance/_overview/docs/_csv.test.ts"
 // The CSV text of an export: quoting, the byte-order mark, and a cell a spreadsheet would run as a formula written as text.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

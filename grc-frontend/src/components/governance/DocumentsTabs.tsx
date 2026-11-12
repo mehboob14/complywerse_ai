@@ -1,12 +1,10 @@
 'use client';
 
 /**
- * The Documents area's tabs (Documents · Overview · Comply AI Studio · Attestation · Reviews · Exceptions · Directory · Settings), shown in the top bar instead of a row
+ * The Documents area's tabs (Documents · Comply AI Studio · Attestation · Reviews · Exceptions · Directory · Settings), shown in the top bar instead of a row
  * of their own so the page below gets the height. Every tab is an icon and a label (Settings is just the gear) while the strip fits; when it does not,
  * only the open tab keeps its label (the others have it as their tooltip and for a screen reader). The strip is measured with every label showing, once the tabs are
- * known, and again whenever its width changes (the window, the menu opening): with the Studio and the Settings gear it needs 648px at 1280, where the top bar leaves
- * 577px, so there the labels go; from about 1360 the whole strip fits. (The Overview tab made them seven: the six fitted at 1280 only by taking their side padding
- * down to 4px.) Past that the strip still scrolls sideways and brings the open tab into view. The product keeps its full name, "Comply AI Studio", on every screen; "Policy exceptions" is
+ * known, and again whenever its width changes (the window, the menu opening): the labels go when the strip does not fit (the At a glance tab, which made the strip eight, went to the Governance Overview on 2026-11-12). Past that the strip still scrolls sideways and brings the open tab into view. The product keeps its full name, "Comply AI Studio", on every screen; "Policy exceptions" is
  * "Exceptions" and "Document Reviews" is "Reviews" here, their full names staying as the tooltip and as what a screen reader says.
  * Which tabs there are, their names and order, who sees them and which page lights which come from the navigation registry
  * (lib/navRegistry.ts); this file is how a tab looks. Colours are explicit hex on purpose: the platform CSS repaints the accent
@@ -16,7 +14,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, CalendarClock, ClipboardCheck, FileText, FolderTree, LayoutDashboard, Settings, Sparkles, type LucideIcon } from 'lucide-react';
+import { AlertTriangle, CalendarClock, ClipboardCheck, FileText, FolderTree, Settings, Sparkles, type LucideIcon } from 'lucide-react';
 import { clsx } from 'clsx';
 import { studioApi } from '@/lib/studio/api';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -26,7 +24,6 @@ import { scrollDelta } from '@/lib/tabsModel';
 // the look of each tab of the registry's 'documents' strip, by its id
 const LOOK: Record<string, { icon: LucideIcon; iconOnly?: boolean }> = {
   documents: { icon: FileText },
-  overview: { icon: LayoutDashboard },
   studio: { icon: Sparkles },
   attestation: { icon: ClipboardCheck },
   reviews: { icon: CalendarClock },
