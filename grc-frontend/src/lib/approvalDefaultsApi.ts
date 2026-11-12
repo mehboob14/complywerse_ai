@@ -1,6 +1,6 @@
 // The requests of the approval defaults (`/governance/approval-defaults`, lib/approvalDefaults.ts has the shapes and the words) and of the list of who can be asked. A unit is
 // its id, or 'org' for the whole organisation. Refusals are the server's own sentences (400 validation, 403 rights, 404, 409 when a lock above blocks a write): the screens
-// show them as they are. Kept here, not in lib/api.ts, so the Directory, "Submit for review" and the exception form read one module.
+// show them as they are. Kept here, not in lib/api.ts, so the folders' Properties, "Submit for review" and the exception form read one module.
 import apiClient from './api';
 import { parseAnswer, parseResolved, type DefaultsAnswer, type PersonType, type Resolved, type Subject, type Targets } from './approvalDefaults';
 import type { RouteStageIn } from './approvalRoutes';

@@ -1,6 +1,6 @@
-// Back and Forward in the Directory, apart from React so `node --test` can pin them (navTrail.test.ts). The browser's history holds the folders this page went through
+// Back and Forward in the library's Folders layout, apart from React so `node --test` can pin them (navTrail.test.ts). The browser's history holds the folders this page went through
 // (every move to another folder is a push, so the browser's own Back and mouse buttons work); this is the small mirror of it the page keeps, to know whether there is anywhere
-// to go back or forward to (the first Back from the first folder visited must not leave the Directory silently, so its button is disabled there) and which way a change of
+// to go back or forward to (the first Back from the first folder visited must not leave the folders silently, so its button is disabled there) and which way a change of
 // address went. A folder is a unit's id, or null for the Organisation.
 
 export type Folder = number | null;

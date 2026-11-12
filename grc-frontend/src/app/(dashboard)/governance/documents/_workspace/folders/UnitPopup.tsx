@@ -1,6 +1,6 @@
 'use client';
 
-// The unit's PROPERTIES: a centered dialog over the Directory (focus kept inside, Escape or X closes it, focus goes back to the unit that opened it) with the unit's name under its folder
+// The unit's PROPERTIES: a centered dialog over the library (focus kept inside, Escape or X closes it, focus goes back to the unit that opened it) with the unit's name under its folder
 // icon, "Properties" and its place in the organisation, and a strip of tabs. It opens from the toolbar's Properties, the menus, Alt+Enter and a link; a double-click goes INTO the folder. Which tabs there are is directoryTabs.ts (a tab is registered there and enabled there; this file knows none by name). The open tab is
 // in the address (?open=<unit>&tab=<tab>), so a link opens the same popup and a reload keeps it. A tab says when it holds typed input (`setDirty`), and then Escape, X and a
 // press on the dim area ask "Discard changes?" first (the dialog's own guard). A tab is drawn when first opened and kept, so what was typed in one stays while another is read.

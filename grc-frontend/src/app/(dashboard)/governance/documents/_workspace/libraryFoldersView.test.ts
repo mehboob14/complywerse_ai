@@ -21,12 +21,24 @@ test('the Folders view is the same list: the same rows one step under their fold
   assert.ok(workspace.includes('{!inFolders && !grouped && ('));                                               // the pager is the list's; folders have "Show N more"
 });
 
-test('a folder header is a real button that says whether it is open and what it controls; its tick box is not a click on the row', () => {
-  assert.ok(rows.includes('aria-expanded={open}') && rows.includes('aria-controls='));
-  assert.ok(rows.includes('<button') && rows.includes('aria-label={folderAria(node)}'));
-  assert.ok(rows.includes("closest('[data-no-peek], input, label')"));
+test('a folder row is a real button that says whether it is open and what it controls, is one tab stop for all the folders, and behaves like a folder in Explorer: click selects, double-click and Enter open, right-click and "…" give the menu', () => {
+  assert.ok(rows.includes('aria-expanded={openable ? open : undefined}') && rows.includes('aria-controls='));
+  assert.ok(rows.includes('<button') && rows.includes('aria-label={`${folderAria(node)}'));
+  assert.ok(rows.includes('data-folder-main={node.key}') && rows.includes('tabIndex={tabbable ? 0 : -1}'));          // the folders are one tab stop; the arrow keys move between them
+  assert.ok(rows.includes("aria-current={selected ? 'true' : undefined}"));
+  assert.ok(rows.includes('onClick={(e) => { if (openable && (e.target as HTMLElement).closest(\'[data-folder-arrow]\')) onToggle(); else ui.onSelect(node); }}'), 'a click selects, the arrow opens and closes');
+  assert.ok(rows.includes('ui.onOpen(node)') && rows.includes('onContextMenu={(e) => ui.onContext(e, node)}') && rows.includes('onKeyDown={(e) => ui.onKey(e, node)}'));
+  assert.ok(rows.includes('aria-label={`Menu for ${node.name}`}') && rows.includes('aria-haspopup="menu"'), 'the "…" of every folder row has a name');
   assert.ok(rows.includes('sticky left-[12px]'));                                                    // pinned: it stays in view when the table scrolls sideways
   assert.ok(!/overflow-hidden/.test(rows.slice(rows.indexOf('export function FolderHeadRow'), rows.indexOf('// ─── Show N more'))));   // overflow would unpin it
+  assert.ok(rows.includes("<FolderIcon size={20} open={(open && openable) || here} inactive={node.inactive} />"), 'a yellow folder: open where it shows what is in it, grey where it is switched off');
+  assert.ok(items.includes('tabbable={tabStop === node.key}') && items.includes('ui={i.ui}'));
+});
+
+test('the Folders view says why it has nothing to show instead of an empty table: no departments yet (a way to make them), or none could be read', () => {
+  assert.ok(rows.includes('No departments yet') && rows.includes("href={withFrom('/governance/settings', here)}") && rows.includes('New department'));
+  assert.ok(rows.includes('Could not load departments') && rows.includes('onRetry={onRetry}'));          // the kit's error state offers its own Retry
+  assert.ok(workspace.includes('departmentsQ.isError ? <DepartmentsFailed') && workspace.includes('<NoDepartments onNew={foldersApi.newDepartment ?? undefined} />'));
 });
 
 test('Move to… is in the row menu and the bulk bar of the working list only, for the documents the person may change, never an archived one', () => {
@@ -53,12 +65,6 @@ test('the layout is in the address, the switch is in the toolbar, and the choice
   // the switch is the kit's SegmentedControl (a native radio group named "Library view"): List, Folders, Calendar and Tracker (no Board: it lives on the Governance Overview); a choice calls the page's changeView
   assert.ok(workspace.includes("label: 'Library view'") && workspace.includes("{ value: 'table', label: 'List' }, { value: 'folders', label: 'Folders' }, { value: 'calendar', label: 'Calendar' }, { value: 'tracker', label: 'Tracker' }") && !workspace.includes("'board'"));
   assert.ok(explorer.includes('<SegmentedControl') && workspace.includes('changeView(v as LibraryViewId)'));
-});
-
-test('the Folders view says why it has nothing to show instead of an empty table: no departments yet (a way to make them), or none could be read', () => {
-  assert.ok(rows.includes('No departments yet') && rows.includes("href={withFrom('/governance/settings', here)}"));
-  assert.ok(rows.includes('Could not load departments') && rows.includes('onRetry={onRetry}'));          // the kit's error state offers its own Retry
-  assert.ok(workspace.includes('departmentsQ.isError ? <DepartmentsFailed') && workspace.includes('<NoDepartments />'));
 });
 
 test('the Move to… popover is a dialog with a search box and a list, closes on Escape, and takes nothing while it is moving', () => {

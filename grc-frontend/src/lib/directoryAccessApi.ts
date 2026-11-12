@@ -1,6 +1,6 @@
-// The Directory's Access tab: the requests of the cascading rights (backend `services/department_rights.py`, routes in `routers/admin_departments_router.py`). Reading who has
+// The Access tab of a folder's Properties: the requests of the cascading rights (backend `services/department_rights.py`, routes in `routers/admin_departments_router.py`). Reading who has
 // access is open to anyone signed in; picking, giving, changing and taking back access need the manage level on the unit (or the right to administer the organisation).
-// What the answers hold is read by app/(dashboard)/governance/documents/directory/accessModel.ts, which tolerates a backend that leaves a field out.
+// What the answers hold is read by app/(dashboard)/governance/documents/_workspace/folders/accessModel.ts, which tolerates a backend that leaves a field out.
 import apiClient from '@/lib/api';
 
 /** The cache key of every read of the Access tab (the list, the picker): a change to a unit's people or rights makes them all out of date. */

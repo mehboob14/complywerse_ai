@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { activeTab, breadcrumbFor, isInArea, ownHeadingSection, registryNamesPage, routeFor, routes, sectionOfEntry, subtitleFor, tabsFor, titleFor, type RouteEntry } from './navRegistry.ts';
+import { activeTab, breadcrumbFor, isInArea, ownHeadingSection, registryNamesPage, routeFor, routes, searchRoutes, sectionOfEntry, subtitleFor, tabsFor, titleFor, type RouteEntry } from './navRegistry.ts';
 import { flattenLeaves, isGroup, navigation, navPermissions, type NavEntry } from '../components/layout/navAccess.ts';
 import { activeNavHref } from '../components/layout/navActive.ts';
 
@@ -40,7 +40,7 @@ function hasPage(at: string, segments: string[]): boolean {
 
 test('every page of the Governance folder is exactly one entry, and every Governance URL of the registry is a page', () => {
   const pages = pagesOf('(dashboard)/governance', '/governance');
-  assert.equal(pages.length, 28, 'the folder holds the 26 pages of the URL contract, the Documents Overview and the Directory');
+  assert.equal(pages.length, 28, 'the folder holds the 26 pages of the URL contract, the Documents Overview and the old Directory address (both forwards)');
   for (const page of pages) assert.equal(routes.filter((e) => e.path === page).length, 1, page);
   for (const e of routes.filter((r) => r.path.startsWith('/governance'))) assert.ok(pages.includes(e.path), `${e.path} has no page.tsx`);
 });
@@ -75,7 +75,7 @@ test("the rights of a page without a menu entry are those of the page it hangs u
   const rightsOf = (e: RouteEntry): RouteEntry => { let at = e; while (at.aliasOf || at.parent) at = entry((at.aliasOf ?? at.parent) as string); return at; };
   for (const e of routes.filter((r) => !leafPaths.includes(r.path) && navPermissions(r.path).length === 0)) {
     // a Governance page: no page of it gates itself, so it is offered to whoever is offered the page it hangs under (a root with no rights: everyone)
-    // (except the pages made for the owner of a department who reads no library - `ownerDoor`, the Directory: they take no right, pinned in the Directory test below)
+    // (except the pages made for the owner of a department who reads no library - `ownerDoor`, the library: they take no right, pinned in the owner test below)
     if (e.area === 'governance' && !e.tab?.ownerDoor) assert.deepEqual(e.permissions, rightsOf(e).permissions, e.path);
   }
   // the Governance pages that guard nothing today (any signed-in user opens them by URL; navAccess lists no right for them); G3_permission_matrix lists which of their APIs are open too
@@ -123,6 +123,7 @@ test('a forward is another URL of an entry that is a page of its own, under the 
   assert.deepEqual(aliases.map((e) => [e.path, e.aliasOf]), [
     ['/governance/documents/overview', '/governance'],                       // the old At a glance address: a server redirect to the Overview that keeps dept, group and measure and maps view
     ['/governance/attestations', '/governance/documents/attestation'],
+    ['/governance/documents/directory', '/governance/documents'],             // the old Directory address: a server redirect to the library's Folders layout that keeps the unit (dept) and the Properties popup (props, tab)
     ['/governance/reviews/calendar', '/governance/reviews'],                // not a forward: the same page opened on its calendar view
     ['/frameworks/manage', '/frameworks'],                                   // the menu's old address for Frameworks: a server redirect that keeps the query
     ['/governance/approvals', '/needs-my-action'],                          // "My Approvals" became the global queue; the address forwards to it (a server redirect)
@@ -279,7 +280,7 @@ test('the old names stay findable (keywords), and no keyword repeats the label',
   assert.deepEqual(entry('/governance/committees').keywords, ['Board & Committee Management']);
   assert.deepEqual(entry('/is-projects').keywords, ['IS Projects']);
   assert.deepEqual(entry('/erm/kris').keywords, ['Key Risk Indicators']);
-  assert.deepEqual(entry('/governance/documents').keywords, ['Document library']);
+  assert.deepEqual(entry('/governance/documents').keywords, ['Document library', 'Folders', 'Directory', 'Departments', 'Units', 'Organisation', 'Organization', 'Org chart', 'Sub-departments'], 'the Directory went into the library: a search for its old name or for departments finds it');
   assert.deepEqual(entry('/governance/approvals').keywords, ['Pending Approvals']);
   assert.deepEqual(entry('/governance/reviews').keywords, ['Reviews', 'Review Calendar']);
   assert.equal(titleFor('/is-projects/dashboard'), 'Projects Overview');
@@ -326,18 +327,18 @@ test('an unknown or odd path falls back (undefined, an empty trail) and never th
 
 // ---- tabs (the full pin of the Documents tab bar is documentsTabs.test.ts) ----
 
-test('the Documents strip: seven tabs in order; the Studio only where it is on, Settings only to those who hold its right', () => {
+test('the Documents strip: six tabs in order; the Studio only where it is on, Settings only to those who hold its right', () => {
   assert.deepEqual(tabsFor('documents').map((t) => t.path), [
     '/governance/documents', '/governance/documents/studio', '/governance/documents/attestation', '/governance/reviews',
-    '/governance/exceptions', '/governance/documents/directory', '/governance/settings',
+    '/governance/exceptions', '/governance/settings',
   ]);
   const labels = (studio: boolean, can: boolean) => tabsFor('documents', { studio, can: () => can }).map((t) => t.label);
-  assert.deepEqual(labels(true, true), ['Documents', 'Comply AI Studio', 'Attestation', 'Document Reviews', 'Exceptions', 'Directory', 'Governance settings']);
-  assert.deepEqual(labels(false, true), ['Documents', 'Attestation', 'Document Reviews', 'Exceptions', 'Directory', 'Governance settings']);
-  assert.deepEqual(labels(true, false), ['Documents', 'Comply AI Studio', 'Attestation', 'Document Reviews', 'Exceptions', 'Directory']);
-  assert.deepEqual(labels(false, false), ['Documents', 'Attestation', 'Document Reviews', 'Exceptions', 'Directory']);
-  assert.equal(tabsFor('documents', { studio: true, can: (p) => p === 'governance:settings:*' }).length, 7, 'the right asked for is governance:settings:*');
-  assert.equal(tabsFor('documents', { studio: true, can: (p) => p === 'governance:settings:view' }).length, 6);
+  assert.deepEqual(labels(true, true), ['Documents', 'Comply AI Studio', 'Attestation', 'Document Reviews', 'Exceptions', 'Governance settings']);
+  assert.deepEqual(labels(false, true), ['Documents', 'Attestation', 'Document Reviews', 'Exceptions', 'Governance settings']);
+  assert.deepEqual(labels(true, false), ['Documents', 'Comply AI Studio', 'Attestation', 'Document Reviews', 'Exceptions']);
+  assert.deepEqual(labels(false, false), ['Documents', 'Attestation', 'Document Reviews', 'Exceptions']);
+  assert.equal(tabsFor('documents', { studio: true, can: (p) => p === 'governance:settings:*' }).length, 6, 'the right asked for is governance:settings:*');
+  assert.equal(tabsFor('documents', { studio: true, can: (p) => p === 'governance:settings:view' }).length, 5);
   assert.deepEqual(tabsFor('nowhere'), []);
 });
 
@@ -383,8 +384,8 @@ test('Reviews is a door of its own: a tab of the Documents strip for everyone wh
   }
   assert.deepEqual(breadcrumbFor('/governance/reviews/calendar').map((c) => c.label), ['Governance', 'Documents', 'Document Reviews']);
   // the tabs on either side keep their places
-  assert.deepEqual(tabsFor('documents').map((t) => t.tab.order), [1, 3, 4, 5, 6, 7, 8], 'the 2 is the At a glance tab that went to the Overview: the others keep their places');
-  assert.deepEqual(tabsFor('documents').map((t) => t.tab.id), ['documents', 'studio', 'attestation', 'reviews', 'exceptions', 'directory', 'settings']);
+  assert.deepEqual(tabsFor('documents').map((t) => t.tab.order), [1, 3, 4, 5, 6, 8], 'the 2 is the At a glance tab that went to the Overview and the 7 is the Directory tab that went into the library: the others keep their places');
+  assert.deepEqual(tabsFor('documents').map((t) => t.tab.id), ['documents', 'studio', 'attestation', 'reviews', 'exceptions', 'settings']);
 });
 
 test('a short label is only what the tab shows; the tooltip and the accessible name are the label', () => {
@@ -442,28 +443,35 @@ test('a page that draws its own heading is flagged in the registry, and only its
   assert.equal(ownHeadingSection(null), undefined);
 });
 
-test('the owner of a department with no governance right gets the library and the Directory, and no other tab of the strip (and the Overview in the menu)', () => {
+test('the owner of a department with no governance right gets the library (whose Folders layout is where they manage their units), and no other tab of the strip (and the Overview in the menu)', () => {
   const owner = { studio: true, can: () => false, ownerOnly: true };
-  assert.deepEqual(tabsFor('documents', owner).map((t) => t.label), ['Documents', 'Directory']);
-  assert.deepEqual(tabsFor('documents', { ...owner, studio: false }).map((t) => t.label), ['Documents', 'Directory']);
-  assert.equal(tabsFor('documents', { studio: true, can: () => true }).length, 7, 'without the flag nothing changes');
-  assert.equal(tabsFor('documents').length, 7);
-  for (const tab of tabsFor('documents')) assert.equal(!!tab.tab.ownerDoor, ['documents', 'directory'].includes(tab.tab.id), tab.tab.id);
+  assert.deepEqual(tabsFor('documents', owner).map((t) => t.label), ['Documents']);
+  assert.deepEqual(tabsFor('documents', { ...owner, studio: false }).map((t) => t.label), ['Documents']);
+  assert.equal(tabsFor('documents', { studio: true, can: () => true }).length, 6, 'without the flag nothing changes');
+  assert.equal(tabsFor('documents').length, 6);
+  for (const tab of tabsFor('documents')) assert.equal(!!tab.tab.ownerDoor, tab.tab.id === 'documents', tab.tab.id);
   assert.deepEqual(flattenLeaves(navigation).filter((l) => l.ownerDoor).map((l) => l.href), ['/governance', '/governance/documents'], 'the Overview is the owner\'s door too: its Departments and Board views are theirs to read');
 });
 
-test('the Directory is a tab of the Documents strip before the Settings gear, for everyone who sees the strip (no right of its own), and its page lights it', () => {
-  const directory = entry('/governance/documents/directory');
-  assert.deepEqual([directory.tab?.area, directory.tab?.id, directory.tab?.order, directory.tab?.permission, directory.tab?.studio, directory.tab?.ownerDoor], ['documents', 'directory', 7, undefined, undefined, true]);
-  assert.equal(directory.label, 'Directory');
-  assert.equal(directory.permissions, null, 'reading the tree takes no right (the server lists the departments to anyone signed in); what may be changed is decided per unit');
-  for (const url of ['/governance/documents/directory', '/governance/documents/directory?unit=4&view=details', '/governance/documents/directory/']) {
+test('the Directory is gone: no tab, no page of its own; its old address is an alias of the library (a server redirect that keeps the unit and the popup), and the library is found by its old name', () => {
+  const old = entry('/governance/documents/directory');
+  assert.equal(old.tab, undefined, 'no tab of the Documents strip');
+  assert.equal(old.aliasOf, '/governance/documents');
+  assert.equal(old.label, 'Documents');
+  assert.equal(old.hidden, undefined);
+  assert.deepEqual(old.permissions, entry('/governance/documents').permissions, 'the registry adds no right: it is the library\'s');
+  assert.ok(!tabsFor('documents').some((t) => /directory/i.test(t.label) || t.tab.id === 'directory'));
+  for (const url of ['/governance/documents/directory', '/governance/documents/directory?unit=4&open=2&tab=access', '/governance/documents/directory/']) {
     assert.equal(isInArea('documents', url), true, url);
-    assert.equal(activeTab('documents', url)?.path, '/governance/documents/directory', url);
-    assert.equal(titleFor(url), 'Directory', url);
+    assert.equal(activeTab('documents', url)?.path, '/governance/documents', url);
+    assert.equal(titleFor(url), 'Documents', url);
   }
-  assert.deepEqual(breadcrumbFor('/governance/documents/directory').map((c) => c.label), ['Governance', 'Documents', 'Directory']);
+  assert.deepEqual(breadcrumbFor('/governance/documents/directory').map((c) => c.label), ['Governance', 'Documents'], 'a forward shows its target\'s trail');
+  // Next finds the page before the document page: a static folder beats [id]; the page is the server redirect
   assert.ok(existsSync(`${APP}(dashboard)/governance/documents/directory/page.tsx`));
+  assert.ok(readFileSync(`${APP}(dashboard)/governance/documents/directory/page.tsx`, 'utf8').includes('redirect(`/governance/documents${directoryQuery(searchParams)}`)'));
+  assert.ok(searchRoutes('directory').some((r) => r.path === '/governance/documents'), 'a search for the old name finds the library');
+  assert.ok(searchRoutes('departments').some((r) => r.path === '/governance/documents'));
 });
 
 // ---- the other modules' groups of pages (lib/navPages/<group>.ts): the rules every builder's entries must keep ----

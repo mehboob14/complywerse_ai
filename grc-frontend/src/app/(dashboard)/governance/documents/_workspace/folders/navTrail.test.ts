@@ -1,4 +1,4 @@
-// node --test "src/app/(dashboard)/governance/documents/directory/navTrail.test.ts"
+// node --test "src/app/(dashboard)/governance/documents/_workspace/folders/navTrail.test.ts"
 // Back and Forward in the Directory: the page's mirror of the browser's history of folders. The first Back from the first folder visited has nowhere to go (its button is off, so the
 // Directory is not left silently); going somewhere new drops what was ahead; an address that changed by itself is placed as a Back, a Forward or a new place.
 import { test } from 'node:test';

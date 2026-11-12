@@ -157,6 +157,10 @@ export interface BuildInput<T extends FolderDoc> {
   /** a search or filter is on: a folder with nothing in it is left out */
   filtering: boolean;
   now: Date;
+  /** the folder that is open (a unit's id): the folders are re-rooted there, the folder itself first with everything under it. Not a unit that is known: the whole organisation. */
+  root?: number | null;
+  /** "Show inactive" is on: a switched-off unit with nothing in it is a folder too (one that holds documents is always one) */
+  showInactive?: boolean;
 }
 
 /**
@@ -164,9 +168,10 @@ export interface BuildInput<T extends FolderDoc> {
  * for the documents with no department or one the list does not know. Inside a folder the documents are nested by docTree.buildTree
  * with the same `match` rule as the table (a parent that does not match is kept, greyed, for the documents under it). Counts follow the
  * filters. Left out: a folder with no document that matches while a search or filter is on, a switched-off department with none at
- * any time, and an empty "No department". When a folder is left out, the folders inside it that stay move up to its place.
+ * any time (unless "Show inactive" is on), and an empty "No department". When a folder is left out, the folders inside it that stay move up to its place. With `root` the folders are
+ * those of one open folder: it is the one top folder (always there) and what is under it follows the same rules.
  */
-export function buildFolders<T extends FolderDoc>({ scope, matches, departments, filtering, now }: BuildInput<T>): FolderNode<T>[] {
+export function buildFolders<T extends FolderDoc>({ scope, matches, departments, filtering, now, root = null, showInactive = false }: BuildInput<T>): FolderNode<T>[] {
   const { byId, sorted, parent, kids } = indexDepartments(departments);
 
   const bucket = new Map<string, T[]>();
@@ -194,13 +199,20 @@ export function buildFolders<T extends FolderDoc>({ scope, matches, departments,
 
   const shown = (n: FolderNode<T>): FolderNode<T>[] => {
     n.folders = n.folders.reduce<FolderNode<T>[]>((all, f) => all.concat(shown(f)), []);
-    return n.total.docs > 0 || (!filtering && !n.inactive) ? [n] : n.folders;
+    return n.total.docs > 0 || (!filtering && (!n.inactive || showInactive)) ? [n] : n.folders;
   };
   const place = (list: FolderNode<T>[], depth: number): FolderNode<T>[] => {
     list.forEach((n) => { n.depth = depth; place(n.folders, depth + 1); });
     return list;
   };
 
+  // an open folder is the one top folder, whatever it holds (it is where the person is); the folders inside it follow the rules above
+  const rooted = root != null ? byId.get(root) : undefined;
+  if (rooted) {
+    const only = make(rooted);
+    only.folders = only.folders.reduce<FolderNode<T>[]>((all, f) => all.concat(shown(f)), []);
+    return place([only], 0);
+  }
   const top = sorted.filter((d) => !parent.has(d.id)).reduce<FolderNode<T>[]>((all, d) => all.concat(shown(make(d))), []);
   const none = make(null);
   return place(none.total.docs > 0 ? [...top, none] : top, 0);
@@ -212,6 +224,32 @@ export function allFolders<T extends FolderDoc>(nodes: readonly FolderNode<T>[])
   const walk = (list: readonly FolderNode<T>[]) => list.forEach((n) => { out.push(n); walk(n.folders); });
   walk(nodes);
   return out;
+}
+
+/** The unit the library is opened into: the Department filter holds exactly that one unit (and the list knows it). Several departments, "no department" or a unit that does not exist is no open folder. */
+export function openFolderOf(chosen: readonly string[], departments: readonly FolderDepartment[] | null | undefined): number | null {
+  if (chosen.length !== 1 || !/^\d{1,9}$/.test(chosen[0])) return null;
+  const id = Number(chosen[0]);
+  return (departments ?? []).some((d) => d.id === id) ? id : null;
+}
+
+/** The units from the top one down to this one: the path bar's segments. [] for the whole organisation (null) and for a unit the list does not know. */
+export function folderPath(departments: readonly FolderDepartment[] | null | undefined, id: number | null): { id: number; name: string }[] {
+  if (id == null) return [];
+  const { byId, parent } = indexDepartments(departments);
+  const out: { id: number; name: string }[] = [];
+  const seen = new Set<number>();
+  for (let at: number | undefined = id; at !== undefined && byId.has(at) && !seen.has(at); at = parent.get(at)) {
+    seen.add(at);
+    out.unshift({ id: at, name: byId.get(at)!.name });
+  }
+  return out;
+}
+
+/** The unit this one sits in; null: it sits under the organisation (or the list does not know it). */
+export function folderParent(departments: readonly FolderDepartment[] | null | undefined, id: number | null): number | null {
+  if (id == null) return null;
+  return indexDepartments(departments).parent.get(id) ?? null;
 }
 
 /** Something to open: documents or folders inside. An empty folder has nothing to show. */
@@ -299,6 +337,15 @@ export function setAllFolders(v: FoldView, keys: readonly string[], open: boolea
   const saved = { ...v.saved };
   keys.forEach((key) => { saved[key] = open; });
   return { saved, shut: new Set(v.shut) };
+}
+
+/** The state after these folders are opened (a folder was opened or a new one made inside it): remembered, except while a search or filter is on. */
+export function openFolders(v: FoldView, keys: readonly string[]): FoldChange {
+  const shut = new Set(v.shut);
+  if (v.filtering) { keys.forEach((k) => shut.delete(k)); return { saved: { ...v.saved }, shut }; }
+  const saved = { ...v.saved };
+  keys.forEach((k) => { saved[k] = true; });
+  return { saved, shut };
 }
 
 /** Documents a folder lists now: the first ones, and those the person asked for with "Show N more". */

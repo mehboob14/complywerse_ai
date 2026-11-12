@@ -1,12 +1,11 @@
-// node --test "src/app/(dashboard)/governance/documents/directory/directoryModel.test.ts"
-// The Directory's rules: the nodes from either backend answer, the tree and its lines, the keys, what each action may do and why not, the choices of Move and New,
-// the summary, the search and the popup's tabs.
+// node --test "src/app/(dashboard)/governance/documents/_workspace/folders/directoryModel.test.ts"
+// The folders' rules: the nodes from either backend answer, the tree, what each action may do and why not, the choices of Move and New and the popup's tabs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  ORGANISATION, ORG_NODE_ID, ORG_PARAM, badgesOf, buildTree, defaultsParam, isOrgAddress, organisationNode, countText, findUnits, fromDirectory, fromList, libraryHref, moveChoices, newPlaceChoices, openPathTo, selectionAfterClose,
-  shownTabs, summaryOf, tabOr, treeKey, treeRows, unitActions, unitFromAddress, viewOnly, type Directory, type ListRow,
+  ORGANISATION, ORG_NODE_ID, ORG_PARAM, badgesOf, buildTree, defaultsParam, isOrgAddress, organisationNode, countText, fromDirectory, fromList, libraryHref, moveChoices, newPlaceChoices,
+  shownTabs, tabOr, unitActions, unitFromAddress, viewOnly, type Directory, type ListRow,
 } from './directoryModel.ts';
 
 // the scratch tenant: Operations > Support, Information Security > SOC Operations, and six departments with nothing under them
@@ -104,79 +103,6 @@ test('the tree: top units A-Z, children A-Z, paths, subtrees and the documents o
   assert.equal(tree.node(404), undefined);
 });
 
-test('the summary of a unit and of the organisation (people are not summed across units)', () => {
-  const tree = buildTree(dir().nodes);
-  assert.deepEqual(summaryOf(tree, 4), { owner: null, documents: 11, documentsTotal: 15, people: 5, units: 1, unitsBelow: 1 });
-  assert.deepEqual(summaryOf(tree, 7), { owner: 'Hana Head', documents: 7, documentsTotal: 7, people: 0, units: 0, unitsBelow: 0 });
-  assert.deepEqual(summaryOf(tree, null), { owner: null, documents: 0, documentsTotal: 45, people: null, units: 5, unitsBelow: 7 });
-});
-
-test('the lines of the tree: the organisation first, a unit\'s units only while it is open, with their place in the set', () => {
-  const tree = buildTree(dir().nodes);
-  const closed = treeRows(tree, new Set());
-  assert.deepEqual(closed.map((r) => r.id), [null, 3, 7, 4, 6, 1]);
-  assert.deepEqual(closed.map((r) => r.depth), [0, 1, 1, 1, 1, 1]);
-  assert.deepEqual(closed.map((r) => r.hasChildren), [true, false, false, true, false, true]);
-  assert.ok(closed.every((r) => !r.open || r.id === null), 'a closed unit is not open');
-  const open = treeRows(tree, new Set([4, 1]));
-  assert.deepEqual(open.map((r) => r.id), [null, 3, 7, 4, 5, 6, 1, 2]);
-  assert.deepEqual(open.find((r) => r.id === 5), { id: 5, depth: 2, hasChildren: false, open: false, posInSet: 1, setSize: 1 });
-  assert.deepEqual(open.find((r) => r.id === 6), { id: 6, depth: 1, hasChildren: false, open: false, posInSet: 4, setSize: 5 });
-  assert.equal(treeRows(tree, new Set([3])).length, 6, 'opening a unit with nothing under it adds nothing');
-  assert.deepEqual(treeRows(buildTree([]), new Set()), [{ id: null, depth: 0, hasChildren: false, open: true, posInSet: 1, setSize: 1 }]);
-});
-
-test('opening the way to a unit adds only the units above it, and returns the same set when there is nothing to add', () => {
-  const three = fromList([{ id: 1, name: 'A', is_active: true }, { id: 2, name: 'B', parent_department_id: 1, is_active: true }, { id: 3, name: 'C', parent_department_id: 2, is_active: true }], true);
-  const tree = buildTree(three.nodes);
-  assert.deepEqual(Array.from(openPathTo(tree, new Set(), 3)).sort(), [1, 2]);
-  assert.deepEqual(Array.from(openPathTo(tree, new Set([1]), 3)).sort(), [1, 2]);
-  const done = new Set([1, 2]);
-  assert.equal(openPathTo(tree, done, 3), done);
-  assert.equal(openPathTo(tree, done, null), done);
-  assert.equal(openPathTo(tree, done, 1), done, 'a top unit has nothing above it');
-});
-
-test('closing a unit moves the selection up to it when the selection was under it', () => {
-  const tree = buildTree(dir().nodes);
-  assert.equal(selectionAfterClose(tree, 5, 4), 4);
-  assert.equal(selectionAfterClose(tree, 4, 4), 4);
-  assert.equal(selectionAfterClose(tree, 3, 4), 3);
-  assert.equal(selectionAfterClose(tree, null, 4), null);
-});
-
-test('the keys of the tree: arrows move, Right opens then enters, Left closes then goes up, Home and End, Enter opens the folder, a letter jumps', () => {
-  const d = dir();
-  const tree = buildTree(d.nodes);
-  const names = (id: number) => tree.node(id)!.name;
-  const key = (rows: ReturnType<typeof treeRows>, at: number | null, k: string) => treeKey(rows, names, (id) => tree.parentOf(id), at, k);
-  const rows = treeRows(tree, new Set([4]));          // org, Finance, HR, IS, SOC, Legal, Operations
-  assert.deepEqual(key(rows, null, 'ArrowDown'), { focus: 3 });
-  assert.deepEqual(key(rows, 4, 'ArrowDown'), { focus: 5 });
-  assert.deepEqual(key(rows, 6, 'ArrowUp'), { focus: 5 });
-  assert.equal(key(rows, null, 'ArrowUp'), null);
-  assert.equal(key(rows, 1, 'ArrowDown'), null, 'the last line');
-  assert.deepEqual(key(rows, 5, 'Home'), { focus: null });
-  assert.deepEqual(key(rows, 3, 'End'), { focus: 1 });
-  assert.deepEqual(key(rows, 1, 'ArrowRight'), { expand: 1 }, 'a closed unit opens');
-  assert.deepEqual(key(rows, 4, 'ArrowRight'), { focus: 5 }, 'an open one goes to its first unit');
-  assert.equal(key(rows, 3, 'ArrowRight'), null, 'nothing under it');
-  assert.equal(key(rows, null, 'ArrowRight'), null);
-  assert.deepEqual(key(rows, 4, 'ArrowLeft'), { collapse: 4 }, 'an open unit closes');
-  assert.deepEqual(key(rows, 5, 'ArrowLeft'), { focus: 4 }, 'a unit with nothing open goes to the unit above');
-  assert.deepEqual(key(rows, 3, 'ArrowLeft'), { focus: null }, 'a top unit goes to the organisation');
-  assert.equal(key(rows, null, 'ArrowLeft'), null);
-  assert.deepEqual(key(rows, 5, 'Enter'), { open: 5 });
-  assert.equal(key(rows, null, 'Enter'), null, 'the organisation is already open: nothing to go into');
-  assert.deepEqual(key(rows, null, 'l'), { focus: 6 }, 'a letter goes to the next unit that starts with it');
-  assert.deepEqual(key(rows, 6, 'L'), { focus: 6 }, 'and wraps round to itself when it is the only one');
-  assert.deepEqual(key(rows, 3, 'o'), { focus: 1 });
-  assert.equal(key(rows, 3, 'z'), null);
-  assert.equal(key(rows, 3, ' '), null);
-  assert.equal(key(rows, 3, 'Tab'), null);
-  assert.equal(key(rows, 999, 'ArrowDown'), null, 'a line that is not shown');
-});
-
 test('actions of a unit the person manages: New names the next level, Move, Deactivate; Access and Approvals only when their tab exists', () => {
   const tree = buildTree(dir().nodes);
   const a = (id: number | null, c = ctx) => Object.fromEntries(unitActions(tree, id, c).map((x) => [x.key, x]));
@@ -185,13 +111,14 @@ test('actions of a unit the person manages: New names the next level, Move, Deac
   assert.deepEqual([ops.new.hidden, ops.new.disabled], [false, false]);
   assert.equal(ops.edit.label, 'Edit details');
   assert.deepEqual([ops.properties.label, ops.properties.hidden, ops.properties.disabled], ['Properties', false, false], 'the popup is Properties');
-  assert.deepEqual(unitActions(tree, 1, ctx).map((x) => x.key), ['new', 'properties', 'edit', 'move', 'toggle', 'access', 'approvals']);
+  assert.deepEqual(unitActions(tree, 1, ctx).map((x) => x.key), ['new', 'properties', 'edit', 'move', 'toggle', 'access', 'approvals', 'exceptions']);
   assert.deepEqual([ops.move.hidden, ops.move.disabled], [false, false]);
   assert.equal(ops.toggle.label, 'Deactivate');
-  assert.ok(ops.access.hidden && ops.approvals.hidden, 'no Access or Approvals tab yet');
-  const later = a(1, { ...ctx, tabs: ['details', 'people', 'access', 'approvals'] });
-  assert.ok(!later.access.hidden && !later.approvals.hidden);
+  assert.ok(ops.access.hidden && ops.approvals.hidden && ops.exceptions.hidden, 'no Access, Approvals or Exceptions tab yet');
+  const later = a(1, { ...ctx, tabs: ['details', 'people', 'access', 'approvals', 'exceptions'] });
+  assert.ok(!later.access.hidden && !later.approvals.hidden && !later.exceptions.hidden);
   assert.equal(later.access.label, 'Access');
+  assert.equal(later.exceptions.label, 'Exceptions');
 });
 
 test('actions: a switched-off unit holds nothing new and is activated, not deactivated', () => {
@@ -273,22 +200,12 @@ test('New lists the places a unit can be added under, started on the unit it is 
   assert.equal(newPlaceChoices(tree, null, { ...ctx, canTop: false })[0].value, '', 'opened at the top, the top is shown even without the right (it is where the dialog starts)');
 });
 
-test('finding a unit: by name or code, ignoring case and accents, A-Z, nothing for a blank', () => {
-  const nodes = [...dir().nodes, ...fromList([{ id: 20, name: 'Sécurité Cloud', code: 'SC', is_active: true }], true).nodes];
-  assert.deepEqual(findUnits(nodes, 'oper').map((n) => n.name), ['Operations', 'SOC Operations']);
-  assert.deepEqual(findUnits(nodes, 'FINA').map((n) => n.name), ['Finance'], 'the code');
-  assert.deepEqual(findUnits(nodes, 'securite').map((n) => n.name), ['Sécurité Cloud']);
-  assert.deepEqual(findUnits(nodes, '  '), []);
-  assert.deepEqual(findUnits(nodes, 'zzz'), []);
-  assert.equal(findUnits(nodes, 'o', 2).length, 2, 'capped');
-});
-
 test('the words and addresses: counts, the library link, and a unit named by the address', () => {
   assert.equal(countText(1, 'document'), '1 document');
   assert.equal(countText(0, 'person', 'people'), '0 people');
   assert.equal(countText(5, 'unit'), '5 units');
-  assert.equal(libraryHref(4), '/governance/documents?dept=4');
-  assert.equal(libraryHref(null), '/governance/documents');
+  assert.equal(libraryHref(4), '/governance/documents?view=folders&dept=4');
+  assert.equal(libraryHref(null), '/governance/documents?view=folders');
   const tree = buildTree(dir().nodes);
   assert.equal(unitFromAddress('4', tree), 4);
   assert.equal(unitFromAddress(' 4 ', tree), 4);

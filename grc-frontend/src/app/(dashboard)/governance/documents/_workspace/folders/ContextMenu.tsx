@@ -61,7 +61,7 @@ export function ContextMenu({ x, y, label, items, onClose }: { x: number; y: num
       ref={box}
       role="menu"
       aria-label={label}
-      tabIndex={-1}
+      tabIndex={0}                                                  // a menu that scrolls on a short screen is a focusable region (Tab closes it: onKeyDown)
       onKeyDown={onKeyDown}
       onContextMenu={(e) => e.preventDefault()}
       style={{ top: at?.top ?? 0, left: at?.left ?? 0, maxHeight: at?.maxHeight, opacity: at ? 1 : 0 }}

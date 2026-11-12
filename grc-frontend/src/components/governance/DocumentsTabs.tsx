@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * The Documents area's tabs (Documents · Comply AI Studio · Attestation · Reviews · Exceptions · Directory · Settings), shown in the top bar instead of a row
+ * The Documents area's tabs (Documents · Comply AI Studio · Attestation · Reviews · Exceptions · Settings), shown in the top bar instead of a row
  * of their own so the page below gets the height. Every tab is an icon and a label (Settings is just the gear) while the strip fits; when it does not,
  * only the open tab keeps its label (the others have it as their tooltip and for a screen reader). The strip is measured with every label showing, once the tabs are
  * known, and again whenever its width changes (the window, the menu opening): the labels go when the strip does not fit (the At a glance tab, which made the strip eight, went to the Governance Overview on 2026-11-12). Past that the strip still scrolls sideways and brings the open tab into view. The product keeps its full name, "Comply AI Studio", on every screen; "Policy exceptions" is
@@ -14,7 +14,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, CalendarClock, ClipboardCheck, FileText, FolderTree, Settings, Sparkles, type LucideIcon } from 'lucide-react';
+import { AlertTriangle, CalendarClock, ClipboardCheck, FileText, Settings, Sparkles, type LucideIcon } from 'lucide-react';
 import { clsx } from 'clsx';
 import { studioApi } from '@/lib/studio/api';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -28,7 +28,6 @@ const LOOK: Record<string, { icon: LucideIcon; iconOnly?: boolean }> = {
   attestation: { icon: ClipboardCheck },
   reviews: { icon: CalendarClock },
   exceptions: { icon: AlertTriangle },
-  directory: { icon: FolderTree },
   settings: { icon: Settings, iconOnly: true },
 };
 

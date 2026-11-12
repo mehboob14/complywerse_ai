@@ -1,6 +1,6 @@
 'use client';
 
-// The two small dialogs of the Directory: New (a unit under the one you are in, or a department at the top) and Move to… (a unit to another place). Both are the kit's centered
+// The two small dialogs of the Folders layout: New (a unit under the one you are in, or a department at the top) and Move to… (a unit to another place). Both are the kit's centered
 // dialog: focus inside, Escape closes, and they ask "Discard changes?" when something was typed or chosen. The fields and rules are UnitForm's and lib/departments.ts's; the
 // places a unit can go are directoryModel's (not itself, not under itself, not too deep, not switched off, only where the person may manage); the server's refusal (a name
 // already taken, a place that would be too deep) is shown in the dialog as it says it, with the choice kept.

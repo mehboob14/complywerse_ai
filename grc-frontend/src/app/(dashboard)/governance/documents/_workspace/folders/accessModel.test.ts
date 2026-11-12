@@ -1,4 +1,4 @@
-// node --test "src/app/(dashboard)/governance/documents/directory/accessModel.test.ts"
+// node --test "src/app/(dashboard)/governance/documents/_workspace/folders/accessModel.test.ts"
 // The Access tab's rules: what the server's answer becomes, the words of a level and of where it comes from, why a person is listed, what Remove does, what the picker lists,
 // and the body and the confirmation of each write.
 import { test } from 'node:test';

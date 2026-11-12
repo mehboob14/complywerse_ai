@@ -37,7 +37,7 @@
 //   /governance/documents/studio             -                  tabs                                     Comply AI Studio              tab Comply AI Studio                     Comply AI Studio
 //   /governance/documents/studio/:sessionId  -                  tabs                                     the draft's title (editable)  back "Studio"                            Studio draft
 //   /governance/documents/attestation        -                  tabs                                     Attestation                   tab Attestation                          Attestation
-//   /governance/documents/directory          -                  tabs                                     Directory                     tab Directory (before the Settings gear) Directory (the department tree: browse, edit in a popup, add, move, deactivate)
+//   /governance/documents/directory          -                  (a server redirect)                      -                             -                                        Documents (an alias of the library: the old Directory address forwards to its Folders layout, with its unit and its Properties)
 //   /governance/attestations                 -                  "Attestation" (a flash, then a redirect) Attestation (after it)        -                                        Attestation (an alias)
 //   /governance/attestations/campaigns       -                  (none)                                   Attestation Campaigns         -                                        Attestation Campaigns
 //   /governance/attestations/campaigns/:id   -                  (none)                                   the campaign's name           back "Campaigns"                         Attestation Campaign
@@ -161,7 +161,7 @@ const OF_LEAF: Record<string, Extra> = {
   '/governance': { title: 'Governance Overview', subtitle: 'Real-time policy, framework, and review posture', ownHeading: true, keywords: ['At a glance', 'Documents overview'] },
   '/governance/kpi-report': { ownHeading: true },
   // the strip's first tab says Library ("Documents" under "Documents" read twice); the leaf keeps its sidebar name and the tab's accessible name holds both (tabName)
-  [DOCS]: { tab: { area: 'documents', id: 'documents', order: 1, ownerDoor: true }, shortLabel: 'Library', keywords: ['Document library'] },
+  [DOCS]: { tab: { area: 'documents', id: 'documents', order: 1, ownerDoor: true }, shortLabel: 'Library', keywords: ['Document library', 'Folders', 'Directory', 'Departments', 'Units', 'Organisation', 'Organization', 'Org chart', 'Sub-departments'] },
   '/governance/approvals': { keywords: ['Pending Approvals'] },
   [COMMITTEES]: { keywords: ['Board & Committee Management'], ownHeading: true },
   '/erm/kris': { keywords: ['Key Risk Indicators'] },
@@ -194,8 +194,8 @@ const pages: Draft[] = [
   gov('/governance/attestations/my', 'My Attestations', { parent: ATTEST, hidden: 'legacy page: no link opens it, kept for a typed or bookmarked URL' }),
   gov('/governance/attestations/complete/:id', 'Complete Attestation', { parent: '/governance/attestations/my', hidden: 'opens from the legacy My Attestations list' }),
   gov('/governance/exceptions', 'Exceptions', { parent: DOCS, tab: { area: 'documents', id: 'exceptions', order: 6 } }),
-  // the organisation's departments as a tree to browse (Windows-Explorer style); reading takes no right (like the Overview), so the head of a unit reaches it too: what a person may change there is decided per unit by the page and the server
-  gov(`${DOCS}/directory`, 'Directory', { parent: DOCS, permissions: null, tab: { area: 'documents', id: 'directory', order: 7, ownerDoor: true }, keywords: ['Departments', 'Units', 'Organisation', 'Organization', 'Org chart', 'Sub-departments'] }),
+  // the old Directory address: the organisation's folders are the library's Folders layout now (2026-11-12), and this forwards there with its unit (`dept`) and its Properties (`props`, `tab`)
+  gov(`${DOCS}/directory`, 'Documents', { aliasOf: DOCS }),
   gov('/governance/settings', 'Governance settings', { shortLabel: 'Settings', parent: DOCS, tab: { area: 'documents', id: 'settings', order: 8, permission: 'governance:settings:*' } }),
   gov('/governance/reviews', 'Document Reviews', { shortLabel: 'Reviews', parent: DOCS, tab: { area: 'documents', id: 'reviews', order: 5 }, keywords: ['Reviews', 'Review Calendar'] }),
   gov('/governance/reviews/calendar', 'Document Reviews', { aliasOf: '/governance/reviews' }),

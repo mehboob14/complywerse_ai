@@ -1,6 +1,6 @@
 'use client';
 
-// The Directory's data: one query for every unit, read from the Directory API (`GET /admin/departments/directory`: per-unit can_manage and counts) when the backend
+// The organisation's units as the library's Folders layout and the Properties popup read them: one query for every unit, read from the Directory API (`GET /admin/departments/directory`: per-unit can_manage and counts) when the backend
 // answers it, else from the flat list every backend has (`GET /admin/departments?include_inactive=true`, where can_manage is the person's global
 // `admin:organization:edit`). Which of the two answers is found out ONCE per page load (the first read tries the Directory API; a backend without it says 404, 405 or 422 and
 // the list is read instead, and the page does not ask again), so the missing endpoint costs one refused request and no console error. Anything else the Directory API
@@ -59,14 +59,15 @@ export interface DirectoryData {
   levels: readonly string[];
 }
 
-export function useDirectory(): DirectoryData {
+/** `enabled`: the Folders layout is on (or a unit's Properties is open): nothing is asked for in the library's other layouts. */
+export function useDirectory(enabled = true): DirectoryData {
   const perms = usePermissions();
   const globalRight = !perms.isLoading && perms.hasPermission(GLOBAL_RIGHT);
   const levelNames = useDepartmentLevels().data?.labels;
-  const query = useQuery<Answer>({ queryKey: DIRECTORY_KEY, queryFn: read, staleTime: 30_000, retry: false });
+  const query = useQuery<Answer>({ queryKey: DIRECTORY_KEY, queryFn: read, staleTime: 30_000, retry: false, enabled });
   const answer = query.data;
   // which units define their own default reviewers, approvers, route or implementer: the badges of the Details table. A failed read is no badge (unknown is not "none"), never the page's error.
-  const overview = useQuery({ queryKey: OVERVIEW_KEY, queryFn: readOverview, staleTime: 30_000, retry: false });
+  const overview = useQuery({ queryKey: OVERVIEW_KEY, queryFn: readOverview, staleTime: 30_000, retry: false, enabled });
   const directory = useMemo<Directory | null>(() => {
     if (!answer) return null;
     const base = answer.kind === 'directory' ? fromDirectory(answer.payload) : fromList(answer.rows, globalRight, levelNames);
@@ -76,7 +77,7 @@ export function useDirectory(): DirectoryData {
   const canTop = directory?.canCreateTop ?? globalRight;
   const tree = useMemo(() => (directory ? buildTree(directory.nodes) : null), [directory]);
   return {
-    loading: query.isPending || perms.isLoading,
+    loading: enabled && (query.isPending || perms.isLoading),
     error: query.error,
     refetch: () => { void query.refetch(); },
     fetching: query.isFetching,

@@ -1,14 +1,15 @@
 'use client';
 
-// Going from folder to folder in the Directory: every move to another folder pushes the address (`?unit=`), so the browser's Back and Forward and a mouse's side buttons work and bring
+// Going from folder to folder in the library's Folders layout: every move to another folder pushes the address (`?dept=`, the library's own Department filter), so the browser's Back and Forward and a mouse's side buttons work and bring
 // the address, the tree and the selection back; and the page keeps the small mirror of that history (navTrail.ts) so its own Back and Forward buttons know whether there is anywhere
-// to go (the first Back from the first folder visited does not leave the Directory: its button is off) and which way an address change went.
+// to go (the first Back from the first folder visited does not leave the folders: its button is off) and which way an address change went.
 // SCROLL: the page scrolls inside the shell's <main>, which the browser does not restore and the app router does not reset for an address the page pushed itself, so it is done here: a
 // folder opened afresh (a push, Up, a click in the tree) starts at the top; Back and Forward put the folder back where it was left.
 import { useCallback, useEffect, useLayoutEffect, useReducer, useRef } from 'react';
 import { canBack, canForward, follow, replaceHere, startTrail, visit, type Folder, type Trail } from './navTrail';
-import { folderKey } from './directoryFiles';
-import type { DirectoryTree } from './directoryModel';
+
+/** The folder a scroll position is remembered under: `org` or the unit's id. */
+const folderKey = (folder: Folder): string => (folder === null ? 'org' : String(folder));
 
 // measured before the browser paints; on the server there is nothing to measure
 const useBeforePaint = typeof window === 'undefined' ? useEffect : useLayoutEffect;
@@ -23,7 +24,8 @@ export interface DirectoryNav {
   forward: () => void;
 }
 
-export function useDirectoryNav(tree: DirectoryTree | null, current: Folder, setUnit: (to: Folder, push: boolean) => void): DirectoryNav {
+/** `active`: the Folders layout is showing; otherwise nothing is followed. */
+export function useDirectoryNav(active: boolean, current: Folder, setUnit: (to: Folder, push: boolean) => void): DirectoryNav {
   const trailRef = useRef<Trail | null>(null);
   const asked = useRef<'back' | 'forward' | null>(null);       // the direction the page's own button asked the browser for
   const own = useRef<'push' | 'replace' | null>(null);          // the page itself moved to another folder (not the browser's Back or Forward)
@@ -42,7 +44,7 @@ export function useDirectoryNav(tree: DirectoryTree | null, current: Folder, set
 
   // the folder changed: which step of the history is it (the browser's Back or Forward, or the page's own move), and where is it scrolled to
   useBeforePaint(() => {
-    if (!tree) return;
+    if (!active) { trailRef.current = null; left.current = undefined; return; }        // not on the Folders layout: nothing is followed
     const t = trailRef.current;
     if (!t) { trailRef.current = startTrail(current); left.current = current; bump(); return; }
     const next = follow(t, current, asked.current);
@@ -56,7 +58,7 @@ export function useDirectoryNav(tree: DirectoryTree | null, current: Folder, set
       if (main) { main.scrollTop = kind === 'back' || kind === 'forward' ? tops.current.get(folderKey(current)) ?? 0 : 0; top.current = main.scrollTop; }
     }
     left.current = current;
-  }, [tree, current]);
+  }, [active, current]);
 
   const navigate = useCallback((to: Folder, mode: 'push' | 'replace' = 'push') => {
     const t = trailRef.current ?? startTrail(current);

@@ -5,7 +5,7 @@ import { buildTree, treeEntries } from './docTree.ts';
 import {
   FIRST_SHOWN, NO_DEPARTMENT_KEY, NO_DEPARTMENT_NAME, OPEN_UP_TO, SHOW_STEP,
   allFolders, buildFolders, chooseView, commonDepartment, defaultView, displayOrder, expandable, filterTargets, flipFolder, folderAria,
-  folderEntries, folderIsOpen, folderKey, matchedIds, moveAll, moveMessage, moveTargets, planFolders, setAllFolders, showMoreStep, shownLimit,
+  folderEntries, folderIsOpen, folderKey, folderParent, folderPath, matchedIds, moveAll, moveMessage, moveTargets, openFolderOf, openFolders, planFolders, setAllFolders, showMoreStep, shownLimit,
   statusSummary,
   type FolderDepartment, type FolderDoc, type FolderNode, type FoldView,
 } from './libraryFolders.ts';
@@ -27,10 +27,11 @@ const doc = (over: Partial<FolderDoc> = {}): FolderDoc => ({
 });
 const dept = (id: number, name: string, over: Partial<FolderDepartment> = {}): FolderDepartment => ({ id, name, parent_department_id: null, is_active: true, ...over });
 
-const build = (scope: FolderDoc[], departments: FolderDepartment[] | null, over: { matches?: number[]; filtering?: boolean } = {}) =>
+const build = (scope: FolderDoc[], departments: FolderDepartment[] | null, over: { matches?: number[]; filtering?: boolean; root?: number | null; showInactive?: boolean } = {}) =>
   buildFolders({
     scope, departments, now: NOW, filtering: over.filtering ?? false,
     matches: new Set(over.matches ?? scope.map((d) => d.id)),
+    root: over.root, showInactive: over.showInactive,
   });
 const names = (nodes: FolderNode[]) => nodes.map((x) => x.name);
 const shape = (nodes: readonly FolderNode[]): unknown[] => nodes.map((x) => [x.name, x.depth, shape(x.folders)]);
@@ -544,4 +545,76 @@ test('one toast says what happened: how many moved, how many could not, and the 
   assert.deepEqual(moveMessage({ moved: [], same: [], failed }, 'Legal'), { title: '2 not moved', message: 'The department chosen is not active.', type: 'error' });
   assert.deepEqual(moveMessage({ moved: [], same: [], failed: failed.slice(0, 1) }, 'Legal'), { title: 'Not moved', message: 'The department chosen is not active.', type: 'error' });
   assert.equal(moveMessage({ moved: [1], same: [], failed: [{ id: 2, reason: '' }] }, 'Legal').message, undefined);
+});
+
+
+// ── the folders are the directory: every unit, inactive ones on request, an open folder, its path ────────────────────────────
+
+test('with no filter on EVERY active unit is a folder, empty ones too, however deep; a switched-off one holding documents stays (dimmed), an empty one is hidden until "Show inactive"', () => {
+  const departments = [
+    dept(1, 'Operations'), dept(2, 'Support', { parent_department_id: 1 }), dept(3, 'Helpdesk', { parent_department_id: 2 }),
+    dept(4, 'Legal'), dept(5, 'Old unit', { is_active: false }), dept(6, 'Closed unit', { is_active: false }), dept(7, 'Archive team', { is_active: false, parent_department_id: 4 }),
+  ];
+  const scope = [doc({ department_id: 5 })];
+  assert.deepEqual(shape(build(scope, departments)), [['Legal', 0, []], ['Old unit', 0, []], ['Operations', 0, [['Support', 1, [['Helpdesk', 2, []]]]]]]);
+  assert.deepEqual(shape(build(scope, departments, { showInactive: true })), [['Closed unit', 0, []], ['Legal', 0, [['Archive team', 1, []]]], ['Old unit', 0, []], ['Operations', 0, [['Support', 1, [['Helpdesk', 2, []]]]]]]);
+  assert.deepEqual(build(scope, departments, { showInactive: true }).filter((f) => f.inactive).map((f) => f.name), ['Closed unit', 'Old unit']);
+  // with a filter on only the folders with a match are folders, whatever "Show inactive" says
+  assert.deepEqual(names(build(scope, departments, { matches: [scope[0].id], filtering: true, showInactive: true })), ['Old unit']);
+  assert.deepEqual(build(scope, departments, { matches: [], filtering: true, showInactive: true }), []);
+});
+
+test('an open folder is the one top folder: it is always there (empty or switched off), everything under it follows the rules, nothing else is drawn, "No department" is not', () => {
+  const departments = [dept(1, 'Operations'), dept(2, 'Support', { parent_department_id: 1 }), dept(3, 'Helpdesk', { parent_department_id: 2 }), dept(4, 'Legal'), dept(5, 'Old', { parent_department_id: 2, is_active: false })];
+  const inSupport = doc({ department_id: 2 });
+  const scope = [doc({ department_id: 4 }), inSupport, doc({ department_id: null })];
+  const rooted = build(scope, departments, { root: 2, matches: [inSupport.id] });
+  assert.deepEqual(shape(rooted), [['Support', 0, [['Helpdesk', 1, []]]]]);                  // Old is switched off and empty: hidden
+  assert.equal(rooted[0].total.docs, 1);
+  assert.deepEqual(shape(build(scope, departments, { root: 2, matches: [inSupport.id], showInactive: true })), [['Support', 0, [['Helpdesk', 1, []], ['Old', 1, []]]]]);
+  // a leaf with nothing in it, and a unit that is switched off, are still the folder you are in
+  assert.deepEqual(shape(build([], departments, { root: 3, matches: [] })), [['Helpdesk', 0, []]]);
+  assert.deepEqual(shape(build([], departments, { root: 5, matches: [] })), [['Old', 0, []]]);
+  assert.equal(build([], departments, { root: 5, matches: [] })[0].inactive, true);
+  // with another filter on, the folders under it with no match are left out and its own row stays
+  assert.deepEqual(shape(build(scope, departments, { root: 1, matches: [inSupport.id], filtering: true })), [['Operations', 0, [['Support', 1, []]]]]);
+  assert.deepEqual(shape(build(scope, departments, { root: 1, matches: [], filtering: true })), [['Operations', 0, []]]);
+  // a unit the list does not know is no root: the whole organisation
+  assert.deepEqual(names(build(scope, departments, { root: 99 })), ['Legal', 'Operations', 'No department']);
+  assert.deepEqual(names(build(scope, departments, { root: null })), ['Legal', 'Operations', 'No department']);
+});
+
+test('the open folder is the Department filter holding exactly one unit that the list knows', () => {
+  const departments = [dept(1, 'Operations'), dept(2, 'Support', { parent_department_id: 1, is_active: false })];
+  assert.equal(openFolderOf(['1'], departments), 1);
+  assert.equal(openFolderOf(['2'], departments), 2, 'a switched-off unit is a folder too');
+  for (const odd of [[], ['1', '2'], ['none'], ['99'], ['x'], ['1x'], ['-1'], ['12345678901234']]) assert.equal(openFolderOf(odd, departments), null, JSON.stringify(odd));
+  assert.equal(openFolderOf(['1'], null), null);
+  assert.equal(openFolderOf(['1'], []), null);
+});
+
+test('the path of an open folder runs from the top unit down to it; the unit above it is its parent; the organisation has neither', () => {
+  const departments = [dept(1, 'Operations'), dept(2, 'Support', { parent_department_id: 1 }), dept(3, 'Helpdesk', { parent_department_id: 2 }), dept(4, 'Legal')];
+  assert.deepEqual(folderPath(departments, 3), [{ id: 1, name: 'Operations' }, { id: 2, name: 'Support' }, { id: 3, name: 'Helpdesk' }]);
+  assert.deepEqual(folderPath(departments, 4), [{ id: 4, name: 'Legal' }]);
+  assert.deepEqual(folderPath(departments, null), []);
+  assert.deepEqual(folderPath(departments, 99), []);
+  assert.equal(folderParent(departments, 3), 2);
+  assert.equal(folderParent(departments, 2), 1);
+  assert.equal(folderParent(departments, 1), null);
+  assert.equal(folderParent(departments, null), null);
+  assert.equal(folderParent(departments, 99), null);
+  // a loop (A in B in A) has one top, as the folders have: the path ends and does not run for ever
+  const loop = [dept(1, 'A', { parent_department_id: 2 }), dept(2, 'B', { parent_department_id: 1 })];
+  assert.deepEqual(folderPath(loop, 2).map((x) => x.name), ['A', 'B']);
+  assert.deepEqual(folderPath([dept(1, 'Self', { parent_department_id: 1 })], 1).map((x) => x.name), ['Self']);
+});
+
+test('opening folders (going into one, making one inside another) is remembered, or for those matches only while a filter is on; the rest is as it was', () => {
+  const view = (over: Partial<FoldView> = {}): FoldView => ({ saved: {}, shut: new Set(), filtering: false, docCount: 100, ...over });
+  assert.deepEqual(openFolders(view({ saved: { d9: false } }), ['d1', 'd2']).saved, { d9: false, d1: true, d2: true });
+  assert.deepEqual(Array.from(openFolders(view({ filtering: true, shut: new Set(['d1', 'd7']) }), ['d1']).shut), ['d7']);
+  const before = view({ saved: { d1: false } });
+  openFolders(before, ['d1']);
+  assert.deepEqual(before.saved, { d1: false }, 'the view it was given is not changed');
 });

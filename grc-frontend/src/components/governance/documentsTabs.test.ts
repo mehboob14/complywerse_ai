@@ -1,5 +1,5 @@
 // node --test "src/components/governance/documentsTabs.test.ts"
-// The Documents area's tab bar (Documents · Comply AI Studio · Attestation · Reviews · Exceptions · Directory · Settings) in the top bar: which tabs there are, in which order,
+// The Documents area's tab bar (Documents · Comply AI Studio · Attestation · Reviews · Exceptions · Settings) in the top bar: which tabs there are, in which order,
 // which pages belong to the area (the Header swaps its title for the tabs there) and which tab is lit on which page. It was written inline in
 // DocumentsTabs.tsx and is now read from the navigation registry (lib/navRegistry.ts); this test is the pin of the behaviour it had BEFORE:
 // ORACLE is the old logic transcribed, TABLE is the same behaviour as a hand-written table, and the registry must give both.
@@ -24,13 +24,12 @@ const EXCEPTIONS: Tab = { name: 'Exceptions', label: 'Exceptions', href: '/gover
 const REVIEWS: Tab = { name: 'Document Reviews', label: 'Reviews', href: '/governance/reviews' };
 const STUDIO: Tab = { name: 'Comply AI Studio', label: 'Comply AI Studio', href: '/governance/documents/studio' };
 const SETTINGS: Tab = { name: 'Settings', label: 'Settings', href: '/governance/settings', iconOnly: true };
-const DIRECTORY: Tab = { name: 'Directory', label: 'Directory', href: '/governance/documents/directory' };
 
 const oracleInArea = (pathname: string | null) =>
   !!pathname && (pathname.startsWith('/governance/documents') || pathname.startsWith('/governance/exceptions') || pathname.startsWith(REVIEWS.href) || pathname.startsWith(SETTINGS.href));
 
 function oracleTabs({ studio, settings }: Ctx): Tab[] {
-  const tabs = studio ? [DOCUMENTS, STUDIO, ATTESTATION, REVIEWS, EXCEPTIONS, DIRECTORY] : [DOCUMENTS, ATTESTATION, REVIEWS, EXCEPTIONS, DIRECTORY];
+  const tabs = studio ? [DOCUMENTS, STUDIO, ATTESTATION, REVIEWS, EXCEPTIONS] : [DOCUMENTS, ATTESTATION, REVIEWS, EXCEPTIONS];
   if (settings) tabs.push(SETTINGS);
   return tabs;
 }
@@ -38,7 +37,7 @@ function oracleTabs({ studio, settings }: Ctx): Tab[] {
 function oracleLit(pathname: string, ctx: Ctx): string | null {
   const docInStudio = ctx.studio && /^\/governance\/documents\/\d+$/.test(pathname);
   const lit = oracleTabs(ctx).find((t) => (t === DOCUMENTS
-    ? pathname === t.href || (!docInStudio && pathname.startsWith(`${t.href}/`) && !pathname.startsWith(ATTESTATION.href) && !pathname.startsWith(STUDIO.href) && !pathname.startsWith(DIRECTORY.href))
+    ? pathname === t.href || (!docInStudio && pathname.startsWith(`${t.href}/`) && !pathname.startsWith(ATTESTATION.href) && !pathname.startsWith(STUDIO.href))
     : t === STUDIO ? docInStudio || pathname.startsWith(t.href) : pathname.startsWith(t.href)));
   return lit ? lit.name : null;
 }
@@ -53,7 +52,7 @@ const TABLE: Array<[string, boolean, string | null, string | null]> = [
   ['/governance/documents/studio', true, 'Comply AI Studio', null],
   ['/governance/documents/studio/12', true, 'Comply AI Studio', null],
   ['/governance/documents/attestation', true, 'Attestation', 'Attestation'],
-  ['/governance/documents/directory', true, 'Directory', 'Directory'],
+  ['/governance/documents/directory', true, 'Documents', 'Documents'],           // the old Directory address: a redirect to the library's Folders layout, no tab of its own
   ['/governance/reviews', true, 'Document Reviews', 'Document Reviews'],
   ['/governance/reviews/calendar', true, 'Document Reviews', 'Document Reviews'],            // the same tab: its calendar view
   ['/governance/exceptions', true, 'Exceptions', 'Exceptions'],
@@ -97,10 +96,10 @@ test('the old logic and the table say the same thing (so the oracle is the behav
 test('the tabs, in order, by who sees them: the Studio where it is on, Settings with the right', () => {
   const names = ALL.map((ctx) => oracleTabs(ctx).map((t) => t.name));
   assert.deepEqual(names, [
-    ['Documents', 'Comply AI Studio', 'Attestation', 'Document Reviews', 'Exceptions', 'Directory', 'Settings'],
-    ['Documents', 'Attestation', 'Document Reviews', 'Exceptions', 'Directory', 'Settings'],
-    ['Documents', 'Comply AI Studio', 'Attestation', 'Document Reviews', 'Exceptions', 'Directory'],
-    ['Documents', 'Attestation', 'Document Reviews', 'Exceptions', 'Directory'],
+    ['Documents', 'Comply AI Studio', 'Attestation', 'Document Reviews', 'Exceptions', 'Settings'],
+    ['Documents', 'Attestation', 'Document Reviews', 'Exceptions', 'Settings'],
+    ['Documents', 'Comply AI Studio', 'Attestation', 'Document Reviews', 'Exceptions'],
+    ['Documents', 'Attestation', 'Document Reviews', 'Exceptions'],
   ]);
 });
 

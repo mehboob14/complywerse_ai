@@ -5,7 +5,8 @@
  * whole library), the page's state (filters, sort, the document open and the layout live in the ADDRESS, on the kit's useAddressState, so a link opens the same view; the
  * person's density, rows per page, saved views and open folders are kept in their browser), the mutations and what each part draws. What a filter MEANS is libraryModel.ts, the
  * facets and their live counts are libraryFacets.ts over components/records/facetEngine.ts (held to libraryModel by a parity test), the rows are libraryRows.tsx, the folders
- * libraryFolders.ts, the numbers the page states libraryNumbers.ts. There is no quick-view row and no Board here: the filter bar does what the chips did, and the Board lives on the
+ * libraryFolders.ts and what a person does with them (open one, its path bar, Properties, New, Move, Access, Approvals) folders/useFolders.tsx, the numbers the page states libraryNumbers.ts.
+ * The Folders layout is the organisation's directory too (the Governance Directory page went into it, 2026-11-12). There is no quick-view row and no Board here: the filter bar does what the chips did, and the Board lives on the
  * Governance Overview.
  *
  * The library loads ONCE, whole and lean: every count, every facet number and the export are over all the documents (the response says when it could not hold them all).
@@ -53,7 +54,7 @@ import {
 } from './libraryFacets';
 import { filterChips, removeChip, validViewName, WAITING_LABEL } from './libraryFiltersLogic';
 import {
-  buildFolders, chooseView, commonDepartment, displayOrder, expandable, flipFolder, folderEntries, folderIsOpen, moveAll, moveMessage, moveTargets, setAllFolders,
+  buildFolders, chooseView, commonDepartment, displayOrder, expandable, flipFolder, folderEntries, folderIsOpen, moveAll, moveMessage, moveTargets, openFolderOf, openFolders, setAllFolders,
   showMoreStep, allFolders, type FoldChange, type FoldView, type MoveTarget,
 } from './libraryFolders';
 import { caretLabel, folderItems, recordRows } from './libraryItems';
@@ -82,6 +83,8 @@ import { waitingCount, waitingForMe, waitingNote } from './waitingModel';
 import { DocumentDetail } from './DocumentDetail';
 import { useHere } from './useHere';
 import { DepartmentsFailed, FoldersToolbar, NoDepartments } from './FolderRows';
+import { PROPS_SCHEMA } from './folders/foldersAddress';
+import { useFolders } from './folders/useFolders';
 import { MovePopover } from './MovePopover';
 import DetailsDialog from '../[id]/_DetailsDialog';
 import { useOrgDepartments } from '../_DetailsFields';
@@ -166,6 +169,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
 
   // ── the page's state: in the address, so a link opens the same view ──
   const [address, setAddress] = useAddressState(LIBRARY_SCHEMA);
+  const [popup, setPopup] = useAddressState(PROPS_SCHEMA);                // the Properties popup of a folder (?props=<unit>|org&tab=<tab>): the library's own `open` is a document's details
   const page = useMemo(() => pageOf(address as LibraryAddress), [address]);
   const { filters, sort } = page.state;
   const openId = page.openId;
@@ -266,6 +270,10 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   const result = useMemo(() => evaluate(index, chosenOf(applied), ruleOf(applied, matchCtx)), [index, applied, matchCtx]);
   const filteredDocs = result.matches as GovDoc[];
   const filtering = isFiltering(filters);
+  // the folder the library is opened into (the Department filter holds that one unit): not a filter of the folders, they are re-rooted there and every unit under it is a folder
+  const openFolder = inFolders ? openFolderOf(filters.departments, departments) : null;
+  const foldFiltering = openFolder != null ? isFiltering({ ...filters, departments: [] }) : filtering;
+  const [showInactive, setShowInactive] = useState(false);
   const archivedList = filters.statuses.length === 1 && filters.statuses[0] === 'archived';
   const totals = useMemo(() => libraryCounts(allDocs), [allDocs]);
   const scope = useMemo(() => unlessArchivedAsked(allDocs, filters.statuses), [allDocs, filters.statuses]);
@@ -334,8 +342,8 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   const sortedScope = useMemo(() => sortDocs(scope, sort, lookupsForSort), [scope, sort, lookupsForSort]);
   const folders = useMemo(() => {
     if (!inFolders || foldersBlocked || waitingForData) return null;
-    return buildFolders({ scope: sortedScope, matches: matchIds, departments, filtering, now });
-  }, [inFolders, foldersBlocked, waitingForData, sortedScope, matchIds, departments, filtering, now]);
+    return buildFolders({ scope: sortedScope, matches: matchIds, departments, filtering: foldFiltering, now, root: openFolder, showInactive });
+  }, [inFolders, foldersBlocked, waitingForData, sortedScope, matchIds, departments, foldFiltering, now, openFolder, showInactive]);
   const roots = useMemo(() => buildTree(inFolders ? [] : sortedScope, matchIds), [inFolders, sortedScope, matchIds]);
   const entries = useMemo(() => (folders ? folderEntries(folders) : treeEntries(roots)), [folders, roots]);
   const at = useMemo(() => new Map(entries.map((e) => [e.doc.id, e])), [entries]);
@@ -371,8 +379,8 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   const pageRows = useMemo(() => drawnRows(pageSlice(top, pageClamped, prefs.pageSize), at, openOf), [top, pageClamped, prefs.pageSize, at, fold, filtering]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── the folders (Folders view) ──
-  const foldView: FoldView = { saved: folderPrefs?.open ?? {}, shut, filtering, docCount: filteredDocs.length };
-  const applyFold = (change: FoldChange) => { if (filtering) setShut(change.shut); else changeFolderPrefs({ ...(folderPrefs ?? {}), view: folderPrefs?.view ?? null, open: change.saved }); };
+  const foldView: FoldView = { saved: folderPrefs?.open ?? {}, shut, filtering: foldFiltering, docCount: filteredDocs.length };
+  const applyFold = (change: FoldChange) => { if (foldFiltering) setShut(change.shut); else changeFolderPrefs({ ...(folderPrefs ?? {}), view: folderPrefs?.view ?? null, open: change.saved }); };
   const everyFolder = folders ? allFolders(folders) : [];
   const foldable = everyFolder.filter(expandable);
   const allFoldersOpen = foldable.every((n) => folderIsOpen(foldView, n.key));
@@ -381,6 +389,18 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
     applyFold(setAllFolders(foldView, foldable.map((n) => n.key), open));
     setFold((f) => (open ? expandAll(f) : collapseAll(parents)));
   };
+  // what a person does with a folder: select it, go into it (Back, Forward, Up), its menu, Properties, New, Move, Deactivate
+  const foldersApi = useFolders({
+    on: inFolders,
+    departments,
+    openFolder,
+    setDepartments: (next, push) => setAddress({ dept: next }, { push }),
+    props: popup.props,
+    tab: popup.tab,
+    setProps: (patch) => setPopup(patch),
+    flip: (key) => applyFold(flipFolder(foldView, key)),
+    reveal: (keys) => applyFold(openFolders(foldView, keys)),
+  });
 
   // ── ticks, the cursor, the details ──
   const selection = useSelection(matchKey);
@@ -403,7 +423,9 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
         onFlip: (key) => applyFold(flipFolder(foldView, key)),
         onMore: (n, step) => setExtra((e) => ({ ...e, [n.key]: (e[n.key] ?? 0) + step })),
         onFewer: (n) => setExtra((e) => { const next = { ...e }; delete next[n.key]; return next; }),
+        ui: foldersApi.ui,
       });
+      foldersApi.lines.current = built.lines;
       return { items: built.items, drawn: built.rows.map((r) => r.doc.id) };
     }
     if (grouped) {
@@ -420,7 +442,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
     }
     return { items: recordRows(pageRows, 0, toggleRow), drawn: pageRows.map((r) => r.doc.id) };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inTracker, inCalendar, grouped, docGroups, group, gfold, waitingForData, folders, foldView.saved, folderPrefs, shut, filtering, filteredDocs.length, extra, uid, selectable, selection.selected, at, fold, pageRows]);
+  }, [inTracker, inCalendar, grouped, docGroups, group, gfold, waitingForData, folders, foldView.saved, folderPrefs, shut, filtering, foldFiltering, filteredDocs.length, extra, uid, selectable, selection.selected, at, fold, pageRows, foldersApi.ui]);
   const pageIds = listItems.items.filter((i) => i.kind === 'row' && !i.context).map((i) => (i as { id: number }).id);
 
   // ── handlers ──
@@ -428,6 +450,26 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   const here = useHere();
   const docHref = (id: number) => withFrom(`/governance/documents/${id}`, here);
   const openDoc = (id: number) => router.push(docHref(id));
+  // a double-click on a document row (or on the backdrop the first click's details panel put over it) opens the document: the row that was clicked first. It is the second CLICK that is
+  // heard, in the capture phase, because the backdrop closes the panel on that click and a "dblclick" would then be sent to an element that is already gone
+  const tableBox = useRef<HTMLDivElement>(null);
+  const lastRow = useRef<{ id: number; at: number } | null>(null);
+  const openDocRef = useRef(openDoc);
+  openDocRef.current = openDoc;
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      const hit = lastRow.current;
+      const t = e.target instanceof HTMLElement ? e.target : null;
+      if (e.detail < 2 || !hit || !t || e.timeStamp - hit.at > 900) return;
+      if (!tableBox.current?.contains(t) && !/bg-ds-scrim/.test(String(t.className))) return;
+      if (t.closest('a, button, input, label, select, [data-no-peek], [data-folder-row]')) return;
+      lastRow.current = null;
+      e.stopPropagation();                                                       // the backdrop must not also close the panel (it would rewrite the address under the navigation)
+      openDocRef.current(hit.id);
+    };
+    document.addEventListener('click', onClick, true);
+    return () => document.removeEventListener('click', onClick, true);
+  }, []);
   const refreshAll = () => { REFRESH_KEYS.forEach((k) => qc.invalidateQueries({ queryKey: [...k] })); };
   const publish = useReportedMutation({
     mutationFn: (ids: number[]) => bulkPublish(ids),
@@ -663,12 +705,14 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
     if (noList) return <ErrorState title="Couldn't load the documents" message={errorMessage(listError)} onRetry={canRetry(listError) ? () => { void refetch(); } : undefined} />;
     if (loading) return <div aria-busy="true" className="rounded-ds-card border border-ds-border bg-ds-surface p-[12px]"><SkeletonRows rows={10} columns={5} label="Loading the documents" /></div>;
     if (foldersBlocked) {
-      return <div className="rounded-ds-card border border-ds-border bg-ds-surface">{departmentsQ.isError ? <DepartmentsFailed onRetry={() => departmentsQ.refetch()} /> : <NoDepartments />}</div>;
+      return <div className="rounded-ds-card border border-ds-border bg-ds-surface">{departmentsQ.isError ? <DepartmentsFailed onRetry={() => departmentsQ.refetch()} /> : <NoDepartments onNew={foldersApi.newDepartment ?? undefined} />}</div>;
     }
     if (attnFailed && attnKind) {
       return <ErrorState title={`Couldn't load “${ATTENTION_LABEL[attnKind]}”`} message={errorMessage(attn.error)} onRetry={canRetry(attn.error) ? () => { void attn.refetch(); } : undefined} />;
     }
-    if (filteredDocs.length === 0) return <div className="rounded-ds-card border border-ds-border bg-ds-surface">{empty}</div>;
+    // with no filter on, every unit is a folder: an organisation with no documents (or a folder with none) still has its folders to manage
+    const foldersToShow = inFolders && !foldFiltering && folders != null && folders.length > 0;
+    if (filteredDocs.length === 0 && !foldersToShow) return <div className="rounded-ds-card border border-ds-border bg-ds-surface">{empty}</div>;
     if (inTracker) {
       return <TrackerView docs={ordered} lookups={lookups} now={now} people={people} activeId={openId} onOpen={(d) => setOpenId(d.id)} hrefOf={docHref} />;
     }
@@ -689,6 +733,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
     const nested = entries.filter((e) => e.depth > 0).length;
     return (
       <>
+        {inFolders && folders ? foldersApi.bar : null}
         {inFolders && folders ? (
           <FoldersToolbar
             allOpen={allFoldersOpen}
@@ -698,6 +743,9 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
             documents={filteredDocs.length}
             loaded={allDocs.length}
             total={serverTotal}
+            inactive={foldersApi.inactive}
+            showInactive={showInactive}
+            onShowInactive={setShowInactive}
           />
         ) : null}
         {grouped ? (
@@ -711,6 +759,15 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
             total={serverTotal}
           />
         ) : null}
+        {/* a click on a document row opens its details; a double-click opens the document itself, as it does in Explorer (never on a control in the row) */}
+        <div ref={tableBox} onClickCapture={(e) => {
+          const t = e.target as HTMLElement;
+          const row = t.closest<HTMLElement>('[data-record-row]');
+          const now = e.timeStamp;
+          // the first click of a pair names the row: the second one may land on the details panel's backdrop, which the first click opened
+          if (row && !t.closest('a, button, input, label, select, [data-no-peek]') && !(lastRow.current && now - lastRow.current.at < 600)) lastRow.current = { id: Number(row.dataset.recordRow), at: now };
+          else if (!row) lastRow.current = null;
+        }}>
         <RecordTable
           caption={inFolders ? 'Documents by department' : grouped ? `Documents by ${GROUP_LABEL[group].toLowerCase()}` : 'Documents'}
           columns={columns}
@@ -725,6 +782,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
           card={(row) => <DocumentCard row={row} env={env} />}
           compact={prefs.density === 'compact'}
         />
+        </div>
         {!inFolders && !grouped && (
           <Pager
             className="mt-[8px]"
@@ -931,6 +989,9 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
 
       {/* Row Edit: the document page's Details popup */}
       {details && <DetailsDialog doc={details} open onClose={() => setDetails(null)} canEdit={mayChange(details)} onSaved={refreshAll} />}
+
+      {/* a folder's Properties, New, Move to… and its menu */}
+      {foldersApi.overlays}
 
       {/* Archive, and deleting a saved view, ask first */}
       {confirmDialog}

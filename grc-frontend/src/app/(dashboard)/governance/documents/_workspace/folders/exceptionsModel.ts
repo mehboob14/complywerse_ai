@@ -2,7 +2,7 @@
 // submitted (modules/governance/exception_rules.py `pick`): of the active rules whose unit is the exception's unit, one above it, or the whole organisation, and whose conditions
 // (priority, document type, exception type) fit, the one with the DEEPEST unit wins, then the one that names more conditions, then the oldest. This lists those rules in that order,
 // so the first one whose conditions fit an exception is the one it follows; it never decides for an exception (that is the server's, at submit). The words are lib/exceptionRules.ts's.
-import { WHOLE_ORGANISATION, type ExceptionRule } from '../../../../../lib/exceptionRules.ts';
+import { WHOLE_ORGANISATION, type ExceptionRule } from '../../../../../../lib/exceptionRules.ts';
 
 export type RuleFrom = 'here' | 'above' | 'organisation';
 

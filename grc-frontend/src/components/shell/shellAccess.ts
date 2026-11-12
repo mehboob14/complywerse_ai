@@ -30,7 +30,7 @@ export function mayAskComplyAgent(access: NavAccess, leaves: ReadonlySet<string>
   return !!entry && offeredEntry(entry, access, leaves);
 }
 
-/** The Documents strip this person has: all of it with a governance right, the tabs made for them (the library and the Directory) as the owner of a department who holds none,
+/** The Documents strip this person has: all of it with a governance right, the tabs made for them (the library, whose Folders layout is where the owner manages their units) as the owner of a department who holds none,
  *  nothing otherwise. The same rule the top bar's strip has always followed; the panel lists the same tabs. `studio`: the Comply AI Studio is on for the tenant. */
 export function documentsStrip(access: NavAccess, studio: boolean): TabEntry[] {
   const can = (permission: string) => access.isAdmin || holds(access.permissions, permission);

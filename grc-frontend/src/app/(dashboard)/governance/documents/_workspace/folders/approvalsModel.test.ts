@@ -1,4 +1,4 @@
-// node --test "src/app/(dashboard)/governance/documents/directory/approvalsModel.test.ts"
+// node --test "src/app/(dashboard)/governance/documents/_workspace/folders/approvalsModel.test.ts"
 // What the Directory's Approvals tab decides apart from the screen: the defaults badges of the Details table (unknown is not "none"), and what each default's card shows and
 // offers for a unit that sets its own, inherits, sits under a lock, has one that is not in force, or is read by someone who may not change it. Also what the tabs promise as
 // sources: the server decides which default applies, nothing here works it out; every state is drawn; nothing is written without the server's `can_edit`.
@@ -6,10 +6,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { parseAnswer, parseRow, type DefaultRow, type SubjectState } from '../../../../../lib/approvalDefaults.ts';
+import { parseAnswer, parseRow, type DefaultRow, type SubjectState } from '../../../../../../lib/approvalDefaults.ts';
 import { cardView, organisationLine, rowWords, withDefaults } from './approvalsModel.ts';
 import { badgesOf, type DirectoryNode } from './directoryModel.ts';
-import { findViolations } from '../../../../../components/ui/ds/kitRules.ts';
+import { findViolations } from '../../../../../../components/ui/ds/kitRules.ts';
 
 const node = (id: number): DirectoryNode => ({
   id, parent_department_id: null, name: `Unit ${id}`, code: null, level: 1, level_label: 'Department', head: null, is_active: true, counts: { documents: 0, members: 0, children: 0 }, can_manage: true,

@@ -31,7 +31,7 @@ function sourceFiles(): string[] {
 
 test('no screen of Governance > Documents says "in force": it says Published', () => {
   const files = sourceFiles();
-  assert.ok(files.length > 100 && files.includes('_workspace/DocumentsWorkspace.tsx') && files.includes('[id]/_DocumentStudio.tsx') && files.includes('directory/DefaultCard.tsx'), 'the guard reads the whole area');
+  assert.ok(files.length > 100 && files.includes('_workspace/DocumentsWorkspace.tsx') && files.includes('[id]/_DocumentStudio.tsx') && files.includes('_workspace/folders/DefaultCard.tsx'), 'the guard reads the whole area');
   const found = files.flatMap((f) => visibleText(readFileSync(`${DOCUMENTS}${f}`, 'utf8'), f.endsWith('.tsx')).filter((s) => IN_FORCE.test(s)).map((s) => `${f}: "${s.slice(0, 90)}"`));
   assert.deepEqual(found, [], 'say "published" (or "active" for a default); the code may keep version_in_force, inForce and the in-force view id');
 });

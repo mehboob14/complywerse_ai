@@ -2,7 +2,7 @@
 
 // The Access tab of a unit's popup: who has a way into this unit and why (its owner, people added by hand, holders of its roles, people or roles given a level), the level each has
 // (View, Edit or Manage) and where it comes from ("Granted here", "Inherited from Operations", "Blocked here"). Below it the levels given ON this unit (they reach every unit under
-// it) and the ones inherited from the units above, which a person who manages the unit can override or block here. Anyone who can open the Directory reads the lists; only a manager
+// it) and the ones inherited from the units above, which a person who manages the unit can override or block here. Anyone who can open the library reads the lists; only a manager
 // of the unit adds, changes, takes back or blocks. A level given lower down wins over one above, and access only adds (a global right is never taken away): the (i) says so.
 // Every change says what happened or, when the server refuses, why in its words. The rules and words are accessModel.ts (tested); the requests are lib/directoryAccessApi.ts.
 import { useMemo, useState, type ReactNode } from 'react';

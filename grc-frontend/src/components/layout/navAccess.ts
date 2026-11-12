@@ -264,7 +264,7 @@ export interface NavAccess {
   signedIn: boolean;
 }
 
-/** a person with a level on some unit (/auth/me user.unit_rights: given by the Directory's Access tab) has the owner's door to the Documents area too */
+/** a person with a level on some unit (/auth/me user.unit_rights: given by a folder's Access tab in the library) has the owner's door to the Documents area too */
 export const hasUnitRights = (rights: unknown): boolean => !!rights && typeof rights === 'object' && Object.keys(rights as object).length > 0;
 
 export const NO_ACCESS: NavAccess = { isAdmin: false, permissions: [], modules: [], features: [], headsDepartment: false, signedIn: false };

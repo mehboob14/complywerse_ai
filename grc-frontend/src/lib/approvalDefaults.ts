@@ -1,6 +1,6 @@
 // Approval defaults: who reviews and approves the documents of a department, sub-department or unit by default, and who carries out its exceptions, as plain
 // functions (no React, no @/ imports) so `node --test` runs approvalDefaults.test.ts against them. Backend: services/approval_defaults.py and
-// modules/governance/routers/approval_defaults.py (`/governance/approval-defaults`). Used by the Directory's Approvals and Exceptions tabs, by "Submit for review"
+// modules/governance/routers/approval_defaults.py (`/governance/approval-defaults`). Used by the Approvals and Exceptions tabs of a folder's Properties, by "Submit for review"
 // (a notice that defaults apply, and the people a lock keeps in) and by the exception form (the implementer starts as the unit's default).
 //
 // What the server decides, in short: per subject the nearest ACTIVE default up the tree wins (the unit, the ones above it, then the organisation's); a LOCKED one

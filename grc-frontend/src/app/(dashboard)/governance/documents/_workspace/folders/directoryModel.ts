@@ -1,10 +1,9 @@
-// The Directory's rules, apart from React so `node --test` can pin them (directoryModel.test.ts): the units as one list of nodes (built from the Directory API
-// `GET /admin/departments/directory` when the backend answers it, else from the flat `GET /admin/departments` list that always exists), the tree over them, the rows
-// the tree shows for a set of open units, what the arrow keys do in it, what each toolbar action may do for a unit (and why not), the choices of the Move and New
-// dialogs, a unit's summary, and which tabs the unit popup lists. The words of a department (levels, depth cap, member chips, parent choices) are lib/departments.ts's:
+// The rules of the library's folders (the units of the organisation and what a person may do with them), apart from React so `node --test` can pin them (directoryModel.test.ts): the units as one list of nodes (built from the Directory API
+// `GET /admin/departments/directory` when the backend answers it, else from the flat `GET /admin/departments` list that always exists), the tree over them, what each toolbar action may do for a unit (and why not),
+// the choices of the Move and New dialogs, and which tabs the unit popup lists. The words of a department (levels, depth cap, member chips, parent choices) are lib/departments.ts's:
 // a department is read, saved and switched off the same way here as in Administration and Governance settings; this file only adds the tree-as-a-folder view.
 
-import { DEFAULT_LEVEL_LABELS, MAX_DEPTH, departmentTree, levelLabel, parentPickItems, type PickItem } from '../../../../../lib/departments.ts';
+import { DEFAULT_LEVEL_LABELS, MAX_DEPTH, departmentTree, levelLabel, parentPickItems, type PickItem } from '../../../../../../lib/departments.ts';
 
 // ── nodes ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -154,86 +153,9 @@ export function buildTree(nodes: readonly DirectoryNode[]): DirectoryTree {
   };
 }
 
-/** A unit's own facts and what is under it. For the organisation (null) `people` is null: a person in two units would count twice. */
-export interface UnitSummary { owner: string | null; documents: number; documentsTotal: number; people: number | null; units: number; unitsBelow: number }
-
-export function summaryOf(tree: DirectoryTree, id: number | null): UnitSummary {
-  if (id === null) return { owner: null, documents: 0, documentsTotal: tree.documentsTotal(null), people: null, units: tree.childrenOf(null).length, unitsBelow: tree.nodes.length };
-  const n = tree.node(id);
-  return {
-    owner: n?.head?.name ?? null, documents: n?.counts.documents ?? 0, documentsTotal: tree.documentsTotal(id), people: n?.counts.members ?? 0,
-    units: tree.childrenOf(id).length, unitsBelow: tree.subtree(id).size - 1,
-  };
-}
-
-// ── the tree on screen ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-
-/** One line of the tree: the organisation (id null, always open) or a unit. `depth` 0 for the organisation, 1 for a top unit. */
-export interface TreeRow { id: number | null; depth: number; hasChildren: boolean; open: boolean; posInSet: number; setSize: number }
-
-/** The lines the tree shows when these units are open: depth first, each level A-Z. */
-export function treeRows(tree: DirectoryTree, expanded: ReadonlySet<number>): TreeRow[] {
-  const top = tree.childrenOf(null);
-  const rows: TreeRow[] = [{ id: null, depth: 0, hasChildren: top.length > 0, open: true, posInSet: 1, setSize: 1 }];
-  const walk = (list: readonly DirectoryNode[], depth: number) => {
-    list.forEach((n, i) => {
-      const kids = tree.childrenOf(n.id);
-      const open = kids.length > 0 && expanded.has(n.id);
-      rows.push({ id: n.id, depth, hasChildren: kids.length > 0, open, posInSet: i + 1, setSize: list.length });
-      if (open) walk(kids, depth + 1);
-    });
-  };
-  walk(top, 1);
-  return rows;
-}
-
-/** The open units plus every unit above `id`, so the line of `id` is on screen. The same set when nothing is to be added (so a state update is skipped). */
-export function openPathTo(tree: DirectoryTree, expanded: ReadonlySet<number>, id: number | null): ReadonlySet<number> {
-  if (id === null) return expanded;
-  const missing = tree.path(id).slice(0, -1).filter((n) => !expanded.has(n.id));
-  return missing.length === 0 ? expanded : new Set([...Array.from(expanded), ...missing.map((n) => n.id)]);
-}
-
-/** What closing a unit does to the selection: the selected unit under the one being closed becomes the closed one (as Explorer does), else it stays. */
-export function selectionAfterClose(tree: DirectoryTree, selected: number | null, closed: number): number | null {
-  return selected !== null && selected !== closed && tree.subtree(closed).has(selected) ? closed : selected;
-}
-
-export type TreeKey = { focus: number | null } | { expand: number } | { collapse: number } | { open: number } | null;
-
-/** What a key does in the tree when the line of `at` (null: the organisation) has focus: the arrows move (Right opens a closed unit, then goes to its first unit; Left closes an
- *  open one, then goes to the unit above), Home and End go to the first and last line, Enter opens the folder (goes into it, and into its contents), a letter goes to the next unit that starts with it. */
-export function treeKey(rows: readonly TreeRow[], names: (id: number) => string, parentOf: (id: number) => number | null, at: number | null, key: string): TreeKey {
-  const i = rows.findIndex((r) => r.id === at);
-  if (i < 0) return null;
-  const row = rows[i];
-  switch (key) {
-    case 'ArrowDown': return i + 1 < rows.length ? { focus: rows[i + 1].id } : null;
-    case 'ArrowUp': return i > 0 ? { focus: rows[i - 1].id } : null;
-    case 'Home': return i > 0 ? { focus: rows[0].id } : null;
-    case 'End': return i < rows.length - 1 ? { focus: rows[rows.length - 1].id } : null;
-    case 'ArrowRight':
-      if (row.id === null || !row.hasChildren) return null;
-      return row.open ? { focus: rows[i + 1].id } : { expand: row.id };
-    case 'ArrowLeft':
-      if (row.id === null) return null;
-      return row.open ? { collapse: row.id } : { focus: parentOf(row.id) };
-    case 'Enter': return row.id === null ? null : { open: row.id };
-    default: {
-      if (key.length !== 1 || !/\S/.test(key)) return null;
-      const c = key.toLowerCase();
-      for (let step = 1; step <= rows.length; step++) {
-        const r = rows[(i + step) % rows.length];
-        if (r.id !== null && names(r.id).toLowerCase().startsWith(c)) return { focus: r.id };
-      }
-      return null;
-    }
-  }
-}
-
 // ── what the toolbar and the menus may do ───────────────────────────────────────────────────────────────────────────────────────────────
 
-export type ActionKey = 'new' | 'properties' | 'edit' | 'move' | 'toggle' | 'access' | 'approvals';
+export type ActionKey = 'new' | 'properties' | 'edit' | 'move' | 'toggle' | 'access' | 'approvals' | 'exceptions';
 export interface ActionState {
   key: ActionKey;
   label: string;
@@ -259,11 +181,11 @@ export function unitActions(tree: DirectoryTree, id: number | null, ctx: ActionC
   if (id === null) {
     return [
       { key: 'new', label: `New ${levelLabel(1, ctx.levels)}`, hidden: !ctx.canTop, disabled: false },
-      gone('properties', 'Properties'), gone('edit', 'Edit details'), gone('move', 'Move to…'), gone('toggle', 'Deactivate'), gone('access', 'Access'), gone('approvals', 'Approvals'),
+      gone('properties', 'Properties'), gone('edit', 'Edit details'), gone('move', 'Move to…'), gone('toggle', 'Deactivate'), gone('access', 'Access'), gone('approvals', 'Approvals'), gone('exceptions', 'Exceptions'),
     ];
   }
   const n = tree.node(id);
-  if (!n) return (['new', 'properties', 'edit', 'move', 'toggle', 'access', 'approvals'] as const).map((k) => gone(k, k));
+  if (!n) return (['new', 'properties', 'edit', 'move', 'toggle', 'access', 'approvals', 'exceptions'] as const).map((k) => gone(k, k));
   const parent = tree.parentOf(id);
   const manage = n.can_manage;
   const nextLevel = levelLabel(Math.min(n.level + 1, MAX_DEPTH), ctx.levels);
@@ -277,6 +199,7 @@ export function unitActions(tree: DirectoryTree, id: number | null, ctx: ActionC
     { key: 'toggle', label: n.is_active ? 'Deactivate' : 'Activate', hidden: !manage, disabled: false },
     { key: 'access', label: 'Access', hidden: !ctx.tabs.includes('access'), disabled: false },
     { key: 'approvals', label: 'Approvals', hidden: !ctx.tabs.includes('approvals'), disabled: false },
+    { key: 'exceptions', label: 'Exceptions', hidden: !ctx.tabs.includes('exceptions'), disabled: false },
   ];
 }
 
@@ -304,20 +227,11 @@ function placeChoices(tree: DirectoryTree, self: number | null, current: number 
 
 // ── finding a unit, and the words ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
-const fold = (s: string) => s.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase();
-
-/** The units whose name or code holds what was typed (A-Z, at most `limit`). Nothing for a blank query. */
-export function findUnits(nodes: readonly DirectoryNode[], query: string, limit = 50): DirectoryNode[] {
-  const q = fold(query).trim();
-  if (!q) return [];
-  return nodes.filter((n) => fold(n.name).includes(q) || fold(n.code ?? '').includes(q)).sort(byName).slice(0, limit);
-}
-
 /** "1 document", "5 documents". */
 export const countText = (n: number, one: string, many: string = `${one}s`): string => `${n} ${n === 1 ? one : many}`;
 
-/** The library, filtered to a unit and everything under it (`?dept=` is the library's own address). */
-export const libraryHref = (id: number | null): string => (id === null ? '/governance/documents' : `/governance/documents?dept=${id}`);
+/** The library's Folders layout opened into a unit (`?dept=` is the library's own address); null: the whole organisation. */
+export const libraryHref = (id: number | null): string => (id === null ? '/governance/documents?view=folders' : `/governance/documents?view=folders&dept=${id}`);
 
 /** The unit an address names (`?unit=7`); null when it is not a unit of the tree (the organisation). */
 export function unitFromAddress(raw: string, tree: DirectoryTree): number | null {

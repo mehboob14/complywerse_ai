@@ -1,10 +1,10 @@
-// node --test "src/app/(dashboard)/governance/documents/directory/exceptionsModel.test.ts"
+// node --test "src/app/(dashboard)/governance/documents/_workspace/folders/exceptionsModel.test.ts"
 // Which exception approval rules apply to a unit, and in what order the server tries them (modules/governance/exception_rules.py `pick`): the deepest unit first, then more
 // conditions, then the oldest; the organisation's rules for everything; switched-off rules apply to nothing; the rule an exception with no special conditions follows.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import type { ExceptionRule } from '../../../../../lib/exceptionRules.ts';
+import type { ExceptionRule } from '../../../../../../lib/exceptionRules.ts';
 import { conditionCount, otherwise, rulesFor } from './exceptionsModel.ts';
 
 const rule = (id: number, over: Partial<ExceptionRule> = {}): ExceptionRule => ({

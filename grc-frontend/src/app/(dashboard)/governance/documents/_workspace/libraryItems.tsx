@@ -8,10 +8,11 @@
 import { Checkbox } from '@/components/ui/ds';
 import type { RecordItem, RecordRow } from '@/components/records/RecordTable';
 import { tickState, toggleAll } from '@/components/records/explorerModel';
-import { FolderHeadCard, FolderHeadRow, ShowMoreCard, ShowMoreRow } from './FolderRows';
+import { FolderHeadCard, FolderHeadRow, ShowMoreCard, ShowMoreRow, type FolderUi } from './FolderRows';
+import type { FolderLine } from './folders/folderKeys';
 import type { GovDoc } from './lib';
 import {
-  FIRST_SHOWN, folderIsOpen, matchedIds, planFolders, showMoreStep, shownLimit, type FoldView, type FolderNode, type PlanItem,
+  FIRST_SHOWN, expandable, folderIsOpen, matchedIds, planFolders, showMoreStep, shownLimit, type FoldView, type FolderNode, type PlanItem,
 } from './libraryFolders';
 import type { DrawnRow } from './libraryTableLogic';
 import { STEP } from './Versions';
@@ -56,10 +57,12 @@ export interface FolderItemsInput {
   onMore: (node: FolderNode<GovDoc>, step: number) => void;
   onFewer: (node: FolderNode<GovDoc>) => void;
   uid: string;
+  /** what a click, a double-click, a key and a right-click on a folder do (the page's: useFolders) */
+  ui: FolderUi;
 }
 
-/** The Folders view as the table's items: a folder's header, then (open) its own documents with "Show N more", then the folders inside it. */
-export function folderItems(i: FolderItemsInput): { items: RecordItem<GovDoc>[]; rows: DrawnRow<GovDoc>[] } {
+/** The Folders view as the table's items: a folder's row, then (open) its own documents with "Show N more", then the folders inside it. `lines`: the folder rows as drawn, for the keyboard. */
+export function folderItems(i: FolderItemsInput): { items: RecordItem<GovDoc>[]; rows: DrawnRow<GovDoc>[]; lines: FolderLine[] } {
   const plan: PlanItem<GovDoc>[] = planFolders(i.folders, {
     isOpen: (n) => folderIsOpen(i.view, n.key),
     limit: (n) => shownLimit(i.extra[n.key]),
@@ -69,9 +72,14 @@ export function folderItems(i: FolderItemsInput): { items: RecordItem<GovDoc>[];
   const cardHeadId = (n: FolderNode<GovDoc>) => `${i.uid}-cfolder-${n.key}`;
   const items: RecordItem<GovDoc>[] = [];
   const drawn: DrawnRow<GovDoc>[] = [];
+  const lines: FolderLine[] = [];
+  // the one folder in the tab order: the selected one when it is drawn, else the first
+  const first = plan.find((p) => p.kind === 'folder');
+  const tabStop = i.ui.selected !== null && plan.some((p) => p.kind === 'folder' && p.node.key === i.ui.selected) ? i.ui.selected : first?.node.key ?? null;
   plan.forEach((p) => {
     if (p.kind === 'folder') {
       const node = p.node;
+      lines.push({ key: node.key, name: node.name, depth: node.depth, expandable: expandable(node), open: p.open });
       const mine = matchedIds(node);
       const tick = !i.selectable ? null : mine.length === 0 ? <span className="w-[16px] shrink-0" aria-hidden /> : (
         <FolderTick
@@ -84,9 +92,9 @@ export function folderItems(i: FolderItemsInput): { items: RecordItem<GovDoc>[];
         kind: 'group',
         id: node.key,
         table: (columns) => (
-          <FolderHeadRow node={node} open={p.open} colSpan={columns} tick={tick} headId={headId(node)} controls={node.folders.map(headId)} onToggle={() => i.onFlip(node.key)} />
+          <FolderHeadRow node={node} open={p.open} colSpan={columns} tick={tick} headId={headId(node)} controls={node.folders.map(headId)} onToggle={() => i.onFlip(node.key)} ui={i.ui} tabbable={tabStop === node.key} />
         ),
-        card: <FolderHeadCard node={node} open={p.open} tick={tick} headId={cardHeadId(node)} controls={node.folders.map(cardHeadId)} onToggle={() => i.onFlip(node.key)} />,
+        card: <FolderHeadCard node={node} open={p.open} tick={tick} headId={cardHeadId(node)} controls={node.folders.map(cardHeadId)} onToggle={() => i.onFlip(node.key)} ui={i.ui} tabbable={tabStop === node.key} />,
       });
       return;
     }
@@ -106,7 +114,7 @@ export function folderItems(i: FolderItemsInput): { items: RecordItem<GovDoc>[];
       items.push({ kind: 'more', id: node.key, table: (columns) => <ShowMoreRow colSpan={columns} {...props} />, card: <ShowMoreCard {...props} /> });
     }
   });
-  return { items, rows: drawn };
+  return { items, rows: drawn, lines };
 }
 
 export { toggleAll };

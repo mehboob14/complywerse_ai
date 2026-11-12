@@ -1,6 +1,6 @@
 'use client';
 
-// The implementer of a NEW exception starts as its unit's default (Governance > Documents > Directory > the unit > Exceptions; `GET /governance/approval-defaults/resolve`, subject
+// The implementer of a NEW exception starts as its unit's default (Governance > Documents > Folders > the unit's Properties > Exceptions; `GET /governance/approval-defaults/resolve`, subject
 // `exc_implementer`): the unit the exception is for, else its document's, else the organisation's. The field is filled while it is empty or still what the default put there; once the
 // author has chosen (or cleared it) it is theirs and is left alone. The server fills an empty implementer again at submit and holds a locked default's people (400, in words), so
 // this is only the starting point. A failed read starts nothing. Kept apart from the form: the form's guard (exceptionsPage.test.ts) keeps effects out of it.

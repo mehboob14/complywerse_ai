@@ -64,7 +64,7 @@ export function usePermissions() {
                   .map((p: string) => normalizePerm(p))
               : [];
             const admin = !!data.user.is_admin;
-            const heads = !!data.user.heads_department || hasUnitRights(data.user.unit_rights);       // the owner's door also opens for a person given access to a unit (the Directory's Access tab)
+            const heads = !!data.user.heads_department || hasUnitRights(data.user.unit_rights);       // the owner's door also opens for a person given access to a unit (a folder's Access tab in the library)
             setPermissions(perms);
             setIsAdmin(admin);
             setHeadsDepartment(heads);

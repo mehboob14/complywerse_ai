@@ -103,12 +103,12 @@ test('Comply Agent is offered to those who hold its right and to administrators,
 
 test('the Documents strip: every tab with a governance right (the Studio where it is on, Settings with its right), two for a department owner or anyone given access to a unit, none for anyone else', () => {
   const strip = (who: unknown, studio = true) => documentsStrip(navAccessFromMe(who), studio).map((t) => t.tab.id);
-  assert.deepEqual(strip(PERSONAS.admin), ['documents', 'studio', 'attestation', 'reviews', 'exceptions', 'directory', 'settings']);
-  assert.deepEqual(strip(PERSONAS.admin, false), ['documents', 'attestation', 'reviews', 'exceptions', 'directory', 'settings'], 'no Studio tab where it is off');
-  assert.deepEqual(strip(PERSONAS.ro1), ['documents', 'studio', 'attestation', 'reviews', 'exceptions', 'directory', 'settings'], 'governance:settings:view holds the Settings right');
-  assert.deepEqual(strip(me(['governance:policies:view'])), ['documents', 'studio', 'attestation', 'reviews', 'exceptions', 'directory'], 'no Settings without its right');
-  assert.deepEqual(strip(me([], { heads_department: true })), ['documents', 'directory']);
-  assert.deepEqual(strip(me([], { unit_rights: { '12': 'edit' } })), ['documents', 'directory'], 'a person given access to a unit has the same door as a department owner');
+  assert.deepEqual(strip(PERSONAS.admin), ['documents', 'studio', 'attestation', 'reviews', 'exceptions', 'settings']);
+  assert.deepEqual(strip(PERSONAS.admin, false), ['documents', 'attestation', 'reviews', 'exceptions', 'settings'], 'no Studio tab where it is off');
+  assert.deepEqual(strip(PERSONAS.ro1), ['documents', 'studio', 'attestation', 'reviews', 'exceptions', 'settings'], 'governance:settings:view holds the Settings right');
+  assert.deepEqual(strip(me(['governance:policies:view'])), ['documents', 'studio', 'attestation', 'reviews', 'exceptions'], 'no Settings without its right');
+  assert.deepEqual(strip(me([], { heads_department: true })), ['documents'], 'the owner of a department has the library: its Folders layout is where they manage their units');
+  assert.deepEqual(strip(me([], { unit_rights: { '12': 'edit' } })), ['documents'], 'a person given access to a unit has the same door as a department owner');
   assert.deepEqual(strip(me([], { unit_rights: {} })), [], 'no level on any unit: no door');
   assert.deepEqual(strip(PERSONAS.rev1), []);
   assert.deepEqual(strip(null), []);

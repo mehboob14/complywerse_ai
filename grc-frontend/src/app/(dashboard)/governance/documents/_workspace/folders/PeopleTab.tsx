@@ -1,7 +1,7 @@
 'use client';
 
 // The People tab of a unit's popup: who belongs to it and how. A unit's people are the ones added by hand, its owner, and everyone who holds one of its roles (they join and
-// leave with the role). Anyone who can open the Directory reads the list; a person who may manage the unit adds someone by hand with a role (Lead, Member, Viewer), changes
+// leave with the role). Anyone who can open the library reads the list; a person who may manage the unit adds someone by hand with a role (Lead, Member, Viewer), changes
 // that role, removes someone added by hand, and chooses which roles give membership. Someone who belongs through a role or as the owner is not removed here: the row says
 // how to (lib/departments.ts removeBlock). Roles give membership only: they grant no access to documents. Every change says what happened, or why not in the server's
 // words; a failed one can be tried again. The requests and rules are the ones Administration → Departments uses (departmentsApi, lib/departments.ts).
