@@ -59,7 +59,8 @@ export function useLibrary() {
 export function useRegister() {
   return useQuery({
     queryKey: [...REGISTER_KEY],
-    queryFn: async () => (await onboardingApi.register()).frameworks as OnboardingRow[],
+    queryFn: onboardingApi.register,                                   // the whole answer: the Onboarding tab and the start gates read this same key and need `meta` too
+    select: (r) => r.frameworks as OnboardingRow[],                    // the hub wants the rows; a transformed value must never be what the shared key holds
     retry: retryRead,
     staleTime: 30_000,
   });

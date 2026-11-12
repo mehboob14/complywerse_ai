@@ -89,7 +89,7 @@ export default function OnboardingRegister() {
     onSuccess: (r) => { notify.success(checkWords(r)); void qc.invalidateQueries({ queryKey: ONBOARDING_KEYS.register }); },
     onError: (e) => { const p = problemOf(e); notify.error(checkRefusal(p.status, p.message), { title: "Couldn't check for changes" }); },
   });
-  const checked = lastCheckedWords(register.data?.meta.version_checked_at, (iso) => formatRelative(iso));
+  const checked = lastCheckedWords(register.data?.meta?.version_checked_at, (iso) => formatRelative(iso));
 
   const columns: RegisterColumn<RegisterRow>[] = [
     { key: 'name', header: 'Framework', sortable: true, isRowHeader: true, cell: (r) => <NameCell row={r} /> },

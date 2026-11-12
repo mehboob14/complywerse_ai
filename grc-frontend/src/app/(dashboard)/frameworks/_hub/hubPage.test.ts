@@ -29,11 +29,13 @@ test('the requests keep their keys and endpoints, read the lists whole (the old 
   assert.match(data, /JOURNEYS_KEY = \['certifications'\]/, 'shared with the Compliance overview and the auditor portal');
   assert.match(data, /LIBRARY_KEY = \['uploaded-frameworks'\]/);
   assert.match(data, /REGISTER_KEY = ONBOARDING_KEYS\.register/, 'shared with the Onboarding tab and the start gates');
+  assert.ok(data.includes('queryFn: onboardingApi.register') && data.includes('select: (r) => r.frameworks'), 'the shared key holds the whole register answer; the hub takes its rows with select (a rows-only value under that key crashed the Onboarding tab: its `meta` was missing)');
+  assert.doesNotMatch(data, /queryFn: async \(\) => \(await onboardingApi\.register\(\)\)\.frameworks/, 'never cache a transformed register under the shared key');
   assert.match(data, /AGGREGATE_KEY = \['compliance-frameworks-aggregate'\]/);
   assert.match(data, /apiClient\.get\('\/certifications', \{ params: \{ skip: page \* PAGE, limit: PAGE \} \}\)/);
   assert.match(data, /apiClient\.get\('\/framework-upload\/upload', \{ params: \{ skip: page \* PAGE, limit: PAGE \} \}\)/);
   assert.match(data, /truncated: items\.length < total/, 'a cut library is said');
-  assert.match(data, /onboardingApi\.register\(\)/);
+  assert.match(data, /onboardingApi\.register\b/);
   assert.match(data, /complianceApi\.dashboard\.getComplianceTrend\(days\)/);
   assert.match(data, /complianceApi\.dashboard\.getFrameworksAggregate\(\)/);
   assert.doesNotMatch(data, /refetchInterval/, 'the old Dashboard asked the aggregate again every minute');
