@@ -78,7 +78,7 @@ function History({ view }: { view: OnboardingView }) {
 const LABEL: Record<'submit' | Decision, string> = { submit: 'Submit for approval', approve: 'Approve', reopen: 'Reopen', underway: 'Mark underway' };
 const PRIMARY: ReadonlyArray<'submit' | Decision> = ['submit', 'approve'];
 
-export default function ReviewStage({ view, stages, actions, submitting, submitProblem, onSubmit, onDecision, onJump, gapReview }: {
+export default function ReviewStage({ view, stages, actions, submitting, submitProblem, onSubmit, onDecision, onJump, gapReview, programme }: {
   view: OnboardingView;
   stages: readonly Stage[];
   actions: Actions;
@@ -89,12 +89,15 @@ export default function ReviewStage({ view, stages, actions, submitting, submitP
   onJump: (stage: string, field: string) => void;
   /** the AI gap review, when the page may change answers */
   gapReview: ReactNode;
+  /** the compliance programme card (an approved or underway onboarding starts it); null before that */
+  programme?: ReactNode;
 }) {
   const r = view.readiness;
   const open = openCount(r);
   const buttons = (['submit', 'approve', 'reopen', 'underway'] as const).filter((k) => actions[k].shown);
   return (
     <div className="grid min-w-0 gap-[16px] xl:grid-cols-[minmax(0,1fr)_22rem]">
+      {programme}
       <SectionCard
         id="readiness" title="Readiness" meta={open > 0 ? `${open} required open` : 'Everything required is in'}
         info="Required items hold the onboarding back; advice does not. Each item takes you to where it is filled."
@@ -104,7 +107,7 @@ export default function ReviewStage({ view, stages, actions, submitting, submitP
         </div>
       </SectionCard>
 
-      <aside className="flex min-w-0 flex-col gap-[16px] xl:col-start-2 xl:row-start-1 xl:row-span-2">
+      <aside className={`flex min-w-0 flex-col gap-[16px] xl:col-start-2 xl:row-start-1 ${programme ? 'xl:row-span-3' : 'xl:row-span-2'}`}>
         <SectionCard
           id="decision" title="Decision"
           info="Submit when everything required is in. Approving locks the answers and lets the journey start; it needs the approve right. Mark underway is for a framework that is already running."

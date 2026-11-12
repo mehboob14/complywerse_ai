@@ -4,7 +4,7 @@
  * conditional field is asked (`when`), how a choice is laid out, how a person is read from three boxes, and how a profile row is named. Pure, so
  * `node --test` pins it (fieldModel.test.ts).
  */
-import type { Column, Confidence, Department, Field, Level, OrgPickOf, OrgRows, Row, When } from '@/lib/frameworkOnboarding';
+import type { Column, Confidence, Department, Field, FileRef, Level, OrgPickOf, OrgRows, Row, When } from '@/lib/frameworkOnboarding';
 
 export type AnyField = Field | Column;
 export type Lookup = (ref: string) => { field: AnyField | undefined; value: unknown };
@@ -40,7 +40,7 @@ export function answered(f: AnyField, v: unknown): boolean {
   switch (f.type) {
     case 'bool': return v === true || v === false;
     case 'table': return (Array.isArray(v) ? v : []).filter((r) => r && rowComplete(columnsOf(f), r as Row)).length >= minRows(f);
-    case 'asset_refs': case 'org_pick': case 'countries': case 'multichoice': case 'departments_derived':
+    case 'asset_refs': case 'org_pick': case 'countries': case 'multichoice': case 'departments_derived': case 'files':
       return (Array.isArray(v) ? v.length : 0) >= minRows(f);
     case 'person': return personKind(v) !== null;
     default: return !isBlank(v) && v !== false;
@@ -52,10 +52,19 @@ export function hasValue(f: AnyField, v: unknown): boolean {
   switch (f.type) {
     case 'bool': return v === true;
     case 'table': return (Array.isArray(v) ? v : []).some((r) => r && rowComplete(columnsOf(f), r as Row));
-    case 'asset_refs': case 'org_pick': case 'countries': case 'multichoice': case 'departments_derived': return Array.isArray(v) && v.length > 0;
+    case 'asset_refs': case 'org_pick': case 'countries': case 'multichoice': case 'departments_derived': case 'files': return Array.isArray(v) && v.length > 0;
     case 'person': return personKind(v) !== null;
     default: return !isBlank(v);
   }
+}
+
+// ── documents ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** How many documents one answer may carry (the server's `MAX_FILES`). */
+export const MAX_FILES = 3;
+/** The documents a saved value holds: an id and a name each; anything else in the list is left out. */
+export function filesOf(v: unknown): FileRef[] {
+  return (Array.isArray(v) ? v : []).filter((x): x is FileRef => !!x && typeof x === 'object' && typeof (x as FileRef).id === 'number' && typeof (x as FileRef).name === 'string');
 }
 
 // ── table rows ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────

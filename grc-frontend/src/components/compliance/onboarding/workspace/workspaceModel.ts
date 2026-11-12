@@ -188,6 +188,20 @@ export function eventSentence(ev: Pick<OnboardingEvent, 'kind' | 'by' | 'detail'
       return `Marked underway${by}${kind ? ` (${kind})` : ''}${str(d.reason) ? `: ${str(d.reason)}` : ''}`;
     }
     case 'journey_started': return `Journey started${by}`;
+    case 'programme_started': {
+      const controls = typeof d.controls === 'number' ? d.controls : 0;
+      const offered = typeof d.offered === 'number' ? d.offered : 0;
+      return `Compliance programme started${by}: journey ${d.journey_made ? 'made' : 'linked'}, ${controls} ${controls === 1 ? 'control' : 'controls'} loaded${offered > 0 ? `, ${offered} ${offered === 1 ? 'item' : 'items'} offered as evidence` : ''}`;
+    }
+    case 'programme_updated': {
+      const words: Record<string, string> = { scope: 'scope', people: 'people', evidence: 'evidence offered', journey: 'journey' };
+      const what = (Array.isArray(d.changed) ? d.changed : []).map((k) => words[String(k)]).filter(Boolean).join(', ');
+      return `Compliance programme updated${by}${what ? `: ${what}` : ''}`;
+    }
+    case 'owners_applied': {
+      const n = typeof d.controls === 'number' ? d.controls : 0;
+      return `${str(d.owner) || 'The programme owner'} made owner of ${n} ${n === 1 ? 'control' : 'controls'}${by}`;
+    }
     case 'journey_blocked': {
       const n = typeof d.unmet === 'number' ? d.unmet : 0;
       return n > 0 ? `Journey blocked: ${n} required ${n === 1 ? 'item was' : 'items were'} open` : 'Journey blocked: waiting for approval';
@@ -241,12 +255,11 @@ export const needsDepartments = (steps: ReadonlyArray<Pick<Step, 'fields'>>): bo
 export const AI_PLACE: Record<AiKind, { step: string; field: string } | null> = {
   scope_draft: { step: 'scope', field: 'statement' },
   exclusions_check: { step: 'scope', field: 'exclusions' },
-  parties_suggest: { step: 'context', field: 'interested_parties' },
   gap_review: null,
 };
-export const AI_TITLE: Record<AiKind, string> = { scope_draft: 'Scope draft', exclusions_check: 'Exclusions check', parties_suggest: 'Suggested parties', gap_review: 'Gap review' };
+export const AI_TITLE: Record<AiKind, string> = { scope_draft: 'Scope draft', exclusions_check: 'Exclusions check', gap_review: 'Gap review' };
 /** Said to a screen reader after "Ask AI", so the button says what it asks about. */
-export const AI_FOR: Record<AiKind, string> = { scope_draft: 'a scope statement', exclusions_check: 'the exclusions', parties_suggest: 'the interested parties', gap_review: 'the gaps an auditor would find' };
+export const AI_FOR: Record<AiKind, string> = { scope_draft: 'a scope statement', exclusions_check: 'the exclusions', gap_review: 'the gaps an auditor would find' };
 
 /** The kinds of help that sit after one field, when the framework has that field. */
 export function aiKindsAfter(steps: ReadonlyArray<Pick<Step, 'key' | 'fields'>>, stepKey: string, fieldKey: string): AiKind[] {
@@ -268,12 +281,10 @@ const text = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
 
 export function draftStatement(s: unknown): string { return text((s as Loose | null)?.statement); }
 
-/** The rows an exclusions check or a parties suggestion proposes, as the columns of the table they would join (empty rows are dropped). */
-export function suggestedRows(kind: 'exclusions_check' | 'parties_suggest', s: unknown): Array<Record<string, string>> {
-  const o = (s ?? {}) as Loose;
-  const cols = kind === 'exclusions_check' ? ['item', 'reason'] : ['party', 'kind', 'requirement'];
-  const list = asObjects(kind === 'exclusions_check' ? o.exclusions : o.rows);
-  return list.map((r) => Object.fromEntries(cols.map((c) => [c, text(r[c])]))).filter((r) => r[cols[0]]);
+/** The rows an exclusions check proposes, as the columns of the table they would join (empty rows are dropped). */
+export function suggestedRows(_kind: 'exclusions_check', s: unknown): Array<Record<string, string>> {
+  const cols = ['item', 'reason'];
+  return asObjects(((s ?? {}) as Loose).exclusions).map((r) => Object.fromEntries(cols.map((c) => [c, text(r[c])]))).filter((r) => r[cols[0]]);
 }
 
 export const exclusionQuestions = (s: unknown): Array<{ item: string; why: string }> =>
@@ -296,10 +307,10 @@ export function appendRows(current: unknown, add: ReadonlyArray<Record<string, s
 }
 
 export interface AiChange { step: string; field: string; value: unknown; added: number }
-const KEY_COLUMN = { exclusions_check: 'item', parties_suggest: 'party' } as const;
+const KEY_COLUMN = { exclusions_check: 'item' } as const;
 
 /**
- * The change an accepted suggestion makes to one field, for the normal autosave to save: a scope draft replaces the statement; exclusions and parties are
+ * The change an accepted suggestion makes to one field, for the normal autosave to save: a scope draft replaces the statement; exclusions are
  * appended to the rows already there (the ones in `picked`, or all). Null when there is nothing to write (a gap review only shows questions).
  */
 export function aiChange(kind: AiKind, suggestion: unknown, current: unknown, pick: { text?: string; rows?: readonly number[] } = {}): AiChange | null {
@@ -309,8 +320,8 @@ export function aiChange(kind: AiKind, suggestion: unknown, current: unknown, pi
     const statement = (pick.text ?? draftStatement(suggestion)).trim();
     return statement ? { ...at, value: statement, added: 1 } : null;
   }
-  const all = suggestedRows(kind as 'exclusions_check' | 'parties_suggest', suggestion);
+  const all = suggestedRows('exclusions_check', suggestion);
   const chosen = pick.rows ? all.filter((_, i) => pick.rows!.includes(i)) : all;
-  const { value, added } = appendRows(current, chosen, KEY_COLUMN[kind as 'exclusions_check' | 'parties_suggest']);
+  const { value, added } = appendRows(current, chosen, KEY_COLUMN.exclusions_check);
   return added > 0 ? { ...at, value, added } : null;
 }

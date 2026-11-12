@@ -6,8 +6,10 @@
  * answer goes and when it is asked are the server's; this only lays them out and points each at its value, its error and its help.
  */
 import type { ReactNode } from 'react';
-import type { Department, Field, OnboardingView, OrgRows, Refs, Step } from '@/lib/frameworkOnboarding';
+import type { Department, ExistingView, Field, OnboardingView, OrgRows, Refs, Step } from '@/lib/frameworkOnboarding';
 import FieldBlock from '../FieldBlock';
+import { InfoTip } from '@/components/ui/InfoTip';
+import ExistingSection from './ExistingSection';
 import { fieldRef, valueOf, visibleFields, type Edits } from './workspaceModel';
 
 export interface FieldContext {
@@ -16,6 +18,10 @@ export interface FieldContext {
   orgRows: OrgRows;
   departments: Department[];
   readOnly: boolean;
+  /** what already exists for the framework, where its items save, and the new view they answer with */
+  onboardingId?: number;
+  existing?: ExistingView;
+  onView?: (v: OnboardingView) => void;
 }
 
 /** The DOM id of the box that holds one field, so a check can bring a person to it. */
@@ -23,9 +29,18 @@ export const fieldBoxId = (base: string, step: string, field: string): string =>
 
 // The one place that draws a field: the shared field block (the same one the organisation profile uses).
 function renderField(field: Field, value: unknown, onChange: (v: unknown) => void, error: string | null, ctx: FieldContext, id: string): ReactNode {
+  if (field.type === 'existing') {                                // rows of their own, saved by their own calls: not an answer
+    if (!ctx.existing || ctx.onboardingId === undefined || !ctx.onView) return null;
+    return (
+      <div className="min-w-0 space-y-[6px]">
+        <div className="flex items-center gap-[6px]"><span id={`${id}-label`} className="min-w-0 break-words text-ds-label text-ds-fg">{field.label}</span>{field.note && <InfoTip text={field.note} label={`About ${field.label.toLowerCase()}`} />}</div>
+        <ExistingSection onboardingId={ctx.onboardingId} existing={ctx.existing} readOnly={ctx.readOnly} onView={ctx.onView} />
+      </div>
+    );
+  }
   return (
     <FieldBlock
-      field={field} value={value} onChange={onChange} error={error} readOnly={ctx.readOnly} id={id} source={field.source}
+      field={field} value={value} onChange={onChange} error={error} readOnly={ctx.readOnly} id={id} source={field.type === 'files' ? null : field.source}
       refs={ctx.refs} onRefs={ctx.onRefs} orgRows={ctx.orgRows} departments={ctx.departments}
     />
   );

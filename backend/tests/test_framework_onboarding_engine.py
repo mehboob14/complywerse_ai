@@ -221,3 +221,25 @@ def test_a_rule_names_the_step_of_the_first_answer_it_reads_so_the_screen_can_op
     assert by_key(ev({"route": {"goal": "Certify"}}))["certonly"]["step"] == "route"
     org = engine.evaluate_org({})
     assert all("step" not in c for c in org["checks"])                 # the profile's own checks belong to no step
+
+
+# ---------------------------------------------------------------- documents on an answer
+def test_a_document_is_one_the_organisation_uploaded_and_an_answer_holds_at_most_three():
+    f = fld("files", level="advised")
+    kn = engine.Known(files={7: "soa.pdf", 8: "scope.docx", 9: "a.pdf", 10: "b.pdf"})
+    assert engine.normalise(f, [{"id": 7, "name": "anything"}, 8], kn) == [{"id": 7, "name": "soa.pdf"}, {"id": 8, "name": "scope.docx"}]   # the name is the server's
+    assert engine.normalise(f, [{"id": 7}, {"id": 7}], kn) == [{"id": 7, "name": "soa.pdf"}] and engine.normalise(f, [], kn) is None
+    for bad in ("soa.pdf", [{"id": 99}], [{"name": "no id"}], [{"id": "x"}]):
+        with pytest.raises(F):
+            engine.normalise(f, bad, kn)
+    with pytest.raises(F):
+        engine.normalise(f, [7, 8, 9, 10], kn)
+    assert engine.has_value(f, [{"id": 7, "name": "soa.pdf"}]) and not engine.has_value(f, [])
+
+
+def test_the_list_of_what_exists_is_not_an_answer_and_never_an_open_item():
+    f = fld("existing", level="advised")
+    with pytest.raises(F):
+        engine.normalise(f, [1])
+    out = engine.evaluate({"steps": [{"key": "existing", "label": "Existing work", "fields": [{**f, "key": "records"}]}], "gate": []}, {}, {})
+    assert out["checks"] == [] and out["ready"] is True and out["counts"]["advised_open"] == 0

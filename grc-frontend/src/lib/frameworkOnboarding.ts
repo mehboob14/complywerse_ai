@@ -7,7 +7,7 @@ import apiClient from '@/lib/api';
 
 export type FieldType =
   | 'text' | 'longtext' | 'number' | 'date' | 'bool' | 'choice' | 'multichoice' | 'person' | 'country' | 'countries'
-  | 'table' | 'asset_refs' | 'vendor_ref' | 'org_pick' | 'departments_derived';
+  | 'table' | 'asset_refs' | 'vendor_ref' | 'org_pick' | 'departments_derived' | 'files' | 'existing';
 export type Level = 'required' | 'advised' | 'optional';
 export type Confidence = 'verified' | 'secondary' | 'unverified';
 /** org_pick `of`: which rows of the organisation profile a framework scope picks from. */
@@ -19,7 +19,7 @@ export interface When { field: string; eq?: unknown; ne?: unknown; in?: unknown[
 export interface Column {
   key: string;
   label: string;
-  type: Exclude<FieldType, 'table' | 'org_pick' | 'departments_derived'>;
+  type: Exclude<FieldType, 'table' | 'org_pick' | 'departments_derived' | 'files' | 'existing'>;
   required?: boolean;
   options?: string[];
   suggestions?: string[];
@@ -47,11 +47,46 @@ export interface Field {
   source?: Source | null;
 }
 
+/** One thing the organisation says it already has for a framework (a certificate, a report, a plan). A claim with its documents: never a compliance status. */
+export interface ExistingRecord {
+  id: number;
+  assessment_type: string;
+  framework_version: string | null;
+  assessment_date: string | null;
+  valid_until: string | null;
+  period_start: string | null;
+  period_end: string | null;
+  assessor_or_issuer: string | null;
+  scope_coverage: string | null;
+  scope_note: string | null;
+  files: FileRef[];
+  verification_status: 'declared' | 'evidence_received' | 'reviewed' | 'verified';
+  verified_by: string | null;
+  verified_at: string | null;
+  note: string | null;
+  expired: boolean;
+  created_by: string | null;
+  updated_at: string | null;
+}
+/** What the server takes for an item: every key optional (a key left out stays as it was); only `assessment_type` is needed to add one. */
+export type ExistingInput = Partial<Pick<ExistingRecord, 'assessment_type' | 'framework_version' | 'assessment_date' | 'valid_until' | 'period_start' | 'period_end' | 'assessor_or_issuer' | 'scope_coverage' | 'scope_note' | 'note'>> & { evidence_ids?: number[] };
+/** The framework's own kinds of existing work, the choices, and the items. */
+export interface ExistingView {
+  types: string[];
+  confidence: Confidence;
+  coverage: string[];
+  verification: Record<string, string>;
+  limits: { records: number; files: number };
+  records: ExistingRecord[];
+}
+
 export interface Step { key: string; label: string; source: Source | null; fields: Field[] }
 export interface Group { key: string; label: string; source: Source | null; fields: Field[] }
 
 /** A person: a user of the platform, or someone outside. */
 export type Person = { user_id: number } | { name: string; email?: string; organisation?: string };
+/** A document on an answer (a `files` field): the Evidence record it is kept in, and its file name. */
+export interface FileRef { id: number; name: string }
 /** A row of a table field: its columns' values plus a stable id the server generates (a framework scope picks rows by it). */
 export type Row = { id: string } & Record<string, unknown>;
 
@@ -161,6 +196,8 @@ export interface OnboardingView {
   /** always empty (kept in the answer) */
   requires_org: Array<{ field: string; reason: string }>;
   answers: Record<string, Record<string, unknown>>;
+  /** what already exists for the framework (rows kept apart from the answers) */
+  existing: ExistingView;
   readiness: Readiness;
   refs: Refs;
   org_rows: OrgRows;
@@ -181,11 +218,49 @@ export interface GateDecision {
   unmet: Array<{ key: string; label: string; hint: string | null }>;
 }
 
-export type AiKind = 'scope_draft' | 'exclusions_check' | 'parties_suggest' | 'gap_review';
+/** The compliance programme an approved (or underway) onboarding starts: what was started, what is only proposed, what is offered. Never a compliance status. */
+export interface ProgrammeNamed { id: number | string; name: string }
+export interface ProgrammeScope {
+  reach: string | null;
+  whole_organisation: boolean;
+  entity: string | null;
+  countries: string[];
+  services: string | null;
+  defined: string | null;
+  documents: FileRef[];
+  statement: string | null;
+  departments: ProgrammeNamed[];
+  systems: Array<ProgrammeNamed & { type: string | null }>;
+  locations: ProgrammeNamed[];
+  third_parties: ProgrammeNamed[];
+  processes: Array<{ process: string; owner: string | null }>;
+  hosting: string[];
+  exclusions: Array<{ item: string; reason: string }>;
+  target_date: string | null;
+}
+export interface ProgrammePerson { role: string; user_id: number | null; name: string; account: boolean; email?: string }
+/** An item of "What exists", offered as evidence: a claim with its source, never accepted evidence. */
+export interface ProgrammeCandidate extends ExistingRecord { source: string; has_document: boolean }
+export interface ProgrammeView {
+  started: boolean;
+  can_start: boolean;
+  why_not: string | null;
+  state: Exclude<OnboardingState, 'not_started'>;
+  journey: { id: number; name: string; status: string; target_date: string | null; made_here: boolean } | null;
+  controls: { total: number; not_started: number; begun: number; without_owner: number } | null;
+  scope: ProgrammeScope | null;
+  proposals: { people: ProgrammePerson[]; teams: ProgrammeNamed[]; assessor: string | null; control_owner: number | null } | null;
+  owner: { name: string | null; can_apply: boolean; without_owner: number; why_not: string | null } | null;
+  candidates: ProgrammeCandidate[];
+  note: string | null;
+  /** set by the two calls that write: did this call change anything */
+  changed?: boolean | number;
+}
+
+export type AiKind = 'scope_draft' | 'exclusions_check' | 'gap_review';
 export interface AiSuggestion<T = Record<string, unknown>> { kind: AiKind; suggestion: T; by: 'ai' | 'rules' }
 export interface ScopeDraft { statement: string }
 export interface ExclusionsCheck { exclusions: Array<{ item: string; reason: string }>; questions: Array<{ item: string; why: string }> }
-export interface PartiesSuggest { rows: Array<{ party: string; kind: string; requirement: string }> }
 export interface GapReview { questions: Array<{ field: string; question: string }> }
 
 /** What a refused call carries (`detail` of the 4xx answer), whatever its shape. `code === 'onboarding_required'` is the gate's 409. */
@@ -239,6 +314,33 @@ export const onboardingApi = {
   /** one step's fields; each key replaces that field whole (422 with `errors` saves nothing; 409 with `locked` when approved) */
   saveAnswers: async (id: number, step: string, values: Record<string, unknown>): Promise<OnboardingView> =>
     (await apiClient.put(`${O}/${id}/answers`, { step, values })).data,
+  /** One document, kept in Evidence. The answer that carries it is saved with `saveAnswers` like any other. */
+  uploadFile: async (file: File): Promise<FileRef> => {
+    const form = new FormData();
+    form.append('file', file);
+    return (await apiClient.post(`${O}/files`, form, { headers: { 'Content-Type': 'multipart/form-data' } })).data;
+  },
+  downloadFile: async (doc: FileRef): Promise<void> => {
+    const res = await apiClient.get(`${O}/files/${doc.id}`, { responseType: 'blob' });
+    const url = window.URL.createObjectURL(res.data as Blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = doc.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  },
+  existingAdd: async (id: number, body: ExistingInput): Promise<OnboardingView> => (await apiClient.post(`${O}/${id}/existing`, body)).data,
+  existingUpdate: async (id: number, recordId: number, body: ExistingInput): Promise<OnboardingView> => (await apiClient.put(`${O}/${id}/existing/${recordId}`, body)).data,
+  existingRemove: async (id: number, recordId: number): Promise<OnboardingView> => (await apiClient.delete(`${O}/${id}/existing/${recordId}`)).data,
+  /** a person who may approve: 'reviewed' or 'verified' (refused without a document) */
+  existingVerify: async (id: number, recordId: number, status: 'reviewed' | 'verified'): Promise<OnboardingView> => (await apiClient.post(`${O}/${id}/existing/${recordId}/verify`, { status })).data,
+  programme: async (id: number): Promise<ProgrammeView> => (await apiClient.get(`${O}/${id}/programme`)).data,
+  /** starts (or refreshes) the compliance programme; safe to repeat: with nothing new, nothing changes */
+  startProgramme: async (id: number): Promise<ProgrammeView> => (await apiClient.post(`${O}/${id}/programme`)).data,
+  /** the programme owner becomes the owner of the journey's controls that nobody owns */
+  applyProgrammeOwner: async (id: number): Promise<ProgrammeView> => (await apiClient.post(`${O}/${id}/programme/owners`)).data,
   ai: async <T = Record<string, unknown>>(id: number, kind: AiKind): Promise<AiSuggestion<T>> => (await apiClient.post(`${O}/${id}/ai/${kind}`, {})).data,
   submit: async (id: number): Promise<OnboardingView> => (await apiClient.post(`${O}/${id}/submit`)).data,
   approve: async (id: number, note?: string): Promise<OnboardingView> => (await apiClient.post(`${O}/${id}/approve`, { note: note || null })).data,
@@ -247,7 +349,7 @@ export const onboardingApi = {
 };
 
 /** Query keys, so every screen that shows onboarding state reads again after a change. */
-export const ONBOARDING_KEYS = { profile: ['org-profile'], register: ['fw-onboarding-register'], detail: (id: number) => ['fw-onboarding', id], gate: (fwId: number) => ['fw-onboarding-gate', fwId] } as const;
+export const ONBOARDING_KEYS = { profile: ['org-profile'], register: ['fw-onboarding-register'], detail: (id: number) => ['fw-onboarding', id], programme: (id: number) => ['fw-onboarding', id, 'programme'], gate: (fwId: number) => ['fw-onboarding-gate', fwId] } as const;
 
 export function refreshOnboarding(qc: QueryClient): void {
   for (const key of ['org-profile', 'fw-onboarding-register', 'fw-onboarding', 'fw-onboarding-gate']) void qc.invalidateQueries({ queryKey: [key] });

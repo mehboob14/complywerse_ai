@@ -14,6 +14,7 @@ import type { Column, Field, FieldInputProps } from '@/lib/frameworkOnboarding';
 import { COUNTRIES, countryChoices } from './countries';
 import { choiceLayout, fromYesNo, parseNumberText, toggleOption, toYesNo, withSaved } from './fieldModel';
 import AssetsInput from './inputs/AssetsInput';
+import FilesInput from './inputs/FilesInput';
 import OrgPickInput, { DerivedDepartments } from './inputs/OrgPickInput';
 import PersonInput from './inputs/PersonInput';
 import TableInput from './inputs/TableInput';
@@ -146,6 +147,7 @@ export default function FieldInput(props: FieldInputProps) {
     case 'vendor_ref': control = <VendorInput id={id} label={field.label} value={value} onChange={onChange} refs={refs} onRefs={onRefs} readOnly={readOnly} invalid={c.invalid} />; break;
     case 'asset_refs': control = <AssetsInput id={id} label={field.label} value={value} onChange={onChange} refs={refs} onRefs={onRefs} readOnly={readOnly} />; break;
     case 'org_pick': control = <OrgPickInput id={id} label={field.label} field={field} value={value} onChange={onChange} refs={refs} onRefs={onRefs} readOnly={readOnly} orgRows={orgRows} departments={departments} />; break;
+    case 'files': control = <FilesInput id={id} label={field.label} value={value} onChange={onChange} readOnly={readOnly} />; break;
     case 'departments_derived': control = <DerivedDepartments label={field.label} value={value} departments={departments} />; break;
     case 'table':
       control = (

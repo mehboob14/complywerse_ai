@@ -8,14 +8,12 @@
  */
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, Play } from 'lucide-react';
 import { PageHeading } from '@/components/ui/ds/PageHeading';
-import { Button, ErrorState, Notice, ReadOnlyNote, SectionCard, SkeletonLines, StatusPill, useAddressState, useNotify, useReportedMutation } from '@/components/ui/ds';
+import { Button, ErrorState, Notice, ReadOnlyNote, SectionCard, SkeletonLines, StatusPill, useAddressState, useNotify } from '@/components/ui/ds';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { canRetry, errorMessage, statusOf } from '@/components/ui/ds/reportOutcome';
-import { certificationsApi } from '@/lib/api';
 import { text } from '@/lib/addressState';
 import { formatDate } from '@/lib/format';
 import { onboardingApi, ONBOARDING_KEYS, problemOf, refreshOnboarding, STATE_LABEL, type OnboardingView, type Problem, type Refs, type Register, type Step } from '@/lib/frameworkOnboarding';
@@ -23,6 +21,7 @@ import { FRAMEWORK_FLOWS } from '@/app/(dashboard)/frameworks/[id]/_data/framewo
 import { journeyWords, STATE_TONE } from '../register/registerModel';
 import AiPanel from './AiPanel';
 import DecisionDialog, { type Decision } from './DecisionDialog';
+import ProgrammeCard, { useProgramme } from './ProgrammeCard';
 import ReviewStage from './ReviewStage';
 import StageStrip, { panelId, tabId } from './StageStrip';
 import StepFields, { fieldBoxId, type FieldContext } from './StepFields';
@@ -118,14 +117,9 @@ export default function OnboardingWorkspace({ id }: { id: number }) {
     onSuccess: (next) => done(next, 'Submitted. It waits for approval.'),
   });
   const submitProblem: Problem | null = submit.error ? problemOf(submit.error) : null;
-  // an approved onboarding (or one marked underway) with no journey yet: the journey starts from here, through the same call the Frameworks page makes (the server's gate decides)
-  const router = useRouter();
-  const startJourney = useReportedMutation({
-    mutationFn: async (v: { frameworkId: number; name: string }) => (await certificationsApi.create({ framework_id: v.frameworkId, name: v.name })).data as { id: number },
-    failure: "Couldn't start the journey",
-    invalidate: [['certifications'], ['compliance-frameworks-aggregate'], [...ONBOARDING_KEYS.register]],
-    onSuccess: (journey) => { if (journey?.id) router.push(`/frameworks/${journey.id}`); },
-  });
+  // an approved onboarding (or one marked underway) starts its compliance programme from here: the journey, the scope, the proposals (the server's hand-off, `programme.py`)
+  const startable = v?.state === 'complete' || v?.state === 'underway';
+  const programme = useProgramme(id, startable);
 
   const stages = useMemo(() => (v ? stagesOf(v.steps) : []), [v]);
   if (v && opened.current === null) opened.current = openingStage(stages, v.readiness);
@@ -177,6 +171,9 @@ export default function OnboardingWorkspace({ id }: { id: number }) {
     orgRows: v.org_rows,
     departments: profile.data?.departments ?? [],
     readOnly: locked,
+    onboardingId: id,
+    existing: v.existing,
+    onView: (next) => { qc.setQueryData(key, next); void qc.invalidateQueries({ queryKey: ONBOARDING_KEYS.register }); },
   };
   const title = v.framework.label || v.framework.name || 'Framework';
   const actions = actionsOf(v.state, v.readiness);
@@ -194,8 +191,8 @@ export default function OnboardingWorkspace({ id }: { id: number }) {
         title={title} info={v.framework.summary ?? undefined}
         back={{ href: '/frameworks/onboarding', label: 'Back to onboarding' }}
         meta={locked ? <ReadOnlyNote>Locked <InfoTip label="Why it is locked" text="It is approved. Reopen it to change an answer." /></ReadOnlyNote> : <span role="status" aria-live="polite">{save.isPending ? 'Saving…' : pending ? 'Unsaved changes' : 'Saved'}</span>}
-        actions={(v.state === 'complete' || v.state === 'underway') && !v.journey ? (
-          <Button variant="primary" leftIcon={<Play aria-hidden />} loading={startJourney.isPending} onClick={() => startJourney.mutate({ frameworkId: v.uploaded_framework_id, name: (v.framework.name ?? '').replace(/\s+certification\s*$/i, '').trim() || v.framework.name || title })}>Start the journey</Button>
+        actions={startable && programme.query.data && !programme.query.data.started ? (
+          <Button variant="primary" leftIcon={<Play aria-hidden />} loading={programme.start.isPending} onClick={() => programme.start.mutate(undefined, { onSuccess: () => setAddress({ step: REVIEW }) })}>Start compliance programme</Button>
         ) : undefined}
         chips={<><StatusPill tone={STATE_TONE[v.state]} label={STATE_LABEL[v.state]} />{v.framework.family_label && <StatusPill tone="neutral" label={v.framework.family_label} />}</>}
       />
@@ -233,6 +230,7 @@ export default function OnboardingWorkspace({ id }: { id: number }) {
           <ReviewStage
             view={v} stages={stages} actions={actions} submitting={submit.isPending} submitProblem={submitProblem}
             onSubmit={() => submit.mutate()} onDecision={setDialog} onJump={goStage}
+            programme={startable ? <ProgrammeCard programme={programme} /> : null}
             gapReview={locked ? null : (
               <SectionCard id="gaps" title="Gap review" info="AI reads the draft the way an auditor would and lists what they would ask next. It never changes an answer.">
                 <AiPanel id={id} kind="gap_review" current={null} steps={v.steps} onAccept={applyAi} onJump={goStage} />

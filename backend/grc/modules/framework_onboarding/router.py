@@ -9,13 +9,14 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from ...models import GRCUser, get_db
 from ...routers.auth_router import get_user_primary_tenant, require_auth, require_tenant_permission
-from . import ai, catalog, gate, profile, service
+from . import ai, catalog, files, gate, profile, programme, service
 
 router = APIRouter(prefix="/compliance", tags=["Framework Onboarding"])
 
@@ -107,6 +108,19 @@ def start(body: StartBody, db: Session = Depends(get_db), user: GRCUser = Depend
         raise _fail(exc)
 
 
+# --------------------------------------------------------------------------- documents on an answer
+@router.post("/framework-onboarding/files", status_code=201)
+async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db), user: GRCUser = Depends(require_auth), _p: bool = Depends(EDIT_ONBOARDING)):
+    """Stores one document (kept in Evidence) and answers ``{id, name}``; the answer that carries it is saved with the usual PUT .../answers."""
+    return await files.save(db, _tenant(db, user), user, file)
+
+
+@router.get("/framework-onboarding/files/{evidence_id}")
+def download_file(evidence_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    ev = files.find(db, _tenant(db, user), evidence_id)
+    return FileResponse(ev.file_path, filename=ev.file_name or "file", media_type=ev.file_type or "application/octet-stream")
+
+
 # --------------------------------------------------------------------------- one onboarding
 @router.get("/framework-onboarding/{onboarding_id}")
 def detail(onboarding_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
@@ -126,6 +140,92 @@ def put_answers(onboarding_id: int, body: AnswersBody, db: Session = Depends(get
                 _p: bool = Depends(EDIT_ONBOARDING)):
     try:
         return service.save_answers(db, service.get(db, _tenant(db, user), onboarding_id), user, body.step, body.values)
+    except service.OnboardingError as exc:
+        db.rollback()
+        raise _fail(exc)
+
+
+class ExistingBody(BaseModel):
+    """What an organisation already has: only ``assessment_type`` is asked; every other key is optional and a key left out is left as it was."""
+    assessment_type: Optional[str] = None
+    framework_version: Optional[str] = None
+    assessment_date: Optional[str] = None
+    valid_until: Optional[str] = None
+    period_start: Optional[str] = None
+    period_end: Optional[str] = None
+    assessor_or_issuer: Optional[str] = None
+    scope_coverage: Optional[str] = None
+    scope_note: Optional[str] = None
+    evidence_ids: Optional[list] = None
+    note: Optional[str] = None
+
+
+@router.post("/framework-onboarding/{onboarding_id}/existing", status_code=201)
+def existing_add(onboarding_id: int, body: ExistingBody, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth), _p: bool = Depends(EDIT_ONBOARDING)):
+    try:
+        return service.existing_add(db, service.get(db, _tenant(db, user), onboarding_id), user, body.dict(exclude_unset=True))
+    except service.OnboardingError as exc:
+        db.rollback()
+        raise _fail(exc)
+
+
+@router.put("/framework-onboarding/{onboarding_id}/existing/{record_id}")
+def existing_update(onboarding_id: int, record_id: int, body: ExistingBody, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth),
+                    _p: bool = Depends(EDIT_ONBOARDING)):
+    try:
+        return service.existing_update(db, service.get(db, _tenant(db, user), onboarding_id), user, record_id, body.dict(exclude_unset=True))
+    except service.OnboardingError as exc:
+        db.rollback()
+        raise _fail(exc)
+
+
+@router.delete("/framework-onboarding/{onboarding_id}/existing/{record_id}")
+def existing_remove(onboarding_id: int, record_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth), _p: bool = Depends(EDIT_ONBOARDING)):
+    try:
+        return service.existing_remove(db, service.get(db, _tenant(db, user), onboarding_id), user, record_id)
+    except service.OnboardingError as exc:
+        db.rollback()
+        raise _fail(exc)
+
+
+class VerifyBody(BaseModel):
+    status: str = ""
+
+
+@router.post("/framework-onboarding/{onboarding_id}/existing/{record_id}/verify")
+def existing_verify(onboarding_id: int, record_id: int, body: VerifyBody, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth),
+                    _p: bool = Depends(APPROVE)):
+    try:
+        return service.existing_verify(db, service.get(db, _tenant(db, user), onboarding_id), user, record_id, body.status)
+    except service.OnboardingError as exc:
+        db.rollback()
+        raise _fail(exc)
+
+
+# --------------------------------------------------------------------------- the hand-off into compliance execution (programme.py)
+@router.get("/framework-onboarding/{onboarding_id}/programme")
+def programme_view(onboarding_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    try:
+        return programme.view(db, service.get(db, _tenant(db, user), onboarding_id))
+    except service.OnboardingError as exc:
+        raise _fail(exc)
+
+
+@router.post("/framework-onboarding/{onboarding_id}/programme")
+def programme_start(onboarding_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth), _p: bool = Depends(EDIT_ONBOARDING)):
+    """Start (or refresh) the compliance programme of an approved or underway onboarding. Safe to repeat: nothing new, nothing changed."""
+    try:
+        return programme.start(db, service.get(db, _tenant(db, user), onboarding_id), user)
+    except service.OnboardingError as exc:
+        db.rollback()
+        raise _fail(exc)
+
+
+@router.post("/framework-onboarding/{onboarding_id}/programme/owners")
+def programme_owners(onboarding_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth), _p: bool = Depends(EDIT_ONBOARDING)):
+    """The programme owner becomes the owner of the journey's controls that nobody owns."""
+    try:
+        return programme.apply_owner(db, service.get(db, _tenant(db, user), onboarding_id), user)
     except service.OnboardingError as exc:
         db.rollback()
         raise _fail(exc)
