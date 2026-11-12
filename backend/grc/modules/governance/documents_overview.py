@@ -35,11 +35,15 @@ Definitions (every figure counts the documents of the scope that the viewer may 
   breaks its documents down: ``by_status`` and ``by_type`` (the non-zero ones), ``waiting`` (the pending and overdue requests of each kind,
   people asked, as in ``requests``), ``reviews`` (overdue / due soon / no date, among the documents that owe one) and ``issues_by``
   (documents that are stuck, on hold, with late approvals, with late acknowledgements, with no owner).
-* ``board`` = the documents of the scope as a Kanban: columns by status (the approval flow, then expired / exception where some document is
-  there), by type or by department (the scope's own documents, then one column for each department directly under it), each with its
-  true count and its most urgent cards (the ones with the most issues first, then the newest); the cards say what is wrong with them.
-* ``export_documents`` = the same documents as a CSV (archived ones left out, as in every figure), cells that a spreadsheet would run as
-  a formula neutralised.
+* ``board`` = the documents of the scope as a Kanban: columns by status (the five steps of the approval flow, always, then ONE last column
+  "Needs attention" - key ``status:attention``, value ``attention``, always present - that holds every other live status: expired,
+  exception applied, review required, any other that is not archived; its ``statuses`` lists the ones that have a document), by type or by
+  department (the scope's own documents, then one column for each department directly under it), each with its true count and its most
+  urgent cards (the ones with the most issues first, then the newest); the cards say what is wrong with them and where their attestation
+  stands (``attestation``: state none | not_started | in_progress | complete with done / total, the library's own coverage numbers:
+  ``library_lean.attestation_by_document`` read for the cards shown, in one go).
+* ``export_documents`` = the same documents as a CSV (archived ones left out, as in every figure, an Attestation column in the board's
+  words), cells that a spreadsheet would run as a formula neutralised.
 
 Every figure has its address in ``links`` (the library's own parameters, ``dept`` first): the fixed ones by their path in the answer
 ("totals.in_force", "reviews.overdue", "issues.stuck", "requests.review.overdue"), the rows of a list by their ``key`` ("type:policy",
@@ -56,7 +60,7 @@ import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -64,8 +68,8 @@ from sqlalchemy.orm import Session
 
 from ...models import DocumentObligation, DocumentRouteHold, DocumentRouteStage, GovernanceDocument, GRCUser
 from ...routers.auth_router import get_user_primary_tenant
-from ...services import org_departments
-from . import doc_lifecycle, permissions, routes
+from ...services import department_rights, org_departments
+from . import doc_lifecycle, library_lean, permissions, routes
 
 KINDS = ("stuck", "late_approvals", "late_acknowledgements", "on_hold")     # what GET /ids answers
 SIGN_OFF = ("review", "approval")                       # the requests that move a document through its stages
@@ -85,12 +89,15 @@ WHOLE, NONE = "", "none"                                # the address values (?d
 ISSUE_KINDS = ("stuck", "on_hold", "late_approvals", "late_acknowledgements", "no_owner")     # what ``issues_by`` counts (a subset of ``issues``)
 BOARD_GROUPS = ("status", "type", "department")
 BOARD_CARDS, BOARD_MAX = 10, 50                         # cards a column lists by default, and at most
+ATTENTION = "attention"                                 # the status board's last column: every live status that is not one of the five steps
+# the words of a document's attestation (the board's cards and the CSV), by state
+ATTESTATION_WORDS = {"none": "No attestation", "not_started": "Attestation not started", "complete": "Everyone acknowledged"}
 # the words of lib/status.ts documentStatus (the interface's own), for the CSV
 STATUS_WORDS = {"draft": "Draft", "pending_review": "In review", "pending_approval": "In approval", "approved": "Approved", "published": "Published",
                 "expired": "Expired", "archived": "Archived", "exception_applied": "Exception", "review_required": "Review required"}
 
-REFUSED = "The documents overview is for people who can read the document library and for the head of a department."
-NOT_YOURS = "You can open the overview of the departments you head and of everything under them."
+REFUSED = "The documents overview is for people who can read the document library, for the head of a department and for anyone given access to one."
+NOT_YOURS = "You can open the overview of the departments you head or were given access to, and of everything under them."
 
 
 def _type_label(doc_type: Optional[str]) -> str:
@@ -139,12 +146,13 @@ def _choices(db: Session, tenant_id: int, whole: bool, tree: org_departments.Tre
 
 
 def access(db: Session, user: GRCUser) -> Access:
-    """What the person may open: 403 for someone who reads no library and heads no department."""
+    """What the person may open: 403 for someone who reads no library, heads no department and was given no access to one."""
     tenant_id = get_user_primary_tenant(user, db)
     if not tenant_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User is not assigned to any tenant.")
     whole = permissions.is_admin(db, user) or permissions.can_read_library(db, user)
     headed = org_departments.headed_by(db, user.id, [tenant_id])
+    headed = set(headed) | set(department_rights.unit_rights(db, user))      # a unit the person was given a level on (view and up) is theirs to open, with what is under it
     if not whole and not headed:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=REFUSED)
     tree = org_departments.Tree.load(db, tenant_id)
@@ -527,6 +535,30 @@ def _flags(d, attention: Dict[str, Set[int]], state: Optional[str]) -> List[str]
     return out
 
 
+def _attestation(db: Session, who: Access, doc_ids: Iterable[int]) -> Dict[int, dict]:
+    """``{document id: {"state", "done", "total"}}`` for every id asked, in one go (never a query per document). The numbers are the library's:
+    ``library_lean.attestation_by_document`` (the coverage map's arithmetic: active campaign else latest, acknowledgements over the active people
+    of its email domain), and the state is the library's ``attestationBucket(pct)`` - none (no entry: no campaign, or nobody on its domain; done
+    and total are null), not_started (0 %), in_progress, complete (100 %) - so the board and the library's Attestation filter cannot disagree."""
+    wanted = set(doc_ids)
+    if not wanted:
+        return {}
+    from .routers.document_attestations import _ensure_tables       # as the library's list does, before it reads a campaign (cached per engine)
+    _ensure_tables(db)
+    found = library_lean.attestation_by_document(db, [who.tenant_id], wanted)
+    out: Dict[int, dict] = {}
+    for doc_id in wanted:
+        a = found.get(doc_id)
+        state = "none" if a is None else "not_started" if a["pct"] <= 0 else "complete" if a["pct"] >= 100 else "in_progress"
+        out[doc_id] = {"state": state, "done": a["done"] if a else None, "total": a["total"] if a else None}
+    return out
+
+
+def _attestation_words(a: dict) -> str:
+    """"No attestation", "Attestation not started", "Attestation: 4 of 12 acknowledged", "Everyone acknowledged"."""
+    return f"Attestation: {a['done']} of {a['total']} acknowledged" if a["state"] == "in_progress" else ATTESTATION_WORDS[a["state"]]
+
+
 def board(db: Session, user: GRCUser, department: Optional[str] = None, group: str = "status", per: int = BOARD_CARDS,
           now: Optional[datetime] = None) -> dict:
     """The documents of the scope as columns (``group``: status | type | department), each with its true count and its first ``per`` cards."""
@@ -548,8 +580,10 @@ def board(db: Session, user: GRCUser, department: Optional[str] = None, group: s
         by: Dict[str, list] = defaultdict(list)
         for d in live.values():
             by[d.status or "draft"].append(d)
-        shown = list(FLOW) + [w for w in ("expired", "exception_applied") if by.get(w)] + sorted(w for w in by if w not in STATUS_ORDER)
-        columns = [{"key": f"status:{w}", "label": STATUS_WORDS.get(w, w.replace("_", " ").capitalize()), "value": w, "docs": by.get(w, [])} for w in shown]
+        # the five steps always (empty ones too), then ONE last column for every other live status: expired, exception applied, review required, ...
+        rest = [w for w in STATUS_ORDER if w not in FLOW and by.get(w)] + sorted(w for w in by if w not in STATUS_ORDER)
+        columns = [{"key": f"status:{w}", "label": STATUS_WORDS[w], "value": w, "docs": by.get(w, [])} for w in FLOW]
+        columns.append({"key": f"status:{ATTENTION}", "label": "Needs attention", "value": ATTENTION, "statuses": rest, "docs": [d for w in rest for d in by[w]]})
     elif group == "type":
         by = defaultdict(list)
         for d in live.values():
@@ -590,6 +624,7 @@ def board(db: Session, user: GRCUser, department: Optional[str] = None, group: s
 
     shown_docs = {col["key"]: sorted(col["docs"], key=urgency)[:per] for col in columns}
     owners = doc_lifecycle._names(db, {d.owner_id for docs in shown_docs.values() for d in docs if d.owner_id}) if shown_docs else {}
+    attested = _attestation(db, who, (d.id for docs in shown_docs.values() for d in docs))      # the cards shown only, one read
 
     def card(d) -> dict:
         dept = tree.rows.get(d.department_id) if d.department_id is not None else None
@@ -597,7 +632,7 @@ def board(db: Session, user: GRCUser, department: Optional[str] = None, group: s
                 "status": d.status or "draft", "version": permissions.in_force_number(d) or d.current_version,
                 "department_id": d.department_id if dept is not None else None, "department": dept.name if dept is not None else None,
                 "owner": owners.get(d.owner_id) if d.owner_id else None, "next_review": d.next_review_date.isoformat() if d.next_review_date else None,
-                "flags": _flags(d, attention, states[d.id])}
+                "flags": _flags(d, attention, states[d.id]), "attestation": attested[d.id]}
 
     out = []
     for col in columns:
@@ -615,7 +650,7 @@ def _safe(cell: Any) -> str:
 
 def export_documents(db: Session, user: GRCUser, department: Optional[str] = None, now: Optional[datetime] = None) -> Tuple[str, str]:
     """(the CSV text, a file name) for the documents of the scope that the person may read: one row each, archived ones left out as in every figure.
-    Columns: Code, Title, Type, Status, Version, Department, Owner, Next review, Issues. No internal id: nobody can use it (UX rule U1)."""
+    Columns: Code, Title, Type, Status, Version, Department, Owner, Next review, Issues, Attestation. No internal id: nobody can use it (UX rule U1)."""
     now = now or datetime.utcnow()
     who = access(db, user)
     scope = scope_of(who, department)
@@ -633,11 +668,13 @@ def export_documents(db: Session, user: GRCUser, department: Optional[str] = Non
     rows = sorted(live.values(), key=lambda d: (where(d).casefold(), (d.title or "").casefold(), d.id))
     out = io.StringIO()
     writer = csv.writer(out, lineterminator="\r\n")
-    writer.writerow(["Code", "Title", "Type", "Status", "Version", "Department", "Owner", "Next review", "Issues"])
+    attested = _attestation(db, who, live)                  # every row, one read
+    writer.writerow(["Code", "Title", "Type", "Status", "Version", "Department", "Owner", "Next review", "Issues", "Attestation"])
     for d in rows:
         flags = _flags(d, attention, _review_state(d, now, horizon))
         writer.writerow([_safe(x) for x in [d.document_code, d.title, _type_label(d.doc_type) if d.doc_type else "", STATUS_WORDS.get(d.status or "draft", d.status),
                                             permissions.in_force_number(d) or d.current_version, where(d), owners.get(d.owner_id) if d.owner_id else "",
-                                            d.next_review_date.date().isoformat() if d.next_review_date else "", "; ".join(issue_words[f] for f in flags)]])
+                                            d.next_review_date.date().isoformat() if d.next_review_date else "", "; ".join(issue_words[f] for f in flags),
+                                            _attestation_words(attested[d.id])]])
     name = re.sub(r"[^a-z0-9]+", "-", (scope.choice["name"] or "documents").lower()).strip("-") or "documents"
     return "\ufeff" + out.getvalue(), f"documents-{name}-{now.date().isoformat()}.csv"

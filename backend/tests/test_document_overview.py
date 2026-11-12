@@ -28,6 +28,7 @@ from sqlalchemy.pool import StaticPool  # noqa: E402
 
 import grc.models as m  # noqa: E402
 from grc.modules.governance import documents_overview as S  # noqa: E402
+from grc.modules.governance import library_lean  # noqa: E402
 from grc.modules.governance.router import router as governance_router  # noqa: E402
 from grc.routers.auth_router import create_access_token  # noqa: E402
 
@@ -36,7 +37,7 @@ OPS, SUP, HELP, FINANCE, LEGACY = 10, 11, 12, 13, 14           # Operations > Su
 URL = "/governance/document-overview"
 NOW = datetime(2026, 11, 4, 12, 0, 0)
 DAY, HOUR = timedelta(days=1), timedelta(hours=1)
-REFUSED = "The documents overview is for people who can read the document library and for the head of a department."
+REFUSED = "The documents overview is for people who can read the document library, for the head of a department and for anyone given access to one."
 
 
 @pytest.fixture(scope="module")
@@ -681,21 +682,25 @@ def test_the_board_by_status_lists_the_flow_with_true_counts_and_the_most_urgent
     b = board(w, per=3)
     assert (b["group"], b["per"], b["total"], b["scope"]["whole_organisation"]) == ("status", 3, 10, True)
     assert [(c["value"], c["label"], c["count"]) for c in b["columns"]] == [
-        ("draft", "Draft", 1), ("pending_review", "In review", 1), ("pending_approval", "In approval", 1), ("approved", "Approved", 0), ("published", "Published", 6), ("expired", "Expired", 1)]
-    assert [c["key"] for c in b["columns"]][:2] == ["status:draft", "status:pending_review"]
+        ("draft", "Draft", 1), ("pending_review", "In review", 1), ("pending_approval", "In approval", 1), ("approved", "Approved", 0), ("published", "Published", 6),
+        ("attention", "Needs attention", 1)]                                                # the expired one: every other live status is in the one last column
+    assert [c["key"] for c in b["columns"]][:2] == ["status:draft", "status:pending_review"] and b["columns"][-1]["key"] == "status:attention"
     published = next(c for c in b["columns"] if c["value"] == "published")
     assert (len(published["cards"]), published["more"]) == (3, 3)                           # the true count is 6; three cards are listed, three are not
     assert {c["id"] for c in published["cards"]} == {2, 3, 6}                               # the ones with something wrong come first (2: review overdue, 3: no owner, 6: a late acknowledgement)
     assert next(c for c in b["columns"] if c["value"] == "approved") == {"key": "status:approved", "label": "Approved", "value": "approved", "count": 0, "cards": [], "more": 0}
     card = next(c for c in b["columns"] if c["value"] == "pending_review")["cards"][0]
     assert card == {"id": 4, "title": "Doc 4", "code": None, "doc_type": "standard", "type_label": "Standard", "status": "pending_review", "version": "1.0",
-                    "department_id": HELP, "department": "Helpdesk", "owner": "Ada", "next_review": None, "flags": ["stuck", "late_approvals"]}
+                    "department_id": HELP, "department": "Helpdesk", "owner": "Ada", "next_review": None, "flags": ["stuck", "late_approvals"],
+                    "attestation": {"state": "none", "done": None, "total": None}}
     assert next(c for c in published["cards"] if c["id"] == 3)["flags"] == ["no_owner"] and next(c for c in published["cards"] if c["id"] == 3)["owner"] is None
     assert next(c for c in published["cards"] if c["id"] == 2)["flags"] == ["overdue_review"]
     assert board(w, per=1)["columns"][0]["more"] == 0                                       # nothing left out of a column that fits
     assert board(w, per=999)["per"] == S.BOARD_MAX                                          # a long column is cut at most at the limit
-    # no expired column while nothing has expired
-    assert "expired" not in {c["value"] for c in board(w, department=OPS)["columns"]}
+    # nothing has expired in Operations: the last column is still there, empty, and holds no status
+    ops = board(w, department=OPS)["columns"]
+    assert ops[-1] == {"key": "status:attention", "label": "Needs attention", "value": "attention", "statuses": [], "count": 0, "cards": [], "more": 0}
+    assert "expired" not in {c["value"] for c in ops}
 
 
 def test_the_board_by_type_and_by_department(w):
@@ -732,6 +737,116 @@ def test_the_board_asks_for_the_same_rights_as_the_figures_and_counts_only_what_
     assert all(card["id"] not in (1, 4, 5) for c in reader["columns"] for card in c["cards"])
 
 
+def campaign(w, did, acks, domain="twelve.test", status="active", created=NOW, tenant=1):
+    """An attestation campaign on a document, with ``acks`` acknowledgements (the library's coverage numbers read them over the active people on ``domain``)."""
+    c = m.DocumentAttestationCampaign(tenant_id=tenant, document_id=did, name=f"Campaign {did}", status=status, public_token=f"token-{did}-{status}",
+                                      allowed_email_domain=domain, created_by=ADMIN, created_at=created)
+    w.db.add(c)
+    w.db.flush()
+    for i in range(acks):
+        w.db.add(m.DocumentAttestationAcknowledgment(campaign_id=c.id, name=f"P{i}", email=f"p{i}@{domain}", signature_data="data:image/png;base64,AAAA"))
+    return c
+
+
+def twelve_people(w):
+    for i in range(12):
+        w.db.add(m.GRCUser(id=100 + i, username=f"t{i}", email=f"t{i}@twelve.test", display_name=f"Twelve {i}"))
+
+
+def card_of(b, did):
+    return next(c for col in b["columns"] for c in col["cards"] if c["id"] == did)
+
+
+def test_every_card_says_where_its_attestation_stands_in_the_librarys_own_numbers(w):
+    twelve_people(w)
+    doc(w, 1, SUP)                                                                          # no attestation requested
+    doc(w, 2, SUP)                                                                          # requested, nobody has acknowledged
+    campaign(w, 2, 0)
+    doc(w, 3, SUP)                                                                          # 4 of the 12 people on the domain
+    campaign(w, 3, 4)
+    doc(w, 4, SUP)                                                                          # everyone
+    campaign(w, 4, 12)
+    doc(w, 5, SUP)                                                                          # a campaign on a domain nobody is on: as in the library, none
+    campaign(w, 5, 2, domain="nobody.test")
+    doc(w, 6, SUP, status="draft")                                                          # a closed campaign is the latest when none is active
+    campaign(w, 6, 3, status="closed")
+    doc(w, 7, SUP)                                                                          # an active older one wins over a newer closed one
+    campaign(w, 7, 6, created=NOW - 9 * DAY)
+    campaign(w, 7, 12, status="closed", created=NOW)
+    w.db.commit()
+    expected = [{"state": "none", "done": None, "total": None}, {"state": "not_started", "done": 0, "total": 12}, {"state": "in_progress", "done": 4, "total": 12},
+                {"state": "complete", "done": 12, "total": 12}, {"state": "none", "done": None, "total": None}, {"state": "in_progress", "done": 3, "total": 12},
+                {"state": "in_progress", "done": 6, "total": 12}]
+    for group in ("status", "type", "department"):
+        assert [card_of(board(w, department=SUP, group=group), did)["attestation"] for did in range(1, 8)] == expected, group
+    # the numbers are the library's: the lean list's attestation_by_document gives the same done / total for the same documents
+    lean = library_lean.attestation_by_document(w.db, [1], range(1, 8))
+    on_board = {did: card_of(board(w, department=SUP), did)["attestation"] for did in range(1, 8)}
+    assert {did: (a["done"], a["total"]) for did, a in on_board.items() if a["state"] != "none"} == {did: (a["done"], a["total"]) for did, a in lean.items()}
+    assert {did for did, a in on_board.items() if a["state"] == "none"} == set(range(1, 8)) - set(lean)
+    # the words (D41: short), the same on the card and in the CSV
+    words = ["No attestation", "Attestation not started", "Attestation: 4 of 12 acknowledged", "Everyone acknowledged"]
+    assert [S._attestation_words(on_board[did]) for did in (1, 2, 3, 4)] == words
+    rows = {r[1]: r[9] for r in csv_rows(S.export_documents(w.db, user(w, ADMIN), str(SUP), now=NOW)[0])[1:]}
+    assert [rows[f"Doc {did}"] for did in (1, 2, 3, 4)] == words
+
+
+def test_the_attestation_is_read_for_the_cards_shown_in_a_fixed_number_of_queries_and_only_for_documents_the_person_may_read(w):
+    twelve_people(w)
+    for did in range(1, 31):
+        doc(w, did, SUP)
+        campaign(w, did, did % 13)
+    doc(w, 40, SUP, status="pending_review")                                                # in review: not a library reader's to read
+    campaign(w, 40, 5)
+    doc(w, 41, FINANCE, tenant=2)                                                           # another organisation's: never read
+    campaign(w, 41, 5, tenant=2)
+    w.db.commit()
+    seen = []
+    event.listen(w.engine, "before_cursor_execute", lambda conn, cursor, statement, params, context, many: seen.append(statement))
+    board(w, READER, group="type", per=1)                                                   # (the first request of a person notes their activity, and the tables are checked once)
+    seen.clear()
+    reader = board(w, READER, group="type", per=5)                                          # five cards shown
+    few = len(seen)
+    assert sum(len(c["cards"]) for c in reader["columns"]) == 5 and reader["total"] == 30 and any("attestation" in s for s in seen)
+    seen.clear()
+    more = board(w, READER, group="type", per=30)                                           # thirty cards cost the same statements as five
+    assert sum(len(c["cards"]) for c in more["columns"]) == 30 and len(seen) == few
+    assert all(card["id"] not in (40, 41) for c in more["columns"] for card in c["cards"])
+    admin = board(w, ADMIN, group="type", per=50)                                           # an administrator reads the one in review too, never the other organisation's
+    assert card_of(admin, 40)["attestation"] == {"state": "in_progress", "done": 5, "total": 12}
+    assert all(card["id"] != 41 for c in admin["columns"] for card in c["cards"]) and admin["total"] == 31
+
+
+def test_the_status_board_ends_in_one_needs_attention_column_that_counts_every_other_live_status_once(w):
+    doc(w, 1, SUP, status="draft")
+    doc(w, 2, SUP)
+    doc(w, 3, SUP, status="expired")
+    doc(w, 4, SUP, status="exception_applied")
+    doc(w, 5, SUP, status="expired")
+    doc(w, 6, SUP, status="review_required")
+    doc(w, 7, SUP, status="archived")                                                       # archived: on no board, in no column
+    w.db.commit()
+    b = board(w, department=SUP)
+    assert [c["value"] for c in b["columns"]] == ["draft", "pending_review", "pending_approval", "approved", "published", "attention"]
+    last = b["columns"][-1]
+    assert (last["key"], last["label"], last["value"], last["count"], last["more"]) == ("status:attention", "Needs attention", "attention", 4, 0)
+    assert last["statuses"] == ["expired", "exception_applied", "review_required"]          # the ones that have a document: the flow's order first, then any other
+    assert sorted(c["id"] for c in last["cards"]) == [3, 4, 5, 6] and {c["status"] for c in last["cards"]} == set(last["statuses"])      # the cards say which status
+    assert all("statuses" not in c for c in b["columns"][:-1])                              # the five steps keep their shape
+    assert sum(c["count"] for c in b["columns"]) == b["total"] == 6                         # each live document is counted once, in exactly one column
+    # a long column keeps its true count and lists only the most urgent cards
+    for did in range(10, 20):
+        doc(w, did, SUP, status="expired")
+    w.db.commit()
+    long = board(w, department=SUP, per=3)["columns"][-1]
+    assert (long["count"], len(long["cards"]), long["more"]) == (14, 3, 11)
+    # the other groupings have no such column; a scope with nothing to attend to has the column, empty
+    assert all(c["value"] != "attention" for g in ("type", "department") for c in board(w, department=SUP, group=g)["columns"])
+    assert board(w, department=FINANCE)["columns"][-1]["count"] == 0
+    # a person who reads only what is in force has an empty last column: what is expired is not theirs to read
+    assert board(w, READER)["columns"][-1] == {"key": "status:attention", "label": "Needs attention", "value": "attention", "statuses": [], "count": 0, "cards": [], "more": 0}
+
+
 BOM = chr(0xFEFF)                                                           # the byte-order mark Excel reads as UTF-8
 
 
@@ -749,11 +864,11 @@ def test_the_export_is_a_csv_of_the_documents_in_scope_with_what_is_wrong_with_e
     text, name = S.export_documents(w.db, user(w, ADMIN), None, now=NOW)
     assert text.startswith(BOM) and name == "documents-whole-organisation-2026-11-04.csv"
     rows = csv_rows(text)
-    assert rows[0] == ["Code", "Title", "Type", "Status", "Version", "Department", "Owner", "Next review", "Issues"]       # no internal id: nobody can use it (UX rule U1)
+    assert rows[0] == ["Code", "Title", "Type", "Status", "Version", "Department", "Owner", "Next review", "Issues", "Attestation"]       # no internal id: nobody can use it (UX rule U1)
     assert len(rows) == 1 + 8                                                               # the archived one is left out, as in every figure
     by_title = {r[1]: r for r in rows[1:]}
-    assert by_title["Doc 4"] == ["", "Doc 4", "Standard", "In review", "1.0", "Operations > Support > Helpdesk", "Ada", "", "Stuck in a stage; Late approval"]
-    assert by_title["Doc 2"][3:] == ["Published", "1.0", "Operations > Support", "Ada", "2026-11-03", "Review overdue"]
+    assert by_title["Doc 4"] == ["", "Doc 4", "Standard", "In review", "1.0", "Operations > Support > Helpdesk", "Ada", "", "Stuck in a stage; Late approval", "No attestation"]
+    assert by_title["Doc 2"][3:] == ["Published", "1.0", "Operations > Support", "Ada", "2026-11-03", "Review overdue", "No attestation"]
     assert by_title["Doc 3"][6] == "" and by_title["Doc 3"][8] == "No owner" and by_title["Doc 7"][5] == "" and by_title["Doc 6"][8] == "Late acknowledgement"
     assert [r[5] for r in rows[1:]] == sorted((r[5] for r in rows[1:]), key=str.casefold)       # in department order, then by title
     # a scope is its own file; the file's name says which
@@ -884,3 +999,21 @@ def test_the_response_has_the_documented_shape(w):
     assert set(body["waiting"][0]) == {"document_id", "title", "kind", "stage", "waiting_for", "waiting_count", "due_date", "days_late"}
     assert set(body["requests"]["review"]) == {"pending", "overdue", "due_soon", "oldest_days_late"}
     assert datetime.fromisoformat(body["as_of"]) <= datetime.utcnow()
+
+
+def test_a_person_given_access_to_a_unit_may_open_the_overview_of_that_unit_and_what_is_under_it(w):
+    """Cascading access (grc_department_grants): any level on a unit opens the overview of the unit and below, with only what the level lets them read."""
+    doc(w, 1, OPS, status="published", owner=ADMIN)
+    doc(w, 2, SUP, status="published", owner=ADMIN)
+    doc(w, 3, SUP, status="draft", owner=ADMIN)                            # a draft: a view grant does not read it
+    doc(w, 4, HELP, status="published", owner=ADMIN)
+    doc(w, 5, FINANCE, status="published", owner=ADMIN)
+    w.db.commit()
+    assert get(w, EVE, path=URL).status_code == 403                        # no grant yet: not a head, not a reader
+    w.db.add(m.GRCDepartmentGrant(tenant_id=1, department_id=SUP, principal_type="user", principal_id=EVE, level="view"))
+    w.db.commit()
+    first = get(w, EVE)
+    assert first.status_code == 200
+    assert [c["department_id"] for c in first.json()["choices"]] == [SUP, HELP]            # Support and what is under it, nothing else
+    assert get(w, EVE, SUP).json()["totals"]["documents"] == 2             # 2 and 4: the published ones of Support and below
+    assert get(w, EVE, OPS).status_code == 403 and get(w, EVE, FINANCE).status_code == 403   # never outside the unit
