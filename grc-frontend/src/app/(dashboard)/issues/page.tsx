@@ -2,26 +2,26 @@
 
 export const dynamic = 'force-dynamic';
 
-// Issue & Incident Management > Overview, a graphical cockpit (the frame of the Risk Management and Governance Overviews: components/overview, with the chart kit components/overview/charts): the
-// figures it leads with (open, late, critical or high, raised and closed in 30 days, closed on time, each with its shape over twelve months), what needs attention across the module as a band of
-// counters, the cards of the whole register (raised and closed, severity, state, age, impact by urgency, the open backlog, who holds the issues, where they came from, how well they close, the
-// corrective actions, the incidents), then the person's own prioritised work beside one compact score card. It replaces the page of eight tabs: Enterprise Log, Contract Compliance and CAPA
-// Actions are the register pages (/issues/register, /issues/actions), the Closure Tracker's lenses are the cards, and the Severity matrix and Automation tabs are /issues/settings. Every old
-// address still lands where its thing is now (_overview/forwards.ts).
-// ONE definition: a counter and a figure are the number of rows the register's own chip keeps (overviewModel.ts, chartModel.ts), so the number here is the number there after the click. "Needs
-// attention" counts each record once. Every request loads, fails (with Retry) and has nothing on its own: a failed list is never read as 0. The score and its sections are the server's scorecard (GET
-// /issue-management/dashboard/sections-overview, key and payload unchanged: the main Dashboard reads the same key).
+// Issue & Incident Management > Overview (Overview v2: posture in graphics, minimal text, everything opens the records, Back returns to the same place; the frame of the other Overviews is
+// components/overview with the chart kit components/overview/charts). It leads with six figures (open issues with their shape over twelve months, late issues, critical or high issues, issues closed
+// on time, late corrective actions and, with the incident right, open incidents), each a way into the records it counts and coloured by its own status; then three rows of graphic cards (the module
+// score with its sections, open issues by severity and by stage; raised and closed or the open backlog over twelve months, open issues by severity and age; who holds the open issues, corrective
+// actions by status, open incidents by severity); then the person's own work, slim: three one-line rows and "See all N" (a sheet). There is no chip wall of "needs attention": attention is the status
+// colour of the graphics. It replaces the page of eight tabs: Enterprise Log, Contract Compliance and CAPA Actions are the register pages (/issues/register, /issues/actions), the Severity matrix and
+// Automation tabs are /issues/settings. Every old address still lands where its thing is now (_overview/forwards.ts).
+// ONE definition: a figure is the number of rows the register's own chip keeps (overviewModel.ts, chartModel.ts), so the number here is the number there after the click. Every request loads, fails
+// (with Retry) and has nothing on its own: a failed list is never read as 0. The score and its sections are the server's scorecard (GET /issue-management/dashboard/sections-overview, key and payload
+// unchanged: the main Dashboard reads the same key). What changes what the page shows (the twelve-month view, the score sheet, the full work list) is in the address (v2Model.ts ADDRESS), and
+// useReturnToPlace puts the page back where it was when the person comes Back.
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, RefreshCw, Settings } from 'lucide-react';
 import { PageHeader } from '@/components/ui';
-import { Button, IconButton, NoAccessState, Notice } from '@/components/ui/ds';
+import { Button, IconButton, NoAccessState, Notice, useAddressState } from '@/components/ui/ds';
 import { canRetry, errorMessage, statusOf } from '@/components/ui/ds/reportOutcome';
 import { Cockpit, SkipToWork } from '@/components/overview/Cockpit';
-import { CounterBand, type BandCounter } from '@/components/overview/CounterBand';
-import { layoutOf, workRowLimit } from '@/components/overview/cockpitModel';
-import { useNarrow } from '@/components/overview/useNarrow';
+import { useReturnToPlace } from '@/components/overview/useReturnToPlace';
 import type { OverviewSection } from '@/components/dashboard/score-kit';
 import { usePermissions } from '@/hooks/usePermissions';
 import { auditRegisterApi } from '@/lib/api';
@@ -29,12 +29,15 @@ import { formatCount } from '@/lib/format';
 import { clockOf } from '@/lib/inbox/inboxView';
 import { titleFor } from '@/lib/navRegistry';
 import { IssueForm } from './_components/IssueForm';
-import { feedOf, useActionRows, useClosing, useIncidentRows, useIssueRows, useMe, useScorecard, useSeverityMatrix } from './_overview/data';
+import { feedOf, useActionRows, useIncidentRows, useIssueRows, useMe, useScorecard } from './_overview/data';
 import { forwardFor } from './_overview/forwards';
-import { ScoreCard, ScoreSheet, WorkCard, type FeedStatus } from './_overview/parts';
-import { SECTION_ORDER, buildWork, countersOf, incidentsFeed, needsAttention, postureOf, sectionRows, type FeedKey } from './_overview/overviewModel';
+import { IssueHero } from './_overview/hero';
+import { IssueVisuals, type ErrorInfo, type Errors } from './_overview/cards';
+import { ScoreSheet } from './_overview/score';
+import { MyWork, WorkSheet } from './_overview/work';
+import { SECTION_ORDER, buildWork, countersOf, incidentsFeed, postureOf, sectionRows } from './_overview/overviewModel';
+import { ADDRESS, type FeedStatus } from './_overview/v2Model';
 import { useWorkSteps } from './_overview/useWorkSteps';
-import { IssueHero, IssueVisuals, type ErrorInfo, type Errors } from './_overview/visuals';
 
 const NO_ROWS: never[] = [];                          // one empty list, so a memo keyed on "the rows" does not run again while nothing has loaded
 
@@ -52,13 +55,12 @@ export default function IssuesPage() {
 }
 
 function IssuesOverview() {
-  const narrow = useNarrow();
   const { hasPermission, isLoading: permissionsLoading } = usePermissions();
   const canEdit = hasPermission('issue_management:issues:edit');
   const canCreate = hasPermission('issue_management:issues:create');
   const canIncidents = hasPermission('erm:incidents:*');
   const [raising, setRaising] = useState(false);
-  const [scoreOpen, setScoreOpen] = useState(false);
+  const [view, setView] = useAddressState(ADDRESS);
   const { run, busy, dialog } = useWorkSteps();
 
   const me = useMe();
@@ -66,8 +68,6 @@ function IssuesOverview() {
   const actions = useActionRows();
   const incidents = useIncidentRows(canIncidents);
   const score = useScorecard();
-  const closing = useClosing();
-  const matrix = useSeverityMatrix();
   const register = useQuery<{ has_register: boolean }>({ queryKey: ['audit-register-status'], queryFn: async () => (await auditRegisterApi.status()).data, retry: false, staleTime: 60_000 });
 
   // incidents are read with another right than issues are: a person who may not read them (or whose read the server refuses) simply has no incident figures
@@ -80,16 +80,7 @@ function IssuesOverview() {
   const issuesRefused = !issues.data && statusOf(issues.error) === 403;
 
   const now = useMemo(() => new Date(), [issues.dataUpdatedAt, actions.dataUpdatedAt, incidents.dataUpdatedAt]);          // eslint-disable-line react-hooks/exhaustive-deps
-  const measured = countersOf(feeds, now);
-  const counters: BandCounter[] = measured.map((c) => {
-    const q = c.feed === 'issues' ? issues : c.feed === 'actions' ? actions : incidents;
-    return { key: c.key, label: c.label, href: c.href, tone: c.tone, state: c.state, value: c.value, onRetry: c.state === 'error' && canRetry(q.error) ? () => { void q.refetch(); } : undefined };
-  });
-  const attention = needsAttention(feeds, now);
-  const shownFeeds = (['issues', 'actions', 'incidents'] as FeedKey[]).filter((k) => feeds[k]);
-  const allFailed = shownFeeds.every((k) => feeds[k]?.state === 'error');
-  const total = attention !== null ? `${formatCount(attention)} ${attention === 1 ? 'item' : 'items'}`
-    : shownFeeds.some((k) => feeds[k]?.state === 'error') ? 'Total unavailable' : undefined;
+  const counters = countersOf(feeds, now);
 
   const issueRows = issues.data?.items ?? NO_ROWS;
   const actionRows = actions.data?.items ?? NO_ROWS;
@@ -101,9 +92,6 @@ function IssuesOverview() {
     { label: 'Corrective actions', feed: statusOfQuery(actions) },
     ...(feeds.incidents ? [{ label: 'Incidents', feed: statusOfQuery(incidents) }] : []),
   ];
-  const workLoading = sources.some((s) => !s.feed.hasData && s.feed.isPending);
-  const mode = layoutOf({ refused: false, workCount: workLoading ? null : work.length });
-  const limit = workRowLimit(mode, narrow);
 
   const scoreStatus: FeedStatus = { ...statusOfQuery(score), isError: score.isError || (score.isSuccess && !score.data) };
   const posture = postureOf(score.data);
@@ -111,13 +99,16 @@ function IssuesOverview() {
   const fullSections = SECTION_ORDER.map((k) => score.data?.sections?.[k]).filter((s): s is OverviewSection => !!s);
 
   const errors: Errors = { issues: errorOf(issues), actions: errorOf(actions), incidents: errorOf(incidents) };
-  const closingFeed = { state: closing.data ? 'ready' as const : closing.isError ? 'error' as const : 'loading' as const, data: closing.data, error: errorOf(closing) };
 
   const updatedAt = Math.max(issues.dataUpdatedAt, actions.dataUpdatedAt, score.dataUpdatedAt);
-  const refreshAll = () => { [me, issues, actions, score, closing].forEach((q) => { void q.refetch(); }); if (canIncidents && !incidentsRefused) void incidents.refetch(); };
+  const refreshAll = () => { [me, issues, actions, score].forEach((q) => { void q.refetch(); }); if (canIncidents && !incidentsRefused) void incidents.refetch(); };
   const staleQueries = [issues, actions, score, ...(feeds.incidents ? [incidents] : [])].filter((q) => q.isError && q.data);
   const cut = issues.data && issues.data.total > issues.data.items.length ? issues.data : null;
   const hasRegister = !!register.data?.has_register;
+
+  // the page is drawn (not just asked for) when every list that feeds a card has answered: then Back puts the scroll position back
+  const ready = !issues.isPending && !actions.isPending && !score.isPending && !me.isPending && (!feeds.incidents || feeds.incidents.state !== 'loading');
+  useReturnToPlace(ready);
 
   return (
     <div className="flex flex-col gap-[16px]">
@@ -152,26 +143,17 @@ function IssuesOverview() {
             </Notice>
           )}
           <Cockpit
-            mode={mode}
-            narrow={narrow}
-            hero={<IssueHero now={now} feeds={feeds} errors={errors} counters={measured} />}
-            visuals={<IssueVisuals now={now} feeds={feeds} errors={errors} matrix={matrix.data?.cells} closing={closingFeed} />}
-            band={(
-              <CounterBand
-                id="attention"
-                title="Needs attention"
-                info="Each count opens the records it counts, in the register. The total counts every issue, action or incident once, however many of these it matches. Open issues and open incidents are shown for context and are not in it."
-                total={total}
-                counters={counters}
-                narrow={narrow}
-                failure={allFailed ? { title: "Couldn't load the counters", message: errorMessage(issues.error ?? actions.error), onRetry: canRetry(issues.error ?? actions.error) ? refreshAll : undefined } : undefined}
+            hero={<IssueHero now={now} feeds={feeds} errors={errors} counters={counters} />}
+            visuals={(
+              <IssueVisuals
+                now={now} feeds={feeds} errors={errors} trend={view.trend} onTrend={(trend) => setView({ trend })}
+                score={{ feed: scoreStatus, posture, sections: sectionList, onOpen: () => setView({ score: true }) }}
               />
             )}
-            work={<WorkCard id="work" items={work} now={now} sources={sources} limit={limit} run={run} busy={busy} />}
-            posture={<ScoreCard id="score" feed={scoreStatus} posture={posture} sections={sectionList} onOpen={() => setScoreOpen(true)} />}
-            breakdowns={[]}
+            work={<MyWork id="work" items={work} now={now} sources={sources} run={run} busy={busy} onAll={() => setView({ work: true })} />}
           />
-          <ScoreSheet open={scoreOpen} onClose={() => setScoreOpen(false)} sections={fullSections} posture={posture} />
+          <ScoreSheet open={view.score} onClose={() => setView({ score: false })} sections={fullSections} posture={posture} />
+          <WorkSheet open={view.work} onClose={() => setView({ work: false })} items={work} now={now} run={run} busy={busy} />
         </>
       )}
       {raising && <IssueForm open onClose={() => setRaising(false)} />}

@@ -1,7 +1,8 @@
 // node --test "src/app/(dashboard)/issues/_overview/overviewGuard.test.ts"
 // Source-text guard for the Issue & Incident Overview (issues/page.tsx, issues/_overview) and the Issue settings (issues/settings): the kit's rules (no class the platform CSS rewrites, nothing under
 // 12px), no native dialog, no hover-only action, no vendor or model name, no raw technical word in a visible string, a write only through useReportedMutation, a bare <p>/<td>/<th>/<h2>/<h3>
-// always sized, every counter and breakdown opening the register FILTERED, and the rights the server asks for. The register folders are guarded by register/registerGuard.test.ts.
+// always sized, every counter and breakdown opening the register FILTERED, the rights the server asks for, and Overview v2 (no counter band, every card a link to its register, the page returns to
+// where it was). The register folders are guarded by register/registerGuard.test.ts.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
@@ -86,18 +87,40 @@ test("the charts are the kit's: no recharts import and no colour written in a pa
     assert.doesNotMatch(src, /from 'recharts'/, `${f}: a chart drawn outside the kit`);
     assert.doesNotMatch(src, /#[0-9a-fA-F]{6}\b/, `${f}: a colour written here (colours are components/overview/charts/palette.ts)`);
   }
-  const visuals = code(read(join(ISSUES, '_overview/visuals.tsx')));
-  const cards = Array.from(visuals.matchAll(/<ChartCard\b[\s\S]*?\n\s*>/g)).map((m) => m[0]);
-  assert.ok(cards.length >= 10, `${cards.length} cards`);
+  const cardsSrc = code(read(join(ISSUES, '_overview/cards.tsx'))) + code(read(join(ISSUES, '_overview/score.tsx')));
+  const cards = Array.from(cardsSrc.matchAll(/<ChartCard\b[\s\S]*?\n\s*>/g)).map((m) => m[0]);
+  assert.equal(cards.length, 8, 'the score, severity, stages, trend, age, owners, actions and incidents');
   for (const c of cards) {
     assert.match(c, /\binfo=/, `a card with no (i): ${c.slice(0, 60)}`);
-    assert.match(c, /\bstate=/, `a card with no state: ${c.slice(0, 60)}`);
-    assert.match(c, /\berror=\{failure\(/, `a card that cannot say it failed: ${c.slice(0, 60)}`);
+    assert.match(c, /\bstate=|\{\.\.\.stateOf\(/, `a card with no state: ${c.slice(0, 60)}`);
+    assert.match(c, /\berror=\{(?:failure\(|issuesError\b)|\{\.\.\.stateOf\(/, `a card that cannot say it failed: ${c.slice(0, 60)}`);
     assert.match(c, /\bemptyText=/, `a card with no words for nothing: ${c.slice(0, 60)}`);
   }
-  const tiles = Array.from(visuals.matchAll(/<KpiTile\b[\s\S]*?\/>/g)).map((m) => m[0]);
+  const hero = code(read(join(ISSUES, '_overview/hero.tsx')));
+  const tiles = Array.from(hero.matchAll(/<KpiTile\b[\s\S]*?\n\s*\/>/g)).map((m) => m[0]);
   assert.equal(tiles.length, 6);
-  for (const t of tiles) assert.match(t, /\binfo=/, `a tile with no (i): ${t.slice(0, 60)}`);
+  for (const tile of tiles) {
+    assert.match(tile, /\binfo=/, `a tile with no (i): ${tile.slice(0, 60)}`);
+    assert.match(tile, /\bhref=/, `a tile that opens nothing: ${tile.slice(0, 60)}`);
+  }
+});
+
+test('Overview v2: no counter band and no chip wall, every card but the score opens its register (rule R6), the page puts itself back where it was (R7)', () => {
+  const page = code(read(join(ISSUES, 'page.tsx')));
+  assert.doesNotMatch(page, /CounterBand|\bband=|needsAttention|Needs attention/, 'the attention wall is gone');
+  assert.match(page, /useReturnToPlace\(ready\)/);
+  assert.match(page, /useAddressState\(ADDRESS\)/, 'the twelve-month view, the score sheet and the full work list live in the address');
+  assert.match(page, /<MyWork\b/);
+  assert.doesNotMatch(page, /<WorkCard\b|<ScoreCard\b/, 'the long list is a sheet; the score is a card of the grid');
+  const cardsSrc = code(read(join(ISSUES, '_overview/cards.tsx')));
+  const cards = Array.from(cardsSrc.matchAll(/<ChartCard\b[\s\S]*?\n\s*>/g)).map((m) => m[0]);
+  assert.equal(cards.length, 7);
+  for (const c of cards) assert.match(c, /\bhref=\{LINKS\./, `a card with no "Open" link: ${c.slice(0, 60)}`);
+  assert.match(cardsSrc, /href=\{\(r\) => ageHref\(/, 'a cell of the heat grid opens its severity');
+  const work = code(read(join(ISSUES, '_overview/work.tsx')));
+  assert.match(work, /slimWork\(items, now\)/, 'three rows, not the list');
+  assert.match(work, /All caught up/);
+  assert.match(work, /could not be loaded/);
 });
 
 test('the rights are the ones the server asks for: Raise issue needs create; Settings and every step need edit; incidents are read with the incident right', () => {
@@ -116,9 +139,9 @@ test('a failed list is never a number: every count, the work list and the cards 
   assert.match(model, /feed\.state === 'ready' \? \{ \.\.\.base, value:/, 'a counter has a value only from a feed that is ready');
   const page = code(read(join(ISSUES, 'page.tsx')));
   assert.doesNotMatch(page, /\?\? 0\b/, 'no "?? 0" stands in for a count');
-  const parts = code(read(join(ISSUES, '_overview/parts.tsx')));
-  assert.match(parts, /Couldn't load/);
-  assert.match(parts, /onRetry=\{retryOf\(feed\)\}/);
+  const score = code(read(join(ISSUES, '_overview/score.tsx')));
+  assert.match(score, /Couldn't load the score/);
+  assert.match(score, /onRetry: canRetry\(feed\.error\)/);
 });
 
 test('the settings page hides what does nothing and sends the matrix\'s unchanged acknowledge window', () => {

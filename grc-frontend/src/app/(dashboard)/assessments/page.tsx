@@ -2,39 +2,46 @@
 
 export const dynamic = 'force-dynamic';
 
-// Assessments > Overview, a dashboard on the worklist-first cockpit (the frame the Governance, Risk and Compliance Overviews use: components/overview): four tiles and three graphs (_overview/Visuals.tsx:
-// the score by category and by assessment, the gaps by state), what needs attention as a band of counters that each open
-// the list they count, the signed-in person's own work ("Do now") beside one posture card, and the categories and the remediation clock below. Four requests (GET /overview, /my-work, /points,
-// /sla-policy) and each part loads, fails (with Retry) and is empty on its own. Every figure is the SERVER's: the score and its grade (85 / 70 / 50), the SLA score and the gap counts; a figure
-// that is not recorded says so and is never 0. A tenant with no assessment is shown how to start instead of a page of zeros. The strip of tabs (Overview, All assessments, Types) is under the head.
-// The old board's cards, its in-place detail and its per-keystroke SLA panel are gone: an assessment opens in its own page, and "Tune SLA" is a dialog with one Save.
+// Assessments > Overview, a posture dashboard on the cockpit frame (components/overview), Overview v2: four tiles (the server's score, the remediation SLA, how many assessments, the gaps still open) and four
+// cards (_overview/Visuals.tsx: the score by category as small multiples, the assessments by grade, the five lowest, the gaps by state and by due date), then the signed-in person's own work as one slim card
+// (three one-line rows and "See all"). There is no wall of counters: attention is the colour of the graphics (an overdue gap is the red part of a bar). Every tile, card title, category, slice and bar opens
+// the register already filtered to it (?category= ?grade= ?quick= ?sort=). The "what if" day of the gaps card is in the address (`?asof=`), and `useReturnToPlace` puts a person who comes back (Back, or a
+// module's own back link) on the same view at the same scroll position once the data has rendered. Four requests (GET /overview, /my-work, /points, /sla-policy) and each part loads, fails (with Retry) and is
+// empty on its own. Every figure is the SERVER's: the score and its grade (85 / 70 / 50), the SLA score and the gap counts; a figure that is not recorded says so and is never 0. A tenant with no assessment is
+// shown how to start instead of a page of zeros. The strip of tabs (Overview, All assessments, Types) is under the head. "Tune SLA" is a dialog with one Save.
 import { RefreshCw } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
-import { formatCount } from '@/lib/format';
 import { clockOf } from '@/lib/inbox/inboxView';
 import { PageHeader } from '@/components/ui';
-import { Button, ErrorState, IconButton, Skeleton } from '@/components/ui/ds';
+import { Button, ErrorState, IconButton, Skeleton, useAddressState } from '@/components/ui/ds';
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
-import { Cockpit, SkipToWork, type Breakdown } from '@/components/overview/Cockpit';
-import { CounterBand, type BandCounter } from '@/components/overview/CounterBand';
-import { layoutOf, workRowLimit } from '@/components/overview/cockpitModel';
-import { useNarrow } from '@/components/overview/useNarrow';
+import { Cockpit, SkipToWork } from '@/components/overview/Cockpit';
+import { useReturnToPlace } from '@/components/overview/useReturnToPlace';
+import { text } from '@/lib/addressState';
 import { AssessmentTabs } from './_tabs/AssessmentTabs';
 import { AREA } from './_tabs/tabsModel';
 import { StartMenu } from './_types/StartMenu';
 import { useAssessmentCount, useBoard, useMyWork, usePoints, usePolicy, WORK_LIMIT } from './_data/assessmentData';
-import { ClockBody, DoNowCard, EmptyOverview, PostureCard, type Load } from './_overview/OverviewParts';
+import { EmptyOverview, MyWorkCard, type Load } from './_overview/OverviewParts';
 import { Charts, Tiles } from './_overview/Visuals';
-import { attentionTotal, countersOf, mineTotal, workRows } from './_overview/overviewModel';
+import { workRows } from './_overview/overviewModel';
+
+/** Defined once, outside the component (useAddressState reads the address again for a new schema). */
+const SCHEMA = { asof: text() };
 
 function OverviewSkeleton() {
   const card = 'rounded-ds-card border border-ds-border bg-ds-surface p-[16px]';
   return (
     <div role="status" aria-busy="true" className="flex flex-col gap-[16px]">
       <span className="sr-only">Loading the overview</span>
-      <div aria-hidden className={card}><Skeleton className="h-[16px] w-[140px]" /><Skeleton className="mt-[12px] h-[32px] w-full" /></div>
-      <div aria-hidden className="grid gap-[16px] lg:grid-cols-[8fr_5fr]">
-        {[0, 1].map((i) => <div key={i} className={card}><Skeleton className="h-[16px] w-[140px]" /><Skeleton className="mt-[16px] h-[12px] w-full" /><Skeleton className="mt-[8px] h-[12px] w-[70%]" /><Skeleton className="mt-[8px] h-[12px] w-[85%]" /></div>)}
+      <div aria-hidden className="grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-[12px]">
+        {[0, 1, 2, 3].map((i) => <div key={i} className={card}><Skeleton className="h-[12px] w-[90px]" /><Skeleton className="mt-[12px] h-[28px] w-[70px]" /><Skeleton className="mt-[12px] h-[8px] w-full" /></div>)}
+      </div>
+      <div aria-hidden className="grid gap-[16px] lg:grid-cols-[7fr_5fr]">
+        {[0, 1].map((i) => <div key={i} className={card}><Skeleton className="h-[16px] w-[140px]" /><Skeleton className="mt-[16px] h-[132px] w-full" /></div>)}
+      </div>
+      <div aria-hidden className="grid gap-[16px] lg:grid-cols-2">
+        {[0, 1].map((i) => <div key={i} className={card}><Skeleton className="h-[16px] w-[140px]" /><Skeleton className="mt-[16px] h-[100px] w-full" /></div>)}
       </div>
     </div>
   );
@@ -44,9 +51,9 @@ function OverviewSkeleton() {
 const loadOf = (q: { isPending: boolean; isError: boolean; error: unknown; data: unknown; refetch: () => unknown }): Load => ({ loading: q.isPending && !q.isError, error: q.isError && q.data === undefined ? q.error : null, retry: () => { void q.refetch(); } });
 
 export default function AssessmentsOverviewPage() {
-  const narrow = useNarrow();
   const { hasPermission } = usePermissions();
   const canTune = hasPermission('compliance:assessments:edit');
+  const [address, setAddress] = useAddressState(SCHEMA);
   const count = useAssessmentCount();
   const board = useBoard();
   const work = useMyWork(WORK_LIMIT);
@@ -56,6 +63,9 @@ export default function AssessmentsOverviewPage() {
   const boardLoad = loadOf(board);
   const workLoad = loadOf(work);
   const pointsLoad = loadOf(points);
+
+  // the page is drawn once its requests have answered or failed: that is when the place a person left is put back
+  useReturnToPlace(!count.isPending && !board.isPending && !work.isPending && !points.isPending);
 
   const refresh = () => { void board.refetch(); void work.refetch(); void points.refetch(); void count.refetch(); void policy.refetch(); };
   const head = (
@@ -84,48 +94,19 @@ export default function AssessmentsOverviewPage() {
   if (count.isPending && board.isPending && work.isPending) return <div className="flex flex-col gap-[16px]">{head}<OverviewSkeleton /></div>;
   if (count.data === 0) return <div className="flex flex-col gap-[16px]">{head}<EmptyOverview action={<div className="flex flex-wrap justify-center gap-[8px]"><StartMenu /><Button href="/assessments/types">Upload a workbook</Button></div>} /></div>;
 
-  const counters = countersOf(board.data, work.data);
-  const total = attentionTotal(counters);
-  const band: BandCounter[] = counters.map((c) => {
-    const q = c.source === 'work' ? workLoad : boardLoad;
-    const state = q.loading ? 'loading' : q.error ? 'error' : c.value === null ? 'none' : 'ready';
-    return { key: c.key, label: c.label, href: c.href, tone: c.tone, state, value: c.value ?? undefined, onRetry: state === 'error' ? q.retry : undefined };
-  });
-  const rows = workRows(work.data);
-  const mine = mineTotal(work.data);
-  const mode = layoutOf({ refused: false, workCount: mine });
-
-  const breakdowns: Breakdown[] = [
-    {
-      id: 'clock', title: 'Remediation clock', size: 'wide',
-      info: 'Gaps are the controls that are not complied with or that have a fix under way. A gap is due on its own date, or when its priority allows from the day it was raised; the days are your organization\'s SLA days. The counts are the server\'s; the due-soon count and the bar are worked out from each gap\'s date.',
-      children: <ClockBody board={board.data} points={points.data} policy={policy.data} boardLoad={boardLoad} pointsLoad={pointsLoad} canTune={canTune} />,
-    },
-  ];
-
   return (
     <div className="flex flex-col gap-[16px]">
       <SkipToWork />
       {head}
       <Cockpit
-        mode={mode}
-        narrow={narrow}
-        refusal={null}
         hero={<Tiles board={board.data} load={boardLoad} />}
-        visuals={<Charts board={board.data} load={boardLoad} />}
-        band={(
-          <CounterBand
-            id="attention"
-            title="Needs attention"
-            info="Each count opens what it counts: evidence to decide in Needs my action, the rest in All assessments. Counts of controls and gaps are not counts of assessments, so the list a count opens can be shorter."
-            total={total !== null ? `${formatCount(total)} in total` : undefined}
-            counters={band}
-            narrow={narrow}
+        visuals={(
+          <Charts
+            board={board.data} load={boardLoad} points={points.data} pointsLoad={pointsLoad} policy={policy.data} canTune={canTune}
+            asof={address.asof} onAsof={(day) => setAddress({ asof: day })}
           />
         )}
-        work={<DoNowCard rows={rows} total={mine} limit={workRowLimit(mode, narrow)} load={workLoad} />}
-        posture={<PostureCard board={board.data} load={boardLoad} />}
-        breakdowns={breakdowns}
+        work={<MyWorkCard rows={workRows(work.data)} work={work.data} load={workLoad} />}
       />
     </div>
   );

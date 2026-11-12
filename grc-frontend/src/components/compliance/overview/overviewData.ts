@@ -1,17 +1,16 @@
 'use client';
 
 // The requests behind the Compliance Overview, each under the key other pages already use (so the answer is asked once): the scorecard (shared with the main Dashboard), the evidence
-// summary (shared with Evidence Insights), the journeys (shared with the Frameworks pages), the onboarding register (shared with the Onboarding tab) and the compliance history (shared
+// summary (shared with Evidence Insights), the journeys (shared with the Frameworks pages) and the compliance history (shared
 // with the Frameworks hub: the same key and the same shape). The graphs are drawn from these answers; no request is made for a chart alone. Nothing here swallows a
 // failure into an empty answer: a failed request is an error the page says where its numbers would be, with Retry.
 import { useQuery } from '@tanstack/react-query';
 import apiClient, { certificationsApi, complianceApi } from '@/lib/api';
 import { canRetry } from '@/components/ui/ds/reportOutcome';
 import { SCORECARD_QUERY_KEYS } from '@/components/dashboard/scorecard-query-keys';
-import { onboardingApi, ONBOARDING_KEYS } from '@/lib/frameworkOnboarding';
 import type { OverviewSection } from '@/components/dashboard/score-kit';
 import type { TrendPointLite } from './graphModel';
-import type { EvidenceSummaryLite, JourneyListItem, PerformanceLite, RegisterLite } from './overviewModel';
+import type { EvidenceSummaryLite, JourneyListItem, PerformanceLite } from './overviewModel';
 
 export interface Scorecard {
   as_of?: string;
@@ -51,14 +50,6 @@ export function useJourneys() {
       }
       return [] as JourneyListItem[];
     },
-    retry: retryRead,
-  });
-}
-
-export function useOnboardingRegister() {
-  return useQuery({
-    queryKey: [...ONBOARDING_KEYS.register],
-    queryFn: async () => (await onboardingApi.register()) as unknown as RegisterLite,
     retry: retryRead,
   });
 }

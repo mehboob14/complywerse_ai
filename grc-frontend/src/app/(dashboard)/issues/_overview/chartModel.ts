@@ -232,9 +232,9 @@ export interface OwnerRow { key: string; label: string; cells: Record<string, nu
 
 const sevKey = (i: IssueRow): string => { const s = (i.severity || '').toLowerCase(); return (OWNER_SERIES as readonly string[]).includes(s) ? s : 'none'; };
 
-/** Open issues by the person they are assigned to, the most loaded first, split by severity: the `max` busiest people, everyone else as one "Others" row (no link: it is not one filter) and
- *  "Unassigned" last (it is always its own row: nobody holds them). */
-export function ownerLoad(rows: readonly IssueRow[], max = 7): OwnerRow[] {
+/** Open issues by the person they are assigned to, the most loaded first, split by severity: the `max` busiest people, then "Unassigned" (always its own row: nobody holds them). A list never
+ *  shows more than `max` + 1 rows (Overview rule R4); the others are "See all" in the register (`ownerPeople` says how many people there are). */
+export function ownerLoad(rows: readonly IssueRow[], max = 4): OwnerRow[] {
   const by = new Map<string, OwnerRow>();
   rows.filter(openOf).forEach((i) => {
     const key = i.assignee ? String(i.assignee.id) : 'none';
@@ -244,18 +244,12 @@ export function ownerLoad(rows: readonly IssueRow[], max = 7): OwnerRow[] {
     by.set(key, cur);
   });
   const people = Array.from(by.values()).filter((r) => r.key !== 'none').sort((a, b) => b.total - a.total || a.label.localeCompare(b.label));
-  const head = people.slice(0, max);
-  const tail = people.slice(max);
-  const out: OwnerRow[] = head.slice();
-  if (tail.length > 0) {
-    const cells: Record<string, number> = {};
-    tail.forEach((r) => Object.entries(r.cells).forEach(([k, v]) => { cells[k] = (cells[k] ?? 0) + v; }));
-    out.push({ key: '__others', label: `${tail.length} other ${tail.length === 1 ? 'person' : 'people'}`, cells, total: sum(tail.map((r) => r.total)) });
-  }
   const unassigned = by.get('none');
-  if (unassigned) out.push(unassigned);
-  return out;
+  return unassigned ? people.slice(0, max).concat(unassigned) : people.slice(0, max);
 }
+
+/** How many different people hold open issues. */
+export const ownerPeople = (rows: readonly IssueRow[]): number => new Set(rows.filter(openOf).flatMap((i) => (i.assignee ? [i.assignee.id] : []))).size;
 
 // ── raised from ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 

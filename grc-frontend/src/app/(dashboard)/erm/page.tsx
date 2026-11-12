@@ -1,36 +1,38 @@
 'use client';
 
-// Risk Management > Overview, a worklist-first cockpit (option A of the Overview design lab, the same frame as the Governance Overview: components/overview): what needs attention across
-// the module as a band of counters, the person's own prioritised work beside one compact posture card, and the breakdowns of the whole register below (by category, by business unit,
-// the highest risks). The ten section cards, the waterfall and dot-matrix variants, the "Arriving" tiles and the two tool cards of the old page are gone: the sections are one sheet behind
-// "How is it scored?", and Bow-Tie and Scenario Analysis are in the menu.
-// Every request loads, fails and has nothing on its own. The module score and the 14 counters are the server's (GET /erm/dashboard/sections-overview, query key and payload unchanged: the
-// main Dashboard reads the same key); a failure of that request is said where the numbers would be, and never reads as a score of 0. The risks are the complete lean load (the old page
-// read the newest 100), so the matrix and the top ten are of every risk.
-import { useMemo, useState } from 'react';
+// Risk Management > Overview (Overview v2): the page says how the risk programme STANDS, in graphics, and what the person has to do is small and last. Six tiles lead (the posture
+// score, open risks, high and critical, above appetite, treatment on track, KRIs on target), then the residual matrix and the ten section scores as small multiples, risks by category,
+// business unit and treatment, the five highest risks, the risks raised by month, three signals from other modules, and "My work" in three lines. There is no counters band and no
+// attention list: attention is the status colour of what is drawn. Every graphic opens the register (or the module page) already filtered to what it shows.
+// What changes what the page shows is in its address (?basis= the matrix's score, ?sheet= the open sheet: how the score is made, the full work list), and useReturnToPlace puts the
+// person back at the same scroll position when they come back from a module (Back, or a link to this address).
+// Every request loads, fails and has nothing on its own, and a failed one is said where its figures would be, never read as 0. The module score and the section counts are the
+// server's (GET /erm/dashboard/sections-overview: query key and payload unchanged, the main Dashboard reads the same key); the risks are the complete lean load, so the matrix, the
+// categories and the five highest are of every risk.
+import { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, RefreshCw } from 'lucide-react';
 import { PageHeader } from '@/components/ui';
-import { Button, IconButton } from '@/components/ui/ds';
-import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
+import { Button, IconButton, useAddressState } from '@/components/ui/ds';
+import { canRetry } from '@/components/ui/ds/reportOutcome';
 import type { OverviewSection } from '@/components/dashboard/score-kit';
 import { SCORECARD_QUERY_KEYS } from '@/components/dashboard/scorecard-query-keys';
-import { Cockpit, SkipToWork, type Breakdown } from '@/components/overview/Cockpit';
-import { CounterBand, type BandCounter } from '@/components/overview/CounterBand';
-import { layoutOf, workRowLimit } from '@/components/overview/cockpitModel';
-import { useNarrow } from '@/components/overview/useNarrow';
+import { Cell, ChartGrid } from '@/components/overview/charts';
+import { useReturnToPlace } from '@/components/overview/useReturnToPlace';
 import { usePermissions } from '@/hooks/usePermissions';
 import apiClient, { ermApi } from '@/lib/api';
-import { formatCount } from '@/lib/format';
+import { oneOf } from '@/lib/addressState';
 import { clockOf } from '@/lib/inbox/inboxView';
 import { titleFor } from '@/lib/navRegistry';
-import { ModuleHealth, PostureCard, SliceList, TopRisksList, WorkCard } from './_overview/parts';
-import {
-  ATTENTION, attentionTotal, buildWork, byCategorySlices, byUnitSlices, counterFrom, postureOf, topRisks, weakest, type SectionRow,
-} from './_overview/overviewModel';
+import { CategoryCard, HighestCard, MatrixCard, RaisedCard, SectionsCard, TreatmentCard, UnitCard } from './_overview/Cards';
+import { MyWorkCard, MyWorkSheet } from './_overview/MyWork';
+import { ModuleHealth } from './_overview/parts';
+import { RiskTiles, SignalTiles } from './_overview/Tiles';
+import { SECTION_ORDER, buildWork, postureOf, riskFigures } from './_overview/overviewModel';
 import { useAppetite, useMeId, usePendingReviews, useRiskRows } from './risks/_register/riskData';
-import { isMine } from './risks/_register/riskModel';
+import type { Basis } from './risks/_register/riskModel';
+import type { KriLike } from '@/lib/erm/kri';
 
 interface SectionsPayload {
   sections?: Record<string, OverviewSection & { counts?: Record<string, unknown> }>;
@@ -38,18 +40,19 @@ interface SectionsPayload {
   performance?: { score: number | null; grade: string | null };
 }
 
-const SECTION_ORDER = ['register', 'assessments', 'rcsa', 'controls', 'vendor_risk', 'kris', 'appetite', 'mitigation', 'reviews', 'incidents'];
+/** The page's state, in its address: the matrix's score and the open sheet. Defined once, outside the component. */
+const SCHEMA = { basis: oneOf(['residual', 'inherent'] as const, 'residual'), sheet: oneOf(['none', 'health', 'work'] as const, 'none') };
+
 const retry = (failures: number, e: unknown) => failures < 3 && canRetry(e);
 
 export default function ERMOverviewPage() {
   const router = useRouter();
-  const narrow = useNarrow();
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('erm:risks:create');
   const me = useMeId();
-  const [healthOpen, setHealthOpen] = useState(false);
+  const [address, setAddress] = useAddressState(SCHEMA);
 
-  // the server's scorecard: the module score, the sections and the 14 counters (the key is shared with the main Dashboard)
+  // the server's scorecard: the module score, the sections and the counts (the key is shared with the main Dashboard)
   const overview = useQuery({ queryKey: [...SCORECARD_QUERY_KEYS.erm], queryFn: async () => (await ermApi.dashboard.getSectionsOverview()).data as SectionsPayload, retry });
   const target = useQuery({ queryKey: ['erm-scorecard-config'], queryFn: async () => ((await apiClient.get('/erm/dashboard/scorecard-config')).data as { target?: number | null }), retry: false });
   const risks = useRiskRows();
@@ -57,6 +60,7 @@ export default function ERMOverviewPage() {
   const appetite = useAppetite();
   const actions = useQuery({ queryKey: ['erm-actions-overdue'], queryFn: async () => (await ermApi.mitigationActions.getOverdue()).data as unknown as Array<{ id: number; risk_id: number; title: string; owner_id?: number | null; due_date?: string | null }>, retry });
   const kris = useQuery({ queryKey: ['erm-kri-my-updates'], queryFn: async () => (await ermApi.kris.myUpdates()).data.items, retry });
+  const krisReport = useQuery({ queryKey: ['metric-report', 'kri'], queryFn: async () => (await ermApi.kris.report(90, 'kri')).data as { kris: Array<KriLike & { is_active?: boolean | null }> }, retry });
   const incidents = useQuery({ queryKey: ['erm-incidents-all'], queryFn: async () => (await ermApi.incidents.getAll()).data as unknown as Array<{ id: number; title: string; severity?: string | null; status?: string | null; assigned_to?: number | null }>, retry });
 
   const now = useMemo(() => new Date(), []);
@@ -64,46 +68,33 @@ export default function ERMOverviewPage() {
   const work = useMemo(() => buildWork({
     me, now, rows: risks.rows, ctx, reviews: reviews.data ?? [], overdueActions: actions.data ?? [], kriUpdates: kris.data ?? [], incidents: incidents.data ?? [],
   }), [me, now, risks.rows, ctx, reviews.data, actions.data, kris.data, incidents.data]);
-  const feeds = [
+  const workFeeds = [
     { label: 'Your risks', feed: risks }, { label: 'Reviews', feed: reviews }, { label: 'Mitigation actions', feed: actions }, { label: 'Indicators to report', feed: kris }, { label: 'Incidents', feed: incidents },
   ];
 
   const payload = overview.data;
   const posture = postureOf(payload?.performance);
-  const sections: OverviewSection[] = useMemo(() => SECTION_ORDER.map((k) => payload?.sections?.[k]).filter((s): s is NonNullable<typeof s> => !!s).map((s) => ({ ...s, counts: s.counts ?? {} } as OverviewSection)), [payload]);
-  const sectionRows: SectionRow[] = sections.map((s) => ({ key: s.key, label: s.label, weight: s.weight, score: s.score }));
+  const unscored = useMemo(() => riskFigures(risks.rows, appetite.limits, now).unscored, [risks.rows, appetite.limits, now]);
+  const sectionList: OverviewSection[] = useMemo(
+    () => SECTION_ORDER.map((k) => payload?.sections?.[k]).filter((s): s is NonNullable<typeof s> => !!s).map((s) => ({ ...s, counts: s.counts ?? {} } as OverviewSection)),
+    [payload],
+  );
+  const mitigation = payload?.sections?.mitigation?.counts as { open?: number; overdue?: number } | undefined;
 
-  const queue = payload?.attention_queue;
-  const counters: BandCounter[] = ATTENTION.map((def) => {
-    const c = counterFrom(def.key, queue, overview.isPending, overview.isError && !payload);
-    return { key: def.key, label: def.label, href: def.href, tone: def.tone, state: c.state, value: c.value, onRetry: c.state === 'error' && canRetry(overview.error) ? () => { void overview.refetch(); } : undefined };
-  });
-  const mineCount = risks.isPending ? null : risks.rows.filter((r) => isMine(r, me)).length;
-  const myRisks: BandCounter = {
-    key: 'my_risks', label: 'My risks', href: '/erm/risks?quick=mine', tone: 'neutral',
-    state: risks.isError && !risks.data ? 'error' : risks.isPending ? 'loading' : me == null ? 'none' : 'ready', value: mineCount ?? undefined, onRetry: risks.isError ? () => { void risks.refetch(); } : undefined,
-  };
-  const total = attentionTotal(queue);
+  // the page is drawn once every request has answered: that is when a returning person is put back where they were
+  const ready = ![overview, risks, reviews, appetite, actions, kris, krisReport, incidents].some((q) => q.isPending);
+  useReturnToPlace(ready);
 
-  const mode = layoutOf({ refused: false, workCount: feeds.some((f) => f.feed.isPending) ? null : work.length });
-  const limit = workRowLimit(mode, narrow);
-  const cats = byCategorySlices(risks.rows);
-  const units = byUnitSlices(risks.rows);
-  const breakdowns: Breakdown[] = [
-    { id: 'by-category', title: 'By category', info: 'Active risks by the category each stores, the ones with the most critical and high risks first.', meta: risks.isPending ? undefined : `${formatCount(cats.length)} categories`, children: <SliceList slices={cats} empty="No active risks yet." /> },
-    { id: 'by-unit', title: 'By business unit', info: 'Active risks by the business unit they are assigned to.', meta: risks.isPending ? undefined : `${formatCount(units.length)} units`, children: <SliceList slices={units} empty="No active risks yet." /> },
-    { id: 'top-risks', title: 'Highest risks', info: 'The ten risks with the highest residual score (inherent when there is no residual), from the whole register.', children: <TopRisksList risks={topRisks(risks.rows)} /> },
-  ];
   const updated = overview.dataUpdatedAt > 0 ? `Updated ${clockOf(overview.dataUpdatedAt)}` : undefined;
-  const refreshAll = () => { [overview, risks, reviews, actions, kris, incidents].forEach((q) => { void q.refetch(); }); };
+  const refreshAll = () => { [overview, risks, reviews, appetite, actions, kris, krisReport, incidents].forEach((q) => { void q.refetch(); }); };
+  const closeSheet = () => setAddress({ sheet: 'none' });
 
   return (
     <div className="flex flex-col gap-[16px]">
-      <SkipToWork />
       <PageHeader
         variant="page"
         title={titleFor('/erm') ?? 'Risk Management Overview'}
-        info="How the risk programme is doing, and what needs you."
+        info="How the risk programme stands. Every figure and chart opens the records behind it."
         meta={<span className="inline-flex items-center gap-[2px]">{updated}<IconButton label="Refresh the overview" onClick={refreshAll}><RefreshCw aria-hidden /></IconButton></span>}
         actions={(
           <>
@@ -112,30 +103,30 @@ export default function ERMOverviewPage() {
           </>
         )}
       />
-      <Cockpit
-        mode={mode}
-        narrow={narrow}
-        band={(
-          <CounterBand
-            id="attention"
-            title="Needs attention"
-            info="Each count opens the records it counts, or the page that lists them. My risks are the ones you own or are the business owner of."
-            total={total != null ? `${formatCount(total)} in total` : undefined}
-            counters={[myRisks, ...counters]}
-            narrow={narrow}
-            failure={overview.isError && !payload ? { title: "Couldn't load the counters", message: errorMessage(overview.error), onRetry: canRetry(overview.error) ? refreshAll : undefined } : undefined}
-          />
-        )}
-        work={<WorkCard id="work" items={work} now={now} sources={feeds} limit={limit} />}
-        posture={(
-          <PostureCard
-            id="posture" sections={overview} score={posture.score} grade={posture.grade} target={target.data?.target ?? null}
-            rows={risks.rows} rowsFeed={risks} weak={weakest(sectionRows)} onOpenSections={() => setHealthOpen(true)}
-          />
-        )}
-        breakdowns={breakdowns}
+
+      <RiskTiles
+        overview={overview} score={posture.score} grade={posture.grade} target={target.data?.target ?? null} mitigation={mitigation}
+        risks={risks} rows={risks.rows} appetite={appetite} limits={appetite.limits} kris={krisReport} krisRows={krisReport.data?.kris ?? []} now={now}
       />
-      <ModuleHealth open={healthOpen} onClose={() => setHealthOpen(false)} sections={sections} score={posture.score} grade={posture.grade} />
+
+      <ChartGrid>
+        <Cell span={6}>
+          <MatrixCard feed={risks} rows={risks.rows} canCreate={canCreate} basis={address.basis as Basis} onBasis={(basis) => setAddress({ basis })} unscored={unscored} />
+        </Cell>
+        <Cell span={6}>
+          <SectionsCard overview={overview} sections={payload?.sections} onOpenHealth={() => setAddress({ sheet: 'health' }, { push: true })} />
+        </Cell>
+        <Cell span={6}><CategoryCard feed={risks} rows={risks.rows} canCreate={canCreate} /></Cell>
+        <Cell span={6}><UnitCard feed={risks} rows={risks.rows} canCreate={canCreate} /></Cell>
+        <Cell span={6}><TreatmentCard feed={risks} rows={risks.rows} canCreate={canCreate} /></Cell>
+        <Cell span={6}><SignalTiles overview={overview} queue={payload?.attention_queue} /></Cell>
+        <Cell span={6}><HighestCard feed={risks} rows={risks.rows} canCreate={canCreate} /></Cell>
+        <Cell span={6}><RaisedCard feed={risks} rows={risks.rows} now={now} /></Cell>
+        <Cell span={12}><MyWorkCard items={work} now={now} sources={workFeeds} /></Cell>
+      </ChartGrid>
+
+      <ModuleHealth open={address.sheet === 'health'} onClose={closeSheet} sections={sectionList} score={posture.score} grade={posture.grade} />
+      <MyWorkSheet open={address.sheet === 'work'} onClose={closeSheet} items={work} now={now} />
     </div>
   );
 }

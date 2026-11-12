@@ -1,11 +1,11 @@
 // node --test "src/app/(dashboard)/assessments/_overview/overviewModel.test.ts"
-// The Assessments Overview's decisions: the counters and where they open, the order of "Do now", the posture and the categories (the server's numbers, one grade scale 85 / 70 / 50), the portfolio
-// clock (headline from the server, due soon and ageing from the points), "What if" and the SLA policy dialog's rules.
+// The Assessments Overview's decisions: the counters the Performance Overview reads and where they open, the order of "My work" and its header, the posture (the server's numbers, one grade scale 85 / 70 / 50),
+// the portfolio clock (headline from the server, due soon and ageing from the points), "What if" and the SLA policy dialog's rules.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  attentionTotal, categoryRows, countersOf, daysOf, mineLine, mineTotal, nameWithKind, policyChanged, policyDraft, policyOf, policyProblem, portfolioClock, postureOf, whatIfBounds, whatIfMs, workRows, TARGET,
+  attentionTotal, countersOf, daysOf, mineTotal, nameWithKind, policyChanged, policyDraft, policyOf, policyProblem, portfolioClock, postureOf, whatIfBounds, whatIfMs, workRows, workSummary, TARGET,
 } from './overviewModel.ts';
 import type { Board, MyWork, Point, Policy } from '../_data/types.ts';
 
@@ -62,12 +62,12 @@ test('Do now: a control past its date first, then evidence to decide, then draft
   assert.deepEqual(workRows(undefined), []);
 });
 
-test('the person\'s total is the sum of the true counts, and the line says when the lists were cut', () => {
+test('the person\'s total is the sum of the true counts, and the header says how many of the controls are late (nothing until the request has answered)', () => {
   assert.equal(mineTotal(work()), 6);
   assert.equal(mineTotal(undefined), null);
-  assert.equal(mineLine(5, 6), 'Showing 5 of 6');
-  assert.equal(mineLine(6, 6), '6 items');
-  assert.equal(mineLine(1, 1), '1 item');
+  assert.deepEqual(workSummary(work()), { total: 6, overdue: 1 });
+  assert.deepEqual(workSummary(work({ counts: { assigned: 0, overdue: 0, to_scope: 0, to_approve: 0, can_decide: 0 } })), { total: 0, overdue: 0 });
+  assert.equal(workSummary(undefined), null);
 });
 
 test('posture: the server\'s score, the one grade scale and the distance to the target', () => {
@@ -78,15 +78,6 @@ test('posture: the server\'s score, the one grade scale and the distance to the 
   const none = postureOf(board({ performance: { score: null, grade: null, assessments: 0 } }));
   assert.deepEqual([none.grade, none.toTarget], [null, null]);
   for (const [score, grade] of [[85, 'excellent'], [84.9, 'good'], [70, 'good'], [69.9, 'fair'], [50, 'fair'], [49.9, 'poor']] as const) assert.equal(postureOf(board({ performance: { score, grade: null, assessments: 1 } })).grade, grade, String(score));
-});
-
-test('categories: the most assessments first, each opens the register on that category, grades by the same scale', () => {
-  const rows = categoryRows(board());
-  assert.deepEqual(rows.map((r) => r.category), ['Cyber Security', 'Audit', 'NCA', 'Privacy & Data']);
-  assert.equal(rows[0].href, '/assessments/register?category=cyber');
-  assert.equal(rows[2].href, '/assessments/register?category=nca');
-  assert.equal(rows[3].href, '/assessments/register?category=privacy');
-  assert.deepEqual(rows.map((r) => r.grade), ['excellent', null, 'fair', 'good']);
 });
 
 const NOW = Date.UTC(2026, 10, 8, 12);

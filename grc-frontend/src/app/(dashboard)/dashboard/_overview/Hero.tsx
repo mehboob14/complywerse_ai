@@ -1,17 +1,19 @@
 'use client';
 
 // The figures the page leads with: four tiles, each a count the page can say exactly. How many scored areas reach their target, how many areas have something that needs attention
-// (areas, not items: the items are in different units and the same one can be counted by two modules, so they are never added), the Governance score with where it went since last month
-// (the only score that keeps a history), and how many live Cyber Security KPIs are on target (read from the strip's own request, so nothing is asked twice). Every tile has its own states:
-// loading, failed with Retry, "No access", and "Not recorded" where nothing is recorded (never a 0 that stands for "no answer"). Rules and words: perfCharts.ts and perfModel.ts (tested).
-import { KpiRow, KpiTile, type KpiTileProps } from '@/components/overview/charts';
+// (areas, not items: the items are in different units and the same one can be counted by two modules, so they are never added; the thin bar under the figure is those areas by their worst
+// count, each colour with its word), the Governance score with where it went since last month (the only score that keeps a history), and how many live Cyber Security KPIs are on target
+// (read from the strip's own request, so nothing is asked twice). Each figure is a link: to the bars it counts, to Governance, to the KPI report. Every tile has its own states: loading,
+// failed with Retry, "No access", and "Not recorded" where nothing is recorded (never a 0 that stands for "no answer"). Rules and words: perfCharts.ts and perfModel.ts (tested).
+import { KpiRow, KpiTile, SegmentBar, type KpiTileProps } from '@/components/overview/charts';
+import { STATUS } from '@/components/overview/charts/palette';
 import { buildKpis, type LiveMetric } from '@/components/dashboard/kpiShared';
 import { errorMessage, canRetry } from '@/components/ui/ds/reportOutcome';
 import { formatCount } from '@/lib/format';
 import { gradeStatus } from '@/lib/statuses/dashboard';
 import { useKpiLive } from './CyberKpis';
-import { gapText, attentionView, governanceDelta, governanceTrend, kpiFigure, nameList, shareOf } from './perfCharts';
-import { kpiCounts, panelState, type KpiData } from './kpiModel';
+import { gapText, attentionNote, attentionView, governanceDelta, governanceTrend, kpiFigure, nameList, severityParts, shareOf } from './perfCharts';
+import { kpiCounts, panelState, reportHref, type KpiData } from './kpiModel';
 import { loadOf } from './overviewModel';
 import { retryable, type AreaRow, type Overall } from './perfModel';
 
@@ -28,27 +30,31 @@ export function Hero({ rows, overall, governance, onRetry, onRetryAll }: { rows:
     value: overall.state === 'ready' ? formatCount(overall.atTarget) : null,
     unit: scored > 0 ? `of ${formatCount(scored)} scored` : undefined,
     progress: overall.state === 'ready' ? shareOf(overall.atTarget, scored) : null,
+    href: overall.state === 'ready' ? '#scores' : undefined,
+    linkLabel: `${overall.atTarget} of ${scored} scored areas are at their target. See the score of each area`,
     loading: overall.state === 'loading',
     error: nothingScored ? { title: "Couldn't load the scored areas", message: errorMessage(failedScored[0].error), onRetry: failedScored.some(retryable) ? onRetryAll : undefined } : null,
     note: overall.state === 'ready' && overall.leftOut.length > 0 ? `${nameList(overall.leftOut)} did not answer` : undefined,
   };
 
-  // 2. areas with something that needs attention
+  // 2. the one "Needs attention" tile: areas with something that needs attention, and the thin bar of them by their worst count
   const view = attentionView(rows);
   const firstFailed = view.failed[0];
+  const hasScored = rows.some((r) => r.area.kind === 'score');
   const attention: KpiTileProps = {
-    label: 'Areas needing attention',
-    info: 'How many areas have at least one count of overdue, lapsed, breached or critical items above 0. It counts areas, not items: the counts are in different units and the same item can be counted by two modules.',
+    label: 'Needs attention',
+    info: 'How many areas have at least one count of overdue, lapsed, breached or critical items above 0. It counts areas, not items: the counts are in different units and the same item can be counted by two modules. The bar splits those areas by their worst count: Act now (overdue, lapsed, breached or critical), Watch (anything else above 0) and Clear (every count 0).',
     value: view.state === 'ready' ? formatCount(view.withItems) : null,
     unit: view.state === 'ready' ? `of ${formatCount(view.reporting)} ${view.reporting === 1 ? 'area' : 'areas'}` : undefined,
-    tone: view.state === 'ready' ? (view.withItems > 0 ? 'danger' : 'success') : 'default',
-    href: view.state === 'ready' ? '#attention' : undefined,
-    linkLabel: `${view.withItems} of ${view.reporting} areas need attention. Go to the counts`,
+    tone: view.state === 'ready' ? (view.act > 0 ? 'danger' : view.watch > 0 ? 'warning' : 'success') : 'default',
+    href: view.state === 'ready' ? (hasScored ? '#scores' : '#areas') : undefined,
+    linkLabel: `${view.withItems} of ${view.reporting} areas need attention. See the counts`,
     loading: view.state === 'loading',
     error: view.state === 'error' ? { title: "Couldn't load what needs attention", message: errorMessage(firstFailed?.error), onRetry: view.failed.some(retryable) ? onRetryAll : undefined } : null,
-    note: view.state === 'ready'
-      ? (view.waiting > 0 ? `${view.waiting} still loading` : view.failed.length > 0 ? `${nameList(view.failed.map((r) => r.area.label))} could not be read` : view.withItems === 0 ? 'Nothing is overdue, lapsed or breached' : undefined)
-      : undefined,
+    note: view.state === 'ready' ? attentionNote(view) : undefined,
+    children: view.state === 'ready' && view.reporting > 0 ? (
+      <SegmentBar label="Areas by their worst count" noun="areas" height={8} legend={false} parts={severityParts(view).map((p) => ({ key: p.key, label: p.label, value: p.value, color: STATUS[p.status] }))} />
+    ) : undefined,
   };
 
   // 3. the Governance score and its history
@@ -70,7 +76,7 @@ export function Hero({ rows, overall, governance, onRetry, onRetryAll }: { rows:
     denied: gov.state === 'denied',
     error: gov.state === 'error' ? { title: "Couldn't load Governance", message: errorMessage(gov.error), onRetry: retryable(gov) ? () => onRetry('governance') : undefined } : null,
     note: gov.state === 'ready' && govRead && govRead.score !== null
-      ? [govRead.grade ? gradeStatus.label(govRead.grade) : '', gapText(govRead.score, govRead.target)].filter(Boolean).join(' · ') + (points.length < 2 ? ' · No history yet' : '')
+      ? [govRead.grade ? gradeStatus.label(govRead.grade) : '', gapText(govRead.score, govRead.target)].filter(Boolean).join(' · ')
       : undefined,
   } : null;
 
@@ -88,8 +94,8 @@ export function Hero({ rows, overall, governance, onRetry, onRetryAll }: { rows:
     value: figure.state === 'value' ? formatCount(figure.on ?? 0) : null,
     unit: figure.state === 'value' ? `of ${formatCount(figure.live ?? 0)} live` : undefined,
     progress: figure.state === 'value' ? shareOf(figure.on ?? 0, figure.live ?? 0) : null,
-    href: figure.state === 'value' ? '#cyber-kpis' : undefined,
-    linkLabel: `${figure.on ?? 0} of ${figure.live ?? 0} live Cyber Security KPIs are on target. Go to the KPIs`,
+    href: figure.state === 'value' && panel.state === 'ready' ? reportHref(panel.workbook) : undefined,
+    linkLabel: `${figure.on ?? 0} of ${figure.live ?? 0} live Cyber Security KPIs are on target. Open the KPI report`,
     loading: figure.state === 'loading',
     error: figure.state === 'error' ? { title: "Couldn't load the Cyber Security KPIs", message: errorMessage(query.error), onRetry: canRetry(query.error) ? () => { void query.refetch(); } : undefined } : null,
   };

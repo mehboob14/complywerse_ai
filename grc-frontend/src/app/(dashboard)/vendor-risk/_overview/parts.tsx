@@ -1,176 +1,96 @@
 'use client';
 
 /**
- * The parts of the Third-Party Vendor Risk Overview that the cockpit frame (components/overview) is handed besides its charts (visuals.tsx): "My work" (the person's own work in this module,
- * one row each, the most urgent first), the posture card (the board's thirty-second read: the residual score as a ring against the appetite, the verdict, the two coverages) and the list of
- * the latest signals. Each part loads, fails and has nothing on its own: a failed request is said where its numbers would be, with Retry, and never reads as zero or as "all clear".
+ * "My work" on the Third-Party Vendor Risk Overview, slim (Overview rule R3): the person's own work in this module (items of the Work queue they own, onboarding requests waiting for a
+ * decision, their planned actions that are due), at most three ONE-LINE rows, the most urgent first: the title (a link named "<action>: <title>"), a due or overdue pill and the action word.
+ * Header "My work · 12 · 6 overdue" and "See all 12" (the Work queue, My vendors). With nothing: one line, "All caught up". Each source loads and fails on its own: a failed one is said in
+ * one line with Retry and never reads as "all caught up". It is the same look as the kit's MyWorkCard, which is built on the document inbox; this module's work is not in that inbox.
  */
-import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { CheckCircle2, RotateCw } from 'lucide-react';
-import type { UseQueryResult } from '@tanstack/react-query';
-import { Button, ErrorState, Notice, ProgressBar, SectionCard, SkeletonRows, StatusPill, WorkRow, type ProgressTone } from '@/components/ui/ds';
-import { ScoreRing, type StatusColor } from '@/components/overview/charts';
+import { clsx } from 'clsx';
+import { ArrowRight, CheckCircle2 } from 'lucide-react';
+import { InfoTip } from '@/components/ui/InfoTip';
+import { Button, SkeletonRows, StatusPill } from '@/components/ui/ds';
+import { dueBadge } from '@/components/ui/ds/workModel';
+import { linkClasses } from '@/components/ui/ds/linkModel';
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { formatCount } from '@/lib/format';
-import { statusPill } from '@/lib/status';
-import { vendorBand } from '@/lib/statuses/vendor';
-import { VERDICT, postureView, signalRows, REGISTER, type Dashboard, type Scope } from '../_lib/overviewModel';
-import { residualBand, type Bands } from '../_lib/vendorRules';
 import { lateCount, type WorkItem } from './workModel';
-import type { TrendAnswer } from './overviewData';
 
 export interface Feed { isPending: boolean; isError: boolean; error: unknown; refetch: () => unknown }
-
-const QUIET = 'm-0 text-ds-body text-ds-fg-muted';
-const LIST = 'm-0 list-none p-0';
-
-/** A request's three states in one place: a skeleton while it runs (or while it shows another scope's answer), the failure with its Retry, else what it answered. */
-export function Loaded<T>({ q, label, rows = 3, children }: { q: UseQueryResult<T>; label: string; rows?: number; children: (data: T) => ReactNode }) {
-  if (q.isPending || q.isPlaceholderData) return <SkeletonRows rows={rows} columns={2} label={`Loading ${label}`} />;
-  if (q.isError || q.data === undefined) {
-    return <ErrorState compact title={`Couldn't load ${label}`} message={errorMessage(q.error)} onRetry={canRetry(q.error) ? () => { void q.refetch(); } : undefined} />;
-  }
-  return <>{children(q.data)}</>;
-}
-
-// ── My work ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export interface WorkCardProps {
   id: string;
   items: WorkItem[];
   /** the sources that feed it, each with its own state */
   sources: Array<{ label: string; feed: Feed }>;
-  limit: number;
+  /** how many one-line rows before "See all" (default 3) */
+  limit?: number;
 }
 
-export function WorkCard({ id, items, sources, limit }: WorkCardProps) {
-  const [shown, setShown] = useState(limit);
+const SEE_ALL = '/vendor-risk/attention?scope=mine';
+
+/** The pill of a row: its due day in words ("Overdue 3d", "Due today"), "Overdue" for a late queue item, nothing for one that is not late. */
+function pillOf(it: WorkItem): { text: string; tone: 'danger' | 'warning' | 'neutral' } | null {
+  if (it.due) {
+    const b = dueBadge({ due: it.due, calendar: true, overdue: it.overdue });
+    return { text: b.text.replace(/^Overdue by (\d+) days?$/, 'Overdue $1d').replace(/^Due in (\d+) days?$/, 'Due in $1d'), tone: b.tone === 'danger' ? 'danger' : b.tone === 'warning' ? 'warning' : 'neutral' };
+  }
+  return it.late ? { text: 'Overdue', tone: 'danger' } : null;
+}
+
+export function WorkCard({ id, items, sources, limit = 3 }: WorkCardProps) {
   const failed = sources.filter((s) => s.feed.isError);
   const loading = sources.some((s) => s.feed.isPending);
   const late = lateCount(items);
-  const rows = items.slice(0, Math.max(shown, limit));
+  const rows = items.slice(0, Math.max(1, limit));
+  const known = !loading && failed.length === 0;
   return (
-    <SectionCard
-      id={id}
-      title="My work"
-      info="What waits for you in this module: items of the Work queue that you own or were given, onboarding requests waiting for a decision, and your planned actions that are due. Late work first, then the oldest."
-      meta={loading && items.length === 0 ? undefined : <>{`${formatCount(items.length)} ${items.length === 1 ? 'item' : 'items'}`}{late > 0 && <> · <span className="font-[600] text-ds-danger">{`${formatCount(late)} overdue`}</span></>}</>}
-    >
+    <section id={id} aria-labelledby={`${id}-h`} className="min-w-0 scroll-mt-[64px] rounded-ds-card border border-ds-border bg-ds-surface px-[16px] py-[12px]">
+      <div className="flex flex-wrap items-center gap-x-[4px] gap-y-[4px]">
+        <h2 id={`${id}-h`} className="min-w-0 break-words !text-ds-section !text-ds-fg">My work</h2>
+        <InfoTip text="What waits for you in this module: items of the Work queue that you own or were given, onboarding requests waiting for a decision, and your planned actions that are due. Late work first, then the oldest." label="About my work" />
+        {known && items.length > 0 && (
+          <span className="ml-[4px] text-ds-body text-ds-fg-muted">
+            {formatCount(items.length)}
+            {late > 0 && <> · <span className="font-[600] text-ds-danger">{`${formatCount(late)} overdue`}</span></>}
+          </span>
+        )}
+        {items.length > 0 && (
+          <Link href={SEE_ALL} aria-label={items.length > rows.length ? `See all ${formatCount(items.length)} items in my work` : 'Open my work'} className={clsx('ml-auto inline-flex items-center gap-[2px]', linkClasses({ tone: 'text', size: 'label' }))}>
+            {items.length > rows.length ? `See all ${formatCount(items.length)}` : 'Open'}
+            <ArrowRight aria-hidden className="h-[14px] w-[14px] shrink-0" strokeWidth={2} />
+          </Link>
+        )}
+      </div>
+
       {failed.map((s) => (
-        <Notice key={s.label} tone="warning" title={`${s.label} could not be loaded`} className="mb-[8px]"
-          action={canRetry(s.feed.error) ? <Button leftIcon={<RotateCw aria-hidden />} onClick={() => { void s.feed.refetch(); }}>Retry</Button> : undefined}>
-          {errorMessage(s.feed.error)} What it holds is not in this list.
-        </Notice>
+        <p key={s.label} role="status" className="mt-[4px] flex flex-wrap items-center gap-x-[8px] text-ds-label text-ds-fg-muted">
+          {`${s.label} could not be loaded: ${errorMessage(s.feed.error)}`}
+          {canRetry(s.feed.error) && <Button size="sm" variant="link" onClick={() => { void s.feed.refetch(); }}>Retry</Button>}
+        </p>
       ))}
-      {loading && items.length === 0 && <SkeletonRows rows={Math.min(limit, 5)} columns={3} label="Loading your work" />}
-      {!loading && failed.length === 0 && items.length === 0 && (
-        <p className="m-0 flex items-center gap-[8px] px-[4px] py-[8px] text-ds-body text-ds-fg-muted">
+      {loading && items.length === 0 && <div className="mt-[8px]"><SkeletonRows rows={limit} columns={3} label="Loading your work" /></div>}
+      {known && items.length === 0 && (
+        <p className="mt-[4px] flex min-h-[32px] items-center gap-[8px] text-ds-body text-ds-fg-muted">
           <CheckCircle2 aria-hidden className="h-[16px] w-[16px] shrink-0 text-ds-success" strokeWidth={1.75} />
-          You&apos;re all caught up. Requests, queue items and planned actions that need you appear here.
+          All caught up
         </p>
       )}
       {rows.length > 0 && (
-        <ul aria-label="My work" className={LIST}>
-          {rows.map((it) => (
-            <WorkRow key={it.key} kind={it.kind} title={it.title} href={it.href} context={it.context || undefined} requester={it.requester} due={it.due} calendar overdue={it.due ? it.overdue : undefined} action={it.action} />
-          ))}
+        <ul aria-label="My work" className="m-0 mt-[4px] list-none p-0">
+          {rows.map((it) => {
+            const pill = pillOf(it);
+            return (
+              <li key={it.key} className="relative flex min-h-[40px] items-center gap-[8px] border-t border-ds-border px-[4px] py-[4px] first:border-t-0 hover:bg-ds-surface-hover has-[:focus-visible]:bg-ds-surface-hover">
+                <Link href={it.href} title={it.title} aria-label={`${it.action.label}: ${it.title}`} className="min-w-0 flex-1 truncate rounded-ds-control text-ds-body font-[500] text-ds-fg after:absolute after:inset-0 hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring">{it.title}</Link>
+                {pill && <StatusPill size="sm" tone={pill.tone} label={pill.text} className="shrink-0" />}
+                <span aria-hidden className="hidden shrink-0 text-ds-label font-[500] text-ds-primary-text sm:inline">{it.action.label}</span>
+              </li>
+            );
+          })}
         </ul>
       )}
-      <div className="mt-[4px] flex flex-wrap items-center justify-between gap-x-[12px] gap-y-[4px] border-t border-ds-border px-[8px] pt-[8px] text-ds-label text-ds-fg-muted">
-        <span role="status">{items.length > rows.length ? `Showing ${formatCount(rows.length)} of ${formatCount(items.length)}` : ''}</span>
-        <span className="flex flex-wrap items-center gap-[8px]">
-          {items.length > rows.length && <Button variant="link" size="sm" onClick={() => setShown((n) => n + 25)}>Show more</Button>}
-          <Button variant="link" size="sm" href="/vendor-risk/attention">Work queue</Button>
-          <Button variant="link" size="sm" href="/vendor-risk/actions">Planned actions</Button>
-        </span>
-      </div>
-    </SectionCard>
-  );
-}
-
-// ── Posture ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
-
-function Measure({ label, value, caption, percent, tone, href }: { label: string; value: string; caption: string; percent: number | null; tone: ProgressTone; href?: string }) {
-  return (
-    <div className="py-[6px]">
-      <div className="flex items-baseline justify-between gap-[8px]">
-        <span className="text-ds-body font-[500] text-ds-fg">{label}</span>
-        <span className="text-ds-body font-[600] tabular-nums text-ds-fg">{value}</span>
-      </div>
-      {percent !== null && <ProgressBar value={percent} label={label} showValue={false} tone={tone} className="mt-[4px]" />}
-      <p className="m-0 mt-[2px] text-ds-label text-ds-fg-muted">
-        {href ? <Link href={href} className="rounded-ds-control text-ds-primary-text hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring">{caption}</Link> : caption}
-      </p>
-    </div>
-  );
-}
-
-const RING: Record<string, StatusColor> = { unset: 'progress', within: 'good', approaching: 'warn', over: 'bad' };
-
-/** The board's thirty-second read: the residual score as a ring with the appetite as its tick, the verdict in words, and the two coverages. */
-export function PostureCard({ id, dash, trend, bands, scope }: { id: string; dash: UseQueryResult<Dashboard>; trend: UseQueryResult<TrendAnswer>; bands: Bands; scope: Scope }) {
-  return (
-    <SectionCard id={id} title="Risk posture" info="The residual score is the portfolio's average after controls (0 to 100, lower is better), against the appetite your organisation set, the tick on the ring. Critical vendors assessed counts the critical vendors that have a residual score; Reviews in window counts the critical and high vendors that are inside their reassessment window.">
-      <Loaded q={dash} label="the posture" rows={4}>
-        {(d) => {
-          const p = postureView(d, trend.data?.appetite ?? null);
-          const band = residualBand(p.residual, bands);
-          const v = VERDICT[p.verdict];
-          return (
-            <>
-              <div className="flex flex-wrap items-center gap-x-[16px] gap-y-[8px]">
-                <ScoreRing value={p.scored ? p.residual : null} target={trend.data?.appetite ?? null} tone={RING[p.verdict]} caption="Portfolio residual score" size={112} />
-                {p.scored ? (
-                <div className="flex min-w-[160px] flex-1 flex-col items-start gap-[6px]">
-                  <StatusPill {...statusPill(vendorBand, band)} />
-                  {trend.isPending ? <span className="text-ds-label text-ds-fg-muted">Reading the appetite…</span>
-                    : trend.isError ? <Button size="sm" leftIcon={<RotateCw aria-hidden />} onClick={() => { void trend.refetch(); }}>Appetite unavailable: retry</Button>
-                      : <><StatusPill tone={v.tone} label={v.label} />{p.gap && <span className="text-ds-label text-ds-fg-muted">{`${p.gap} (appetite ${trend.data?.appetite})`}</span>}</>}
-                  <p className="m-0 text-ds-label text-ds-fg-muted">{`Inherent ${p.inherent}: the controls remove ${p.removed} ${p.removed === 1 ? 'point' : 'points'}.`}</p>
-                </div>
-                ) : <p className="m-0 min-w-[160px] flex-1 text-ds-body text-ds-fg-muted">No vendor has a residual score yet. The ring fills once an assessment is scored.</p>}
-              </div>
-              <div className="mt-[8px] border-t border-ds-border pt-[4px]">
-                <Measure
-                  label="Critical vendors assessed" value={p.assessed.percent === null ? '—' : `${p.assessed.percent}%`} caption={p.assessed.caption}
-                  percent={p.assessed.percent} tone={p.assessed.tone === 'success' ? 'success' : 'warning'} href={p.assessed.percent === null ? undefined : `${REGISTER}?tier=critical${scope === 'mine' ? '&owner=me' : ''}`}
-                />
-                <Measure
-                  label="Reviews in window" value={p.window.percent === null ? '—' : `${p.window.percent}%`}
-                  caption={p.window.percent === null ? 'No critical or high vendors yet' : `${p.window.caption}${p.window.outside > 0 ? ` · ${p.window.outside} outside` : ''}`}
-                  percent={p.window.percent} tone={p.window.percent !== null && p.window.percent >= 85 ? 'success' : 'warning'}
-                  href={p.window.outside > 0 ? `${REGISTER}?attention=reassessment_overdue${scope === 'mine' ? '&owner=me' : ''}` : undefined}
-                />
-              </div>
-            </>
-          );
-        }}
-      </Loaded>
-    </SectionCard>
-  );
-}
-
-// ── Latest signals ───────────────────────────────────────────────────────────────────────────────────────────────────────
-
-export function SignalList({ d }: { d: Dashboard }) {
-  const rows = signalRows(d.monitoring_feed);
-  if (rows.length === 0) return <p className={QUIET}>No signals yet.</p>;
-  return (
-    <>
-      <ul className={LIST}>
-        {rows.map((s) => (
-          <li key={s.id} className="flex items-start gap-[8px] border-b border-ds-border py-[6px] last:border-b-0">
-            <StatusPill size="sm" tone={s.tone} label={s.severity} className="mt-[2px] shrink-0" />
-            <div className="min-w-0 flex-1">
-              <Link href={`${REGISTER}/${s.vendorId}`} className="block truncate rounded-ds-control text-ds-body font-[500] text-ds-fg hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring" title={s.title}>{s.title}</Link>
-              <span className="block truncate text-ds-label text-ds-fg-muted">{s.meta}</span>
-            </div>
-            {s.fresh && <StatusPill size="sm" tone="progress" label="New" className="shrink-0" />}
-          </li>
-        ))}
-      </ul>
-      <p className="m-0 mt-[6px] px-[8px] text-ds-label"><Link href="/vendor-risk/monitoring" className="rounded-ds-control text-ds-primary-text hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring">All signals</Link></p>
-    </>
+    </section>
   );
 }

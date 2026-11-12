@@ -3,8 +3,9 @@
 // The two histories this page can draw from the requests it already makes (no request is added for a chart): the Governance score by month (`performance.health_trend` of the
 // Governance scorecard, the points that visits to this page and to Governance kept: it starts from the first one and fabricates nothing) and the tasks created and completed by month
 // (`trend_data` of the tasks summary, counted from the tasks' own dates, so it has twelve months from day one). A card is drawn only for an area the person can open. Each says why
-// it is empty in a plain line; a failed or refused request is its own state, never an empty chart. Rules: perfCharts.ts (tested).
-import { Cell, ChartCard, ChartGrid, TrendChart, type ChartState } from '@/components/overview/charts';
+// it is empty in a plain line; a failed or refused request is its own state, never an empty chart. Each card's title opens the module the history is of (Governance, Task Management).
+// The cards are cells of the page's own ChartGrid (PerfOverview). Rules: perfCharts.ts (tested).
+import { Cell, ChartCard, TrendChart, type ChartState } from '@/components/overview/charts';
 import { SERIES } from '@/components/overview/charts/palette';
 import { governanceTrend, tasksTrend } from './perfCharts';
 import { errorMessage } from '@/components/ui/ds/reportOutcome';
@@ -27,13 +28,15 @@ export function Trends({ rows, payloads, onRetry }: { rows: readonly AreaRow[]; 
   const taskState: ChartState = !tasks ? 'empty' : tasks.state !== 'ready' ? stateOf(tasks) : !months || !months.busy ? 'empty' : 'ready';
 
   return (
-    <ChartGrid>
+    <>
       {gov && (
         <Cell span={span}>
           <ChartCard
             id="governance-trend"
             title="Governance score by month"
             meta="Last 12 months"
+            href="/governance"
+            hrefLabel="Open Governance"
             info="The Governance score at the end of each month, from the points kept each time this page or Governance is opened. The dashed line is the target the area is scored against. The line starts at the first point kept."
             state={govState}
             loadingHeight={220}
@@ -58,6 +61,8 @@ export function Trends({ rows, payloads, onRetry }: { rows: readonly AreaRow[]; 
             id="tasks-trend"
             title="Tasks created and completed"
             meta="Last 12 months"
+            href="/tasks"
+            hrefLabel="Open Task Management"
             info={`Tasks created and tasks completed in each calendar month, counted from the tasks' own dates. ${months?.scope === 'mine' ? 'Only the tasks you may see are counted.' : 'It counts every task you may see.'}`}
             state={taskState}
             loadingHeight={220}
@@ -75,6 +80,6 @@ export function Trends({ rows, payloads, onRetry }: { rows: readonly AreaRow[]; 
           </ChartCard>
         </Cell>
       )}
-    </ChartGrid>
+    </>
   );
 }

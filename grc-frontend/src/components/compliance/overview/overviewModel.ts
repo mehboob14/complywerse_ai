@@ -1,12 +1,10 @@
-// What the Compliance Overview decides, apart from React so `node --test` pins it (overviewModel.test.ts): the counters of the band (each from the request that knows it, the
-// total the SUM of the ones shown), the module score's words, the areas that pull it down, one row per framework journey (every Ready / Implemented figure comes from
-// lib/journeyModel.ts, the one definition), and the rows of the Coverage and Onboarding cards. A number is never made up: a request that failed or has not answered is a state of
-// its own, never 0.
+// What the Compliance Overview decides, apart from React so `node --test` pins it (overviewModel.test.ts): the module score's words, the areas of the score and the page each is worked on, one row
+// per framework journey (every Ready / Implemented figure comes from lib/journeyModel.ts, the one definition) and the four buckets the server adds up as "needs attention", which the Performance
+// Overview still reads (lib/perf/moduleFeeds.ts). A number is never made up: a request that failed or has not answered is a state of its own, never 0.
 import {
   isActiveJourney, journeyNumbers, portfolioNumbers, readinessBand, targetState,
   type JourneyProgressPayload, type ReadinessBand, type TargetState,
 } from '../../../lib/journeyModel.ts';
-import { formatCount } from '../../../lib/format.ts';
 import type { Tone } from '../../../lib/status.ts';
 
 // ── the strip between the Overview and the pages it opens ────────────────────────────────────────────────────────────────
@@ -23,13 +21,11 @@ export const STRIP: readonly StripItem[] = [
 
 // ── the counters ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-export type CounterState = 'ready' | 'loading' | 'error' | 'none';
-export interface CounterView { state: CounterState; value?: number }
 export interface CounterDef { key: string; label: string; href: string; tone: Tone; from: 'scorecard' | 'evidence' }
 
-/** The four buckets the server adds up for "needs attention" (dashboard.py: controls without evidence + stale evidence + overdue control tests + overdue regulatory tasks), now all four
- *  shown, so the number on the band IS the sum of its chips (before, the badge was the sum of four and the rows were five others, one of them never listed). Stale evidence is read
- *  from the evidence summary's `lapsed_count` (a file past its validity, worked out when it is read) because the stored flag the scorecard counts is set by nobody. */
+/** The four buckets the server adds up for "needs attention" (dashboard.py: controls without evidence + stale evidence + overdue control tests + overdue regulatory tasks). This page no longer draws them
+ *  as a band (Overview v2: attention is the colour of the posture graphics, the numbers ride on the area tiles); the Performance Overview reads the definitions. Stale evidence is read from the evidence
+ *  summary's `lapsed_count` (a file past its validity, worked out when it is read) because the stored flag the scorecard counts is set by nobody. */
 export const ATTENTION: readonly CounterDef[] = [
   { key: 'controls_without_evidence', label: 'Controls without evidence', href: '/controls', tone: 'warning', from: 'scorecard' },
   { key: 'evidence_lapsed', label: 'Lapsed evidence', href: '/evidence?fresh=lapsed', tone: 'danger', from: 'evidence' },
@@ -37,36 +33,12 @@ export const ATTENTION: readonly CounterDef[] = [
   { key: 'regulatory_overdue_tasks', label: 'Overdue regulatory tasks', href: '/governance/regulatory-changes', tone: 'danger', from: 'scorecard' },
 ];
 
-/** What a request is doing, as the page knows it: `failed` = it failed and there is no earlier answer. */
-export interface Feed { pending: boolean; failed: boolean }
-export interface ScorecardFeed extends Feed { queue: Record<string, unknown> | null | undefined }
 export interface EvidenceMonth { month: string; uploaded?: number; approved?: number }
 export interface EvidenceSummaryLite {
   lapsed_count?: number; stale_count?: number; expiring_soon_count?: number; pending_review_count?: number;
   /** what the graphs read (the same answer the Evidence library reads): every file, its statuses, the ones in force, and six months of uploads and approvals */
   total_count?: number; in_force_count?: number; by_status?: Record<string, number>; by_month?: EvidenceMonth[];
 }
-export interface EvidenceFeed extends Feed { summary: EvidenceSummaryLite | null | undefined }
-
-const whole = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
-
-/** One counter from the request that knows it. A key missing from an answer that arrived is "not recorded" (a dash), never 0. */
-export function counterFor(def: CounterDef, scorecard: ScorecardFeed, evidence: EvidenceFeed): CounterView {
-  const feed = def.from === 'scorecard' ? scorecard : evidence;
-  if (feed.failed) return { state: 'error' };
-  if (feed.pending) return { state: 'loading' };
-  const v = def.from === 'scorecard' ? whole(scorecard.queue?.[def.key]) : whole(evidence.summary?.lapsed_count) ?? whole(evidence.summary?.stale_count);
-  return v === null ? { state: 'none' } : { state: 'ready', value: v };
-}
-
-/** "N in total": the sum of the chips, only when every one of them answered (a sum over some of them would be a smaller number than the truth). */
-export function attentionTotal(views: readonly CounterView[]): number | null {
-  if (views.length === 0 || !views.every((v) => v.state === 'ready')) return null;
-  return views.reduce((n, v) => n + (v.value ?? 0), 0);
-}
-
-/** Every counter failed: said once instead of once per chip. */
-export const allFailed = (views: readonly CounterView[]): boolean => views.length > 0 && views.every((v) => v.state === 'error');
 
 // ── the worklist ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -119,11 +91,6 @@ export function areaWord(score: number | null | undefined): AreaWord {
   return score >= 80 ? 'strong' : score >= 60 ? 'fair' : 'weak';
 }
 
-/** The areas that pull the score down most: lowest score first (an area with none is left out), the heavier weight breaking a tie. */
-export function weakest(rows: readonly SectionRow[], n = 3): SectionRow[] {
-  return rows.filter((r) => r.score !== null).sort((a, b) => (a.score as number) - (b.score as number) || b.weight - a.weight).slice(0, n);
-}
-
 // ── one row per framework journey ────────────────────────────────────────────────────────────────────────────────────────
 
 export interface JourneyListItem { id: number; name?: string | null; status?: string | null; target_date?: string | null; progress?: JourneyProgressPayload | null }
@@ -170,53 +137,4 @@ export function portfolioLine(list: readonly JourneyListItem[] | null | undefine
   const rows = list ?? [];
   const p = portfolioNumbers(rows, { activeOnly: true });
   return { journeys: p.journeys, completed: rows.filter((r) => !isActiveJourney(r.status)).length, missing: p.missing, ready: p.readyPct, implemented: p.implementedPct };
-}
-
-// ── the Coverage card ────────────────────────────────────────────────────────────────────────────────────────────────────
-
-export interface CoverageRow { key: string; label: string; href: string; tone: Tone; state: CounterState; value?: number }
-export interface CoverageSections { sections: Record<string, { counts?: Record<string, unknown> }> | null | undefined; queue: Record<string, unknown> | null | undefined }
-
-/** The numbers an owner works down that are not part of "needs attention": the two control gaps the server counts but does not add into the total, the policy statements judged compliant,
- *  and the evidence waiting for a decision or ending soon. Each from the request that knows it, each with its own state. */
-export function coverageRows(scorecard: ScorecardFeed & { sections: CoverageSections['sections'] }, evidence: EvidenceFeed): CoverageRow[] {
-  const fromScorecard = (value: unknown): { state: CounterState; value?: number } => {
-    if (scorecard.failed) return { state: 'error' };
-    if (scorecard.pending) return { state: 'loading' };
-    const v = whole(value);
-    return v === null ? { state: 'none' } : { state: 'ready', value: v };
-  };
-  const fromEvidence = (value: unknown): { state: CounterState; value?: number } => {
-    if (evidence.failed) return { state: 'error' };
-    if (evidence.pending) return { state: 'loading' };
-    const v = whole(value);
-    return v === null ? { state: 'none' } : { state: 'ready', value: v };
-  };
-  const counts = scorecard.sections?.controls?.counts;
-  const assessed = whole(counts?.statements_assessed);
-  return [
-    { key: 'controls_unverified', label: 'Controls not verified', href: '/controls', tone: 'neutral', ...fromScorecard(scorecard.queue?.controls_unverified) },
-    { key: 'controls_untested', label: 'Controls not tested', href: '/control-library/assurance', tone: 'neutral', ...fromScorecard(scorecard.queue?.controls_untested) },
-    {
-      key: 'statements_compliant', label: assessed === null ? 'Statements compliant' : `Statements compliant, of ${formatCount(assessed)} assessed`,
-      href: '/compliance/statements', tone: 'neutral', ...fromScorecard(counts?.statements_compliant),
-    },
-    { key: 'evidence_pending', label: 'Evidence waiting for review', href: '/evidence?quick=waiting', tone: 'warning', ...fromEvidence(evidence.summary?.pending_review_count) },
-    { key: 'evidence_expiring', label: 'Evidence expiring in 30 days', href: '/evidence?fresh=expiring', tone: 'warning', ...fromEvidence(evidence.summary?.expiring_soon_count) },
-  ];
-}
-
-// ── the Onboarding card ──────────────────────────────────────────────────────────────────────────────────────────────────
-
-export interface RegisterLite { counts?: Record<string, number> | null; org?: { complete?: boolean } | null }
-export interface OnboardingView { inProgress: number; ready: number; profileComplete: boolean | null }
-
-/** Where framework onboarding stands: frameworks being filled in, frameworks that can start their journey, and whether the organisation profile every journey needs is complete. */
-export function onboardingOf(register: RegisterLite | null | undefined): OnboardingView | null {
-  if (!register) return null;
-  const c = register.counts ?? {};
-  return {
-    inProgress: whole(c.draft) ?? 0, ready: whole(c.ready) ?? 0,
-    profileComplete: typeof register.org?.complete === 'boolean' ? register.org.complete : null,
-  };
 }

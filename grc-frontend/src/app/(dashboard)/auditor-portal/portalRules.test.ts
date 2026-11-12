@@ -3,8 +3,8 @@
 // native dialog or hover-only action, no bare mutation, no server path or e-mail on a screen, a decision is sent through the route the platform has always used (and a file
 // previews by its LIBRARY id), Auto-approve is kept behind a question, an old address is forwarded, and the queue links into Frameworks without importing any of it.
 // The pages of Statutory Audit, Internal Audit and the Issue Register are other groups' and are not read here.
-// The front door's dashboard (2026-11-11: figures, graphs on the chart kit, then the worklist) has its own pins at the end: the kit's cards and tiles, a state for every request, no colour outside
-// the palette, every part that opens records a link.
+// The front door's dashboard (2026-11-11: figures, graphs on the chart kit, then the worklist; Overview v2 2026-11-12: three rows of graphics, the journeys as small multiples, a slim worklist) has its
+// own pins at the end: the kit's cards and tiles, a state for every request, no colour outside the palette, every part that opens records a link, the page returns to where it was.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
@@ -90,7 +90,7 @@ test('every request says loading, failed with Retry and empty on its own; a fail
   const journey = code(join(APP, '[frameworkId]', 'page.tsx'));
   assert.match(journey, /<ErrorState/);
   assert.match(journey, /onRetry=/);
-  for (const f of ['DoNowCard.tsx', 'JourneysCard.tsx']) assert.match(code(join(APP, '_front', f)), /<ErrorState compact/, f);
+  assert.match(code(join(APP, '_front', 'WaitingCard.tsx')), /<ErrorState compact/, 'the slim worklist says it failed, with Retry');
   for (const f of ['QueueTab.tsx', 'DecisionsTab.tsx']) assert.match(code(join(APP, '[frameworkId]', '_queue', f)), /error=\{failed\}/, f);
   assert.match(code(join(APP, '[frameworkId]', '_queue', 'SummaryTab.tsx')), /error=\{journeyFailed\}/);
   assert.doesNotMatch(page, /\?\? 0\b|\|\| 0\b/, 'the counters do not default to 0 when a request failed');
@@ -120,22 +120,47 @@ test('the shared sheet is exported for the register group: DecisionSheet and its
 
 // ── the front door as a dashboard ────────────────────────────────────────────
 
-test('the front door leads with figures and graphs on the chart kit and keeps the worklist and the journeys under them', () => {
+test('the front door leads with figures and graphs on the chart kit and keeps a slim worklist under them (no counter band, no second card beside it)', () => {
   const page = code(join(APP, 'page.tsx'));
   assert.match(page, /hero=\{<FrontKpis/);
   assert.match(page, /visuals=\{<FrontVisuals/);
-  assert.match(page, /work=\{<DoNowCard/);
-  assert.match(page, /posture=\{<JourneysCard/);
+  assert.match(page, /work=\{<WaitingCard/);
+  assert.doesNotMatch(page, /posture=|band=|CounterBand|DoNowCard|JourneysCard/, 'the long lists and the attention band are gone');
   assert.match(page, /<SkipToWork/, 'a keyboard gets past the graphs to the work');
+  assert.match(page, /useReturnToPlace\(/, 'Back from a journey or a register puts the page back where it was');
   const visuals = code(join(APP, '_front', 'FrontVisuals.tsx'));
   assert.match(visuals, /<ChartGrid>/);
-  assert.equal((visuals.match(/<Cell span=/g) ?? []).length, 8, 'eight cards: four of the review work, four of the observations');
+  assert.equal((visuals.match(/<Cell span=/g) ?? []).length, 7, 'seven cards in three rows: the review work, the journeys and the scope, the observations');
   for (const f of ['ReviewCards.tsx', 'ObservationCards.tsx']) {
     const src = code(join(APP, '_front', f));
     assert.match(src, /from '@\/components\/overview\/charts'/, `${f} draws with the chart kit`);
     assert.doesNotMatch(src, /from 'recharts'/, `${f} does not draw a second chart kit`);
-    for (const card of src.match(/<ChartCard[\s\S]*?>/g) ?? []) assert.match(card, /cardState\(/, `${f}: a card without its own state`);
+    for (const card of src.match(/<ChartCard[\s\S]*?\n\s*>/g) ?? []) assert.match(card, /cardState\(/, `${f}: a card without its own state`);
   }
+});
+
+test('Overview v2: every card carries an "Open" link, the journeys are tiles that open their queue, the worklist is three one-line rows with "See all"', () => {
+  for (const f of ['ReviewCards.tsx', 'ObservationCards.tsx', 'JourneyTiles.tsx']) {
+    const src = code(join(APP, '_front', f));
+    const cards = src.match(/<ChartCard[\s\S]*?\n\s*>/g) ?? [];
+    assert.ok(cards.length >= 1, f);
+    for (const card of cards) {
+      assert.match(card, /\bhref=/, `${f}: a card with no "Open" link`);
+      assert.match(card, /\bhrefLabel=/, `${f}: an "Open" link that does not say where it goes`);
+      assert.match(card, /\binfo=/, `${f}: a card with no (i)`);
+    }
+  }
+  const tiles = code(join(APP, '_front', 'JourneyTiles.tsx'));
+  assert.match(tiles, /<AreaTiles\b/);
+  assert.match(tiles, /journeyTiles\(/);
+  const rules = code(join(APP, '_front', 'frontRules.ts'));
+  assert.match(rules, /href: journeyHref\(c\.id\)/, 'a tile opens its journey');
+  const waiting = code(join(APP, '_front', 'WaitingCard.tsx'));
+  assert.match(waiting, /waitingRows\(work\.rows, now\)/);
+  assert.match(waiting, /See all/);
+  assert.match(waiting, /All caught up/);
+  assert.match(rules, /WAITING_ROWS = 3/);
+  assert.doesNotMatch(code(join(APP, '_front', 'ObservationCards.tsx')), /RegisteredCard|<Button\b/, 'no second link row on the observation cards');
 });
 
 test('every graph and tile has its own loading, failure and empty state, and a failed request is never a figure', () => {

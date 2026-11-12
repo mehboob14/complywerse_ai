@@ -1,14 +1,15 @@
 // node --test "src/app/(dashboard)/dashboard/_overview/perfCharts.test.ts"
-// What the graphical part of the Performance Overview decides: the bars of score against target, the ranked bars of what needs attention (the biggest first, the zeros kept, a failed or
-// waiting area named, never a 0), the two histories, and the figures of the tiles. A failed request is a state of its own and a missing number is "no data", never 0.
+// What the graphical part of the Performance Overview decides: the bars of score against target (each with the one count that needs attention), the one "Needs attention" tile (areas by their
+// worst count), the tiles of the areas that have no score (a status colour with its words), the two histories, and the figures of the tiles. A failed request is a state of its own and a
+// missing number is "no data", never 0.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { AREA_BY_KEY, type Area } from '../../../../lib/perf/moduleFeeds.ts';
 import {
-  attentionView, gapText, governanceDelta, governanceTrend, kpiFigure, nameList, scoreEmptyText, scoreView, shareOf, statusOfGrade, statusOfTone, tasksTrend, weakBars,
+  attentionNote, attentionView, barName, countText, gapText, governanceDelta, governanceTrend, kpiFigure, nameList, otherTiles, scoreEmptyText, scoreView, severityParts, shareOf, statusOfGrade, statusOfTone, tasksTrend,
 } from './perfCharts.ts';
-import { rowOf, weakestAreas, type AreaRow } from './perfModel.ts';
+import { rowOf, type AreaRow } from './perfModel.ts';
 
 const area = (key: string): Area => AREA_BY_KEY[key];
 const err = (status: number) => Object.assign(new Error('x'), { response: { status } });
@@ -33,7 +34,7 @@ test('the distance to the target in words: below, above, on target, and when no 
   assert.equal(gapText(60, null), 'No target recorded');
 });
 
-test('score against target: a bar per scored area that has a score, in the order given; an area with no score is named, never a 0 bar; a refused area is not here', () => {
+test('score against target: a bar per scored area that answered, in the order given; an area with no score is a neutral "Not scored" bar, never a 0 score; a refused area is not here', () => {
   const view = scoreView([
     ready('compliance', card(23, [], { target: 85 })),
     ready('governance', card(90, [], { target: 85 })),
@@ -46,11 +47,36 @@ test('score against target: a bar per scored area that has a score, in the order
   assert.deepEqual(view.bars.map((b) => [b.key, b.score, b.target, b.grade, b.status, b.gap]), [
     ['compliance', 23, 85, 'poor', 'bad', '62 below target'],
     ['governance', 90, 85, 'excellent', 'good', '5 above target'],
+    ['assets', null, null, null, 'neutral', 'Not scored yet'],
     ['risk', 70, 80, 'good', 'good', '10 below target'],
   ]);
-  assert.deepEqual(view.noScore.map((a) => a.key), ['assets']);
   assert.deepEqual(view.leftOut, []);
   assert.ok(!view.bars.some((b) => b.key === 'issues' || b.key === 'tasks'), 'a refused area and a count-only area have no bar');
+});
+
+test('a bar carries its area\'s most serious count as the one line under the name, with its own words and the records it opens; no count lit, no line', () => {
+  const view = scoreView([
+    ready('governance', card(50, [], {}, { overdue_reviews: 12, overdue_attestations: 30 })),
+    ready('compliance', card(50, [], {}, { controls_without_evidence: 0 })),
+    ready('risk', card(50)),
+  ]);
+  const [gov, comp, risk] = view.bars;
+  assert.deepEqual([gov.attention?.text, gov.attention?.status], ['30 overdue attestations', 'bad'], 'the same tone: the bigger count first');
+  assert.match(gov.attention?.href ?? '', /^\/governance\/documents/);
+  assert.equal(comp.attention, null, 'a count at 0 is not drawn');
+  assert.equal(risk.attention, null, 'a count the answer did not carry is not drawn either');
+});
+
+test('a count in words: the number, then its label with the first word in lower case unless it is an acronym', () => {
+  assert.equal(countText(99, 'Overdue tasks'), '99 overdue tasks');
+  assert.equal(countText(12, 'SLA-breached issues'), '12 SLA-breached issues');
+  assert.equal(countText(1234, 'Lapsed evidence'), '1,234 lapsed evidence');
+  assert.equal(countText(1, 'Overdue tasks'), 'Overdue tasks: 1', 'one is never "1 overdue tasks"');
+});
+
+test('what a bar\'s link says: where it goes, the score, the grade word and the distance to the target; an area with no score says so', () => {
+  assert.equal(barName({ label: 'Governance', score: 72, grade: 'good', gap: '13 below target' }), 'Open Governance: 72 out of 100, good, 13 below target');
+  assert.equal(barName({ label: 'IT Assets', score: null, grade: null, gap: 'Not scored yet' }), 'Open IT Assets: not scored yet');
 });
 
 test('score against target: the states are waiting, failed (named), nothing scored, and no scored area open to the person', () => {
@@ -68,46 +94,17 @@ test('score against target: the states are waiting, failed (named), nothing scor
   assert.equal(scoreView([ready('assets', { performance: { score: 40, components: [] } })]).bars[0].gap, 'No target recorded');
 });
 
-test('weakest sections as bars: the score as a figure, the module, its grade word and its target as the note, the colour of the grade, where it opens', () => {
-  const w = weakestAreas([ready('governance', card(56, [['Attestations', 24], ['Documents', 71]], { target: 85 })), ready('compliance', { performance: { score: 23, components: [{ key: 'evidence', label: 'Evidence', score: 3, target: 85 }] } })], 3);
-  const bars = weakBars(w.rows);
-  assert.deepEqual(bars.map((b) => [b.label, b.value, b.valueText, b.note, b.status]), [
-    ['Evidence', 3, '3%', 'Compliance · Poor · target 85', 'bad'],
-    ['Attestations', 24, '24%', 'Governance · Poor · target 85', 'bad'],
-    ['Documents', 71, '71%', 'Governance · Good · target 85', 'good'],
-  ]);
-  assert.equal(bars[0].href, '/evidence', 'a Compliance section opens its page');
-  assert.equal(bars[1].href, '/governance');
-  assert.deepEqual(weakBars([]), []);
-});
-
-test('needs attention: one bar per counter with something in it, the biggest first (then the most serious, then the order the areas are defined in); a zero is kept, a missing number is counted, never drawn', () => {
+test('needs attention counts AREAS, once each: a danger count is "act now", any other lit count is "watch", every count at 0 is clear; an area with no counters is not counted', () => {
   const view = attentionView([
     ready('governance', card(50, [], {}, { overdue_reviews: 12, overdue_attestations: 0 })),
     ready('compliance', card(50, [], {}, { controls_without_evidence: 12 })),
-    ready('risk', card(50, [], {}, { critical_open_risks: 3 })),
+    ready('risk', card(50, [], {}, { critical_open_risks: 3, red_kris: 4 })),
+    ready('issues', card(50, [], {}, { sla_breached_issues: 0, open_critical_incidents: 0 })),
     ready('assets', card(50)),
   ]);
   assert.equal(view.state, 'ready');
-  assert.deepEqual(view.bars.map((b) => [b.key, b.value, b.area, b.status]), [
-    ['overdue_reviews', 12, 'Governance', 'bad'],
-    ['controls_without_evidence', 12, 'Compliance', 'warn'],
-    ['critical_open_risks', 3, 'Risk Management', 'bad'],
-  ]);
-  assert.deepEqual(view.quiet.map((c) => [c.key, c.area]), [['overdue_attestations', 'Governance']], 'a recorded zero stays one press away');
-  assert.equal(view.unreported, 1, 'Red KRIs: the answer carried no number');
-  assert.equal(view.reporting, 3, 'the areas that answered and have counters (IT Assets has none)');
-  assert.equal(view.withItems, 3);
-});
-
-test('needs attention: the areas with something are counted once each, however many counters they have', () => {
-  const view = attentionView([
-    ready('risk', card(50, [], {}, { critical_open_risks: 3, red_kris: 4 })),
-    ready('governance', card(50, [], {}, { overdue_reviews: 0, overdue_attestations: 0 })),
-  ]);
-  assert.equal(view.bars.length, 2);
-  assert.equal(view.withItems, 1);
-  assert.equal(view.reporting, 2);
+  assert.deepEqual([view.reporting, view.withItems, view.act, view.watch, view.clear], [4, 3, 2, 1, 1]);
+  assert.deepEqual(severityParts(view).map((p) => [p.key, p.label, p.value, p.status]), [['act', 'Act now', 2, 'bad'], ['watch', 'Watch', 1, 'warn'], ['clear', 'Clear', 1, 'good']], 'the bar\'s parts add up to the areas that answered');
 });
 
 test('needs attention: waiting, failed (named), refused (silent), nothing to count; one failed area does not hide the others', () => {
@@ -120,15 +117,49 @@ test('needs attention: waiting, failed (named), refused (silent), nothing to cou
   assert.equal(mixed.state, 'ready');
   assert.deepEqual(mixed.failed.map((r) => r.area.key), ['risk']);
   assert.equal(mixed.waiting, 1);
-  assert.equal(mixed.bars.length, 1);
+  assert.equal(mixed.act, 1);
 });
 
-test('needs attention: all zero is a state of its own (ready, with no bars and the zeros listed), not an error and not an empty card', () => {
+test('the words under the Needs attention figure: the colours of its bar first, then what it leaves out; a failed area never hides them; all clear only when nothing is lit', () => {
+  const one = [ready('governance', card(50, [], {}, { overdue_reviews: 3 })), ready('compliance', card(50, [], {}, { controls_without_evidence: 2 })), failed('risk'), loading('assets')];
+  assert.equal(attentionNote(attentionView(one)), '1 act now · 1 watch · 1 still loading · Risk Management could not be read');
+  assert.equal(attentionNote(attentionView([ready('governance', card(50, [], {}, { overdue_reviews: 0, overdue_attestations: 0 }))])), 'All clear');
+  assert.equal(attentionNote(attentionView([ready('governance', card(50, [], {}, { overdue_reviews: 4 }))])), '1 act now');
+});
+
+test('needs attention: all zero is a state of its own (ready, every area clear), not an error and not an empty card', () => {
   const view = attentionView([ready('governance', card(50, [], {}, { overdue_reviews: 0, overdue_attestations: 0 }))]);
   assert.equal(view.state, 'ready');
-  assert.equal(view.bars.length, 0);
-  assert.equal(view.quiet.length, 2);
-  assert.equal(view.withItems, 0);
+  assert.deepEqual([view.withItems, view.clear], [0, 1]);
+});
+
+test('the other areas: a tile each for the areas with no score; the top lit count in its status colour with its words, "All clear", a neutral headline, a link, and the states waiting, failed and refused', () => {
+  const tiles = otherTiles([
+    ready('governance', card(50)),
+    ready('tasks', { total: 101, overdue: 99 }),
+    ready('frameworks', []),
+    ready('auditor', []),
+    rowOf(area('cyber'), undefined),
+    loading('bcm'),
+    failed('evidence'),
+    failed('automation', 403),
+  ]);
+  assert.deepEqual(tiles.map((t) => t.key), ['tasks', 'frameworks', 'auditor', 'cyber', 'bcm', 'evidence', 'automation'], 'a scored area is a bar, not a tile');
+  const [tasks, frameworks, auditor, cyber, bcm, evidence, automation] = tiles;
+  assert.deepEqual([tasks.line, tasks.status, tasks.name], ['99 overdue tasks', 'bad', 'Open Task Management: 99 overdue tasks']);
+  assert.match(tasks.href ?? '', /^\/tasks/, 'a lit count opens the records it counts');
+  assert.deepEqual([frameworks.line, frameworks.status, frameworks.href], ['All clear', 'good', '/frameworks'], 'every count answered 0: the area opens');
+  assert.deepEqual([auditor.line, auditor.status, auditor.state], ['No certification journeys yet', 'neutral', 'ready'], 'a headline is neutral: no colour for what is not a count');
+  assert.deepEqual([cyber.line, cyber.state, cyber.href], ['Open', 'link', '/cyber-assurance/dashboard']);
+  assert.deepEqual([bcm.state, bcm.href], ['loading', null]);
+  assert.deepEqual([evidence.line, evidence.status, evidence.href, evidence.retry], ["Couldn't load", 'bad', null, true], 'a failure is said, never a 0, and can be asked again');
+  assert.deepEqual([automation.line, automation.href, automation.retry], ['No access', null, false], 'a refusal cannot be retried');
+});
+
+test('the other areas: more than one lit count is said in the link name; the most serious (then the biggest) is the figure', () => {
+  const [t] = otherTiles([ready('automation', { automation: { posture: { failed: 3 } }, collection: { counts: { failing: 5 } } })]);
+  assert.deepEqual([t.line, t.status], ['5 sources failing', 'bad']);
+  assert.equal(t.name, 'Open Controls Automation: 5 sources failing, and 1 more count');
 });
 
 test('the Governance history: the scorecard\'s monthly points, oldest first, labelled with the year; anything that is not a number is not a point', () => {

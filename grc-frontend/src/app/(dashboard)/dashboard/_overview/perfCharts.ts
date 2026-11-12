@@ -1,14 +1,15 @@
 // What the graphical part of the Performance Overview decides, apart from React so `node --test` pins it (perfCharts.test.ts): the bars of "Score against target" (one per scored
-// area, weakest first), the ranked bars of "Needs attention" (one per counter of every area that answered, the biggest first), the two history charts (the Governance score by month,
-// the tasks created and completed by month) and the figures of the tiles. Every number is perfModel.ts's or the module's own (lib/perf/moduleFeeds.ts); nothing is computed here that
-// a module did not compute except counting areas ("3 of 7 at target") and the change between the last two months. A request that failed or has not answered is a state of its own,
-// never a 0 and never an empty chart. Colours are named here as the palette's keys (good / bad / warn ...): the components turn them into hex through palette.ts.
+// area, weakest first, each with the one count that needs attention), the small multiples of the other areas (one tile each: its top count in its status colour), the one
+// "Needs attention" tile (areas by their worst count), the two history charts (the Governance score by month, the tasks created and completed by month) and the figures of the tiles.
+// Every number is perfModel.ts's or the module's own (lib/perf/moduleFeeds.ts); nothing is computed here that a module did not compute except counting areas ("3 of 7 at target")
+// and the change between the last two months. A request that failed or has not answered is a state of its own, never a 0 and never an empty chart. Colours are named here as the
+// palette's keys (good / bad / warn ...): the components turn them into hex through palette.ts.
 import { changeOf, deltaOf, trendText } from '../../../../components/overview/charts/chartModel.ts';
 import type { StatusColor } from '../../../../components/overview/charts/palette.ts';
 import { gradeOf, type Grade } from '../../../../lib/perf/moduleFeeds.ts';
+import { formatCount } from '../../../../lib/format.ts';
 import type { Tone } from '../../../../lib/status.ts';
-import { gradeStatus } from '../../../../lib/statuses/dashboard.ts';
-import { againstTarget, type AreaRow, type WeakArea } from './perfModel.ts';
+import { againstTarget, litCounters, retryable, type AreaRow } from './perfModel.ts';
 import type { KpiCounts, PanelState } from './kpiModel.ts';
 
 // ── colours as the palette's keys ────────────────────────────────────────────
@@ -38,111 +39,152 @@ export interface ScoreBar {
   key: string;
   label: string;
   href: string;
-  score: number;
+  /** null: the area answered and has no score yet (drawn as a neutral "Not scored" bar, never as 0) */
+  score: number | null;
   target: number | null;
-  grade: Grade;
+  grade: Grade | null;
   status: StatusColor;
+  /** "13 below target": in the tooltip and the link's name, not drawn */
   gap: string;
+  /** the one count of this area that needs attention (its most serious), which opens the records it counts */
+  attention: { text: string; href: string; status: StatusColor } | null;
 }
 
 export type CardState = 'loading' | 'error' | 'empty' | 'ready';
 
 export interface ScoreView {
   state: CardState;
-  /** the scored areas that have a score, in the order given (the table's: weakest first) */
+  /** the scored areas that answered, in the order given (weakest first, the ones without a score last) */
   bars: ScoreBar[];
-  /** the scored areas that answered and have no score yet: named, never drawn as 0 */
-  noScore: Array<{ key: string; label: string; href: string }>;
   /** the scored areas that did not answer (failed, or still loading): named, so the picture says what it leaves out */
   leftOut: string[];
 }
 
-/** One bar per scored area that has a score. The areas the person may not open are not asked about (their rows are `denied`) and are not here. */
+/** "99 overdue tasks": a count's number and its own words, the first word in lower case unless it is an acronym ("SLA-breached issues"). The labels are plural phrases, so one of them
+ *  is said as "Overdue tasks: 1" (never "1 overdue tasks"). */
+export function countText(value: number, label: string): string {
+  if (value === 1) return `${label}: 1`;
+  const word = /^[A-Z][a-z]/.test(label) ? `${label.charAt(0).toLowerCase()}${label.slice(1)}` : label;
+  return `${formatCount(value)} ${word}`;
+}
+
+/** One bar per scored area that answered. The areas the person may not open are not asked about (their rows are `denied`) and are not here. */
 export function scoreView(rows: readonly AreaRow[]): ScoreView {
   const scored = rows.filter((r) => r.area.kind === 'score' && r.state !== 'denied');
   const answered = scored.filter((r) => r.state === 'ready' && r.read);
-  const bars: ScoreBar[] = [];
-  const noScore: ScoreView['noScore'] = [];
-  answered.forEach((r) => {
+  const bars: ScoreBar[] = answered.map((r) => {
     const read = r.read!;
-    if (read.score === null) { noScore.push({ key: r.area.key, label: r.area.label, href: r.area.href }); return; }
+    const top = litCounters(read)[0];
+    const attention = top ? { text: countText(top.value as number, top.label), href: top.href, status: statusOfTone(top.tone) } : null;
+    if (read.score === null) return { key: r.area.key, label: r.area.label, href: r.area.href, score: null, target: read.target, grade: null, status: 'neutral' as const, gap: 'Not scored yet', attention };
     const grade = read.grade ?? (gradeOf(read.score) as Grade);
-    bars.push({ key: r.area.key, label: r.area.label, href: r.area.href, score: read.score, target: read.target, grade, status: statusOfGrade(grade), gap: gapText(read.score, read.target) });
+    return { key: r.area.key, label: r.area.label, href: r.area.href, score: read.score, target: read.target, grade, status: statusOfGrade(grade), gap: gapText(read.score, read.target), attention };
   });
   const waiting = scored.some((r) => r.state === 'loading');
   const leftOut = scored.filter((r) => r.state === 'loading' || r.state === 'error').map((r) => r.area.label);
-  const state: CardState = scored.length === 0 ? 'empty' : answered.length === 0 ? (waiting ? 'loading' : 'error') : bars.length === 0 ? 'empty' : 'ready';
-  return { state, bars, noScore, leftOut };
+  const anyScore = bars.some((b) => b.score !== null);
+  const state: CardState = scored.length === 0 ? 'empty' : answered.length === 0 ? (waiting ? 'loading' : 'error') : !anyScore ? 'empty' : 'ready';
+  return { state, bars, leftOut };
 }
 
 /** The sentence an empty "score against target" card says. */
 export function scoreEmptyText(view: ScoreView, anyScoredShown: boolean): string {
   if (!anyScoredShown) return 'None of the scored areas are open to your account.';
-  return view.noScore.length > 0 ? 'No area has a score yet. A score appears once the area has records to score.' : 'No scored area is available.';
+  return view.bars.length > 0 ? 'No area has a score yet. A score appears once the area has records to score.' : 'No scored area is available.';
 }
 
-// ── the weakest sections, as bars ────────────────────────────────────────────
-export interface WeakBar { key: string; label: string; value: number; valueText: string; note: string; href: string; status: StatusColor }
-
-/** The rows of the "weakest sections" bars: the section, its score, the module and its grade word (and the module's target) as the note, and where it opens. */
-export function weakBars(weak: readonly WeakArea[]): WeakBar[] {
-  return weak.map((w) => ({
-    key: w.key,
-    label: w.label,
-    value: w.score,
-    valueText: `${Math.round(w.score)}%`,
-    note: `${w.module} · ${gradeStatus.label(w.grade)}${w.target !== null ? ` · target ${Math.round(w.target)}` : ''}`,
-    href: w.href,
-    status: statusOfGrade(w.grade),
-  }));
+/** The words a bar says for a screen reader and in its tooltip: "Open Governance: 72 out of 100, good, 13 below target". */
+export function barName(b: Pick<ScoreBar, 'label' | 'score' | 'grade' | 'gap'>): string {
+  return b.score === null ? `Open ${b.label}: not scored yet` : `Open ${b.label}: ${Math.round(b.score)} out of 100${b.grade ? `, ${b.grade}` : ''}, ${b.gap}`;
 }
 
-// ── what needs attention, ranked ─────────────────────────────────────────────
-export interface AttentionBar { key: string; label: string; area: string; value: number; tone: Tone; status: StatusColor; href: string }
-export interface QuietCounter { key: string; label: string; area: string; href: string; tone: Tone }
-
+// ── what needs attention: the one tile ───────────────────────────────────────
 export interface AttentionView {
   state: CardState;
-  /** every counter with something in it, the biggest first (then the most serious, then the order the areas are defined in) */
-  bars: AttentionBar[];
-  /** the counters that answered 0: still one press away */
-  quiet: QuietCounter[];
-  /** counters the answer carried no number for (a dash, never 0) */
-  unreported: number;
   failed: AreaRow[];
   waiting: number;
   /** the areas that answered and have counters, and how many of them have something in a counter */
   reporting: number;
   withItems: number;
+  /** by the worst count of the area: a danger count (overdue, lapsed, breached, critical), any other lit count, none lit */
+  act: number;
+  watch: number;
+  clear: number;
 }
 
-const TONE_RANK: Record<Tone, number> = { danger: 0, warning: 1, pending: 2, progress: 3, success: 4, neutral: 5 };
-
 export function attentionView(rows: readonly AreaRow[]): AttentionView {
-  const bars: Array<AttentionBar & { i: number }> = [];
-  const quiet: QuietCounter[] = [];
-  let unreported = 0;
   let reporting = 0;
-  let withItems = 0;
-  let i = 0;
+  let act = 0;
+  let watch = 0;
   rows.forEach((r) => {
     if (r.state !== 'ready' || !r.read || r.read.counters.length === 0) return;
     reporting++;
-    let lit = false;
-    r.read.counters.forEach((c) => {
-      i++;
-      if (c.value === null) { unreported++; return; }
-      if (c.value === 0) { quiet.push({ key: c.key, label: c.label, area: r.area.label, href: c.href, tone: c.tone }); return; }
-      lit = true;
-      bars.push({ key: c.key, label: c.label, area: r.area.label, value: c.value, tone: c.tone, status: statusOfTone(c.tone), href: c.href, i });
-    });
-    if (lit) withItems++;
+    const lit = litCounters(r.read);
+    if (lit.some((c) => c.tone === 'danger')) act++;
+    else if (lit.length > 0) watch++;
   });
-  bars.sort((a, b) => b.value - a.value || TONE_RANK[a.tone] - TONE_RANK[b.tone] || a.i - b.i);
   const failed = rows.filter((r) => r.state === 'error');
   const waiting = rows.filter((r) => r.state === 'loading').length;
   const state: CardState = reporting > 0 ? 'ready' : waiting > 0 ? 'loading' : failed.length > 0 ? 'error' : 'empty';
-  return { state, bars: bars.map(({ i: _i, ...bar }) => bar), quiet, unreported, failed, waiting, reporting, withItems };
+  return { state, failed, waiting, reporting, withItems: act + watch, act, watch, clear: reporting - act - watch };
+}
+
+/** The line under the figure of the "Needs attention" tile: the words of the colours of its bar (how many areas to act on now, how many to watch), then what the figure leaves out
+ *  (areas still loading, areas that could not be read), so a failed area never hides the words of the colours. "All clear" when nothing is lit. */
+export function attentionNote(v: Pick<AttentionView, 'act' | 'watch' | 'withItems' | 'waiting'> & { failed: readonly AreaRow[] }): string {
+  const parts = [
+    v.act > 0 ? `${v.act} act now` : '',
+    v.watch > 0 ? `${v.watch} watch` : '',
+    v.waiting > 0 ? `${v.waiting} still loading` : '',
+    v.failed.length > 0 ? `${nameList(v.failed.map((r) => r.area.label))} could not be read` : '',
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(' · ') : v.withItems === 0 ? 'All clear' : '';
+}
+
+export interface SeverityPart { key: 'act' | 'watch' | 'clear'; label: string; value: number; status: StatusColor }
+
+/** The thin bar of the tile: the areas by their worst count, each with the word its colour carries. */
+export const severityParts = (v: Pick<AttentionView, 'act' | 'watch' | 'clear'>): SeverityPart[] => [
+  { key: 'act', label: 'Act now', value: v.act, status: 'bad' },
+  { key: 'watch', label: 'Watch', value: v.watch, status: 'warn' },
+  { key: 'clear', label: 'Clear', value: v.clear, status: 'good' },
+];
+
+// ── the other areas: one tile each ───────────────────────────────────────────
+export interface OtherTile {
+  key: string;
+  label: string;
+  state: 'ready' | 'loading' | 'error' | 'denied' | 'link';
+  /** where the tile opens: the records of its top count, else the area; null when the tile is not a link (waiting, failed, refused) */
+  href: string | null;
+  status: StatusColor;
+  /** the line under the name, in the status colour (a colour never stands alone): "99 overdue tasks", "All clear", "12 active vendors", "Open" */
+  line: string;
+  /** the link's name: "Open Task Management: 99 overdue tasks, and 1 more count" */
+  name: string;
+  retry: boolean;
+}
+
+/** One tile for each area that has no score of its own (a headline and counts, or a link). The most serious lit count is its figure; a headline is neutral; every count at 0 is "All clear". */
+export function otherTiles(rows: readonly AreaRow[]): OtherTile[] {
+  return rows.filter((r) => r.area.kind !== 'score').map((r): OtherTile => {
+    const base = { key: r.area.key, label: r.area.label, retry: false };
+    if (r.state === 'loading') return { ...base, state: 'loading', href: null, status: 'neutral', line: 'Loading', name: `${r.area.label}: loading` };
+    if (r.state === 'error') return { ...base, state: 'error', href: null, status: 'bad', line: "Couldn't load", name: `${r.area.label}: could not be loaded`, retry: retryable(r) };
+    if (r.state === 'denied') return { ...base, state: 'denied', href: null, status: 'neutral', line: 'No access', name: `${r.area.label}: no access` };
+    if (r.state === 'link' || !r.read) return { ...base, state: 'link', href: r.area.href, status: 'neutral', line: 'Open', name: `Open ${r.area.label}` };
+    const lit = litCounters(r.read);
+    if (lit.length > 0) {
+      const top = lit[0];
+      const text = countText(top.value as number, top.label);
+      const more = lit.length - 1;
+      return { ...base, state: 'ready', href: top.href, status: statusOfTone(top.tone), line: text, name: `Open ${r.area.label}: ${text}${more > 0 ? `, and ${more} more ${more === 1 ? 'count' : 'counts'}` : ''}` };
+    }
+    const clear = r.read.counters.length > 0 && r.read.counters.every((c) => c.value === 0);
+    if (clear) return { ...base, state: 'ready', href: r.area.href, status: 'good', line: 'All clear', name: `Open ${r.area.label}: all clear` };
+    const line = r.read.headline ?? 'Open';
+    return { ...base, state: 'ready', href: r.area.href, status: 'neutral', line, name: `Open ${r.area.label}: ${line}` };
+  });
 }
 
 // ── history ──────────────────────────────────────────────────────────────────

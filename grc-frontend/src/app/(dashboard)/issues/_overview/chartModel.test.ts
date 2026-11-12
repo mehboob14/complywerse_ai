@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  ageHeat, actionProgress, cardState, closedOnTime, flowOf, hueOfSeverity, incidentHistory, incidentSeverityParts, issueHistory, matrixHeat, monthSlots, openAt, oldSerious, ownerLoad,
+  ageHeat, actionProgress, cardState, closedOnTime, flowOf, hueOfSeverity, incidentHistory, incidentSeverityParts, issueHistory, matrixHeat, monthSlots, openAt, oldSerious, ownerLoad, ownerPeople,
   seriousSplit, severityParts, sourceRank, stageParts, wholeParts, OWNER_SERIES, SEVERITY_HUE, STATE_HUE, ACTION_HUE,
 } from './chartModel.ts';
 import { ageMatrix } from './overviewModel.ts';
@@ -144,26 +144,26 @@ test('impact by urgency: open issues in the nine cells (high first), the unrated
   assert.equal(matrixHeat(rows, undefined).severity.flat().every((x) => x === null), true);
 });
 
-test('who holds them: the busiest people split by severity, the rest as one row with no link, Unassigned last and always its own', () => {
+test('who holds them: the busiest people split by severity, then Unassigned (always its own row); never more than max + 1 rows', () => {
   const rows: IssueRow[] = [];
   const give = (id: number, name: string, count: number, severity = 'medium') => { for (let k = 0; k < count; k += 1) rows.push(issue({ assignee: person(id, name), severity })); };
   give(1, 'Ana', 5); give(2, 'Bo', 4, 'critical'); give(3, 'Cy', 3); give(4, 'Di', 2); give(5, 'Ed', 1);
   rows.push(issue({ assignee: null, severity: 'high' }), issue({ assignee: null }), issue({ assignee: person(1, 'Ana'), workflow_state: 'closed' }));
   const out = ownerLoad(rows, 3);
-  assert.deepEqual(out.map((r) => [r.label, r.total]), [['Ana', 5], ['Bo', 4], ['Cy', 3], ['2 other people', 3], ['Unassigned', 2]]);
+  assert.deepEqual(out.map((r) => [r.label, r.total]), [['Ana', 5], ['Bo', 4], ['Cy', 3], ['Unassigned', 2]]);
   assert.deepEqual(out[1].cells, { critical: 4 });
   assert.equal(out[0].href, '/issues/register?quick=open&assignee=1');
-  assert.equal(out[3].href, undefined);
-  assert.equal(out[4].href, '/issues/register?quick=open&assignee=none');
-  assert.equal(out.reduce((a, r) => a + r.total, 0), rows.filter((r) => r.workflow_state === 'in_progress').length, 'no open issue is lost or counted twice');
+  assert.equal(out[3].href, '/issues/register?quick=open&assignee=none');
+  assert.equal(ownerLoad(rows).length, 5, 'four people and Unassigned by default');
+  assert.equal(ownerPeople(rows), 5, 'five people hold open issues (a closed one does not count a person twice)');
   assert.deepEqual(ownerLoad([]), []);
+  assert.equal(ownerPeople([]), 0);
   OWNER_SERIES.forEach((s) => assert.ok(typeof s === 'string'));
 });
 
-test('a person nobody named is "User N", and a single person in the tail is not "people"', () => {
-  const out = ownerLoad([issue({ assignee: { id: 9 } }), issue({ assignee: person(1, 'Ana') }), issue({ assignee: person(1, 'Ana') })], 1);
-  assert.deepEqual(out.map((r) => r.label), ['Ana', '1 other person']);
+test('a person nobody named is "User N"', () => {
   assert.equal(ownerLoad([issue({ assignee: { id: 9 } })])[0].label, 'User 9');
+  assert.deepEqual(ownerLoad([issue({ assignee: null })]).map((r) => r.label), ['Unassigned']);
 });
 
 test('raised from: the biggest places with their serious ones, the tail as one "Other places" row, the folded total is the whole', () => {

@@ -10,9 +10,10 @@ import { areaBand } from '../../../lib/statuses/complianceStatements.ts';
 import { evidenceStatus } from '../../../lib/statuses/evidence.ts';
 import { journeyStatus, readinessBandWords } from '../../../lib/statuses/frameworkJourney.ts';
 import { changeOf, deltaOf } from '../../overview/charts/chartModel.ts';
+import type { AreaTileItem, AreaTone } from '../../overview/charts/areaModel.ts';
 import { OTHER, STATUS, type StatusColor } from '../../overview/charts/palette.ts';
 import {
-  SECTION_HREF, SECTION_ORDER, areaWord, journeyRows, sectionRows,
+  SECTION_HREF, areaWord, journeyRows,
   type EvidenceSummaryLite, type JourneyListItem, type JourneyRow, type SectionRow,
 } from './overviewModel.ts';
 
@@ -43,49 +44,56 @@ const whole = (n: unknown): number | null => (finite(n) ? n : null);
 
 // ── the six areas of the score ───────────────────────────────────────────────────────────────────────────────────────────
 
-/** The areas as ranked bars, the weakest first (an area with no score last, as "No data", never as a bar of 0): the server's score, the band the dashboards always used (80 strong,
- *  60 fair) in the colour of its pill and in words, and the share of the module score it carries. */
-export function areaBars(rows: readonly SectionRow[]): BarItem[] {
+const AREA_TONE = { strong: 'good', fair: 'warn', weak: 'bad', no_data: 'neutral' } as const satisfies Record<ReturnType<typeof areaWord>, AreaTone>;
+
+/** The words of the area tiles' colours: the band the dashboards always used (80 strong, 60 fair, below weak) and "No data" for an area with no score. */
+export const AREA_WORDS = { good: 'Strong', warn: 'Fair', bad: 'Weak', neutral: 'No data' } as const;
+
+/** What is wrong inside an area, in a few words, from the answers the page has (the four buckets the old "Needs attention" band counted): they ride on the tile's tooltip and its accessible name,
+ *  never drawn as text. A count of 0, and a count the answer did not carry, is no note. */
+export function areaNotes(queue: Record<string, unknown> | null | undefined, evidence: EvidenceSummaryLite | null | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  const say = (key: string, n: unknown, one: string, many: string) => { if (finite(n) && n > 0) out[key] = `${formatCount(n)} ${n === 1 ? one : many}`; };
+  say('controls', queue?.controls_without_evidence, 'control without evidence', 'controls without evidence');
+  say('effectiveness', queue?.overdue_control_tests, 'overdue test', 'overdue tests');
+  say('evidence', evidence?.lapsed_count ?? evidence?.stale_count, 'lapsed file', 'lapsed files');
+  say('regulatory', queue?.regulatory_overdue_tasks, 'overdue task', 'overdue tasks');
+  return out;
+}
+
+/** The areas as small multiples, the weakest first (an area with no score last, "No data", never a ring at 0): the server's score, the band's colour, the weight and the area's attention note in
+ *  the tooltip, and the page the area is worked on. */
+export function areaTiles(rows: readonly SectionRow[], notes: Record<string, string> = {}): AreaTileItem[] {
   const ranked = rows.slice().sort((a, b) => Number(a.score === null) - Number(b.score === null) || (a.score ?? 0) - (b.score ?? 0) || b.weight - a.weight);
-  return ranked.map((r) => {
-    const word = areaWord(r.score);
-    return {
-      key: r.key, label: r.label, value: r.score ?? 0, valueText: r.score === null ? 'No data' : String(Math.round(r.score)),
-      color: toneColor(areaBand.tone(word)), note: `${areaBand.label(word)} · ${Math.round(r.weight * 100)}% of the score`, href: SECTION_HREF[r.key],
-    };
-  });
+  return ranked.map((r) => ({
+    key: r.key, label: r.label, value: r.score, tone: AREA_TONE[areaWord(r.score)], href: SECTION_HREF[r.key],
+    note: [`${Math.round(r.weight * 100)}% of the score`, notes[r.key]].filter(Boolean).join(' · '),
+  }));
 }
 
 export interface MetricLite { key?: string; label?: string; score?: number | null; numerator?: number | null; denominator?: number | null; inverse?: boolean }
 export interface SectionLite { key?: string; label?: string; weight?: number; score?: number | null; metrics?: readonly MetricLite[] }
-export interface MeasureGroup { key: string; label: string; score: number | null; word: ReturnType<typeof areaWord>; href: string; rows: BarItem[] }
 
-/** The measure of the Evidence area that reads the stored "stale" flag, which nothing sets (a lapsed file is worked out from its dates: the Evidence freshness card). It would read 100% beside
- *  35 lapsed files, so it is not drawn. Everything else the server measures is. */
-export const LEFT_OUT = new Set(['evidence:freshness']);
+/** The three measures that say where the controls stand, each the server's own score of it (not worked out here): controls with approved evidence and controls independently verified (Controls area),
+ *  controls tested on schedule (Control Effectiveness area). In the colour of the band of its score, with its word; a measure the answer lacks is "No data" and a bar of nothing, never a 0. */
+export const CONTROL_MEASURES = [
+  { section: 'controls', metric: 'evidence_coverage', label: 'With evidence', href: '/controls' },
+  { section: 'controls', metric: 'verified', label: 'Verified', href: '/controls' },
+  { section: 'effectiveness', metric: 'test_coverage', label: 'Tested', href: '/control-library/assurance' },
+] as const;
 
-/** One group per area that is in the answer, in the order the score lists them; each measure is a bar at the server's own score (0 to 100) with its numerator and denominator in words.
- *  A measure with no score is "No data". A measure that is the opposite of a count (tests on schedule: 1 minus overdue) has no "x of y": the bar says it. */
-export function measureGroups(sections: Record<string, SectionLite> | null | undefined): MeasureGroup[] {
-  const out: MeasureGroup[] = [];
-  for (const key of SECTION_ORDER) {
-    const s = sections?.[key];
-    if (!s) continue;
-    const rows: BarItem[] = [];
-    (s.metrics ?? []).forEach((m, i) => {
-      const id = m.key ?? String(i);
-      if (LEFT_OUT.has(`${key}:${id}`)) return;
-      const score = whole(m.score);
-      const num = whole(m.numerator);
-      const den = whole(m.denominator);
-      rows.push({
-        key: `${key}:${id}`, label: m.label ?? id, value: score ?? 0, valueText: score === null ? 'No data' : `${Math.round(score)}%`,
-        note: score !== null && !m.inverse && num !== null && den !== null && den > 0 ? `${formatCount(num)} of ${formatCount(den)}` : undefined,
-      });
+export function controlBars(sections: Record<string, SectionLite> | null | undefined): BarItem[] {
+  const out: BarItem[] = [];
+  CONTROL_MEASURES.forEach((def) => {
+    const section = sections?.[def.section];
+    if (!section) return;
+    const m = (section.metrics ?? []).find((x) => x.key === def.metric);
+    const score = whole(m?.score);
+    out.push({
+      key: `${def.section}:${def.metric}`, label: def.label, value: score ?? 0, valueText: score === null ? 'No data' : `${Math.round(score)}%`,
+      color: toneColor(areaBand.tone(areaWord(score))), href: def.href,
     });
-    const score = whole(s.score);
-    out.push({ key, label: s.label ?? key, score, word: areaWord(score), href: SECTION_HREF[key] ?? '/compliance', rows });
-  }
+  });
   return out;
 }
 
@@ -93,30 +101,6 @@ export function measureGroups(sections: Record<string, SectionLite> | null | und
 
 /** Where the Frameworks hub lists the journeys that are late or due within 30 days. */
 export const ATTENTION_HREF = '/frameworks?quick=attention';
-
-const STAGES = ['not_started', 'in_progress', 'on_hold', 'completed', 'cancelled'] as const;
-const stageColor = (k: string): string => (k === 'cancelled' ? OTHER : toneColor(journeyStatus.tone(k)));
-
-/** Journeys by stage, in the order a journey goes through them (a stage nobody is in is left out). */
-export function stageParts(list: readonly JourneyListItem[] | null | undefined): PartItem[] {
-  const counts = new Map<string, number>();
-  (list ?? []).forEach((j) => { const k = String(j.status ?? '').trim().toLowerCase() || 'in_progress'; counts.set(k, (counts.get(k) ?? 0) + 1); });
-  const known = STAGES.filter((k) => counts.has(k));
-  const other = Array.from(counts.keys()).filter((k) => !(STAGES as readonly string[]).includes(k)).sort();
-  return [...known, ...other].map((k) => ({ key: k, label: journeyStatus.label(k), value: counts.get(k) as number, color: stageColor(k) }));
-}
-
-/** The journeys that still have work in them, by their target date: late, within 30 days (the line the hub uses), later, none set. */
-export function dueParts(rows: readonly JourneyRow[]): PartItem[] {
-  const active = rows.filter((r) => r.active);
-  const n = (state: JourneyRow['target']['state']): number => active.filter((r) => r.target.state === state).length;
-  return [
-    { key: 'overdue', label: 'Overdue', value: n('overdue'), color: STATUS.bad, href: ATTENTION_HREF },
-    { key: 'soon', label: 'Due in 30 days', value: n('soon'), color: STATUS.warn, href: ATTENTION_HREF },
-    { key: 'later', label: 'Later', value: n('later'), color: STATUS.progress },
-    { key: 'none', label: 'No date set', value: n('none'), color: STATUS.neutral },
-  ];
-}
 
 /** Late or due within 30 days, over the journeys that still have work in them (the hub's "Due in 30 days" tile says the same). */
 export function dueCounts(rows: readonly JourneyRow[]): { due: number; overdue: number } {
@@ -126,20 +110,16 @@ export function dueCounts(rows: readonly JourneyRow[]): { due: number; overdue: 
 }
 
 /** A journey with work in it and figures to draw: its row (the order of the table: the most urgent first) and its numbers (the journey model's). */
-export interface Figure { row: JourneyRow; n: JourneyNumbers; domains: ReadonlyArray<{ name: string; total: number; inProgress: number; notStarted: number }> }
+export interface Figure { row: JourneyRow; n: JourneyNumbers }
 
 export function figuresOf(list: readonly JourneyListItem[] | null | undefined, today: Date = new Date()): Figure[] {
   const byId = new Map((list ?? []).map((j) => [j.id, j]));
   const out: Figure[] = [];
   journeyRows(list, today).forEach((row) => {
     if (!row.active) return;
-    const progress = byId.get(row.id)?.progress;
-    const n = journeyNumbers(progress);
+    const n = journeyNumbers(byId.get(row.id)?.progress);
     if (!n) return;
-    const domains = (progress?.by_domain ?? []).map((d) => ({
-      name: (d.domain_name ?? '').trim() || 'General', total: whole(d.total) ?? 0, inProgress: whole(d.in_progress) ?? 0, notStarted: whole(d.not_started) ?? 0,
-    }));
-    out.push({ row, n, domains });
+    out.push({ row, n });
   });
   return out;
 }
@@ -151,49 +131,33 @@ export function openWork(figures: readonly Figure[]): { open: number; toStart: n
   return { open: toStart + inProgress, toStart, inProgress };
 }
 
-export interface StackCategoryItem { key: string; label: string; cells: Record<string, number>; href: string }
-export const STACK_LIMIT = 8;
-
-/** Requirements by status per journey, the most urgent journeys first: implemented (the verified ones counted once, as the journey model says), in progress, not started. Out-of-scope
- *  requirements are left out, as in every percentage. Counts, not shares. */
-export function requirementStack(figures: readonly Figure[], limit: number = STACK_LIMIT): { categories: StackCategoryItem[]; shown: number; of: number } {
-  const shown = figures.slice(0, limit);
-  return {
-    categories: shown.map((f) => ({ key: String(f.row.id), label: f.row.name, cells: { implemented: f.n.implemented, inProgress: f.n.inProgress, toStart: f.n.toStart }, href: f.row.href })),
-    shown: shown.length, of: figures.length,
-  };
+/** Where every requirement of the journeys with work in them stands: implemented (the verified ones counted once, as the journey model says), in progress, not started. Out-of-scope
+ *  requirements are left out, as in every percentage. Counts, not shares. The Frameworks hub lists journeys, not requirements, so every part opens it. */
+export function requirementParts(figures: readonly Figure[]): PartItem[] {
+  if (figures.length === 0) return [];
+  const { toStart, inProgress } = openWork(figures);
+  const implemented = figures.reduce((s, f) => s + f.n.implemented, 0);
+  return [
+    { key: 'implemented', label: 'Implemented', value: implemented, color: STATUS.good, href: '/frameworks' },
+    { key: 'in_progress', label: 'In progress', value: inProgress, color: STATUS.progress, href: '/frameworks' },
+    { key: 'not_started', label: 'Not started', value: toStart, color: STATUS.neutral, href: '/frameworks' },
+  ];
 }
 
-/** Ready by journey, the lowest first: the journey model's Ready %, in the colour and the word of its band (75 strong, 50 building, 25 early), Implemented in the note. */
-export function readyBars(figures: readonly Figure[]): BarItem[] {
-  return figures
-    .slice()
-    .sort((a, b) => a.n.readyPct - b.n.readyPct || a.row.name.localeCompare(b.row.name))
-    .map((f) => {
-      const band = readinessBand(f.n.readyPct);
-      return {
-        key: String(f.row.id), label: f.row.name, value: f.n.readyPct, valueText: formatPercent(f.n.readyPct), color: toneColor(readinessBandWords.tone(band)),
-        note: `${readinessBandWords.label(band)} · Implemented ${formatPercent(f.n.implementedPct)}`, href: f.row.href,
-      };
-    });
-}
+/** The tone of a framework tile: Ready from 75 is strong, from 50 building, below that early (the lines of the whole platform: lib/journeyModel.ts readinessBand). */
+const BAND_TONE = { strong: 'good', building: 'warn', early: 'bad', start: 'bad' } as const satisfies Record<ReturnType<typeof readinessBand>, AreaTone>;
+export const FRAMEWORK_WORDS = { good: 'Strong', warn: 'Building', bad: 'Early', neutral: 'No figures' } as const;
 
-export const DOMAIN_LIMIT = 8;
-
-/** Where the open work is: the domains of the journeys, the most requirements still to do first. A domain is told apart by its journey when there are several. */
-export function domainBars(figures: readonly Figure[], limit: number = DOMAIN_LIMIT): { rows: BarItem[]; of: number } {
-  const several = figures.length > 1;
-  const all: BarItem[] = [];
-  figures.forEach((f) => f.domains.forEach((d, i) => {
-    const open = d.inProgress + d.notStarted;
-    if (open <= 0) return;
-    all.push({
-      key: `${f.row.id}:${i}`, label: d.name, value: open, valueText: `${formatCount(open)} open`,
-      note: `${several ? `${f.row.name} · ` : ''}${formatCount(d.inProgress)} in progress · ${formatCount(d.notStarted)} not started`, href: f.row.href,
-    });
-  }));
-  all.sort((a, b) => b.value - a.value || a.label.localeCompare(b.label) || a.key.localeCompare(b.key));
-  return { rows: all.slice(0, limit), of: all.length };
+/** One tile per framework journey, the most urgent first (the order of journeyRows: a target date that has passed, then the lowest Ready; finished journeys last): the journey model's Ready % in
+ *  the ring and the figure, its band's colour, Implemented, the stage and the target in the tooltip. A journey whose list sent no progress is "No figures", never a ring at 0. */
+export function frameworkTiles(rows: readonly JourneyRow[]): AreaTileItem[] {
+  return rows.map((r) => {
+    const band = r.ready === null ? null : readinessBand(r.ready);
+    return {
+      key: String(r.id), label: r.name, value: r.ready, display: r.ready === null ? undefined : formatPercent(r.ready), tone: band ? BAND_TONE[band] : 'neutral', href: r.href,
+      note: [journeyStatus.label(r.status), band ? readinessBandWords.label(band) : null, r.implemented === null ? null : `Implemented ${formatPercent(r.implemented)}`].filter(Boolean).join(' · '),
+    };
+  });
 }
 
 // ── the history ──────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -245,7 +209,7 @@ export function evidenceParts(summary: EvidenceSummaryLite | null | undefined): 
 export function freshnessBars(summary: EvidenceSummaryLite | null | undefined): { rows: BarItem[]; max: number } {
   const s = summary;
   const defs: Array<[string, string, number | null, string, string | undefined]> = [
-    ['in_force', 'In force', whole(s?.in_force_count), STATUS.good, undefined],       // no list of its own: approved AND in date is not one filter of the library
+    ['in_date', 'In date', whole(s?.in_force_count), STATUS.good, undefined],       // no list of its own: approved AND in date is not one filter of the library
     ['expiring', 'Expiring in 30 days', whole(s?.expiring_soon_count), STATUS.warn, '/evidence?fresh=expiring'],
     ['lapsed', 'Lapsed', whole(s?.lapsed_count) ?? whole(s?.stale_count), STATUS.bad, '/evidence?fresh=lapsed'],
     ['waiting', 'Waiting for review', whole(s?.pending_review_count), STATUS.pending, '/evidence?quick=waiting'],

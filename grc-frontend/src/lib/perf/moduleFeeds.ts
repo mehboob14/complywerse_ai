@@ -7,7 +7,6 @@ import { SCORECARD_QUERY_KEYS } from '../../components/dashboard/scorecard-query
 import { navPermissions } from '../../components/layout/navAccess.ts';
 import { ATTENTION as COMPLIANCE_ATTENTION, SECTION_HREF as COMPLIANCE_SECTION_HREF, journeyRows, portfolioLine, targetOf } from '../../components/compliance/overview/overviewModel.ts';
 import { ATTENTION as GOVERNANCE_ATTENTION } from '../../app/(dashboard)/governance/_overview/overviewModel.ts';
-import { ATTENTION as RISK_ATTENTION } from '../../app/(dashboard)/erm/_overview/overviewModel.ts';
 import { TARGET as ASSESSMENTS_TARGET, countersOf as assessmentCounters } from '../../app/(dashboard)/assessments/_overview/overviewModel.ts';
 import { countersOf as bcmCounters } from '../../app/(dashboard)/bcm/_overview/overviewModel.ts';
 import { tiles as vendorTiles } from '../../app/(dashboard)/vendor-risk/_lib/overviewModel.ts';
@@ -136,6 +135,13 @@ const queueCounters = (d: Raw, defs: ReadonlyArray<CounterDef>): Counter[] => de
 
 const govDef = (key: string) => counterDef(GOVERNANCE_ATTENTION, key);
 const complianceDef = (key: string) => counterDef(COMPLIANCE_ATTENTION, key);
+// The three Risk Management counts this page reads (the server's `attention_queue` keys, in the words and with the addresses the Risk Management Overview uses for them). They are written here
+// and not imported: that Overview is rebuilt on its own schedule, and a renamed export there must not take the Performance page down. moduleFeeds.test.ts pins the addresses.
+const RISK_ATTENTION: readonly CounterDef[] = [
+  { key: 'critical_open_risks', label: 'Critical open risks', href: '/erm/risks?quick=critical', tone: 'danger' },
+  { key: 'red_kris', label: 'Red KRIs', href: '/erm/kris', tone: 'danger' },
+  { key: 'open_critical_incidents', label: 'Open critical incidents', href: '/erm/incidents', tone: 'danger' },
+];
 const riskDef = (key: string) => counterDef(RISK_ATTENTION, key);
 
 /** The counters an area hands the band, in the words and with the addresses of the module's own Overview (Risk Management's are its own: the Issues scorecard's critical incidents are the same count). */

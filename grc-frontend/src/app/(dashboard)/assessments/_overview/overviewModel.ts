@@ -1,6 +1,6 @@
-// What the Assessments Overview decides, apart from React so `node --test` pins it (overviewModel.test.ts): the five counters of "Needs attention" and where each opens, the rows of "Do now"
-// (the person's own controls, drafts to scope and evidence to decide, the most urgent first, one action each), the posture (the server's score and its grade), the categories as bars, and the
-// remediation clock of the whole portfolio. Every figure is the SERVER's (`GET /overview`, `GET /my-work`); the clock's due-soon count and ageing come from the points with the server's own
+// What the Assessments Overview decides, apart from React so `node --test` pins it (overviewModel.test.ts): the five counters the Performance Overview still reads (`countersOf`, `TARGET`: this page no
+// longer draws them as a band), the rows of "My work" (the person's own controls, drafts to scope and evidence to decide, the most urgent first, one action each), the posture (the server's score and its
+// grade) and the remediation clock of the whole portfolio. Every figure is the SERVER's (`GET /overview`, `GET /my-work`); the clock's due-soon count and ageing come from the points with the server's own
 // due-date rule (workspace/clockModel.ts), exactly as one assessment's Remediation tab does. A figure the server did not send is null: the page shows a dash or its error, never 0.
 import type { Tone } from '../../../../lib/status.ts';
 import { normaliseItem, DEFAULT_SLA_DAYS, type RawItem, type SlaDays, type WorkItem as Control } from '../../../../components/assessments/workspace/itemModel.ts';
@@ -8,8 +8,7 @@ import { remediationClock, type Clock } from '../../../../components/assessments
 import { kindOf } from '../../../../components/assessments/workspace/kinds.ts';
 import { gradeOf, workspaceHref, type GradeWord } from '../../../../components/assessments/workspace/workspaceModel.ts';
 import { subjectOf } from '../../../../components/compliance/scoping/scopingModel.ts';
-import { categoryHref } from '../_data/categories.ts';
-import type { Board, BoardCategory, MyApproval, MyDraft, MyItem, MyWork, Point, Policy } from '../_data/types.ts';
+import type { Board, MyApproval, MyDraft, MyItem, MyWork, Point, Policy } from '../_data/types.ts';
 
 /** The server's target (`board`'s ring says "target 85"): a score from here is excellent. */
 export const TARGET = 85;
@@ -33,7 +32,7 @@ export function attentionTotal(counters: readonly Counter[]): number | null {
   return sent.length === 0 ? null : sent.reduce((n, c) => n + (c.value as number), 0);
 }
 
-// ── Do now ──────────────────────────────────────────────────────────────────────
+// ── My work ──────────────────────────────────────────────────────────────────────
 
 export interface WorkRowModel {
   key: string;
@@ -95,9 +94,9 @@ export function mineTotal(work: MyWork | undefined): number | null {
   return work ? work.counts.assigned + work.counts.to_scope + work.counts.to_approve : null;
 }
 
-/** "Showing 25 of 40" when the lists were cut, else "40 items". */
-export function mineLine(shown: number, total: number): string {
-  return total > shown ? `Showing ${shown} of ${total}` : `${total} ${total === 1 ? 'item' : 'items'}`;
+/** The header of the card: how many things the person has (the true count) and how many of the controls are past their date; null until the request has answered. */
+export function workSummary(work: MyWork | undefined): { total: number; overdue: number } | null {
+  return work ? { total: work.counts.assigned + work.counts.to_scope + work.counts.to_approve, overdue: work.counts.overdue } : null;
 }
 
 // ── Posture ─────────────────────────────────────────────────────────────────────
@@ -117,14 +116,6 @@ export function postureOf(board: Board): Posture {
     score, grade: gradeOf(score), sla: board.sla.score, assessments: board.performance.assessments,
     toTarget: typeof score === 'number' && score < TARGET ? Math.round((TARGET - score) * 10) / 10 : null,
   };
-}
-
-export interface CategoryRow { category: string; href: string; score: number | null; grade: GradeWord | null; sla: number | null; count: number }
-
-/** The categories of the board as rows: the most assessments first, ties by name. Each opens the register on that category. */
-export function categoryRows(board: Board): CategoryRow[] {
-  const row = (c: BoardCategory): CategoryRow => ({ category: c.category, href: categoryHref(c.category), score: c.score, grade: gradeOf(c.score), sla: c.sla, count: c.count });
-  return board.categories.map(row).sort((a, b) => b.count - a.count || a.category.localeCompare(b.category));
 }
 
 // ── The remediation clock of the portfolio ──────────────────────────────────────

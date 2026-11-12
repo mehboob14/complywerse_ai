@@ -1,7 +1,8 @@
 // node --test "src/components/compliance/overview/overviewPage.test.ts"
-// What the Compliance Overview keeps and how it is built now (a worklist-first cockpit), pinned in the files that carry it (there is no React renderer here; behaviour is checked in a
-// browser): the scorecard keeps its query key and endpoint (the main Dashboard reads the same key), no failure is swallowed into zeros, every card has its own loading and error state,
-// the worklist is the shared inbox narrowed to Compliance, the weights are offered to administrators only, the kit's rules hold in every file, and the registry names the page.
+// What the Compliance Overview keeps and how it is built now (Overview v2: posture in graphics, a slim "My work", everything opens its module, Back returns to the same place), pinned in the files that
+// carry it (there is no React renderer here; behaviour is checked in a browser): the scorecard keeps its query key and endpoint (the main Dashboard reads the same key), no failure is swallowed into
+// zeros, every card has its own loading and error state, the worklist is the shared inbox narrowed to Compliance, the weights are offered to administrators only, the page draws no counters band, what
+// changes the page lives in the address, the kit's rules hold in every file, and the registry names the page.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -25,44 +26,50 @@ test('the folder is what the pins read, and the page is a thin shell around the 
   assert.doesNotMatch(PAGE, /ComplianceOverviewCards/, 'the old page is not mounted any more');
 });
 
-test('the five requests keep their keys and endpoints (the scorecard key is shared with the main Dashboard, the others with the pages that already ask)', () => {
+test('the four requests keep their keys and endpoints (the scorecard key is shared with the main Dashboard, the others with the pages that already ask)', () => {
   const data = code(src('overviewData.ts'));
   assert.match(data, /queryKey: \[\.\.\.SCORECARD_QUERY_KEYS\.compliance\],\s*queryFn: async \(\) => \(await complianceApi\.dashboard\.getSectionsOverview\(\)\)\.data as Scorecard/);
   assert.match(data, /queryKey: \['ev-ws-summary'\],\s*queryFn: async \(\) => \(await apiClient\.get\('\/evidence-mgmt\/items\/dashboard\/summary'\)\)\.data/);
   assert.match(data, /queryKey: \['certifications'\]/);
   assert.match(data, /certificationsApi\.getAll\(\)/);
-  assert.match(data, /queryKey: \[\.\.\.ONBOARDING_KEYS\.register\]/);
   assert.match(data, /queryKey: \['compliance-trend', days\]/, 'the Frameworks hub reads the history under the same key and shape');
   assert.match(data, /complianceApi\.dashboard\.getComplianceTrend\(days\)/);
-  assert.equal((data.match(/useQuery\(/g) ?? []).length, 5);
+  assert.equal((data.match(/useQuery\(/g) ?? []).length, 4);
 });
 
 test('a failed request is an error state of its own card: nothing swallowed into zeros, no gate that waits for all of them', () => {
   const data = code(src('overviewData.ts'));
   const page = code(src('ComplianceOverview.tsx'));
-  const parts = code(src('OverviewParts.tsx'));
   assert.doesNotMatch(data, /\bcatch\b/, 'the old page caught the scorecard\'s failure and drew a zero payload: "score -, nothing needs attention"');
   assert.doesNotMatch(page, /isLoading/, 'one skeleton for the whole page waited for every request');
-  assert.equal((data.match(/retry: retryRead/g) ?? []).length, 5);
+  assert.equal((data.match(/retry: retryRead/g) ?? []).length, 4);
   assert.match(data, /canRetry\(error\)/, 'Retry only where asking again can help');
-  assert.match(page, /failed: scorecard\.isError && !payload/);
-  assert.match(page, /failed: evidence\.isError && !evidence\.data/);
-  for (const part of ['PostureCard', 'FrameworkRows', 'OnboardingBody'] as const) assert.match(parts, new RegExp(`export function ${part}`), part);
-  assert.match(parts, /SkeletonRows/);
-  assert.match(parts, /function Failed\(/);
-  assert.match(parts, /Couldn't load the compliance score/);
-  assert.match(parts, /Couldn't load the framework journeys/);
-  assert.match(parts, /Couldn't load framework onboarding/);
-  assert.match(parts, /error=\{r\.state === 'error' \?/, 'a coverage row that failed says so with its own Retry');
+  const charts = code(src('Charts.tsx'));
+  assert.match(charts, /function shown\(/);
+  assert.match(charts, /feedState\(q, hasContent\)/);
+  assert.match(charts, /state === 'denied'/);
+  assert.match(charts, /onRetry: failed\?\.onRetry/);
+  assert.match(code(src('Tiles.tsx')), /Couldn't load the compliance score/);
+  assert.match(code(src('Tiles.tsx')), /Couldn't load the framework journeys/);
 });
 
-test('the worklist is the shared inbox narrowed to Compliance (the top bar\'s queries, not requests of its own); the counters\' total is the model\'s sum', () => {
+test('the worklist is the shared inbox narrowed to Compliance (the top bar\'s queries, not requests of its own), drawn as the slim card: three rows, See all', () => {
   const page = code(src('ComplianceOverview.tsx'));
   assert.match(page, /useInbox\(\{ freshOnOpen: true \}\)/);
   assert.match(page, /workOf\(inbox, COMPLIANCE_SOURCES\)/);
-  assert.match(page, /const total = attentionTotal\(views\);/);
-  assert.doesNotMatch(page, /attention_queue\??\.total|queue\??\.total/, 'the server\'s own total is the sum of four other buckets: the band adds the chips it shows');
+  assert.match(page, /<MyWorkCard\b/, 'the slim card (R3), not the long list');
+  assert.doesNotMatch(page, /WorkListCard/);
   assert.doesNotMatch(page, /useQuery|apiClient/, 'the page composes; the requests are overviewData.ts');
+});
+
+test('no counters band, no attention list: attention is the colour of the graphics (Overview rule R2), and each number rides on the area tile', () => {
+  for (const { file, text } of SOURCES) {
+    const c = code(text);
+    assert.doesNotMatch(c, /CounterBand|Nothing counted|Needs attention|Weakest areas/, `${file}: the chip wall and the attention list are gone`);
+  }
+  const model = code(src('graphModel.ts'));
+  assert.match(model, /export function areaNotes\(/);
+  assert.match(code(src('Charts.tsx')), /areaNotes\(payload\?\.attention_queue, evidence\.data\)/);
 });
 
 test('every figure of a journey comes from the one model, and the page worked none out itself', () => {
@@ -134,11 +141,34 @@ test("the page leads with the figures and the graphs: the cockpit's hero and vis
   assert.match(page, /useTrend\(HERO_DAYS\)/, "the tiles' shape is always the last 90 days");
   for (const file of ['Charts.tsx', 'Tiles.tsx', 'graphModel.ts']) assert.doesNotMatch(code(src(file)), /useQuery|apiClient|axios|(?<![\w.])fetch\(/, `${file}: the page asks, the graphs draw`);
   const charts = code(src('Charts.tsx'));
-  assert.equal((charts.match(/<ChartCard\b/g) ?? []).length, 10, 'ten cards');
-  assert.equal((charts.match(/\{\.\.\.shown\(/g) ?? []).length, 10, 'each card has its own loading, refused, failed and empty state');
-  for (const kind of ['BarList', 'DonutChart', 'SegmentBar', 'StackedBars', 'TrendChart']) assert.match(charts, new RegExp(`<${kind}(?=[\\s>])`), kind);
+  assert.equal((charts.match(/<ChartCard\b/g) ?? []).length, 7, 'seven cards');
+  assert.equal((charts.match(/\{\.\.\.shown\(/g) ?? []).length, 7, 'each card has its own loading, refused, failed and empty state');
+  for (const kind of ['AreaTiles', 'BarList', 'DonutChart', 'TrendChart']) assert.match(charts, new RegExp(`<${kind}(?=[\\s>])`), kind);
+  assert.doesNotMatch(charts, /<StackedBars|<SegmentBar/, 'no wall of stacked bars and legends');
   assert.match(code(src('Tiles.tsx')), /<KpiRow>/);
-  assert.equal((code(src('Tiles.tsx')).match(/<KpiTile\b/g) ?? []).length, 6, 'six tiles');
+  assert.equal((code(src('Tiles.tsx')).match(/<KpiTile\b/g) ?? []).length, 5, 'five tiles');
+});
+
+test('everything clicks through (R6): a card title has its Open link, a tile that has records behind it is a link, the framework tiles open their journey', () => {
+  const charts = code(src('Charts.tsx'));
+  for (const [id, href] of [['frameworks', '/frameworks'], ['requirements', '/frameworks'], ['evidence-status', '/evidence'], ['evidence-fresh', '/evidence'], ['history', '/frameworks'], ['controls', '/controls']]) {
+    assert.match(charts, new RegExp(`id="${id}"[^>]*href="${href}"`), `the "${id}" card has its Open link to ${href}`);
+  }
+  assert.match(charts, /moreHref="\/frameworks"/, 'the framework tiles end in "See all N"');
+  const tiles = code(src('Tiles.tsx'));
+  for (const target of ['/frameworks', 'ATTENTION_HREF', '/evidence?status=approved']) assert.ok(tiles.includes(target), `a tile opens ${target}`);
+  const model = code(src('graphModel.ts'));
+  assert.match(model, /href: r\.href/, 'a framework tile opens its journey');
+  assert.match(model, /href: SECTION_HREF\[r\.key\]/, 'an area tile opens the page the area is worked on');
+});
+
+test('what changes the page lives in the address and a person who comes back lands in the same place (R7): ?period= and ?how=1, useReturnToPlace once the data has rendered', () => {
+  const page = code(src('ComplianceOverview.tsx'));
+  assert.match(page, /useAddressState\(SCHEMA\)/);
+  assert.match(page, /period: oneOf<string>\(PERIODS\.map\(\(p\) => p\.value\), DEFAULT_PERIOD\)/);
+  assert.match(page, /how: flag\(\)/);
+  assert.match(page, /useReturnToPlace\(!scorecard\.isPending && !evidence\.isPending && !journeys\.isPending && !trend\.isPending\)/);
+  assert.doesNotMatch(page, /useState\(/, 'no state that Back would lose');
 });
 
 test("no colour but the palette's, no percentage of the graphs' own: every Ready / Implemented figure is the journey model's, the scores are the server's", () => {
@@ -150,5 +180,4 @@ test("no colour but the palette's, no percentage of the graphs' own: every Ready
   const graph = code(src('graphModel.ts'));
   for (const fn of ['journeyNumbers', 'readinessBand']) assert.match(graph, new RegExp(fn));
   assert.doesNotMatch(graph, /\/\s*(?:n|f\.n)\.(?:applicable|total)/, 'no division of its own: a percentage is the journey model\'s or the server\'s');
-  assert.match(graph, /LEFT_OUT = new Set\(\['evidence:freshness'\]\)/, 'the stale-flag measure is not drawn beside the lapsed count');
 });

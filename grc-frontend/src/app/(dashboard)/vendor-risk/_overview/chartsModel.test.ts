@@ -3,8 +3,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  contractCategories, domainBars, findingCategories, findingFacts, gapRows, heatData, heatHref, heroTiles, kpiTrend, nextStepBars, platformBars, reviewCategories, signalCategories,
-  stackTotal, stageBars, statusParts, tierDonut, topResidualBars, trendCard, trendPoints, windowMonths, TIER_COLOR, BAND_COLOR, type ContractLike, type OverviewCharts,
+  attentionFacts, contractCategories, findingCategories, heatData, heatHref, heroTiles, kpiTrend, nextStepBars, platformBars, reviewCategories, signalCategories,
+  stackTotal, stageBars, tierDonut, topFive, topResidualBars, trendCard, trendPoints, windowMonths, TIER_COLOR, BAND_COLOR, type ContractLike, type OverviewCharts,
 } from './chartsModel.ts';
 import type { Dashboard } from '../_lib/overviewModel.ts';
 import { STATUS, RAMP } from '../../../../components/overview/charts/palette.ts';
@@ -73,41 +73,63 @@ test('a figure\'s history: nothing under two recorded months; the change is on w
   assert.deepEqual(up.delta, { text: 'Up 2 findings', direction: 'up', tone: 'bad', since: 'since Sep' });            // more findings is bad
 });
 
-test('the hero row: six figures from the dashboard; the history only for the whole portfolio and only when the trend answered', () => {
+test('the hero row: six figures from the dashboard, every one opening the page it counts; the history only for the whole portfolio and only when the trend answered', () => {
   const tiles = heroTiles(DASH, TREND, 'portfolio', NOW);
-  assert.deepEqual(tiles.map((t) => t.key), ['vendors', 'residual', 'removed', 'findings', 'assessed', 'window']);
+  assert.deepEqual(tiles.map((t) => t.key), ['vendors', 'residual', 'findings', 'assessed', 'window', 'attention']);
+  assert.ok(tiles.every((t) => t.href.startsWith('/vendor-risk/') && t.linkLabel.length > 0));
   const by = Object.fromEntries(tiles.map((t) => [t.key, t]));
   assert.equal(by.vendors.value, '12');
-  assert.equal(by.vendors.note, '2 added in the last 30 days');
+  assert.equal(by.vendors.note, '2 added in 30 days');
+  assert.equal(by.vendors.href, '/vendor-risk/vendors');
   assert.equal(by.vendors.spark, null);                                    // the snapshot's vendor count includes requests: no history is drawn for it
   assert.equal(by.residual.value, '48.5');
   assert.equal(by.residual.tone, 'danger');                                // over the appetite of 45
   assert.equal(by.residual.note, '3.5 over the line. Appetite 45');
+  assert.equal(by.residual.href, '/vendor-risk/vendors?sort=risk%3Aasc');
   assert.ok(by.residual.spark && by.residual.delta);
-  assert.equal(by.removed.value, '13');                                    // 61 - 48.5 = 12.5 -> 13, as the posture card says it
   assert.equal(by.findings.value, '7');                                    // open + in remediation
   assert.equal(by.findings.tone, 'danger');
   assert.equal(by.findings.note, '3 critical');
+  assert.equal(by.findings.href, '/vendor-risk/findings');
   assert.equal(by.assessed.value, '80%');
   assert.equal(by.assessed.progress, 80);
+  assert.equal(by.assessed.note, '4/5');
   assert.equal(by.assessed.tone, 'warning');
+  assert.equal(by.assessed.href, '/vendor-risk/vendors?tier=critical');
   assert.equal(by.window.value, '78%');
-  assert.equal(by.window.note, '7/9 critical and high, 2 outside');
+  assert.equal(by.window.note, '7/9, 2 outside');
   assert.equal(by.window.href, '/vendor-risk/vendors?attention=reassessment_overdue');
+  assert.equal(heroTiles({ ...DASH, coverage: { in_window: 9, total: 9, percent: 100 } } as Dashboard, TREND, 'portfolio', NOW).find((t) => t.key === 'window')?.href, '/vendor-risk/vendors?sort=next_reassessment%3Aasc');
   const mine = heroTiles(DASH, TREND, 'mine', NOW);
   assert.ok(mine.every((t) => t.spark === null && t.delta === null));
   assert.equal(mine.find((t) => t.key === 'vendors')?.href, '/vendor-risk/vendors?owner=me');
+  assert.equal(mine.find((t) => t.key === 'attention')?.href, '/vendor-risk/attention?scope=mine');
   const failed = heroTiles(DASH, undefined, 'portfolio', NOW);
   assert.equal(failed.find((t) => t.key === 'residual')?.note, 'Appetite unavailable');
   assert.ok(failed.every((t) => t.spark === null));
   assert.equal(heroTiles(DASH, undefined, 'portfolio', NOW, true).find((t) => t.key === 'residual')?.note, undefined);
   const unscored = heroTiles({ ...DASH, top_residual_vendors: [], kpis: { ...DASH.kpis, portfolio_residual: 0, portfolio_inherent: 0 } } as Dashboard, TREND, 'portfolio', NOW);
   assert.equal(unscored.find((t) => t.key === 'residual')?.value, null);                      // no scored vendor: the residual is not recorded, not a score of 0 that reads "within appetite"
-  assert.equal(unscored.find((t) => t.key === 'residual')?.note, 'No vendor has a residual score yet');
-  assert.equal(unscored.find((t) => t.key === 'removed')?.value, null);
   const noCritical = heroTiles({ ...DASH, kpis: { ...DASH.kpis, critical_count: 0 }, coverage: undefined } as Dashboard, TREND, 'portfolio', NOW);
   assert.equal(noCritical.find((t) => t.key === 'assessed')?.value, null);                    // "not recorded", never 0%
   assert.equal(noCritical.find((t) => t.key === 'window')?.value, null);
+});
+
+test('Needs attention is ONE figure (the vendors that wait on a next step) and a thin bar of how urgent, the register tones; it opens the Work queue', () => {
+  const f = attentionFacts(DASH.attention_counts, 'portfolio');              // reassessment_overdue 2 (danger), no_owner 3 + not_tiered 1 (warning)
+  assert.deepEqual(f.parts.map((p) => [p.label, p.value]), [['Urgent', 2], ['To fix', 4], ['In hand', 0]]);
+  assert.equal(f.total, 6);
+  assert.equal(f.urgent, 2);
+  assert.equal(f.href, '/vendor-risk/attention');
+  const tile = heroTiles(DASH, TREND, 'portfolio', NOW).find((t) => t.key === 'attention');
+  assert.equal(tile?.value, '6');
+  assert.equal(tile?.tone, 'danger');
+  assert.equal(tile?.note, '2 urgent');
+  assert.equal(tile?.bar?.length, 3);
+  const quiet = heroTiles({ ...DASH, attention_counts: {} } as Dashboard, TREND, 'portfolio', NOW).find((t) => t.key === 'attention');
+  assert.equal(quiet?.value, '0');                                          // a vendor nobody waits on is a real zero: the dashboard answered
+  assert.equal(quiet?.tone, 'default');
+  assert.equal(quiet?.bar, undefined);
 });
 
 test('the trend card has the months with a score; with none it says so instead of drawing a flat line', () => {
@@ -151,32 +173,25 @@ test('the risk grid has every tier row and band column, the numbers the server c
   assert.equal(empty.cells.length, 5);
 });
 
-test('inherent against residual shows the tiers that have a scored vendor, so an unscored tier is not drawn as 0', () => {
-  const rows = gapRows(DASH.inherent_vs_residual, MATRIX);
-  assert.deepEqual(rows.map((r) => [r.label, r.inherent, r.residual, r.vendors]), [['Critical', 80, 60, 5], ['High', 60, 40, 4], ['Low', 15, 10, 2]]);
-  assert.deepEqual(gapRows(DASH.inherent_vs_residual, undefined), []);
-});
-
-test('the highest residual scores are bars in the colour of their band on the tenant\'s own bands, each a link to the vendor; a vendor with no score is left out', () => {
+test('the highest residual scores are bars in the colour of their band on the tenant bands, the band in words beside the figure, each a link to the vendor; a vendor with no score is left out', () => {
   const bars = topResidualBars(DASH.top_residual_vendors, { critical: 75, high: 50, medium: 25 });
-  assert.deepEqual(bars.map((b) => [b.label, b.value, b.color, b.href]), [['Atlas', 80, BAND_COLOR.critical, '/vendor-risk/vendors/1'], ['Mail', 30, BAND_COLOR.medium, '/vendor-risk/vendors/2']]);
-  assert.equal(bars[0].note, 'Critical · grade E · Critical');
-  assert.equal(bars[1].note, 'Not tiered · Medium');
+  assert.deepEqual(bars.map((b) => [b.label, b.value, b.valueText, b.color, b.href]), [['Atlas', 80, '80 Critical', BAND_COLOR.critical, '/vendor-risk/vendors/1'], ['Mail', 30, '30 Medium', BAND_COLOR.medium, '/vendor-risk/vendors/2']]);
   assert.equal(topResidualBars(DASH.top_residual_vendors, { critical: 90, high: 80, medium: 60 })[0].color, BAND_COLOR.high);      // 80 is "high", not "critical", on a looser policy: the colour follows the policy
+  const many = Array.from({ length: 9 }, (_, i) => ({ id: i + 1, name: `V${i}`, tier: 'low', residual: 50 - i, inherent: 60, rating: null, grade: null }));
+  assert.equal(topResidualBars(many, { critical: 75, high: 50, medium: 25 }).length, 5);                                              // never more than five rows
 });
 
-test('what vendors wait on: bars in the register\'s order in the colour of their urgency, each opening the register', () => {
+test('a list on the Overview is the five biggest and says how many there are; what vendors wait on opens the register on each step', () => {
+  const t = topFive([{ value: 1 }, { value: 7 }, { value: 3 }, { value: 9 }, { value: 2 }, { value: 4 }, { value: 8 }]);
+  assert.deepEqual(t.rows.map((r) => r.value), [9, 8, 7, 4, 3]);
+  assert.equal(t.total, 7);
   const bars = nextStepBars(DASH.attention_counts, 'portfolio');
-  assert.deepEqual(bars.map((b) => [b.label, b.value]), [['Reassessment overdue', 2], ['Needs tiering', 1], ['No owner', 3]]);
-  assert.equal(bars[0].color, STATUS.bad);
-  assert.equal(bars[1].color, STATUS.warn);
-  assert.equal(bars[0].href, '/vendor-risk/vendors?attention=reassessment_overdue');
-  assert.deepEqual(nextStepBars({}, 'portfolio'), []);
-});
-
-test('open findings gather by domain, most first, each opening that domain', () => {
-  const rows = domainBars(DASH.findings_by_domain);
-  assert.deepEqual(rows.map((r) => [r.label, r.value, r.href]), [['Cybersecurity', 4, '/vendor-risk/findings?domain=cybersecurity'], ['Legal & Contractual', 1, '/vendor-risk/findings?domain=legal']]);
+  assert.deepEqual(bars.rows.map((b) => [b.label, b.value]), [['No owner', 3], ['Reassessment overdue', 2], ['Needs tiering', 1]]);
+  assert.equal(bars.total, 3);
+  assert.equal(bars.rows[1].color, STATUS.bad);
+  assert.equal(bars.rows[2].color, STATUS.warn);
+  assert.equal(bars.rows[1].href, '/vendor-risk/vendors?attention=reassessment_overdue');
+  assert.deepEqual(nextStepBars({}, 'portfolio'), { rows: [], total: 0 });
 });
 
 test('the review calendar is the server\'s buckets by tier in date order; overdue opens the register on the tile\'s own filter', () => {
@@ -191,16 +206,24 @@ test('the review calendar is the server\'s buckets by tier in date order; overdu
   assert.deepEqual(cats.map((c) => c.label), ['Overdue', 'In 30 d', 'In 60 d', 'In 90 d', 'Later', 'No date']);
   assert.equal(cats[0].cells.critical, 2);
   assert.equal(cats[0].href, '/vendor-risk/vendors?attention=reassessment_overdue');
-  assert.equal(cats[1].href, undefined);
+  assert.equal(cats[1].href, '/vendor-risk/vendors?sort=next_reassessment%3Aasc');
   assert.equal(stackTotal(cats), 12);
   assert.equal(stackTotal(reviewCategories(undefined, 'portfolio')), 0);
 });
 
-test('the stages are in the lifecycle\'s order with the vendors that have not started last', () => {
-  const bars = stageBars({ items: [{ key: 'intake', label: 'Intake & Scoping', count: 1 }, { key: 'tiering', label: 'Inherent Risk Tiering', count: 0 }], not_started: 4 });
-  assert.deepEqual(bars.map((b) => [b.label, b.value]), [['Intake', 1], ['Tiering', 0], ['Not started', 4]]);
-  assert.equal(stageBars({ items: [{ key: 'custom', label: 'A stage of its own', count: 2 }], not_started: 0 })[0].label, 'A stage of its own');
-  assert.deepEqual(stageBars(undefined), []);
+test('the stages: the five with most vendors, the vendors with no review started as one more, each opening the register on that stage', () => {
+  const stages = { items: [{ key: 'intake', label: 'Intake & Scoping', count: 1 }, { key: 'tiering', label: 'Inherent Risk Tiering', count: 0 }, { key: 'scoring', label: 'Scoring', count: 3 }], not_started: 4 };
+  const bars = stageBars(stages, 'portfolio');
+  assert.deepEqual(bars.rows.map((b) => [b.label, b.value]), [['Not started', 4], ['Scoring', 3], ['Intake', 1]]);       // a stage nobody is in is not a bar
+  assert.equal(bars.total, 3);
+  assert.equal(bars.rows[0].href, '/vendor-risk/vendors?stage=not_started');
+  assert.equal(bars.rows[1].href, '/vendor-risk/vendors?stage=scoring');
+  assert.equal(stageBars(stages, 'mine').rows[1].href, '/vendor-risk/vendors?stage=scoring&owner=me');
+  assert.equal(stageBars({ items: [{ key: 'custom', label: 'A stage of its own', count: 2 }], not_started: 0 }, 'portfolio').rows[0].label, 'A stage of its own');
+  assert.deepEqual(stageBars(undefined, 'portfolio'), { rows: [], total: 0 });
+  const eleven = { items: Array.from({ length: 11 }, (_, i) => ({ key: `s${i}`, label: `S${i}`, count: i + 1 })), not_started: 0 };
+  assert.equal(stageBars(eleven, 'portfolio').rows.length, 5);
+  assert.equal(stageBars(eleven, 'portfolio').total, 11);
 });
 
 const FINDINGS: OverviewCharts['findings'] = {
@@ -213,14 +236,14 @@ const FINDINGS: OverviewCharts['findings'] = {
   overdue: { critical: 1, high: 0, medium: 0, low: 0 },
 };
 
-test('findings by severity split by status, or the open ones by age; a severity opens its findings; the facts count open and late', () => {
+test('findings by severity split by status (a bar counts closed ones too, so it opens all of them) or the open ones by age; a severity opens its findings', () => {
   const status = findingCategories(FINDINGS, 'status');
   assert.deepEqual(status.map((c) => c.label), ['Critical', 'High', 'Medium', 'Low']);
   assert.deepEqual(status[0].cells, { open: 2, in_remediation: 1, accepted: 0, closed: 1 });
-  assert.equal(status[0].href, '/vendor-risk/findings?severity=critical');
+  assert.equal(status[0].href, '/vendor-risk/findings?severity=critical&scope=all');
   const age = findingCategories(FINDINGS, 'age');
   assert.deepEqual(age[0].cells, { d30: 1, d60: 0, d90: 0, older: 2 });
-  assert.deepEqual(findingFacts(FINDINGS), { open: 4, late: 1 });
+  assert.equal(age[0].href, '/vendor-risk/findings?severity=critical');
   assert.equal(stackTotal(findingCategories(undefined, 'status')), 0);
   assert.equal(RAMP.length, 5);
 });
@@ -232,6 +255,7 @@ test('signals by month: the months are the server\'s, split by severity, the yea
   });
   assert.deepEqual(cats.map((c) => c.label), ['Dec', 'Jan 27']);
   assert.deepEqual(cats[1].cells, { critical: 0, high: 1, medium: 1, low: 4 });
+  assert.ok(cats.every((c) => c.href === '/vendor-risk/monitoring'));
   assert.deepEqual(signalCategories(undefined), []);
 });
 
@@ -251,23 +275,22 @@ test('the contract timeline: active contracts by the month they end, the lapsed 
   assert.equal(all.categories[1].cells.medium, 1);                                  // ending today is not lapsed
   assert.equal(stackTotal(all.categories), 5);                                      // 2028, the draft and the one with no date are not drawn
   assert.deepEqual(all.facts, { lapsed: 1, decide: 2, total: 5 });
+  assert.ok(all.categories.every((c) => c.href === '/vendor-risk/contracts?sort=ends:asc'));
   const mine = contractCategories(items, 'mine', 8, NOW);
   assert.equal(stackTotal(mine.categories), 1);
   assert.equal(stackTotal(contractCategories(items, 'mine', null, NOW).categories), 0);   // who the person is is not known: nothing is claimed as theirs
   assert.equal(stackTotal(contractCategories(undefined, 'portfolio', null, NOW).categories), 0);
 });
 
-test('concentration: the platforms most vendors rely on, with the critical dependencies in words', () => {
-  const bars = platformBars([{ platform: 'AWS', vendor_count: 6, critical_count: 3 }, { platform: 'Azure', vendor_count: 4, critical_count: 1 }, { platform: 'Okta', vendor_count: 2, critical_count: 0 }], 2);
-  assert.deepEqual(bars.map((b) => [b.label, b.value, b.note]), [['AWS', 6, '3 critical dependencies'], ['Azure', 4, '1 critical dependency']]);
-  assert.deepEqual(platformBars(undefined), []);
+test('concentration: the five platforms most vendors rely on and how many there are, each opening what suppliers run on it', () => {
+  const list = [{ platform: 'AWS', vendor_count: 6, critical_count: 3 }, { platform: 'Azure', vendor_count: 4, critical_count: 1 }, { platform: 'Okta', vendor_count: 2, critical_count: 0 }];
+  const bars = platformBars(list);
+  assert.deepEqual(bars.rows.map((b) => [b.label, b.value, b.note, b.href]), [
+    ['AWS', 6, undefined, '/vendor-risk/dependencies?view=technology&q=AWS'], ['Azure', 4, undefined, '/vendor-risk/dependencies?view=technology&q=Azure'], ['Okta', 2, undefined, '/vendor-risk/dependencies?view=technology&q=Okta'],
+  ]);
+  const seven = platformBars(Array.from({ length: 7 }, (_, i) => ({ platform: `P${i}`, vendor_count: 9 - i, critical_count: 0 })));
+  assert.equal(seven.rows.length, 5);
+  assert.equal(seven.total, 7);
+  assert.deepEqual(platformBars(undefined), { rows: [], total: 0 });
   assert.equal(TIER_COLOR.not_tiered, STATUS.neutral);
-});
-
-test('vendors by status: the biggest first, in the colour of the status tone, with its word; none is no parts', () => {
-  const parts = statusParts({ active: 20, suspended: 2, offboarded: 1, unset: 1 });
-  assert.deepEqual(parts.map((p) => [p.label, p.value]), [['Active', 20], ['Suspended', 2], ['Offboarded', 1], ['Not set', 1]]);
-  assert.equal(parts[0].color, STATUS.good);
-  assert.equal(parts.find((p) => p.key === 'suspended')?.color, STATUS.warn);
-  assert.deepEqual(statusParts({}), []);
 });

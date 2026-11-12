@@ -1,6 +1,7 @@
 // What the graphical part of the Third-Party Vendor Risk Overview draws, as decisions apart from React so `node --test` pins them (chartsModel.test.ts): the six figures of the hero row with
-// their history, and the data of every chart card (tier and risk band, inherent against residual, the review calendar, the review stages, findings by status and by age, the contract
-// timeline, concentration, signals by month). Nothing here is a number the server did not say: a chart's figures are the dashboard's, the overview-charts endpoint's, the 12-month trend's,
+// their history (the last one, Needs attention, is ONE number and a thin bar of how urgent), and the data of every chart card (tier and risk band, the review calendar, the review stages,
+// findings by status and by age, the contract timeline, concentration, signals by month). Every list is at most five rows (the rest is "See all"), and every part opens the register,
+// the findings or the module's page, filtered where that page can filter (Overview v2, R4 and R6). Nothing here is a number the server did not say: a chart's figures are the dashboard's, the overview-charts endpoint's, the 12-month trend's,
 // the contracts register's and the concentration read's, arranged; a month with no record is a gap (null), never a 0. Colours are the chart kit's palette (a tier or a band is a state of
 // risk: STATUS, always with its word beside it).
 import { RAMP, STATUS } from '../../../../components/overview/charts/palette.ts';
@@ -8,8 +9,7 @@ import { changeOf, trendText, type DeltaTone, type Direction, type Slice } from 
 import type { BarRow, StackCategory, StackSeries } from '../../../../components/overview/charts/index.ts';
 import { formatCount } from '../../../../lib/format.ts';
 import type { Tone } from '../../../../lib/status.ts';
-import { vendorLifecycle } from '../../../../lib/statuses/vendor.ts';
-import { attentionRows, domainRows, postureView, registerHref, statusBars, FINDINGS, REGISTER, type Dashboard, type Scope } from '../_lib/overviewModel.ts';
+import { attentionRows, postureView, registerHref, FINDINGS, REGISTER, type Dashboard, type Scope } from '../_lib/overviewModel.ts';
 import { residualBand, type Bands } from '../_lib/vendorRules.ts';
 
 const finite = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n);
@@ -60,6 +60,13 @@ export const tierKey = (tier: string | null | undefined): TierRow => {
   const t = String(tier ?? '').trim().toLowerCase();
   return (TIER_ROWS as readonly string[]).includes(t) && t !== 'not_tiered' ? (t as TierRow) : 'not_tiered';
 };
+
+export const CONTRACTS = '/vendor-risk/contracts';
+export const MONITORING = '/vendor-risk/monitoring';
+export const DEPENDENCIES = '/vendor-risk/dependencies';
+export const QUEUE = '/vendor-risk/attention';
+/** The most rows any list of the Overview shows before "See all". */
+export const MOST = 5;
 
 const tierHref = (tier: TierRow, scope: Scope): string => (tier === 'not_tiered' ? registerHref({ attention: 'not_tiered' }, scope) : registerHref({ tier }, scope));
 
@@ -138,14 +145,31 @@ export interface TileSpec {
   unit?: string;
   note?: string;
   tone: TileTone;
-  href?: string;
-  linkLabel?: string;
+  /** every tile opens the page it counts */
+  href: string;
+  linkLabel: string;
   progress?: number | null;
+  /** a thin bar of how the figure splits (the Needs attention tile) */
+  bar?: Slice[];
   spark: ReturnType<typeof kpiTrend>['spark'];
   delta: ReturnType<typeof kpiTrend>['delta'];
 }
 
 const VERDICT_TONE = { unset: 'default', within: 'success', approaching: 'warning', over: 'danger' } as const;
+
+/** The three kinds of next step, as the register colours them: already late, something missing, someone working on it. */
+const URGENCY = [
+  { key: 'late', label: 'Urgent', color: STATUS.bad, tones: ['danger'] },
+  { key: 'missing', label: 'To fix', color: STATUS.warn, tones: ['warning'] },
+  { key: 'moving', label: 'In hand', color: STATUS.progress, tones: ['progress', 'pending', 'neutral', 'success'] },
+] as const;
+
+/** The vendors that wait on a next step, as ONE figure and a thin bar of how urgent they are (the register's own tones). The Work queue is the list it opens. */
+export function attentionFacts(counts: Record<string, number> | undefined, scope: Scope): { total: number; urgent: number; parts: Slice[]; href: string } {
+  const rows = attentionRows(counts, scope);
+  const parts = URGENCY.map((u) => ({ key: u.key, label: u.label, color: u.color, value: rows.filter((r) => (u.tones as readonly string[]).includes(r.tone)).reduce((n, r) => n + r.count, 0), href: scope === 'mine' ? `${QUEUE}?scope=mine` : QUEUE }));
+  return { total: parts.reduce((n, p) => n + p.value, 0), urgent: parts[0].value, parts, href: scope === 'mine' ? `${QUEUE}?scope=mine` : QUEUE };
+}
 
 /** The six figures the page leads with, from the dashboard and (for their history) the 12-month trend. The history is the whole portfolio's, so in My vendors the tiles have none. */
 export function heroTiles(d: Dashboard, trend: TrendAnswer | undefined, scope: Scope, now: Date = new Date(), trendLoading = false): TileSpec[] {
@@ -156,33 +180,38 @@ export function heroTiles(d: Dashboard, trend: TrendAnswer | undefined, scope: S
   const open = num(d.findings_posture?.open) + num(d.findings_posture?.in_remediation);
   const critical = num(d.kpis.open_critical_findings);
   const added = num(d.kpis.onboarded_this_period);
+  const wait = attentionFacts(d.attention_counts, scope);
+  const outside = p.window.outside;
   return [
     {
-      key: 'vendors', label: 'Vendors in use', value: formatCount(d.kpis.active_vendors), tone: 'default', href: registerHref({}, scope), linkLabel: `${formatCount(d.kpis.active_vendors)} vendors in use. Open the register`,
-      note: added > 0 ? `${formatCount(added)} added in the last 30 days` : 'None added in the last 30 days', ...none,
+      key: 'vendors', label: 'Vendors in use', value: formatCount(d.kpis.active_vendors), tone: 'default', href: registerHref({}, scope), linkLabel: `Open the vendor register, ${formatCount(d.kpis.active_vendors)} vendors in use`,
+      note: added > 0 ? `${formatCount(added)} added in 30 days` : undefined, ...none,
     },
     {
       key: 'residual', label: 'Residual risk', value: p.scored ? String(p.residual) : null, unit: p.scored ? '/ 100' : undefined, tone: p.scored ? VERDICT_TONE[p.verdict] : 'default', ...history((x) => x.residual, 'Residual risk', 'down', [' point', ' points'], 1),
-      note: !p.scored ? 'No vendor has a residual score yet' : trendLoading ? undefined : !trend ? 'Appetite unavailable' : p.verdict === 'unset' ? 'No appetite set' : `${p.gap}. Appetite ${trend.appetite}`,
+      href: registerHref({ sort: 'risk:asc' }, scope), linkLabel: `Open the vendor register, highest risk first${p.scored ? `. Residual risk ${p.residual} out of 100` : ''}`,
+      note: !p.scored ? undefined : trendLoading ? undefined : !trend ? 'Appetite unavailable' : p.verdict === 'unset' ? 'No appetite set' : `${p.gap}. Appetite ${trend.appetite}`,
     },
     {
-      key: 'removed', label: 'Risk removed by controls', value: p.scored ? `${p.removed}` : null, unit: p.scored ? (p.removed === 1 ? 'point' : 'points') : undefined, tone: 'default', ...history((x) => x.removed, 'Risk removed by controls', 'up', [' point', ' points']),
-      note: p.scored ? `Inherent ${p.inherent}, residual ${p.residual}` : undefined,
-    },
-    {
-      key: 'findings', label: 'Open findings', value: formatCount(open), tone: critical > 0 ? 'danger' : 'default', href: `${FINDINGS}`, linkLabel: `${formatCount(open)} open findings. Open the findings`,
+      key: 'findings', label: 'Open findings', value: formatCount(open), tone: critical > 0 ? 'danger' : 'default', href: FINDINGS, linkLabel: `Open the findings register, ${formatCount(open)} open findings`,
       ...history((x) => x.open, 'Open findings', 'down', [' finding', ' findings']),
-      note: critical > 0 ? `${formatCount(critical)} critical` : 'None critical',
+      note: critical > 0 ? `${formatCount(critical)} critical` : undefined,
     },
     {
       key: 'assessed', label: 'Critical vendors assessed', value: p.assessed.percent === null ? null : `${p.assessed.percent}%`, tone: p.assessed.tone === 'success' ? 'success' : 'warning',
-      progress: p.assessed.percent, note: p.assessed.caption, ...none,
-      href: p.assessed.percent === null ? undefined : `${REGISTER}?tier=critical${scope === 'mine' ? '&owner=me' : ''}`,
+      progress: p.assessed.percent, note: p.assessed.percent === null ? undefined : p.assessed.caption.replace(' critical vendors have a residual score', ''), ...none,
+      href: registerHref({ tier: 'critical' }, scope), linkLabel: `Open the critical vendors${p.assessed.percent === null ? '' : `, ${p.assessed.percent} percent assessed`}`,
     },
     {
       key: 'window', label: 'Reviews in window', value: p.window.percent === null ? null : `${p.window.percent}%`, tone: p.window.percent !== null && p.window.percent >= 85 ? 'success' : 'warning',
-      progress: p.window.percent, note: p.window.percent === null ? 'No critical or high vendors yet' : `${p.window.caption}${p.window.outside > 0 ? `, ${p.window.outside} outside` : ''}`, ...none,
-      href: p.window.outside > 0 ? `${REGISTER}?attention=reassessment_overdue${scope === 'mine' ? '&owner=me' : ''}` : undefined,
+      progress: p.window.percent, note: p.window.percent === null ? undefined : `${p.window.caption.replace(' critical and high', '')}${outside > 0 ? `, ${outside} outside` : ''}`, ...none,
+      href: outside > 0 ? registerHref({ attention: 'reassessment_overdue' }, scope) : registerHref({ sort: 'next_reassessment:asc' }, scope),
+      linkLabel: outside > 0 ? `Open the ${outside} vendors outside their review window` : 'Open the vendor register, next review first',
+    },
+    {
+      key: 'attention', label: 'Needs attention', value: formatCount(wait.total), unit: wait.total === 1 ? 'vendor' : 'vendors', tone: wait.urgent > 0 ? 'danger' : 'default', href: wait.href,
+      linkLabel: `Open the Work queue, ${formatCount(wait.total)} vendors need attention${wait.urgent > 0 ? `, ${formatCount(wait.urgent)} urgent` : ''}`,
+      note: wait.urgent > 0 ? `${formatCount(wait.urgent)} urgent` : undefined, bar: wait.total > 0 ? wait.parts : undefined, ...none,
     },
   ];
 }
@@ -215,41 +244,23 @@ export function heatData(m: OverviewCharts['risk_matrix'] | undefined): HeatData
 /** Where a cell with something in it opens: the register on its tier (the band is not a register filter). */
 export const heatHref = (rowKey: TierRow, scope: Scope): string => tierHref(rowKey, scope);
 
-export interface GapRow { key: TierRow; label: string; inherent: number; residual: number; vendors: number }
-
-/** Inherent against residual by tier, for the tiers that have a scored vendor (a tier with none would read as a score of 0). `vendors` is how many are scored. */
-export function gapRows(rows: Dashboard['inherent_vs_residual'] | undefined, m: OverviewCharts['risk_matrix'] | undefined): GapRow[] {
-  const scored = (t: TierRow) => BAND_COLS.filter((b) => b !== 'none').reduce((n, b) => n + num(m?.cells?.[t]?.[b]), 0);
-  return (['critical', 'high', 'medium', 'low'] as const).flatMap((t) => {
-    const r = (rows ?? []).find((x) => x.tier === t);
-    return r && scored(t) > 0 ? [{ key: t, label: TIER_LABEL[t], inherent: r.inherent, residual: r.residual, vendors: scored(t) }] : [];
-  });
-}
-
-/** The highest residual scores as bars on the tenant's bands, each a link to the vendor; the tier and the grade say who it is. */
-export function topResidualBars(list: Dashboard['top_residual_vendors'] | undefined, bands: Bands, most = 8): BarRow[] {
+/** The highest residual scores as bars on the tenant's bands, each a link to the vendor; the word of the band is beside the figure (a colour is never alone). */
+export function topResidualBars(list: Dashboard['top_residual_vendors'] | undefined, bands: Bands, most = MOST): BarRow[] {
   return (list ?? []).filter((v) => finite(v.residual)).slice(0, most).map((v) => {
     const band = residualBand(v.residual, bands);
-    return {
-      key: String(v.id), label: v.name, value: v.residual as number, color: BAND_COLOR[band], href: `${REGISTER}/${v.id}`,
-      note: [v.tier ? TIER_LABEL[tierKey(v.tier)] : TIER_LABEL.not_tiered, v.grade ? `grade ${v.grade}` : null, BAND_LABEL[band]].filter(Boolean).join(' · '),
-    };
+    return { key: String(v.id), label: v.name, value: v.residual as number, valueText: `${v.residual} ${BAND_LABEL[band]}`, color: BAND_COLOR[band], href: `${REGISTER}/${v.id}` };
   });
 }
 
-/** The one thing each vendor waits on, as bars in the register's order; each opens the register on those vendors. */
-export function nextStepBars(counts: Record<string, number> | undefined, scope: Scope): BarRow[] {
-  return attentionRows(counts, scope).map((r) => ({ key: r.code, label: r.label, value: r.count, color: toneColor(r.tone), href: r.href }));
+/** `most` rows and how many more there are: a list on the Overview never runs past five, the rest is "See all". */
+export function topFive<T extends { value: number }>(rows: readonly T[], most = MOST): { rows: T[]; total: number } {
+  return { rows: [...rows].sort((a, b) => b.value - a.value).slice(0, most), total: rows.length };
 }
 
-/** Where open findings gather, the domains with most first; each opens the findings of that domain. */
-export function domainBars(byDomain: Record<string, number> | undefined): BarRow[] {
-  return domainRows(byDomain, 8).map((r) => ({ key: r.key, label: r.label, value: r.value, href: r.href }));
-}
-
-/** Vendors by where they are in their life cycle (the status on the vendor): one whole, the biggest first, each in the colour of its tone and with its word. */
-export function statusParts(byStatus: Record<string, number> | undefined): Slice[] {
-  return statusBars(byStatus).map((b) => ({ key: b.key, label: b.label, value: b.count, color: toneColor(vendorLifecycle.tone(b.key)) }));
+/** The one thing each vendor waits on, the five most common as bars in the colour of their urgency; each opens the register on those vendors. */
+export function nextStepBars(counts: Record<string, number> | undefined, scope: Scope): { rows: BarRow[]; total: number } {
+  const all = attentionRows(counts, scope).map((r) => ({ key: r.code, label: r.label, value: r.count, color: toneColor(r.tone), href: r.href }));
+  return topFive(all);
 }
 
 // ── the review calendar and the stages ───────────────────────────────────────────────────────────────────────────────────
@@ -262,11 +273,11 @@ export const TIER_SERIES: StackSeries[] = TIER_ROWS.map((t) => ({ key: t, label:
 const total = (cats: readonly StackCategory[]): number => cats.reduce((a, c) => a + Object.values(c.cells).reduce<number>((x, v) => x + num(v), 0), 0);
 export const stackTotal = total;
 
-/** When the next review falls, by tier. Overdue opens the register on those vendors (the tile's own filter). */
+/** When the next review falls, by tier. Overdue opens the register on those vendors (the tile's own filter); the other columns open it with the next review first. */
 export function reviewCategories(reviews: OverviewCharts['reviews'] | undefined, scope: Scope): StackCategory[] {
   return BUCKET_ORDER.map((b) => ({
     key: b, label: BUCKET_LABEL[b], cells: Object.fromEntries(TIER_ROWS.map((t) => [t, num(reviews?.cells?.[b]?.[t])])),
-    href: b === 'overdue' ? registerHref({ attention: 'reassessment_overdue' }, scope) : undefined,
+    href: b === 'overdue' ? registerHref({ attention: 'reassessment_overdue' }, scope) : registerHref({ sort: 'next_reassessment:asc' }, scope),
   }));
 }
 
@@ -276,10 +287,14 @@ export const STAGE_SHORT: Record<string, string> = {
   contracting: 'Contracting', approval: 'Approval', onboarding: 'Onboarding', monitoring: 'Monitoring', reassessment: 'Reassessment',
 };
 
-/** Where each vendor is in its review, in the lifecycle's order; the vendors with no review started are the last bar. */
-export function stageBars(stages: OverviewCharts['stages'] | undefined): BarRow[] {
-  if (!stages) return [];
-  return [...stages.items.map((s) => ({ key: s.key, label: STAGE_SHORT[s.key] ?? s.label, value: num(s.count) })), { key: 'not_started', label: 'Not started', value: num(stages.not_started), color: STATUS.neutral }];
+/** Where each vendor is in its review: the five stages with most vendors (the vendors with no review started count as one), each opening the register on that stage. */
+export function stageBars(stages: OverviewCharts['stages'] | undefined, scope: Scope): { rows: BarRow[]; total: number } {
+  if (!stages) return { rows: [], total: 0 };
+  const all = [
+    ...stages.items.map((s) => ({ key: s.key, label: STAGE_SHORT[s.key] ?? s.label, value: num(s.count), href: registerHref({ stage: s.key }, scope) })),
+    { key: 'not_started', label: 'Not started', value: num(stages.not_started), color: STATUS.neutral, href: registerHref({ stage: 'not_started' }, scope) },
+  ];
+  return topFive(all.filter((r) => r.value > 0));
 }
 
 // ── findings ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -294,17 +309,11 @@ export const AGE_SERIES: StackSeries[] = [
 ];
 const SEVERITIES = ['critical', 'high', 'medium', 'low'] as const;
 
-/** Findings by severity, split by status (`status`) or, for the open ones, by age (`age`). A severity opens the findings of that severity. */
+/** Findings by severity, split by status (`status`: the bar counts closed ones too, so it opens all of them) or, for the open ones, by age (`age`). A severity opens the findings of that severity. */
 export function findingCategories(f: OverviewCharts['findings'] | undefined, view: 'status' | 'age'): StackCategory[] {
   const grid = view === 'status' ? f?.matrix : f?.age;
   const keys = (view === 'status' ? STATUS_SERIES : AGE_SERIES).map((s) => s.key);
-  return SEVERITIES.map((s) => ({ key: s, label: TIER_LABEL[s], cells: Object.fromEntries(keys.map((k) => [k, num(grid?.[s]?.[k])])), href: `${FINDINGS}?severity=${s}` }));
-}
-
-/** The open findings and how many have a fix past its date, for the card's line of facts. */
-export function findingFacts(f: OverviewCharts['findings'] | undefined): { open: number; late: number } {
-  const open = SEVERITIES.reduce((n, s) => n + num(f?.matrix?.[s]?.open) + num(f?.matrix?.[s]?.in_remediation), 0);
-  return { open, late: SEVERITIES.reduce((n, s) => n + num(f?.overdue?.[s]), 0) };
+  return SEVERITIES.map((s) => ({ key: s, label: TIER_LABEL[s], cells: Object.fromEntries(keys.map((k) => [k, num(grid?.[s]?.[k])])), href: `${FINDINGS}?severity=${s}${view === 'status' ? '&scope=all' : ''}` }));
 }
 
 // ── signals, contracts, concentration ────────────────────────────────────────────────────────────────────────────────────
@@ -315,7 +324,7 @@ export const SEVERITY_SERIES: StackSeries[] = SEVERITIES.map((s) => ({ key: s, l
 export function signalCategories(signals: OverviewCharts['signals'] | undefined): StackCategory[] {
   return (signals?.months ?? []).map((m) => {
     const [y, mm] = String(m.month).split('-').map(Number);
-    return { key: String(m.month), label: Number.isFinite(mm) ? MONTHS[mm - 1] + (mm === 1 ? ` ${String(y).slice(2)}` : '') : String(m.month), cells: Object.fromEntries(SEVERITIES.map((s) => [s, num(m[s])])) };
+    return { key: String(m.month), label: Number.isFinite(mm) ? MONTHS[mm - 1] + (mm === 1 ? ` ${String(y).slice(2)}` : '') : String(m.month), cells: Object.fromEntries(SEVERITIES.map((s) => [s, num(m[s])])), href: MONITORING };
   });
 }
 
@@ -339,16 +348,15 @@ export function contractCategories(items: readonly ContractLike[] | undefined, s
     if (m) { m.cells[t] = num(m.cells[t]) + 1; counted += 1; }
   }
   return {
-    categories: [lapsed, ...Array.from(byMonth.values())],
+    categories: [lapsed, ...Array.from(byMonth.values())].map((c) => ({ ...c, href: `${CONTRACTS}?sort=ends:asc` })),
     facts: { lapsed: live.filter((c) => c.state === 'lapsed').length, decide: live.filter((c) => c.state === 'decide').length, total: counted },
   };
 }
 
-/** The platforms several vendors rely on, most shared first, with how many of those dependencies are critical. */
-export function platformBars(platforms: readonly PlatformLike[] | undefined, most = 6): BarRow[] {
-  return (platforms ?? []).slice(0, most).map((p) => ({
-    key: p.platform, label: p.platform, value: num(p.vendor_count),
-    note: num(p.critical_count) > 0 ? `${p.critical_count} critical ${p.critical_count === 1 ? 'dependency' : 'dependencies'}` : undefined,
+/** The platforms several vendors rely on, most shared first (five, and how many there are), each opening what suppliers run on it. One line a row: the critical dependencies are on the Dependencies page. */
+export function platformBars(platforms: readonly PlatformLike[] | undefined): { rows: BarRow[]; total: number } {
+  const all = (platforms ?? []).map((p) => ({
+    key: p.platform, label: p.platform, value: num(p.vendor_count), href: `${DEPENDENCIES}?view=technology&q=${encodeURIComponent(p.platform)}`,
   }));
+  return { rows: all.slice(0, MOST), total: all.length };
 }
-

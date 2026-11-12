@@ -1,14 +1,16 @@
 'use client';
 
-// The graphical part of the front door, under the figures: the review work in the first two rows (what is sent and decided each month, what waits and for how long, the files
-// of each journey by decision, the requirements by scope) and the observations in the next two (priority by status, deadlines, registered and closed, regulators). The cards are
-// the kit's ChartCards in its 12-column grid: level in height within a row, one per row on a phone, none folded away.
+// The graphical part of the front door, under the figures, in three rows: the review work (what is sent and decided each month, what waits and for how long), the journeys under audit as small
+// multiples beside the requirements by scope, and the observations (priority by status, deadlines, regulators). The cards are the kit's ChartCards in its 12-column grid: level in height within a
+// row, one per row on a phone, none folded away; the title of each carries an "Open" link and the parts of each open the records. Where the queue is per journey and several journeys have work waiting,
+// "Open" goes to the journey tiles (the anchor), because there is no list across them.
 import type { UseQueryResult } from '@tanstack/react-query';
 import { Cell, ChartGrid } from '@/components/overview/charts';
-import type { WorkPayload } from '@/lib/auditorPortal/portalModel';
+import { counterTarget, type WorkPayload } from '@/lib/auditorPortal/portalModel';
 import type { ObservationSummary, WorkSummary } from '@/lib/auditorPortal/frontModel';
-import { DeadlinesCard, HeatCard, RegisteredCard, RegulatorsCard } from './ObservationCards';
-import { AgingCard, FlowCard, JourneyFilesCard, ScopeCard } from './ReviewCards';
+import { JourneyTiles } from './JourneyTiles';
+import { DeadlinesCard, HeatCard, RegulatorsCard } from './ObservationCards';
+import { AgingCard, FlowCard, ScopeCard } from './ReviewCards';
 
 export interface FrontVisualsProps {
   work: UseQueryResult<WorkPayload, Error>;
@@ -17,15 +19,17 @@ export interface FrontVisualsProps {
 }
 
 export function FrontVisuals({ work, summary, observations }: FrontVisualsProps) {
+  const cards = work.data?.journeys ?? [];
+  const files = work.data ? counterTarget('files', cards) : undefined;
+  const scope = work.data ? counterTarget('scope', cards) : undefined;
   return (
     <ChartGrid>
-      <Cell span={8}><FlowCard summary={summary} /></Cell>
-      <Cell span={4}><AgingCard summary={summary} /></Cell>
-      <Cell span={7}><JourneyFilesCard work={work} /></Cell>
-      <Cell span={5}><ScopeCard work={work} summary={summary} /></Cell>
-      <Cell span={6}><HeatCard observations={observations} /></Cell>
-      <Cell span={6}><DeadlinesCard observations={observations} /></Cell>
-      <Cell span={8}><RegisteredCard observations={observations} /></Cell>
+      <Cell span={8}><FlowCard summary={summary} href={files} /></Cell>
+      <Cell span={4}><AgingCard summary={summary} href={files} /></Cell>
+      <Cell span={8}><JourneyTiles work={work} /></Cell>
+      <Cell span={4}><ScopeCard work={work} summary={summary} href={scope} /></Cell>
+      <Cell span={4}><HeatCard observations={observations} /></Cell>
+      <Cell span={4}><DeadlinesCard observations={observations} /></Cell>
       <Cell span={4}><RegulatorsCard observations={observations} /></Cell>
     </ChartGrid>
   );

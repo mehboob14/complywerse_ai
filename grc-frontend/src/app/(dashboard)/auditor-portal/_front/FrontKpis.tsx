@@ -1,9 +1,10 @@
 'use client';
 
-// The figures the front door leads with: six tiles, each one a number an auditor acts on and each (when there is something behind it) the way into it. Files and scope requests
-// waiting open the queue of the journey that holds them (or the list of journeys when several do), the oldest wait opens that item's decision, the observations open the
-// register on the same chip. A tile that has a history carries its shape (what waited at each month end, what was decided each month). Each tile loads, fails and has nothing
-// on its own: a failed request is said ON the tile with Retry and is never a 0, a refused one says "No access".
+// The figures the front door leads with: six tiles, each one a number an auditor acts on and each (when there is something behind it) the way into it (the whole tile is the link). Files and
+// scope requests waiting open the queue of the journey that holds them (or the journey tiles when several do), the oldest wait opens that item's decision, the observations open the register on
+// the same chip. A tile that has a history carries its shape (what waited at each month end, what was decided each month), a tile that is a share carries its bar; the sentences that used to stand
+// under the figures are in the (i). "Decided this month" opens nothing: decisions are per journey. Each tile loads, fails and has nothing on its own: a failed request is said ON the tile with
+// Retry and is never a 0, a refused one says "No access".
 import type { UseQueryResult } from '@tanstack/react-query';
 import { KpiRow, KpiTile } from '@/components/overview/charts';
 import { formatCount, formatDate } from '@/lib/format';
@@ -12,6 +13,7 @@ import {
   bothSeries, kindSeries, monthLabels, monthOfObservations, oldestWaiting, thisAndLast, tileOf, waitTone, type ObservationSummary, type WorkSummary,
 } from '@/lib/auditorPortal/frontModel';
 import { tileFeed } from './cardState';
+import { share } from './frontRules';
 
 const STATUTORY = '/auditor-portal/statutory-audit';
 const plural = (n: number, one: string, other: string): string => `${formatCount(n)} ${n === 1 ? one : other}`;
@@ -71,15 +73,13 @@ export function FrontKpis({ work, summary, observations }: FrontKpisProps) {
         tone={oldest ? waitTone(oldest.days) : 'success'}
         href={oldest && first ? rowHref(first) : undefined}
         linkLabel={oldest ? `Oldest item has waited ${plural(oldest.days, 'day', 'days')}. Open its decision` : undefined}
-        info="How long the oldest file or scope request has waited since it was sent or asked. From 30 days the figure is amber, from 90 days red."
-        note={oldest ? `Since ${formatDate(oldest.since)}` : data ? 'Nothing is waiting' : undefined}
+        info={`How long the oldest file or scope request has waited since it was sent or asked${oldest ? ` (since ${formatDate(oldest.since)})` : ''}. From 30 days the figure is amber, from 90 days red.`}
         {...w}
       />
       <KpiTile
         label="Decided this month"
         value={decidedNow ? formatCount(decidedNow.now) : null}
-        info="Files and scope requests approved or turned down this calendar month so far. The graph is the same count for each of the last 12 months."
-        note={decidedNow && decidedNow.before !== null ? `${formatCount(decidedNow.before)} in ${labels[labels.length - 2]?.split(' ')[0] ?? 'the month before'}` : undefined}
+        info={`Files and scope requests approved or turned down this calendar month so far${decidedNow && decidedNow.before !== null ? ` (${formatCount(decidedNow.before)} in ${labels[labels.length - 2]?.split(' ')[0] ?? 'the month before'})` : ''}. The graph is the same count for each of the last 12 months.`}
         spark={decided ? { values: decided.values, label: 'Decided per month, last 12 months', summary: decided.summary, floor: 0 } : null}
         {...s}
       />
@@ -88,8 +88,7 @@ export function FrontKpis({ work, summary, observations }: FrontKpisProps) {
         value={open ? formatCount(open.open) : null}
         href={open && open.open > 0 ? `${STATUTORY}?quick=open` : undefined}
         linkLabel={open ? `${plural(open.open, 'open observation', 'open observations')}. Open the register` : undefined}
-        info="Observations not yet in a final status of Statutory Audit (closed and cancelled unless the organisation set others)."
-        note={registered ? `${formatCount(registered.opened)} registered and ${formatCount(registered.closed)} closed this month` : undefined}
+        info={`Observations not yet in a final status of Statutory Audit (closed and cancelled unless the organisation set others)${registered ? `. This month ${formatCount(registered.opened)} were registered and ${formatCount(registered.closed)} closed` : ''}.`}
         {...o}
       />
       <KpiTile
@@ -98,8 +97,8 @@ export function FrontKpis({ work, summary, observations }: FrontKpisProps) {
         tone={open ? (open.deadlines.overdue > 0 ? 'danger' : 'success') : 'default'}
         href={open && open.deadlines.overdue > 0 ? `${STATUTORY}?quick=overdue` : undefined}
         linkLabel={open ? `${plural(open.deadlines.overdue, 'overdue observation', 'overdue observations')}. Open the register` : undefined}
-        info="Open observations past their due date or SLA: the register's Overdue chip."
-        note={open ? `${formatCount(open.deadlines.due_30)} due in the next 30 days` : undefined}
+        progress={open ? share(open.deadlines.overdue, open.open) : null}
+        info={`Open observations past their due date or SLA: the register's Overdue chip. The bar is their share of the open ones${open ? `; ${formatCount(open.deadlines.due_30)} more are due in the next 30 days` : ''}.`}
         {...o}
       />
     </KpiRow>
