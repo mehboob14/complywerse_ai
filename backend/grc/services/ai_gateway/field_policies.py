@@ -195,19 +195,23 @@ def _spec(spec: str) -> Tuple[str, Optional[int]]:
 _RISK = _codes("""
 K id
 A category risk_category risk_sub_category register_type inherent_likelihood inherent_impact inherent_score residual_likelihood residual_impact residual_score risk_appetite status priority closure_status source_type is_material
+A target_likelihood target_impact target_score response acceptance_status
 R due_date review_date closed_at created_at updated_at
+R acceptance_requested_at accepted_at acceptance_expires_at
 T title description treatment_plan root_cause consequences recommendations closure_notes scenario_actor scenario_method scenario_statement source_reference
+T acceptance_reason
 D ubl_fields template_fields custom_values scenario_effect
 S tenant_id business_unit_id owner_id business_owner_id affected_department_ids closed_by source_assessment_id source_incident_id source_rcsa_finding_id
+S acceptance_requested_by accepted_by
 """)
 
 _INCIDENT = _codes("""
 K id
-A severity status
-R incident_date discovered_date resolved_at created_at updated_at
-B financial_impact
-T title description operational_impact root_cause corrective_actions lessons_learned tags
-S tenant_id risk_id reported_by assigned_to
+A severity status event_type business_line currency is_near_miss boundary_type validation_status
+R incident_date discovered_date resolved_at created_at updated_at accounting_date validated_at
+B financial_impact gross_loss recoveries net_loss
+T title description operational_impact root_cause corrective_actions lessons_learned tags event_type_l2 validation_note
+S tenant_id risk_id reported_by assigned_to validated_by
 """)
 
 _TASK = _codes("""
@@ -286,6 +290,15 @@ R assessed_at
 S program_id normalized_control_id assessed_by
 """)
 
+_BOWTIE_ITEM = _codes("""
+K id
+A side impact_category source position
+T title
+R created_at updated_at
+D control_link_ids
+S tenant_id risk_id gap_action_id created_by
+""")
+
 # Which columns each use case may carry. A use case is registered in ai_gateway/registry.py; the column list is what its
 # prompt needs, no more. "column:N" caps a text column at N characters.
 _RISK_SCORES = ("inherent_likelihood", "inherent_impact", "inherent_score", "residual_likelihood", "residual_impact", "residual_score")
@@ -304,6 +317,9 @@ _USES: Dict[str, Dict[str, Tuple[str, ...]]] = {
         "erm.assessment_risk_suggest": ("title:200", "severity"),
         "erm.incident_suggest": ("title:300", "description:2000", "severity"),
         "erm.incident_analyze": ("id", "title:200", "severity", "incident_date"),
+    },
+    "RiskBowtieItem": {
+        "erm.bowtie_narrative": ("side", "title:300", "impact_category"),
     },
     "ComplianceAssessmentDocumentItem": {
         "assessments.evidence_advice": ("item_number", "area_domain:200", "subdomain_name:200", "control_description:2000",
@@ -345,6 +361,7 @@ POLICIES: Dict[str, Policy] = {
     p.model: p for p in (
         Policy("Risk", _RISK, _USES["Risk"]),
         Policy("RiskIncident", _INCIDENT, _USES["RiskIncident"]),
+        Policy("RiskBowtieItem", _BOWTIE_ITEM, _USES["RiskBowtieItem"]),
         Policy("CriticalTask", _TASK, _USES["CriticalTask"]),
         Policy("CriticalTaskComment", _TASK_COMMENT, _USES["CriticalTaskComment"]),
         Policy("ITAsset", _ASSET, _USES["ITAsset"]),

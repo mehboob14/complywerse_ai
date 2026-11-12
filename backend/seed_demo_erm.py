@@ -14,7 +14,7 @@ import sys
 from datetime import datetime, timedelta, date
 
 from grc.models import (
-    GRCUser, Risk, RiskAssetLink, RiskEvidenceLink, RiskControlLink,
+    GRCUser, Risk, RiskAssetLink, RiskEvidenceLink, RiskControl, RiskControlLink,
     RiskAssessment, RiskAssessmentRisk,
     FrameworkRiskAssessment, FrameworkRiskQuestion, FrameworkRiskQuestionEvidence,
     AIRiskAssessmentEntry, ITAsset, Evidence, NormalizedControl, UploadedFramework,
@@ -28,6 +28,7 @@ from grc.models import (
 )
 from grc.models._38_database_initialization_functions import open_tenant_session
 from grc.routers.auth_router import get_user_tenants
+from grc.modules.erm.services.risk_control_links import link_control
 
 
 def _ensure_model_columns(db, models):
@@ -59,7 +60,8 @@ def cleanup(db):
     rids = demo_risk_ids(db)
     if rids:
         for model, key in [(RiskAssetLink, "asset_links"), (RiskEvidenceLink, "evidence_links"),
-                           (RiskControlLink, "control_links"), (RiskAssessmentRisk, "assessment_risks")]:
+                           (RiskControl, "control_links"), (RiskControlLink, "old_control_links"),
+                           (RiskAssessmentRisk, "assessment_risks")]:
             removed[key] = db.query(model).filter(model.risk_id.in_(rids)).delete(synchronize_session=False)
     demo_assessments = db.query(RiskAssessment).filter(RiskAssessment.name.like("[DEMO]%")).all()
     for a in demo_assessments:
@@ -108,7 +110,9 @@ def cleanup(db):
     for c in demo_ics:
         db.query(InternalControlTest).filter(
             InternalControlTest.control_id == c.id).delete(synchronize_session=False)
-        db.query(InternalControlRiskLink).filter(
+        db.query(RiskControl).filter(RiskControl.control_source == "internal",
+                                     RiskControl.control_id == c.id).delete(synchronize_session=False)
+        db.query(InternalControlRiskLink).filter(        # rows an older seed wrote
             InternalControlRiskLink.control_id == c.id).delete(synchronize_session=False)
         db.delete(c)
     removed["internal_controls"] = len(demo_ics)
@@ -191,7 +195,7 @@ def seed(db, tenant_slug):
     evidence = db.query(Evidence).first()
     for idx, r in enumerate(risks[:7]):
         if controls:
-            db.add(RiskControlLink(risk_id=r.id, normalized_control_id=controls[idx % len(controls)]))
+            link_control(db, r, "normalized", controls[idx % len(controls)], None)
     if asset:
         db.add(RiskAssetLink(risk_id=risks[0].id, asset_id=asset.id))
     if evidence:
@@ -338,8 +342,7 @@ def seed(db, tenant_slug):
                                        result="effective" if oe == "effective" else "partially_effective",
                                        tester_id=user.id, status="completed"))
         if link:
-            db.add(InternalControlRiskLink(control_id=c.id, risk_id=risks[i].id,
-                                           link_type="mitigates", created_by=user.id))
+            link_control(db, risks[i], "internal", c.id, user.id, link_type="mitigates")
 
     # ---------------- Vendor Risk (TPRA) ----------------
     _ensure_model_columns(db, [Vendor, VendorAssessment])

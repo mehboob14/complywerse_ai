@@ -1,4 +1,6 @@
 from ._11_enterprise_risk_management import *  # noqa: F401,F403
+import sqlalchemy as _sa
+from sqlalchemy.orm import column_property as _column_property
 
 # =============================================================================
 # 9. Governance
@@ -180,7 +182,8 @@ class Issue(Base):
     # All nullable so historical rows (from the skeleton model) keep rendering.
     code = Column(String(50), nullable=True, index=True)  # tenant-scoped, e.g. ISS-001
     issue_type = Column(String(40), nullable=True)
-    # incident, audit_finding, non_conformance, vendor_breach, process_gap, capa, other
+    # incident, audit_finding, non_conformance, vendor_breach, process_gap, capa, risk_treatment, other
+    # risk_treatment: one per risk (source_type "risk"); its CAPA actions are the risk's actions (Actions & Acceptances)
     category = Column(String(40), nullable=True)
     # security, privacy, operations, contract, data, regulatory, safety
     urgency = Column(String(20), nullable=True)  # high, medium, low — feeds the matrix
@@ -253,6 +256,7 @@ class IssueAction(Base):
     status = Column(String(30), nullable=False, default="planned")
     # planned, in_progress, blocked, completed, verified, cancelled
     completed_at = Column(DateTime, nullable=True)
+    completed_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)  # the maker: cannot verify it
     verified_by_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
     verified_at = Column(DateTime, nullable=True)
     effectiveness_review_at = Column(DateTime, nullable=True)
@@ -266,18 +270,54 @@ class IssueAction(Base):
     # critical_tasks_router. Nullable + additive — historical rows unchanged.
     linked_critical_task_id = Column(Integer, ForeignKey("grc_critical_tasks.id"), nullable=True, index=True)
 
+    # ── Risk treatment actions (wave 2-E): the old RiskMitigationAction fields, on the CAPA engine ──
+    priority = Column(String(20), nullable=True)  # critical, high, medium, low
+    expected_residual_reduction = Column(Float, nullable=True)
+    actual_residual_reduction = Column(Float, nullable=True)
+    notes = Column(Text, nullable=True)
+    legacy_mitigation_action_id = Column(Integer, nullable=True, index=True)  # the grc_risk_mitigation_actions row it was copied from
+
     issue = relationship("Issue", back_populates="actions")
     assignee = relationship("GRCUser", foreign_keys=[assignee_id])
     verifier = relationship("GRCUser", foreign_keys=[verified_by_id])
     creator = relationship("GRCUser", foreign_keys=[created_by])
     evidence = relationship("Evidence")
     linked_critical_task = relationship("CriticalTask", foreign_keys=[linked_critical_task_id])
+    evidence_links = relationship("IssueActionEvidence", back_populates="action", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("ix_issue_action_issue", "issue_id"),
         Index("ix_issue_action_status", "status"),
         Index("ix_issue_action_assignee", "assignee_id"),
     )
+
+
+# Due date of a risk-treatment action only (None on other CAPA actions), loaded on demand: the workflow
+# "Mitigation action overdue" date event reads it, so it fires for risk actions and not for every CAPA action.
+IssueAction.risk_action_due_date = _column_property(
+    _sa.case((_sa.exists().where(Issue.id == IssueAction.issue_id, Issue.issue_type == "risk_treatment"),
+              IssueAction.due_date)),
+    deferred=True,
+)
+
+
+class IssueActionEvidence(Base):
+    """Evidence linked to one CAPA action (an action can carry several; `IssueAction.evidence_id` holds the first).
+    Mirrors RiskMitigationActionEvidence, whose rows the risk-action migration copies here."""
+    __tablename__ = "grc_issue_action_evidence"
+
+    id = Column(Integer, primary_key=True, index=True)
+    issue_action_id = Column(Integer, ForeignKey("grc_issue_actions.id"), nullable=False, index=True)
+    evidence_id = Column(Integer, ForeignKey("grc_evidence.id"), nullable=False, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=True, index=True)
+    linked_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    linked_at = Column(DateTime, default=datetime.utcnow)
+    notes = Column(Text, nullable=True)
+
+    action = relationship("IssueAction", back_populates="evidence_links")
+    evidence = relationship("Evidence")
+
+    __table_args__ = (Index("uq_issue_action_evidence", "issue_action_id", "evidence_id", unique=True),)
 
 
 class IssueComment(Base):

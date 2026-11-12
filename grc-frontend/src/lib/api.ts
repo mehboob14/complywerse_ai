@@ -301,6 +301,26 @@ export type ServedDocument = GovernanceDocument & {
   newer_version?: { number: string; status: string } | null;
 };
 
+/** A risk action as /erm/mitigation-actions serves it since wave 2-E: a CAPA action on the risk's treatment issue
+ *  (`id` is the IssueAction id). Status is the CAPA list; overdue is computed from the due date. */
+export type RiskActionStatus = 'planned' | 'in_progress' | 'blocked' | 'completed' | 'verified' | 'cancelled';
+export type RiskActionEvidence = {
+  id: number; evidence_id: number; title: string; description?: string | null; evidence_type?: string | null;
+  status?: string | null; file_name?: string | null; file_url?: string | null; notes?: string | null; linked_at?: string | null;
+};
+export type RiskAction = Omit<RiskMitigationAction, 'status' | 'owner'> & {
+  status: RiskActionStatus;
+  issue_id: number;
+  risk_title?: string | null;
+  owner_name?: string | null;
+  completed_by?: number | null;
+  verified_by_id?: number | null;
+  verified_by_name?: string | null;
+  verified_at?: string | null;
+  evidence: RiskActionEvidence[];
+};
+type RiskActionWrite = Omit<Partial<RiskMitigationAction>, 'due_date' | 'status'> & { due_date?: string | null; status?: string };
+
 export const governanceApi = {
   getObjectives: () => apiClient.get<GovernanceObjective[]>('/governance/objectives'),
   getObjectiveById: (id: string) => apiClient.get<GovernanceObjective>(`/governance/objectives/${id}`),
@@ -1222,9 +1242,26 @@ export const controlAssuranceApi = {
     apiClient.get(`/control-library/assurance/controls/${kind}/${controlId}/evidence`),
 };
 
+/** A manual KRI value overdue or falling due within a week (GET /erm/kris/due). */
+export interface KRIDueValue {
+  id: number; name: string; kind?: string; frequency?: string; unit?: string | null;
+  next_due_date: string; data_provider_id?: number | null; owner_id?: number | null;
+  overdue: boolean; pending_review: boolean; days_overdue: number;
+}
+
+/** A submitted KRI value waiting for its check (GET /erm/kri-workflow/pending-reviews). */
+export interface KRIPendingValue {
+  measurement_id: number; kri_id: number; kri_name: string; kind?: string;
+  value: number; previous_value?: number | null; unit?: string | null; status?: string;
+  data_source?: string | null; notes?: string | null; period_label?: string | null;
+  measured_by?: number | null; measured_at?: string | null;
+}
+
 export const ermApi = {
   dashboard: {
     getSectionsOverview: () => apiClient.get('/erm/dashboard/sections-overview'),
+    // The Overview for one audience: board | team | owner | audit | third_party (see erm/_audience/audienceModel.ts).
+    getAudience: (view: string) => apiClient.get('/erm/dashboard/audience', { params: { view } }),
   },
   // CRQM — FAIR quantification (scenario, versioned loss models, Monte Carlo runs).
   quantification: {
@@ -1269,11 +1306,15 @@ export const ermApi = {
       if (filters?.min_score !== undefined) params.append('min_score', filters.min_score.toString());
       if (filters?.max_score !== undefined) params.append('max_score', filters.max_score.toString());
       const queryString = params.toString();
-      return apiClient.get<Risk[]>(`/erm/risks${queryString ? `?${queryString}` : ''}`);
+      // the list alone carries each risk's mitigation-action count
+      return apiClient.get<Array<Risk & { mitigation_action_count?: number }>>(`/erm/risks${queryString ? `?${queryString}` : ''}`);
     },
     getById: (id: number) => apiClient.get<Risk>(`/erm/risks/${id}`),
+    assess: (id: number, data: { inherent_likelihood: number; inherent_impact: number; residual_likelihood?: number; residual_impact?: number }) =>
+      apiClient.post<Risk>(`/erm/risks/${id}/assess`, data),
     getDetail: (id: number) => apiClient.get<RiskDetail>(`/erm/risks/${id}/detail`),
-    getDashboard: () => apiClient.get<RiskDashboard>('/erm/risks/dashboard'),
+    // acceptances_*: approved acceptances within 60 days of their expiry, and past it
+    getDashboard: () => apiClient.get<RiskDashboard & { acceptances_expiring?: number; acceptances_expired?: number }>('/erm/risks/dashboard'),
     getDashboardByRegister: () => apiClient.get<{
       total_risks: number;
       registers: Array<{
@@ -1281,7 +1322,7 @@ export const ermApi = {
         total: number;
         by_status: { open: number; in_treatment: number; mitigated: number; accepted: number; closed: number };
         by_category: Record<string, number>;
-        by_score_range: { critical: number; high: number; medium: number; low: number };
+        by_score_range: { critical: number; high: number; medium: number; low: number; unscored: number };
         top_owners: Array<{ owner: string; count: number }>;
         contributors: number;
         avg_residual_score: number;
@@ -1299,6 +1340,19 @@ export const ermApi = {
     create: (data: Partial<Risk>) => apiClient.post<Risk>('/erm/risks', data),
     update: (id: number, data: Partial<Risk>) => apiClient.put<Risk>(`/erm/risks/${id}`, data),
     delete: (id: number) => apiClient.delete(`/erm/risks/${id}`),
+    // Who changed the risk, what and why (newest first), and its scores over time.
+    getHistory: (id: number) => apiClient.get<{
+      people: Record<string, string | null>;  // names of who acted and of the owners a change moved between
+      changes: Array<{ id: number; at: string; action: string; user_id: number | null; user_name: string | null;
+        reason: string | null; changes: Record<string, { from: unknown; to: unknown }> }>;
+      scores: Array<{ id: number; at: string; user_name: string | null; label: string | null; reason: string | null;
+        inherent_score: number | null; residual_score: number | null; target_score: number | null }>;
+    }>(`/erm/risks/${id}/history`),
+    // Acceptance is maker-checker: one person asks (reason, expiry within 12 months), another approves or refuses.
+    requestAcceptance: (id: number, data: { reason: string; expires_at: string }) =>
+      apiClient.post<Risk>(`/erm/risks/${id}/acceptance/request`, data),
+    approveAcceptance: (id: number, note?: string) => apiClient.post<Risk>(`/erm/risks/${id}/acceptance/approve`, { note }),
+    rejectAcceptance: (id: number, note: string) => apiClient.post<Risk>(`/erm/risks/${id}/acceptance/reject`, { note }),
     uploadRiskRegister: (file: File, registerType?: string) => {
       const formData = new FormData();
       formData.append('file', file);
@@ -1316,8 +1370,12 @@ export const ermApi = {
       apiClient.post<Risk>(`/erm/risks/${riskId}/close`, null, notes ? { params: { closure_notes: notes } } : undefined),
     reopenRisk: (riskId: number) => 
       apiClient.post<Risk>(`/erm/risks/${riskId}/reopen`),
-    getRiskAging: () => 
-      apiClient.get<Array<{ risk_id: number; title: string; days_open: number; status: string }>>('/erm/risks/aging'),
+    getRiskAging: () =>
+      apiClient.get<Array<{
+        id: number; title: string; category: string | null; status: string;
+        inherent_score: number | null; residual_score: number | null; created_at: string | null; updated_at: string | null;
+        days_since_created: number; days_since_updated: number; owner_id: number | null;
+      }>>('/erm/risks/aging'),
     getAISuggestions: (data: { name: string; category?: string; sub_category?: string; description?: string }) =>
       apiClient.post<{
         suggested_description: string;
@@ -1342,18 +1400,25 @@ export const ermApi = {
       apiClient.delete(`/erm/risks/${id}/assets/${linkId}`),
   },
   mitigationActions: {
-    getAll: (riskId: number) => 
-      apiClient.get<RiskMitigationAction[]>(`/erm/risks/${riskId}/mitigation-actions`),
-    create: (riskId: number, data: Partial<RiskMitigationAction>) => 
-      apiClient.post<RiskMitigationAction>(`/erm/risks/${riskId}/mitigation-actions`, data),
-    update: (actionId: number, data: Partial<RiskMitigationAction>) => 
-      apiClient.put<RiskMitigationAction>(`/erm/mitigation-actions/${actionId}`, data),
-    delete: (actionId: number) => 
+    list: () =>
+      apiClient.get<RiskAction[]>('/erm/mitigation-actions'),
+    getAll: (riskId: number) =>
+      apiClient.get<RiskAction[]>(`/erm/risks/${riskId}/mitigation-actions`),
+    // due_date: null clears it
+    create: (riskId: number, data: RiskActionWrite) =>
+      apiClient.post<RiskAction>(`/erm/risks/${riskId}/mitigation-actions`, data),
+    update: (actionId: number, data: RiskActionWrite) =>
+      apiClient.put<RiskAction>(`/erm/mitigation-actions/${actionId}`, data),
+    delete: (actionId: number) =>
       apiClient.delete(`/erm/mitigation-actions/${actionId}`),
-    complete: (actionId: number, actualReduction?: number) => 
-      apiClient.post<RiskMitigationAction>(`/erm/mitigation-actions/${actionId}/complete`, { actual_residual_reduction: actualReduction }),
-    getOverdue: () => 
-      apiClient.get<RiskMitigationAction[]>('/erm/mitigation-actions/overdue'),
+    // Mark done, with the achieved reduction and (optionally) the evidence; a second person then verifies.
+    complete: (actionId: number, actualReduction?: number, evidenceId?: number) =>
+      apiClient.post<RiskAction>(`/erm/mitigation-actions/${actionId}/complete`, { actual_residual_reduction: actualReduction, evidence_id: evidenceId }),
+    // 409 for whoever completed the action or is assigned it
+    verify: (actionId: number, notes?: string) =>
+      apiClient.post<RiskAction>(`/erm/mitigation-actions/${actionId}/verify`, { notes }),
+    getOverdue: () =>
+      apiClient.get<RiskAction[]>('/erm/mitigation-actions/overdue'),
     aiSuggest: (data: { risk_id?: number; title?: string }) =>
       apiClient.post<{
         suggestions: Array<{
@@ -1390,7 +1455,7 @@ export const ermApi = {
       apiClient.post<{ message: string }>('/erm/scales/seed-defaults'),
   },
   kris: {
-    getAll: (params?: { risk_id?: number; status_filter?: string; is_active?: boolean }) => 
+    getAll: (params?: { risk_id?: number; status_filter?: string; is_active?: boolean; kind?: 'kri' | 'kpi' }) =>
       apiClient.get<RiskKRI[]>('/erm/kris', { params }),
     getById: (id: number) => apiClient.get<RiskKRI>(`/erm/kris/${id}`),
     create: (data: RiskKRICreate) => apiClient.post<RiskKRI>('/erm/kris', data),
@@ -1400,11 +1465,22 @@ export const ermApi = {
       apiClient.post<RiskKRIMeasurement>(`/erm/kris/${id}/measure`, data),
     getTrend: (id: number, days?: number) => 
       apiClient.get<RiskKRIMeasurement[]>(`/erm/kris/${id}/trend`, { params: { days } }),
-    getAlerts: () => apiClient.get<RiskKRI[]>('/erm/kris/alerts'),
+    getAlerts: (params?: { kind?: 'kri' | 'kpi' }) => apiClient.get<RiskKRI[]>('/erm/kris/alerts', { params }),
     report: (days?: number, kind?: string) => apiClient.get('/erm/kris/report', { params: { ...(days ? { days } : {}), ...(kind ? { kind } : {}) } }),
     metricOptions: () => apiClient.get('/erm/kris/metric-options'),
     templates: () => apiClient.get('/erm/kris/templates'),
-    due: () => apiClient.get('/erm/kris/due'),
+    due: (params?: { kind?: 'kri' | 'kpi' }) => apiClient.get<{ due: KRIDueValue[] }>('/erm/kris/due', { params }),
+    // Wave 2-F: a draft KRI is approved by someone other than its creator; values are maker-checked.
+    activate: (id: number) => apiClient.post<RiskKRI>(`/erm/kris/${id}/activate`),
+    // a threshold change on an active KRI: decided by someone other than its proposer (the server refuses them)
+    approveThresholds: (id: number, note?: string) => apiClient.post<RiskKRI>(`/erm/kris/${id}/thresholds/approve`, { note }),
+    rejectThresholds: (id: number, note: string) => apiClient.post<RiskKRI>(`/erm/kris/${id}/thresholds/reject`, { note }),
+    sendReminders: () => apiClient.post<{ reminded: number; kri_ids: number[] }>('/erm/kris/reminders'),
+    pendingReviews: () => apiClient.get<{ items: KRIPendingValue[]; total: number }>('/erm/kri-workflow/pending-reviews'),
+    approveValue: (measurementId: number) =>
+      apiClient.post(`/erm/kri-workflow/measurements/${measurementId}/approve`),
+    rejectValue: (measurementId: number, notes?: string) =>
+      apiClient.post(`/erm/kri-workflow/measurements/${measurementId}/reject`, { notes }),
     upload: (file: File) => {
       const formData = new FormData();
       formData.append('file', file);
@@ -1427,6 +1503,7 @@ export const ermApi = {
       apiClient.post<{
         name: string;
         suggestion: {
+          suggested_name?: string;
           description: string;
           metric_type: string;
           unit?: string;
@@ -1440,9 +1517,12 @@ export const ermApi = {
       }>('/erm/kris/ai-suggest', data),
   },
   incidents: {
-    getAll: (params?: { risk_id?: number; severity?: string; status_filter?: string; start_date?: string; end_date?: string }) => 
+    getAll: (params?: { risk_id?: number; severity?: string; status_filter?: string; start_date?: string; end_date?: string; event_type?: string; validation_status?: string }) =>
       apiClient.get<RiskIncident[]>('/erm/incidents', { params }),
     getById: (id: number) => apiClient.get<RiskIncident>(`/erm/incidents/${id}`),
+    // Loss-event validation by someone other than the reporter (409 for the reporter); a return needs a note.
+    validate: (id: number, note?: string) => apiClient.post<RiskIncident>(`/erm/incidents/${id}/validate`, { note }),
+    returnForFix: (id: number, note: string) => apiClient.post<RiskIncident>(`/erm/incidents/${id}/return`, { note }),
     create: (data: RiskIncidentCreate) => apiClient.post<RiskIncident>('/erm/incidents', data),
     update: (id: number, data: RiskIncidentUpdate) => apiClient.put<RiskIncident>(`/erm/incidents/${id}`, data),
     delete: (id: number) => apiClient.delete(`/erm/incidents/${id}`),
@@ -1518,46 +1598,73 @@ export const ermApi = {
           root_cause?: string;
           corrective_actions?: string;
           operational_impact?: string;
+          event_type?: string | null;       // a Basel event-type key, or null
+          business_line?: string | null;    // a business-line key, or null
           rationale?: string;
         };
       }>('/erm/incidents/ai-suggest', data),
   },
   reviews: {
-    getAll: (params?: { risk_id?: number; status_filter?: string; reviewer_id?: number }) => 
+    getAll: (params?: { risk_id?: number; status_filter?: string; reviewer_id?: number; limit?: number }) =>
       apiClient.get<RiskReview[]>('/erm/reviews', { params }),
     getById: (id: number) => apiClient.get<RiskReview>(`/erm/reviews/${id}`),
     create: (data: RiskReviewCreate) => apiClient.post<RiskReview>('/erm/reviews', data),
     update: (id: number, data: RiskReviewUpdate) => apiClient.put<RiskReview>(`/erm/reviews/${id}`, data),
-    complete: (id: number, data: { findings?: string; recommendations?: string; new_inherent_score?: number; new_residual_score?: number }) => 
-      apiClient.post<RiskReview>(`/erm/reviews/${id}/complete`, data),
+    complete: (id: number, data: { findings?: string; recommendations?: string; new_inherent_score?: number; new_residual_score?: number }) =>
+      apiClient.put<RiskReview>(`/erm/reviews/${id}`, { ...data, status: 'completed' }),
+    // Wave 2-H: the reviewer proposes, someone else approves; only the approval changes the risk.
+    start: (id: number) => apiClient.put(`/erm/reviews/${id}`, { status: 'in_review' }),
+    submit: (id: number, data: {
+      proposed_inherent_likelihood?: number; proposed_inherent_impact?: number;
+      proposed_residual_likelihood?: number; proposed_residual_impact?: number;
+      findings?: string; recommendations?: string;
+    }) => apiClient.put(`/erm/reviews/${id}`, { ...data, status: 'submitted' }),
+    approve: (id: number, approval_notes?: string) =>
+      apiClient.put(`/erm/reviews/${id}`, { status: 'approved', approval_notes }),
+    challenge: (id: number, approval_notes: string) =>
+      apiClient.put(`/erm/reviews/${id}`, { status: 'returned', approval_notes }),
+    // an approver hands a review not yet submitted to another reviewer (audit-logged, the new reviewer told)
+    reassign: (id: number, reviewer_id: number, note?: string) =>
+      apiClient.post<RiskReview>(`/erm/reviews/${id}/reassign`, { reviewer_id, note }),
+    scheduleDue: () => apiClient.post<{ created: RiskReview[]; without_owner: Array<{ risk_id: number; risk_title: string }> }>(
+      '/erm/reviews/schedule-due'),
     getPending: () => apiClient.get<RiskReview[]>('/erm/reviews/pending'),
     getOverdue: () => apiClient.get<RiskReview[]>('/erm/reviews/overdue'),
   },
   dependencies: {
-    getAll: (params?: { risk_id?: number }) => 
+    getAll: (params?: { risk_id?: number; source_risk_id?: number; target_risk_id?: number }) => 
       apiClient.get<RiskDependency[]>('/erm/dependencies', { params }),
     create: (data: RiskDependencyCreate) => apiClient.post<RiskDependency>('/erm/dependencies', data),
     delete: (id: number) => apiClient.delete(`/erm/dependencies/${id}`),
     getCascadeAnalysis: (riskId: number) => apiClient.get<CascadeAnalysis>(`/erm/dependencies/${riskId}/cascade`),
-    getGraph: (riskId?: number) => 
-      apiClient.get(`/erm/dependencies/graph`, { params: { risk_id: riskId } }),
   },
   reports: {
-    getAll: (params?: { report_type?: string; status?: string }) => 
+    getAll: (params?: { report_type?: string; status_filter?: string }) =>
       apiClient.get<RiskReport[]>('/erm/reports', { params }),
     getById: (id: number) => apiClient.get<RiskReport>(`/erm/reports/${id}`),
-    generate: (data: RiskReportCreate) => apiClient.post<RiskReport>('/erm/reports', data),
-    delete: (id: number) => apiClient.delete(`/erm/reports/${id}`),
     getExecutiveDashboard: () => apiClient.get<ExecutiveDashboard>('/erm/reports/executive-dashboard'),
-    getBoardSummary: (params?: { period?: string }) => 
+    getBoardSummary: (params?: { period?: string }) =>
       apiClient.get<BoardReportData>('/erm/reports/board-summary', { params }),
-    getDepartmentSummary: (departmentId: number) => 
+    getDepartmentSummary: (departmentId: number) =>
       apiClient.get<DepartmentRiskSummary>(`/erm/reports/department/${departmentId}`),
-    getAggregatedView: (groupBy?: string) => 
-      apiClient.get<AggregatedRiskView[]>('/erm/analytics/aggregated', { params: { group_by: groupBy } }),
-    getAppetiteBreaches: () => apiClient.get<AppetiteBreach[]>('/erm/analytics/appetite-breaches'),
-    getRiskTrends: (days?: number) => 
-      apiClient.get<RiskTrendData[]>('/erm/analytics/trends', { params: { days } }),
+    getAggregatedView: (groupBy?: string) =>
+      apiClient.get<AggregatedRiskView[]>('/erm/reports/aggregated', { params: { group_by: groupBy } }),
+    getToleranceBreaches: () => apiClient.get<{ total_breaches: number; breaches: AppetiteBreach[] }>('/erm/appetite/breaches'),
+    getAuditExport: () => apiClient.get<Record<string, unknown>>('/erm/reports/audit-export'),
+    // Committee packs: built from live data and stored (POST generate, report_type "committee_pack"); draft -> ready -> frozen by a second
+    // person (the preparer gets 409); a frozen pack answers 409 to edits and exports as PDF or Excel.
+    packs: {
+      list: () => apiClient.get('/erm/reports/packs'),
+      get: (id: number) => apiClient.get(`/erm/reports/packs/${id}`),
+      build: (data: { title: string; committee_id?: number | null; meeting_id?: number | null }) =>
+        apiClient.post('/erm/reports/generate', { report_type: 'committee_pack', ...data }),
+      update: (id: number, data: { commentary?: Record<string, string>; meeting_id?: number | null; title?: string }) =>
+        apiClient.put(`/erm/reports/packs/${id}`, data),
+      ready: (id: number) => apiClient.post(`/erm/reports/packs/${id}/ready`),
+      freeze: (id: number) => apiClient.post(`/erm/reports/packs/${id}/freeze`),
+      export: (id: number, format: 'pdf' | 'xlsx') =>
+        apiClient.get(`/erm/reports/packs/${id}/export`, { params: { format }, responseType: 'blob' }),
+    },
   },
   appetite: {
     getAll: () => apiClient.get('/erm/appetite'),
@@ -1565,12 +1672,30 @@ export const ermApi = {
     getBreaches: () => apiClient.get('/erm/appetite/breaches'),
     update: (id: number, data: Record<string, unknown>) => 
       apiClient.put(`/erm/appetite/${id}`, data),
-    create: (tenantId: number, data: Record<string, unknown>) => 
-      apiClient.post(`/erm/appetite?tenant_id=${tenantId}`, data),
+    create: (data: Record<string, unknown>) =>   // the server files it under the user's own tenant
+      apiClient.post('/erm/appetite', data),
     delete: (id: number) =>
       apiClient.delete(`/erm/appetite/${id}`),
-    seedDefaults: (tenantId?: number) => 
-      apiClient.post(`/erm/appetite/seed-defaults${tenantId ? `?tenant_id=${tenantId}` : ''}`),
+    seedDefaults: () => apiClient.post('/erm/appetite/seed-defaults'),
+    setLimitKris: (id: number, kriIds: number[]) => apiClient.put(`/erm/appetite/${id}/kris`, { kri_ids: kriIds }),
+    check: () => apiClient.post<{ opened: number; resolved: number; reopened: number }>('/erm/appetite/check'),
+    getBreachLog: () => apiClient.get('/erm/appetite/breach-log'),
+    proposePlan: (id: number, plan: string) => apiClient.post(`/erm/appetite/breaches/${id}/plan`, { plan }),
+    approvePlan: (id: number, note?: string) => apiClient.post(`/erm/appetite/breaches/${id}/approve-plan`, { note }),
+    rejectPlan: (id: number, note: string) => apiClient.post(`/erm/appetite/breaches/${id}/reject-plan`, { note }),
+    // once a statement is approved, a limit change is proposed and decided by someone other than its proposer
+    approveLimitChange: (configId: number, note?: string) => apiClient.post(`/erm/appetite/${configId}/limit-change/approve`, { note }),
+    rejectLimitChange: (configId: number, note: string) => apiClient.post(`/erm/appetite/${configId}/limit-change/reject`, { note }),
+    approveExcess: (id: number, data: { expires_at: string; note: string }) =>
+      apiClient.post(`/erm/appetite/breaches/${id}/approve-excess`, data),
+    statements: {   // versions of the appetite statement; a second person approves (maker-checker)
+      list: () => apiClient.get('/erm/appetite/statements'),
+      create: (statement: string) => apiClient.post('/erm/appetite/statements', { statement }),
+      update: (id: number, statement: string) => apiClient.put(`/erm/appetite/statements/${id}`, { statement }),
+      submit: (id: number) => apiClient.post(`/erm/appetite/statements/${id}/submit`),
+      approve: (id: number, note?: string) => apiClient.post(`/erm/appetite/statements/${id}/approve`, { note }),
+      reject: (id: number, note: string) => apiClient.post(`/erm/appetite/statements/${id}/reject`, { note }),
+    },
     aiSuggest: (data: { category: string; description?: string }) =>
       apiClient.post<{
         category: string;
@@ -1599,6 +1724,10 @@ export const ermApi = {
     linkRisk: (id: number, data: { risk_id: number; link_type?: string; effectiveness_rating?: string }) => 
       apiClient.post(`/erm/internal-controls/${id}/risks`, data),
     unlinkRisk: (id: number, linkId: number) => apiClient.delete(`/erm/internal-controls/${id}/risks/${linkId}`),
+    // the one risk–control link: a risk's controls of every kind, with type, latest tested effectiveness and dates
+    getRiskLinks: (riskId: number) => apiClient.get(`/erm/internal-controls/risk-links/${riskId}`),
+    unlinkRiskControl: (riskId: number, linkId: number) =>
+      apiClient.delete(`/erm/internal-controls/risk-links/${riskId}/${linkId}`),
     getEscalations: (id: number) => apiClient.get(`/erm/internal-controls/${id}/escalations`),
     createEscalation: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/internal-controls/${id}/escalations`, data),
     deleteEscalation: (id: number, escId: number) => apiClient.delete(`/erm/internal-controls/${id}/escalations/${escId}`),
@@ -1645,28 +1774,56 @@ export const ermApi = {
       apiClient.get<{ category: string; subcategories: string[] }>(`/erm/internal-controls/subcategories/${category}`),
   },
   analytics: {
-    getInteractiveHeatmap: (params?: { risk_type?: string; category?: string; treatment?: string; business_unit_id?: number; score_type?: string }) =>
+    getInteractiveHeatmap: (params?: { category?: string; business_unit_id?: number; score_type?: string }) =>
       apiClient.get('/erm/analytics/heatmap', { params }),
     getBowTie: (riskId: number) =>
       apiClient.get(`/erm/analytics/bowtie/${riskId}`),
-    runScenarioAnalysis: (data: { scenarios: Array<{ risk_id: number; adjusted_likelihood: number; adjusted_impact: number; scenario_name?: string; notes?: string }> }, scoreType?: string) =>
+    // With preset_id the server applies the preset (to its own categories only) and the adjusted values are left out.
+    runScenarioAnalysis: (data: { scenarios: Array<{ risk_id: number; adjusted_likelihood?: number; adjusted_impact?: number; scenario_name?: string; notes?: string }>; preset_id?: string }, scoreType?: string) =>
       apiClient.post(`/erm/analytics/scenario-analysis${scoreType ? `?score_type=${scoreType}` : ''}`, data),
     getScenarioPresets: () =>
       apiClient.get('/erm/analytics/scenario-presets'),
     getAggregation: () =>
       apiClient.get('/erm/analytics/aggregation'),
-    getKRITriggers: (params?: { severity?: string; acknowledged?: boolean }) =>
+    getKRITriggers: (params?: { severity?: string }) =>
       apiClient.get('/erm/analytics/kri-triggers', { params }),
     generateBowTieNarrative: (riskId: number) =>
       apiClient.post(`/erm/analytics/bowtie/${riskId}/ai-narrative`),
+    // the bow-tie's saved causes and consequences, and an action for a gap
+    addBowTieItem: (riskId: number, data: { side: 'cause' | 'consequence'; title: string; impact_category?: string | null; source?: string; control_link_ids?: number[] }) =>
+      apiClient.post(`/erm/analytics/bowtie/${riskId}/items`, data),
+    updateBowTieItem: (riskId: number, itemId: number, data: { title?: string; impact_category?: string | null; control_link_ids?: number[] }) =>
+      apiClient.put(`/erm/analytics/bowtie/${riskId}/items/${itemId}`, data),
+    deleteBowTieItem: (riskId: number, itemId: number) =>
+      apiClient.delete(`/erm/analytics/bowtie/${riskId}/items/${itemId}`),
+    raiseBowTieGapAction: (riskId: number, itemId: number) =>
+      apiClient.post<{ action_id: number; created: boolean }>(`/erm/analytics/bowtie/${riskId}/items/${itemId}/raise-action`),
     aiExplainScenario: (data: { results: any[]; summary: any; scenario_type?: string }) =>
       apiClient.post<{ explanation: string }>('/erm/analytics/scenario-analysis/ai-explain', data),
   },
+  // saved loss scenarios run on the FAIR engine; a second person approves (maker-checker), approved ones are read-only
+  scenarios: {
+    list: () => apiClient.get('/erm/scenarios'),
+    get: (id: number) => apiClient.get(`/erm/scenarios/${id}`),
+    create: (data: Record<string, unknown>) => apiClient.post('/erm/scenarios', data),
+    update: (id: number, data: Record<string, unknown>) => apiClient.put(`/erm/scenarios/${id}`, data),
+    run: (id: number, iterations?: number) => apiClient.post(`/erm/scenarios/${id}/run`, iterations ? { iterations } : {}),
+    review: (id: number, note?: string) => apiClient.post(`/erm/scenarios/${id}/review`, { note }),
+    approve: (id: number, note?: string) => apiClient.post(`/erm/scenarios/${id}/approve`, { note }),
+    sendBack: (id: number, note: string) => apiClient.post(`/erm/scenarios/${id}/send-back`, { note }),
+    reopen: (id: number) => apiClient.post(`/erm/scenarios/${id}/reopen`),
+    delete: (id: number) => apiClient.delete(`/erm/scenarios/${id}`),      // a draft only
+    addAction: (id: number, data: { risk_id: number; title: string; description?: string; due_date?: string }) =>
+      apiClient.post(`/erm/scenarios/${id}/actions`, data),
+  },
+  // every kind of assessment in one list (risk workshops, RCSA self-assessments, framework IT risk), the caller's own first
+  assessments: {
+    list: () => apiClient.get('/erm/assessments'),
+  },
   riskAssessments: {
-    getAll: (params?: { skip?: number; limit?: number; status?: string; assessment_type?: string }) => 
+    getAll: (params?: { skip?: number; limit?: number; status?: string; assessment_type?: string }) =>
       apiClient.get('/erm/risk-assessments', { params }),
     getById: (id: number) => apiClient.get(`/erm/risk-assessments/${id}`),
-    getDetail: (id: number) => apiClient.get(`/erm/risk-assessments/${id}/detail`),
     create: (data: Record<string, unknown>) => apiClient.post('/erm/risk-assessments', data),
     update: (id: number, data: Record<string, unknown>) => apiClient.put(`/erm/risk-assessments/${id}`, data),
     delete: (id: number) => apiClient.delete(`/erm/risk-assessments/${id}`),
@@ -1680,8 +1837,6 @@ export const ermApi = {
       apiClient.delete(`/erm/risk-assessments/${assessmentId}/risks/${assessmentRiskId}`),
     bulkAddRisks: (id: number, risk_ids: number[]) => 
       apiClient.post(`/erm/risk-assessments/${id}/risks/bulk`, { risk_ids }),
-    getAssessedRisks: (id: number, params?: { skip?: number; limit?: number }) => 
-      apiClient.get(`/erm/risk-assessments/${id}/risks`, { params }),
     getAvailableRisks: (id: number) => 
       apiClient.get(`/erm/risk-assessments/${id}/available-risks`),
     linkKRI: (assessmentId: number, assessmentRiskId: number, data: Record<string, unknown>) => 
@@ -1765,6 +1920,8 @@ export const ermApi = {
     create: (data: Record<string, unknown>) => apiClient.post('/erm/framework-risk-assessments', data),
     update: (id: number, data: Record<string, unknown>) => apiClient.put(`/erm/framework-risk-assessments/${id}`, data),
     delete: (id: number) => apiClient.delete(`/erm/framework-risk-assessments/${id}`),
+    // an approved assessment is locked; someone who may approve it reopens it with a reason (kept in the audit log)
+    reopen: (id: number, reason: string) => apiClient.post(`/erm/framework-risk-assessments/${id}/reopen`, { reason }),
     generateQuestions: (
       id: number,
       data?: {
@@ -2259,17 +2416,7 @@ export const criticalityApi = {
 export const vendorRiskApi = {
   getModuleInfo: () => apiClient.get('/vendor-risk'),
 
-  getDashboard: async () => {
-    try {
-      return await apiClient.get('/vendor-risk/vendors/dashboard');
-    } catch {
-      try {
-        return await apiClient.get('/vendor-risk/dashboard');
-      } catch {
-        return await apiClient.get('/vendor-risk');
-      }
-    }
-  },
+  getDashboard: () => apiClient.get('/vendor-risk/vendors/dashboard'),
   getVendors: (params?: {
     tier?: string;
     status?: string;
@@ -2512,6 +2659,7 @@ export const tpraApi = {
   createApproval: (assessmentId: number, data: {
     decision: string; rationale?: string;
     conditions?: Array<string | { text: string; owner_id?: number | null; due_date?: string | null }>;
+    meeting_id?: number | null;   // the committee meeting that decided it: required to approve a critical or important outsourcing
   }) =>
     apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/approvals`, data),
   resolveCondition: (approvalId: number, conditionId: string, data: { status?: 'open' | 'closed'; owner_id?: number; due_date?: string }) =>
@@ -2583,6 +2731,20 @@ export const tpraApi = {
     apiClient.post(`/vendor-risk/tpra/vendors/${vendorId}/products`, data),
   unwatchProduct: (id: number) => apiClient.delete(`/vendor-risk/tpra/vendor-products/${id}`),
   concentration: (minVendors = 2) => apiClient.get('/vendor-risk/tpra/concentration', { params: { min_vendors: minVendors } }),
+  // Outsourcing where it meets ERM (EBA/GL/2019/02): materiality, exit plan, regulator notice, sub-outsourcers, loss events, concentration.
+  getOutsourcing: (vendorId: number, engagementId?: number | null) =>
+    apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/outsourcing`, { params: engagementId ? { engagement_id: engagementId } : {} }),
+  setMateriality: (vendorId: number, data: { critical_important: boolean; reason: string }, engagementId?: number | null) =>
+    apiClient.put(`/vendor-risk/tpra/vendors/${vendorId}/materiality`, data, { params: engagementId ? { engagement_id: engagementId } : {} }),
+  setExitPlan: (vendorId: number, data: { status: string; summary?: string | null; link?: string | null }, engagementId?: number | null) =>
+    apiClient.put(`/vendor-risk/tpra/vendors/${vendorId}/exit-plan`, data, { params: engagementId ? { engagement_id: engagementId } : {} }),
+  setRegulatorNotice: (vendorId: number, data: { required: boolean; sent_on?: string | null; reference?: string | null }, engagementId?: number | null) =>
+    apiClient.put(`/vendor-risk/tpra/vendors/${vendorId}/regulator-notice`, data, { params: engagementId ? { engagement_id: engagementId } : {} }),
+  decideSubOutsourcer: (fourthPartyId: number, data: { decision: 'approve' | 'reject'; note?: string }) =>
+    apiClient.post(`/vendor-risk/tpra/fourth-parties/${fourthPartyId}/decision`, data),
+  recordLossEvent: (incidentId: number, data: { gross_loss?: number; recoveries?: number; currency?: string; business_line?: string; event_type?: string }) =>
+    apiClient.post(`/vendor-risk/tpra/vendor-incidents/${incidentId}/loss-event`, data),
+  concentrationAppetite: () => apiClient.get('/vendor-risk/tpra/concentration/appetite'),
   sharedVulnerabilities: (days = 90) => apiClient.get('/vendor-risk/tpra/concentration/vulnerabilities', { params: { days } }),
   platformAliases: () => apiClient.get('/vendor-risk/tpra/platform-aliases'),
   addPlatformAlias: (data: { alias: string; platform?: string; excluded?: boolean }) =>
@@ -3446,18 +3608,11 @@ export const rcsaApi = {
       apiClient.get(`/erm/rcsa/custom-templates/${id}/download`, { responseType: 'blob' }),
     exportCurrent: (id: number) =>
       apiClient.post(`/erm/rcsa/custom-templates/${id}/export`, undefined, { responseType: 'blob' }),
-    reimport: (id: number, replace = false) =>
-      apiClient.post(`/erm/rcsa/custom-templates/${id}/import-rows`, undefined, { params: { replace } }),
+    // An imported matrix is read-only: the server refuses row changes and re-imports (upload a new file instead).
     listRows: (id: number, params?: { limit?: number; offset?: number }) =>
       apiClient.get(`/erm/rcsa/custom-templates/${id}/rows`, { params }),
-    createRow: (id: number, data: { data: Record<string, unknown>; risk_id_text?: string }) =>
-      apiClient.post(`/erm/rcsa/custom-templates/${id}/rows`, data),
     getRow: (id: number, rowId: number) =>
       apiClient.get(`/erm/rcsa/custom-templates/${id}/rows/${rowId}`),
-    updateRow: (id: number, rowId: number, data: { data?: Record<string, unknown>; risk_id_text?: string }) =>
-      apiClient.put(`/erm/rcsa/custom-templates/${id}/rows/${rowId}`, data),
-    deleteRow: (id: number, rowId: number) =>
-      apiClient.delete(`/erm/rcsa/custom-templates/${id}/rows/${rowId}`),
     promoteRowToRisk: (id: number, rowId: number, data: { title_override?: string; description_override?: string } = {}) =>
       apiClient.post(`/erm/rcsa/custom-templates/${id}/rows/${rowId}/promote-to-risk`, data),
 
@@ -3554,7 +3709,9 @@ export const rcsaApi = {
   activateCampaign: (id: number) => apiClient.post(`/erm/rcsa/campaigns/${id}/activate`),
   closeCampaign: (id: number) => apiClient.post(`/erm/rcsa/campaigns/${id}/close`),
   assignBusinessUnits: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/rcsa/campaigns/${id}/assign`, data),
-  sendReminders: (id: number) => apiClient.post(`/erm/rcsa/campaigns/${id}/reminders`),
+  sendReminders: (id: number, assessmentIds?: number[]) =>
+    apiClient.post<{ message: string; sent: number; failed: number; without_assessor: number }>(
+      `/erm/rcsa/campaigns/${id}/reminders`, { assessment_ids: assessmentIds?.length ? assessmentIds : null }),
   exportResults: (id: number) => apiClient.get(`/erm/rcsa/campaigns/${id}/export`, { responseType: 'blob' }),
   
   getDashboardSummary: () => apiClient.get('/erm/rcsa/dashboard/summary'),
@@ -3585,6 +3742,8 @@ export const rcsaApi = {
   linkFindingToRisk: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/rcsa/findings/${id}/link-risk`, data),
   linkFindingToControl: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/rcsa/findings/${id}/link-control`, data),
   createFindingAction: (id: number, data: Record<string, unknown>) => apiClient.post(`/erm/rcsa/findings/${id}/create-action`, data),
+  raiseFindingIssue: (id: number) =>
+    apiClient.post<{ id: number; code: string; message: string }>(`/erm/rcsa/findings/${id}/raise-issue`),
 
   getApprovalWorkflows: () => apiClient.get('/erm/rcsa/approval-workflows'),
   createApprovalWorkflow: (data: Record<string, unknown>) => apiClient.post('/erm/rcsa/approval-workflows', data),

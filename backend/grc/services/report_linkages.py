@@ -19,8 +19,8 @@ from ..models import (
     FrameworkControl, IncidentAssetLink, IncidentRiskLink, IncidentVulnerabilityLink,
     InternalControl, Issue, IssueAssetLink, IssueControlLink, IssueEvidenceLink,
     IssueRiskLink, IssueVendorLink, IssueVulnerabilityLink, ISProject, ITAsset,
-    NormalizedControl, Risk, RiskAssetLink, RiskControlLink, RiskEvidenceLink,
-    RiskFrameworkControlLink, RiskIncident, RiskGovernanceLink, RiskKRI, Vendor,
+    NormalizedControl, Risk, RiskAssetLink, RiskControl, RiskEvidenceLink,
+    RiskIncident, RiskGovernanceLink, RiskKRI, Vendor,
     Vulnerability, VulnerabilityAssetLink, VulnerabilityControlLink,
 )
 
@@ -422,9 +422,9 @@ def _enrich_risks(db: Session, ids: List[int], includes: Set[str]) -> Dict[int, 
 
     if "controls" in includes:
         rows = (
-            db.query(RiskControlLink.risk_id, NormalizedControl.name)
-            .join(NormalizedControl, NormalizedControl.id == RiskControlLink.normalized_control_id)
-            .filter(RiskControlLink.risk_id.in_(ids))
+            db.query(RiskControl.risk_id, NormalizedControl.name)
+            .join(NormalizedControl, NormalizedControl.id == RiskControl.control_id)
+            .filter(RiskControl.control_source == "normalized", RiskControl.risk_id.in_(ids))
             .all()
         )
         for rid, name in rows:
@@ -444,9 +444,9 @@ def _enrich_risks(db: Session, ids: List[int], includes: Set[str]) -> Dict[int, 
 
     if "framework_controls" in includes:
         rows = (
-            db.query(RiskFrameworkControlLink.risk_id, FrameworkControl.name)
-            .join(FrameworkControl, FrameworkControl.id == RiskFrameworkControlLink.framework_control_id)
-            .filter(RiskFrameworkControlLink.risk_id.in_(ids))
+            db.query(RiskControl.risk_id, FrameworkControl.name)
+            .join(FrameworkControl, FrameworkControl.id == RiskControl.control_id)
+            .filter(RiskControl.control_source == "catalog", RiskControl.risk_id.in_(ids))
             .all()
         )
         for rid, title in rows:
@@ -604,9 +604,9 @@ def _enrich_controls(db: Session, ids: List[int], includes: Set[str]) -> Dict[in
 
     if "risks" in includes:
         rows = (
-            db.query(RiskControlLink.normalized_control_id, Risk.title, Risk.closure_status)
-            .join(Risk, Risk.id == RiskControlLink.risk_id)
-            .filter(RiskControlLink.normalized_control_id.in_(ids))
+            db.query(RiskControl.control_id, Risk.title, Risk.closure_status)
+            .join(Risk, Risk.id == RiskControl.risk_id)
+            .filter(RiskControl.control_source == "normalized", RiskControl.control_id.in_(ids))
             .all()
         )
         for cid, title, st in rows:

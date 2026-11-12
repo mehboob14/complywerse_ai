@@ -104,12 +104,11 @@ export default function RCSACustomTemplatesPage() {
       <section className="rounded-lg border border-slate-200 bg-white p-5">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="min-w-0">
-            <h2 className="text-lg font-semibold text-slate-900">Custom RCSA Templates</h2>
+            <h2 className="text-lg font-semibold text-slate-900">Imported matrices</h2>
             <p className="text-sm text-slate-600 mt-1 max-w-3xl">
-              Upload your bank&apos;s own RCSA Excel template. The platform reads its column structure
-              once and then drives every downstream feature &mdash; row CRUD, AI suggestions, risk-register
-              linkage, and export &mdash; using <em>your</em> exact layout. Existing question-based
-              templates keep working alongside this.
+              An RCSA spreadsheet your bank already uses, kept in its own layout for reference and export.
+              The matrix is read-only: its layout and items are what the file holds (upload a new file to change it). Campaigns
+              run on the versioned question templates under Templates, which link to register risks and controls.
             </p>
           </div>
         </div>
@@ -127,7 +126,7 @@ export default function RCSACustomTemplatesPage() {
               className="block w-full text-sm text-slate-700 file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
             />
             <p className="mt-1 text-xs text-slate-500">
-              The first sheet is parsed by default. Two-row merged headers (the UBL pattern)
+              The first sheet is parsed by default. Two-row merged headers
               are detected automatically; data rows already in the file are imported as seed rows.
             </p>
           </div>
@@ -139,7 +138,7 @@ export default function RCSACustomTemplatesPage() {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. UBL Information Security RCSA"
+              placeholder="e.g. Information Security RCSA"
               className="block w-full text-sm rounded-md border border-slate-300 px-3 py-2 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
             />
           </div>
@@ -236,7 +235,7 @@ export default function RCSACustomTemplatesPage() {
       {tab === 'templates' && (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-slate-900">Your custom templates</h3>
+          <h3 className="text-sm font-semibold text-slate-900">Your imported matrices</h3>
           <label className="text-xs text-slate-600 inline-flex items-center gap-1">
             <input
               type="checkbox"
@@ -252,7 +251,7 @@ export default function RCSACustomTemplatesPage() {
         ) : templates.length === 0 ? (
           <div className="rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center">
             <FileSpreadsheet className="mx-auto h-10 w-10 text-slate-300" />
-            <p className="mt-3 text-sm font-medium text-slate-700">No custom templates yet</p>
+            <p className="mt-3 text-sm font-medium text-slate-700">No imported matrices yet</p>
             <p className="mt-1 text-xs text-slate-500">
               Upload your existing RCSA Excel file above. The platform will preserve every column
               and re-export in the same layout.

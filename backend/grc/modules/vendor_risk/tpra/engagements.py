@@ -375,7 +375,7 @@ def update_engagement(engagement_id: int, body: EngagementIn, db: Session = Depe
 def _end(db: Session, v: Vendor, e: TPRAEngagement, actor_id: Optional[int], reason: str,
          extra: Optional[dict] = None) -> None:
     """The engagement is over: marked ended with when and why, its open assessment archived, the supplier recached
-    to the worst of the rest. Nothing is deleted. The caller commits."""
+    to the worst of the rest, and its Risk Register entry closed. Nothing is deleted. The caller commits."""
     now = datetime.utcnow()
     e.status, e.archived_at, e.ended_reason = "ended", now, reason[:2000]
     if e.end_date is None or e.end_date > now.date():
@@ -390,6 +390,8 @@ def _end(db: Session, v: Vendor, e: TPRAEngagement, actor_id: Optional[int], rea
         archived.append(a.id)
     db.flush()          # tenant sessions do not autoflush (PITFALLS 74): recache reads the ended status from the database
     service.recache(db, v)
+    service.close_register_risks(db, v, actor_id, f"Closed by Third-Party Risk: the engagement {e.name} ended "
+                                                  f"({reason[:200]}).", engagement=e)
     service.write_audit(db, v.tenant_id, entity="engagement", action="end", vendor_id=v.id, entity_id=e.id,
                         actor_id=actor_id, from_value="active", to_value="ended", reason=reason,
                         extra={"archived_assessments": archived, **(extra or {})})

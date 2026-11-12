@@ -26,6 +26,7 @@ from ....routers.auth_router import require_auth, get_user_tenants, refuse_impor
 from ....services import evidence_review
 from . import alerts, contracts, customisation, intake, service, rbac, exchange, tier_policy, monitoring, monitoring_connectors, monitoring_policy, ratings, quantification
 from . import findings
+from . import outsourcing
 from . import policy as vendor_policy
 from .bootstrap import DEFAULT_TIERING_CONFIG
 from .stages import stages_payload, is_valid_stage, cadence_days_for
@@ -197,6 +198,7 @@ def s_approval(a: TPRAApproval) -> dict:
         "open_conditions": _open, "overdue_conditions": _overdue,
         "rationale": a.rationale, "approver_id": a.approver_id,
         "residual_rating": a.residual_rating, "created_at": a.created_at,
+        "committee_id": a.committee_id, "meeting_id": a.meeting_id,
     }
 
 
@@ -380,6 +382,7 @@ class ApprovalIn(BaseModel):
     decision: Literal["approve", "approve_with_conditions", "defer", "reject"]
     conditions: Optional[list] = None
     rationale: Optional[str] = None
+    meeting_id: Optional[int] = None     # the committee meeting that took the decision (required for critical or important)
 
 class ConditionUpdate(BaseModel):
     status: Optional[Literal["open", "closed"]] = None
@@ -1490,6 +1493,8 @@ def create_approval(assessment_id: int, body: ApprovalIn, db: Session = Depends(
     a = _assessment(db, assessment_id, tids)
     # approvals:approve is high-sensitivity — no broad erm:risks:edit backdoor.
     rbac.require_write(db, user, "approvals", "approve", allow_fallback=False)
+    # A committee's meeting for a critical or important outsourcing, and never its classifier approving (409).
+    meeting = outsourcing.decision_meeting(db, user, a, body.decision, body.meeting_id)
     if body.decision in ("approve", "approve_with_conditions"):
         # Segregation of duties, the tier's approver role and no unmitigated
         # critical finding: the rules every approve route applies.
@@ -1529,6 +1534,7 @@ def create_approval(assessment_id: int, body: ApprovalIn, db: Session = Depends(
         tenant_id=a.tenant_id, vendor_id=a.vendor_id, assessment_id=a.id,
         decision=body.decision, conditions=_conditions, recommendation=rec,
         rationale=body.rationale, approver_id=user.id, residual_rating=a.residual_rating,
+        committee_id=meeting.committee_id if meeting else None, meeting_id=meeting.id if meeting else None,
     )
     db.add(ap)
     db.flush()

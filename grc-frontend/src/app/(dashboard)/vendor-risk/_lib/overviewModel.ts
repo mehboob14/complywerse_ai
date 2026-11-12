@@ -10,7 +10,8 @@ import { ATTENTION, attentionLabel, attentionTone } from './attention.ts';
 export type Scope = 'portfolio' | 'mine';
 
 export interface Kpis {
-  active_vendors: number; onboarded_this_period: number; critical_coverage: number; critical_count: number; critical_covered: number;
+  // critical_coverage is null when there are no critical vendors: nothing to cover is not 100%.
+  active_vendors: number; onboarded_this_period: number; critical_coverage: number | null; critical_count: number; critical_covered: number;
   portfolio_inherent: number; portfolio_residual: number; open_critical_findings: number; open_critical_overdue: number;
   closure_rate: number; reviews_due_30d: number; overdue_reviews: number; new_signals: number;
   attention_open?: number; attention_urgent?: number;
@@ -155,7 +156,9 @@ export function kpis(k: Kpis): Kpi[] {
   return [
     { key: 'queue', label: 'Attention queue', value: k.attention_open ?? 0, tone: urgent ? 'danger' : 'success', caption: urgent ? `${urgent} urgent` : undefined, href: '/vendor-risk/attention' },
     { key: 'active', label: 'Active vendors', value: k.active_vendors, tone: 'neutral', caption: k.onboarded_this_period > 0 ? `+${k.onboarded_this_period} onboarded · 30d` : 'No new onboards · 30d' },
-    { key: 'coverage', label: 'Critical coverage', value: `${k.critical_coverage}%`, tone: k.critical_coverage >= 90 ? 'success' : 'warning', caption: `${k.critical_covered}/${k.critical_count} critical assessed` },
+    k.critical_coverage == null
+      ? { key: 'coverage', label: 'Critical coverage', value: '—', tone: 'neutral', caption: 'No critical vendors' }
+      : { key: 'coverage', label: 'Critical coverage', value: `${k.critical_coverage}%`, tone: k.critical_coverage >= 90 ? 'success' : 'warning', caption: `${k.critical_covered}/${k.critical_count} critical assessed` },
     { key: 'residual', label: 'Portfolio residual', value: k.portfolio_residual, tone: 'neutral', caption: `${removed} removed vs inherent ${k.portfolio_inherent}` },
     {
       key: 'reviews', label: 'Reviews due ≤30d', value: k.reviews_due_30d, tone: k.overdue_reviews ? 'warning' : 'neutral',

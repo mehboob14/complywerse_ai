@@ -130,7 +130,7 @@ def test_an_approval_given_before_a_re_tier_that_sends_the_work_back_stops_count
 
 
 def test_a_stage_reopened_ahead_of_the_work_is_simply_there_to_do(db):
-    v = _vendor(db)
+    v = _vendor(db, critical_important=False)      # materiality decided: the tiering gate waits for it (wave 4-M)
     a = _work(db, v, "medium", "tiering", skipped=("dd_planning",))
     result = service.run_tiering(db, v, a, actor_id=OWNER, factors=HIGH)
     db.commit()

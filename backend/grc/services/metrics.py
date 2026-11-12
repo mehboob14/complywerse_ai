@@ -71,7 +71,7 @@ def band_of(score: Optional[float]) -> str:
 
 
 # Statuses treated as no-longer-open (excluded from the live portfolio headline).
-_CLOSED_STATES = ("closed",)
+_CLOSED_STATES = ("closed", "draft")   # not in the open portfolio: closed, and a library draft not yet accepted
 
 
 def open_portfolio(db: Session, tenant_ids: List[int]) -> List[Risk]:

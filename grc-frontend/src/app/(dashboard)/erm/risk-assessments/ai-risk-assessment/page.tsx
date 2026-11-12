@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { aiRiskAssessmentApi, type AIRiskEntry, type AIRiskEvidence } from '@/lib/api';
 import { PageLoader } from '@/components/ui';
+import { usePermissions } from '@/hooks/usePermissions';
 import { EvidenceMaturity } from '@/app/(dashboard)/evidence/_review';
 import {
   Bot, Plus, Upload, Download, Search, Sparkles, ChevronRight,
@@ -65,6 +66,8 @@ const emptyForm: EditableEntry = {
 
 export default function AIRiskAssessmentPage() {
   const queryClient = useQueryClient();
+  const { hasAnyPermission } = usePermissions();
+  const canDelete = hasAnyPermission(['risks:risk_assessment:delete', 'erm:risks:delete']);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -129,7 +132,8 @@ export default function AIRiskAssessmentPage() {
   const summary = useMemo(() => {
     const total = entries.length;
     const high = entries.filter((e) => (e.residual_risk_level || '').toLowerCase() === 'high').length;
-    const open = entries.filter((e) => (e.status || '').toLowerCase() !== 'closed').length;
+    // Accepted and Closed are decided; only Open and In Progress are still being worked
+    const open = entries.filter((e) => ['open', 'in progress'].includes((e.status || '').toLowerCase())).length;
     const withAI = entries.filter((e) => !!e.ai_generated_at).length;
     return { total, high, open, withAI };
   }, [entries]);
@@ -249,7 +253,7 @@ export default function AIRiskAssessmentPage() {
         <div>
           <h1 className="text-xl font-semibold text-slate-900 flex items-center gap-2">
             <Bot className="h-5 w-5 text-primary-600" strokeWidth={1.75} />
-            AI Risk Assessment
+            AI Systems Risk Register
           </h1>
           <p className="text-sm text-slate-600 mt-1">
             Register, score, and treat AI / ML system risks using the AI Risk Assessment Template.
@@ -452,13 +456,13 @@ export default function AIRiskAssessmentPage() {
                       >
                         <Edit2 className="h-4 w-4" />
                       </button>
-                      <button
+                      {canDelete && <button
                         title="Delete"
                         onClick={() => setDeleteTarget(entry)}
                         className="p-1.5 rounded-md text-slate-600 hover:bg-rose-50 hover:text-rose-600"
                       >
                         <Trash2 className="h-4 w-4" />
-                      </button>
+                      </button>}
                     </div>
                   </Td>
                 </tr>

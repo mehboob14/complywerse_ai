@@ -83,6 +83,11 @@ class Vendor(Base):
     tags = Column(JSON, nullable=True)
     security_owner_id = Column(Integer, nullable=True)
     relationship_owner_id = Column(Integer, nullable=True)
+    # ── Outsourcing (EBA/GL/2019/02, SBP outsourcing framework; vendor_risk/tpra/outsourcing.py) ──────────────
+    # Supports a critical or important function? Decided by the second line at tiering; null is "not classified".
+    critical_important = Column(Boolean, nullable=True)
+    # {materiality: {reason, by, at}, exit_plan: {status, summary, link, by, at}, regulator: {required, sent_on, reference, by, at}}
+    outsourcing = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -330,6 +335,8 @@ class VendorIncident(Base):
     corrective_actions = Column(Text, nullable=True)
     # Linkage — the Issue auto-created for a critical incident (loose: plain id).
     linked_issue_id = Column(Integer, nullable=True, index=True)
+    # The Basel loss event (grc_risk_incidents) this incident was recorded as; one each (tpra/outsourcing.py).
+    loss_event_id = Column(Integer, nullable=True, index=True)
     reported_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -250,11 +250,14 @@ def _listen(db, event):
 
 def test_an_overdue_date_fires_once_only_for_a_listening_workflow_and_recent_dates(db, monkeypatch):
     now = datetime.utcnow()
+    # risk actions are CAPA actions on a risk treatment issue (wave 2-E); a CAPA action on any other issue is not one
+    db.add_all([_make(m.Issue, id=1, issue_type="risk_treatment"), _make(m.Issue, id=2, issue_type="incident")])
     db.add_all([
-        _make(m.RiskMitigationAction, title="Patch the firewall", status="open", due_date=now - timedelta(days=2)),
-        _make(m.RiskMitigationAction, title="Done already", status="completed", due_date=now - timedelta(days=2)),
-        _make(m.RiskMitigationAction, title="Overdue for months", status="open", due_date=now - timedelta(days=60)),
-        _make(m.RiskMitigationAction, title="Due tomorrow", status="open", due_date=now + timedelta(days=1)),
+        _make(m.IssueAction, issue_id=1, title="Patch the firewall", status="planned", due_date=now - timedelta(days=2)),
+        _make(m.IssueAction, issue_id=1, title="Done already", status="completed", due_date=now - timedelta(days=2)),
+        _make(m.IssueAction, issue_id=1, title="Overdue for months", status="planned", due_date=now - timedelta(days=60)),
+        _make(m.IssueAction, issue_id=1, title="Due tomorrow", status="planned", due_date=now + timedelta(days=1)),
+        _make(m.IssueAction, issue_id=2, title="Not a risk action", status="planned", due_date=now - timedelta(days=2)),
     ])
     db.commit()
     dispatcher, fired = _dispatcher(db, monkeypatch)
@@ -263,7 +266,7 @@ def test_an_overdue_date_fires_once_only_for_a_listening_workflow_and_recent_dat
     assert dispatcher._check_due_dates() == 1
     assert fired[0]["event_name"] == "mitigation_action_overdue"
     assert fired[0]["payload"]["title"] == "Patch the firewall" and fired[0]["payload"]["overdue"] is True
-    assert fired[0]["correlation_id"].startswith("due:mitigation_action_overdue:RiskMitigationAction:")
+    assert fired[0]["correlation_id"].startswith("due:mitigation_action_overdue:IssueAction:")
     assert dispatcher._check_due_dates() == 0                          # once per record and date
 
 

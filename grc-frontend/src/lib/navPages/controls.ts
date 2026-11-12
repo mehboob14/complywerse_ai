@@ -30,6 +30,8 @@ export const PAGES: PageSpec[] = [
   { path: '/controls/configure-frameworks', label: 'Configure Frameworks', area: COMPLIANCE, parent: '/controls', hidden: 'opens from the Control Catalog' },
   { path: '/controls/overview', label: 'Controls Overview', area: COMPLIANCE, parent: '/controls', hidden: NO_LINK },
   { path: '/controls/workbench', label: 'Controls Workbench', area: COMPLIANCE, parent: '/controls', hidden: NO_LINK },
+  // a framework control's vulnerability evidence (the compliance side of a vulnerability): a page of the erm folder, but not a risk page, so it no longer lights the Risk menu
+  { path: '/erm/framework-controls/:id', label: 'Framework control', area: COMPLIANCE, parent: '/controls', hidden: `${NO_LINK} (a framework control's vulnerability evidence)` },
   { path: LIBRARY, label: 'Unified Control Library', area: COMPLIANCE, parent: '/compliance', hidden: 'opens from the Compliance overview (Control Library card), the Performance Overview cards and the Control Catalog tabs (Normalized Controls)', keywords: ['Normalized Controls', 'Control library'] },
   { path: `${LIBRARY}/assurance`, label: 'Control Testing & Assurance', area: COMPLIANCE, parent: '/compliance', hidden: 'opens from the Performance Overview (Control Testing & Assurance card) and the Control Catalog tabs (Assurance)', keywords: ['Control assurance'] },
   { path: `${LIBRARY}/:id`, label: 'Normalized control', area: COMPLIANCE, parent: LIBRARY, hidden: 'opens from a Unified Control Library row and from the risks, assets and reports that link a control' },

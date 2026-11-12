@@ -1,9 +1,15 @@
 from ._00_base import *  # noqa: F401,F403
 from pydantic import field_validator
+from typing import Literal
 
 # =============================================================================
 # Advanced ERM Schemas
 # =============================================================================
+
+def _kri_frequency(v):
+    """The KPI form once saved "annual"; the KRI value is "annually". Both are taken, "annually" is kept."""
+    return "annually" if v == "annual" else v
+
 
 class RiskKRIBase(BaseModel):
     name: str
@@ -35,6 +41,11 @@ class RiskKRIBase(BaseModel):
     def _default_kind(cls, v):
         return v if v else "kri"
 
+    @field_validator("frequency", mode="before")
+    @classmethod
+    def _canonical_frequency(cls, v):
+        return _kri_frequency(v)
+
 
 class RiskKRICreate(RiskKRIBase):
     risk_id: Optional[int] = None
@@ -65,6 +76,11 @@ class RiskKRIUpdate(BaseModel):
     linked_control_ids: Optional[List[int]] = None
     linked_objective_ids: Optional[List[int]] = None
     linked_framework_id: Optional[int] = None
+
+    @field_validator("frequency", mode="before")
+    @classmethod
+    def _canonical_frequency(cls, v):
+        return _kri_frequency(v)
 
 
 class RiskKRIResponse(BaseModel):
@@ -100,12 +116,22 @@ class RiskKRIResponse(BaseModel):
     linked_control_ids: Optional[List[int]] = None
     linked_objective_ids: Optional[List[int]] = None
     linked_framework_id: Optional[int] = None
+    status: Optional[str] = None            # draft until a second person approves it; None/active otherwise
+    created_by: Optional[int] = None
+    approved_by: Optional[int] = None
+    approved_at: Optional[datetime] = None
+    threshold_change: Optional[Dict[str, Any]] = None   # a threshold change waiting for (or given) a second person's decision
 
     @field_validator("kind", mode="before")
     @classmethod
     def _default_kind(cls, v):
         # ORM rows may still have NULL kind before backfill; never fail hydration.
         return v if v else "kri"
+
+    @field_validator("frequency", mode="before")
+    @classmethod
+    def _canonical_frequency(cls, v):
+        return _kri_frequency(v)
 
     class Config:
         from_attributes = True
@@ -137,7 +163,32 @@ class RiskKRIMeasurementResponse(BaseModel):
         from_attributes = True
 
 
-class RiskIncidentBase(BaseModel):
+class RiskIncidentLossFields(BaseModel):
+    """Basel loss-event fields. event_type / business_line take a key or label of grc/modules/erm/loss_taxonomy.py (the router
+    checks them: the schemas package cannot import the ERM module). net_loss is computed on save, never sent."""
+    discovered_date: Optional[datetime] = None
+    event_type: Optional[str] = None
+    event_type_l2: Optional[str] = None
+    business_line: Optional[str] = None
+    gross_loss: Optional[float] = Field(None, ge=0)
+    recoveries: Optional[float] = Field(None, ge=0)
+    currency: Optional[str] = None
+    accounting_date: Optional[datetime] = None
+    is_near_miss: Optional[bool] = None
+    boundary_type: Optional[Literal["none", "credit", "market"]] = None
+
+    @field_validator("currency", mode="before")
+    @classmethod
+    def _iso_currency(cls, v):
+        if v is None or not str(v).strip():
+            return None
+        code = str(v).strip().upper()
+        if len(code) != 3 or not code.isalpha():
+            raise ValueError("currency must be a 3-letter ISO code such as USD")
+        return code
+
+
+class RiskIncidentBase(RiskIncidentLossFields):
     title: str
     description: Optional[str] = None
     incident_date: datetime
@@ -158,7 +209,7 @@ class RiskIncidentCreate(RiskIncidentBase):
     linked_evidence_ids: Optional[List[int]] = None
 
 
-class RiskIncidentUpdate(BaseModel):
+class RiskIncidentUpdate(RiskIncidentLossFields):
     title: Optional[str] = None
     description: Optional[str] = None
     incident_date: Optional[datetime] = None
@@ -202,9 +253,32 @@ class RiskIncidentResponse(BaseModel):
     tags: Optional[List[str]] = None
     assignee_name: Optional[str] = None
     link_counts: Optional[Dict[str, int]] = None
+    event_type: Optional[str] = None
+    event_type_l2: Optional[str] = None
+    business_line: Optional[str] = None
+    gross_loss: Optional[float] = None
+    recoveries: Optional[float] = None
+    net_loss: Optional[float] = None
+    currency: Optional[str] = None
+    accounting_date: Optional[datetime] = None
+    is_near_miss: Optional[bool] = None
+    boundary_type: Optional[str] = None
+    validation_status: str = "pending"
+    validated_by: Optional[int] = None
+    validated_at: Optional[datetime] = None
+    validation_note: Optional[str] = None
+
+    @field_validator("validation_status", mode="before")
+    @classmethod
+    def _never_validated_is_pending(cls, v):
+        return v or "pending"         # rows from before loss events
 
     class Config:
         from_attributes = True
+
+
+class RiskIncidentValidation(BaseModel):
+    note: Optional[str] = None
 
 
 class RiskReviewCreate(BaseModel):
@@ -309,6 +383,7 @@ class RiskAppetiteConfigUpdate(BaseModel):
     escalation_owner_id: Optional[int] = None
     alert_enabled: Optional[bool] = None
     description: Optional[str] = None
+    concentration_limit: Optional[int] = Field(None, ge=1, le=1000)   # third party: critical or important vendors on one fourth party
 
 
 class RiskAppetiteConfigResponse(BaseModel):
@@ -322,6 +397,7 @@ class RiskAppetiteConfigResponse(BaseModel):
     alert_enabled: bool = True
     description: Optional[str]
     updated_at: datetime
+    concentration_limit: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -333,6 +409,9 @@ class RiskReportCreate(BaseModel):
     description: Optional[str] = None
     report_period_start: Optional[datetime] = None
     report_period_end: Optional[datetime] = None
+    # committee packs (report_type "committee_pack"); a meeting sets the committee
+    committee_id: Optional[int] = None
+    meeting_id: Optional[int] = None
 
 
 class RiskReportResponse(BaseModel):
@@ -348,9 +427,21 @@ class RiskReportResponse(BaseModel):
     report_data: Dict[str, Any]
     file_path: Optional[str]
     status: str
+    committee_id: Optional[int] = None
+    meeting_id: Optional[int] = None
+    commentary: Optional[Dict[str, str]] = None
+    approved_by: Optional[int] = None
+    approved_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
+
+
+class CommitteePackUpdate(BaseModel):
+    """Edits to a pack that is not frozen: commentary per section (merged), the meeting it goes to, its title."""
+    commentary: Optional[Dict[str, str]] = None
+    meeting_id: Optional[int] = None
+    title: Optional[str] = Field(None, min_length=1, max_length=255)
 
 
 class RiskTrendData(BaseModel):

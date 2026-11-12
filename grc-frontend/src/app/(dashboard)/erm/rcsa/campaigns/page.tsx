@@ -15,13 +15,13 @@ import {
   Calendar,
   Building2,
   CheckCircle,
-  Clock,
   FileText,
 } from 'lucide-react';
 import Link from 'next/link';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
 import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
+import { filterCampaignPeriods, newCampaignPeriods } from './periods';
 
 interface Campaign {
   id: number;
@@ -36,7 +36,6 @@ interface Campaign {
   progress: number;
   assigned_units: number;
   completed_units: number;
-  pending_assessments: number;
   created_at: string;
   updated_at: string;
 }
@@ -52,14 +51,35 @@ const STATUS_COLORS: Record<string, { bg: string; text: string; icon: React.Elem
   closed: { bg: 'bg-primary-50', text: 'text-primary-700', icon: CheckCircle },
 };
 
-const PERIOD_OPTIONS = [
-  { value: '', label: 'All Periods' },
-  { value: 'Q1 2025', label: 'Q1 2025' },
-  { value: 'Q2 2025', label: 'Q2 2025' },
-  { value: 'Q3 2025', label: 'Q3 2025' },
-  { value: 'Q4 2025', label: 'Q4 2025' },
-  { value: 'Annual 2025', label: 'Annual 2025' },
-];
+// The list endpoint answers RCSACampaignResponse; the cards read the shape of /campaigns/{id}/detail.
+interface CampaignRow {
+  id: number;
+  name: string;
+  description?: string;
+  template_id: number;
+  template_name: string | null;
+  status: Campaign['status'];
+  period_type: string;
+  period_label: string | null;
+  start_date: string;
+  due_date: string;
+  assessment_count: number;
+  completed_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+function toCampaign(c: CampaignRow): Campaign {
+  return {
+    ...c,
+    template_name: c.template_name ?? '',
+    period: c.period_label || c.period_type,
+    end_date: c.due_date,
+    assigned_units: c.assessment_count,
+    completed_units: c.completed_count,
+    progress: c.assessment_count > 0 ? Math.round((c.completed_count / c.assessment_count) * 100) : 0,
+  };
+}
 
 export default function RCSACampaignsPage() {
   const searchParams = useSearchParams();
@@ -71,14 +91,16 @@ export default function RCSACampaignsPage() {
   const [isModalOpen, setIsModalOpen] = useState(showNewModal);
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
-  const canCreate = hasPermission('risks:rcsa:create');
+  const canCreate = hasPermission('erm:rcsa:create') || hasPermission('erm:risks:create');
+  const canEdit = hasPermission('erm:rcsa:edit') || hasPermission('erm:risks:edit');
+  const canDelete = hasPermission('erm:rcsa:delete') || hasPermission('erm:risks:delete');
 
   const { data: campaigns, isLoading } = useQuery({
     queryKey: ['rcsa-campaigns', statusFilter, periodFilter],
     queryFn: async () => {
       try {
         const response = await rcsaApi.getCampaigns({ status: statusFilter || undefined, period: periodFilter || undefined });
-        return response.data as Campaign[];
+        return (response.data as CampaignRow[]).map(toCampaign);
       } catch {
         return [] as Campaign[];
       }
@@ -193,7 +215,7 @@ export default function RCSACampaignsPage() {
         />
         <MultiSelectDropdown
           title="Period"
-          items={PERIOD_OPTIONS.filter((o) => o.value).map((o) => ({ value: o.value, label: o.label }))}
+          items={filterCampaignPeriods().map((p) => ({ value: p, label: p }))}
           selectedValues={periodFilter ? [periodFilter] : []}
           onApply={(vals) => setPeriodFilter(vals[0] || '')}
           multiSelect={false}
@@ -259,13 +281,6 @@ export default function RCSACampaignsPage() {
                     />
                   </div>
                 </div>
-
-                {campaign.pending_assessments > 0 && (
-                  <div className="flex items-center gap-1.5 text-amber-600 text-sm">
-                    <Clock className="h-4 w-4" />
-                    {campaign.pending_assessments} pending assessments
-                  </div>
-                )}
               </div>
 
               <div className="flex items-center gap-2 pt-4 border-t border-slate-200">
@@ -277,7 +292,7 @@ export default function RCSACampaignsPage() {
                   View
                 </Link>
                 
-                {campaign.status === 'draft' && (
+                {canEdit && campaign.status === 'draft' && (
                   <button
                     onClick={() => {
                       if (confirm('Activate this campaign?')) {
@@ -291,7 +306,7 @@ export default function RCSACampaignsPage() {
                   </button>
                 )}
                 
-                {campaign.status === 'active' && (
+                {canEdit && campaign.status === 'active' && (
                   <button
                     onClick={() => {
                       if (confirm('Close this campaign?')) {
@@ -305,7 +320,7 @@ export default function RCSACampaignsPage() {
                   </button>
                 )}
                 
-                {campaign.status !== 'active' && (
+                {canDelete && campaign.status !== 'active' && (
                   <button
                     onClick={() => {
                       if (confirm('Are you sure you want to delete this campaign?')) {
@@ -333,10 +348,12 @@ export default function RCSACampaignsPage() {
               ? 'No campaigns match your filters'
               : 'Create your first RCSA campaign to get started'}
           </p>
+          {canCreate && (
           <button onClick={() => setIsModalOpen(true)} className="btn-primary">
             <Plus className="h-4 w-4 mr-2" />
             Create Campaign
           </button>
+          )}
         </div>
       )}
 
@@ -371,7 +388,7 @@ export default function RCSACampaignsPage() {
                 name="name"
                 className="input w-full"
                 required
-                placeholder="e.g., Q1 2026 RCSA"
+                placeholder={`e.g., ${newCampaignPeriods()[0]} RCSA`}
               />
             </div>
             <div>
@@ -396,11 +413,9 @@ export default function RCSACampaignsPage() {
               <label className="block text-sm font-medium text-slate-700 mb-1">Period</label>
               <select name="period" className="input w-full" required>
                 <option value="">Select period</option>
-                <option value="Q1 2026">Q1 2026</option>
-                <option value="Q2 2026">Q2 2026</option>
-                <option value="Q3 2026">Q3 2026</option>
-                <option value="Q4 2026">Q4 2026</option>
-                <option value="Annual 2026">Annual 2026</option>
+                {newCampaignPeriods().map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
               </select>
             </div>
             <div className="grid grid-cols-2 gap-4">

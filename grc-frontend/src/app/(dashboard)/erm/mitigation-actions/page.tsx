@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { Fragment, useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { ermApi, criticalTasksApi, evidenceApi } from '@/lib/api';
+import { ermApi, criticalTasksApi, evidenceApi, type RiskAction, type RiskActionStatus } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
-import { Risk, RiskMitigationAction } from '@/types';
+import { Risk } from '@/types';
 import {
   Loader2,
   Plus,
@@ -21,13 +21,22 @@ import {
   Paperclip,
   X as XIcon,
   UserCircle2,
+  ShieldCheck,
+  Scale,
+  CalendarClock,
 } from 'lucide-react';
 import Link from 'next/link';
 import { MultiSelectDropdown, RightSlidePanel, SearchInput, PageLoader } from '@/components/ui';
+import { OPEN_STATUSES, STATUS_LABELS, isActionOverdue, isDueSoon, matchesStatusFilter, sortForTracker } from './actionStatus';
+import AcceptancesTab, { type AcceptanceRisk } from './AcceptancesTab';
+
+// Risk actions are CAPA actions on the risk's treatment issue (wave 2-E); the API serves owner_name and risk_title.
+type ActionRow = RiskAction;
 
 type ActionType = 'mitigate' | 'transfer' | 'avoid' | 'accept';
-type ActionStatus = 'open' | 'in_progress' | 'completed' | 'overdue' | 'cancelled';
+type ActionStatus = RiskActionStatus;
 type ActionPriority = 'critical' | 'high' | 'medium' | 'low';
+type PageTab = 'actions' | 'acceptances';
 
 const ACTION_TYPES: { value: ActionType; label: string; color: string }[] = [
   { value: 'mitigate', label: 'Mitigate', color: 'bg-primary-50 text-primary-700' },
@@ -36,13 +45,26 @@ const ACTION_TYPES: { value: ActionType; label: string; color: string }[] = [
   { value: 'accept', label: 'Accept', color: 'bg-slate-100 text-slate-600' },
 ];
 
+// The CAPA engine's statuses. Done and verified are reached with Complete and Verify, not the edit form.
 const ACTION_STATUSES: { value: ActionStatus; label: string; color: string }[] = [
-  { value: 'open', label: 'Open', color: 'bg-primary-50 text-primary-700' },
-  { value: 'in_progress', label: 'In Progress', color: 'bg-amber-50 text-amber-700' },
-  { value: 'completed', label: 'Completed', color: 'bg-emerald-50 text-emerald-700' },
-  { value: 'overdue', label: 'Overdue', color: 'bg-rose-50 text-rose-700' },
-  { value: 'cancelled', label: 'Cancelled', color: 'bg-slate-100 text-slate-600' },
+  { value: 'planned', label: STATUS_LABELS.planned, color: 'bg-primary-50 text-primary-700' },
+  { value: 'in_progress', label: STATUS_LABELS.in_progress, color: 'bg-amber-50 text-amber-700' },
+  { value: 'blocked', label: STATUS_LABELS.blocked, color: 'bg-orange-50 text-orange-700' },
+  { value: 'completed', label: STATUS_LABELS.completed, color: 'bg-blue-50 text-blue-700' },
+  { value: 'verified', label: STATUS_LABELS.verified, color: 'bg-emerald-50 text-emerald-700' },
+  { value: 'cancelled', label: STATUS_LABELS.cancelled, color: 'bg-slate-100 text-slate-600' },
 ];
+const EDITABLE_STATUSES = ACTION_STATUSES.filter((s) => ['planned', 'in_progress', 'blocked', 'cancelled'].includes(s.value));
+
+// ?filter= deep links (the Overview tile sends overdue) and the status menu
+const STATUS_FILTERS = [
+  { value: 'open', label: 'Open' },
+  { value: 'overdue', label: 'Overdue' },
+  { value: 'due_soon', label: 'Due in 14 days' },
+  ...ACTION_STATUSES.map((s) => ({ value: s.value as string, label: s.label })),
+];
+
+const errorDetail = (err: any, fallback: string) => err?.response?.data?.detail || fallback;
 
 const ACTION_PRIORITIES: { value: ActionPriority; label: string; color: string }[] = [
   { value: 'critical', label: 'Critical', color: 'bg-rose-50 text-rose-700' },
@@ -57,24 +79,35 @@ interface MitigationActionFormData {
   risk_id: number;
   action_type: ActionType;
   priority: ActionPriority;
-  status: ActionStatus;
+  status?: ActionStatus;
   owner_id?: number;
-  due_date?: string;
+  due_date?: string | null;
   expected_residual_reduction?: number;
   notes?: string;
 }
 
 export default function MitigationActionsPage() {
-  const { hasPermission } = usePermissions();
-  const canCreate = hasPermission('erm:mitigation_actions:create');
-  const canDelete = hasPermission('erm:mitigation_actions:delete');
+  const { hasAnyPermission } = usePermissions();
+  // the backend accepts the module grant or the risk-editor one (mitigation_actions.py)
+  const canCreate = hasAnyPermission(['erm:mitigation_actions:create', 'erm:risks:create']);
+  const canEdit = hasAnyPermission(['erm:mitigation_actions:edit', 'erm:risks:edit']);
+  const canDelete = hasAnyPermission(['erm:mitigation_actions:delete', 'erm:risks:delete']);
+  const [tab, setTab] = useState<PageTab>('actions');
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [editingAction, setEditingAction] = useState<RiskMitigationAction | null>(null);
-  const [completingAction, setCompletingAction] = useState<RiskMitigationAction | null>(null);
+  const [editingAction, setEditingAction] = useState<ActionRow | null>(null);
+  const [completingAction, setCompletingAction] = useState<ActionRow | null>(null);
+  const [verifyError, setVerifyError] = useState<{ title: string; message: string } | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [priorityFilter, setPriorityFilter] = useState<string>('all');
-  const [actionTypeFilter, setActionTypeFilter] = useState<string>('all');
+  const [ownerFilter, setOwnerFilter] = useState<string>('all');
+  const [riskFilter, setRiskFilter] = useState<string>('all');
+  useEffect(() => {
+    // deep links: /erm/mitigation-actions?filter=overdue (the Overview tile) and ?tab=acceptances
+    const params = new URLSearchParams(window.location.search);
+    const f = params.get('filter');
+    if (f && STATUS_FILTERS.some((s) => s.value === f)) setStatusFilter(f);
+    if (params.get('tab') === 'acceptances') setTab('acceptances');
+  }, []);
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const toggleExpand = (id: number) => {
     setExpandedRows((prev) => {
@@ -94,127 +127,125 @@ export default function MitigationActionsPage() {
     },
   });
 
-  const { data: overdueActions } = useQuery({
-    queryKey: ['erm-mitigation-actions-overdue'],
-    queryFn: async () => {
-      const response = await ermApi.mitigationActions.getOverdue();
-      return response.data;
-    },
-  });
-
-  const { data: allActions, isLoading: actionsLoading } = useQuery({
-    queryKey: ['erm-all-mitigation-actions', risks?.map(r => r.id)],
-    queryFn: async () => {
-      if (!risks || risks.length === 0) return [];
-      const actionsPromises = risks.map(async (risk) => {
-        try {
-          const response = await ermApi.mitigationActions.getAll(risk.id);
-          return response.data.map((action: RiskMitigationAction) => ({
-            ...action,
-            riskTitle: risk.title,
-          }));
-        } catch {
-          return [];
-        }
-      });
-      const results = await Promise.all(actionsPromises);
-      return results.flat();
-    },
-    enabled: !!risks && risks.length > 0,
+  // one tenant-wide call instead of one per risk
+  const { data: actionList, isLoading: actionsLoading } = useQuery({
+    queryKey: ['erm-all-mitigation-actions'],
+    queryFn: async () => (await ermApi.mitigationActions.list()).data,
     placeholderData: keepPreviousData,
   });
+  const allActions = useMemo(() => sortForTracker(actionList || []), [actionList]);
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ['erm-all-mitigation-actions'] });
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => ermApi.mitigationActions.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['erm-all-mitigation-actions'] });
-      queryClient.invalidateQueries({ queryKey: ['erm-mitigation-actions-overdue'] });
-    },
+    onSuccess: refresh,
   });
 
+  // Verification is by a second person: the server refuses (409) whoever completed the action or is assigned it.
+  const verifyMutation = useMutation({
+    mutationFn: (action: ActionRow) => ermApi.mitigationActions.verify(action.id),
+    onSuccess: () => { setVerifyError(null); refresh(); },
+    onError: (err: any, action) => setVerifyError({ title: action.title, message: errorDetail(err, 'Could not verify the action') }),
+  });
+
+  const ownerOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    allActions.forEach((a) => seen.set(a.owner_id ? String(a.owner_id) : 'none', a.owner_name || (a.owner_id ? `User #${a.owner_id}` : 'No owner')));
+    return Array.from(seen, ([value, label]) => ({ value, label }));
+  }, [allActions]);
+  const riskOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    allActions.forEach((a) => seen.set(String(a.risk_id), a.risk_title || `Risk #${a.risk_id}`));
+    return Array.from(seen, ([value, label]) => ({ value, label }));
+  }, [allActions]);
+
   const filteredActions = useMemo(() => {
-    if (!allActions) return [];
-    return allActions.filter((action: RiskMitigationAction & { riskTitle: string }) => {
-      const matchesSearch = !searchTerm || 
-        action.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        action.riskTitle?.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesStatus = statusFilter === 'all' || action.status === statusFilter;
-      const matchesPriority = priorityFilter === 'all' || action.priority === priorityFilter;
-      const matchesType = actionTypeFilter === 'all' || action.action_type === actionTypeFilter;
-      return matchesSearch && matchesStatus && matchesPriority && matchesType;
-    });
-  }, [allActions, searchTerm, statusFilter, priorityFilter, actionTypeFilter]);
+    const q = searchTerm.toLowerCase();
+    return allActions.filter((action) =>
+      (!q || action.title.toLowerCase().includes(q) || !!action.risk_title?.toLowerCase().includes(q))
+      && matchesStatusFilter(action, statusFilter)
+      && (ownerFilter === 'all' || (action.owner_id ? String(action.owner_id) : 'none') === ownerFilter)
+      && (riskFilter === 'all' || String(action.risk_id) === riskFilter));
+  }, [allActions, searchTerm, statusFilter, ownerFilter, riskFilter]);
 
   const stats = useMemo(() => {
-    if (!allActions) return { total: 0, open: 0, overdue: 0, completedThisMonth: 0 };
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    
     return {
-      total: allActions.length,
-      open: allActions.filter((a: RiskMitigationAction) => a.status === 'open' || a.status === 'in_progress').length,
-      overdue: overdueActions?.length || allActions.filter((a: RiskMitigationAction) => a.status === 'overdue').length,
-      completedThisMonth: allActions.filter((a: RiskMitigationAction) => 
-        a.status === 'completed' && a.completed_at && new Date(a.completed_at) >= startOfMonth
-      ).length,
+      open: allActions.filter((a) => OPEN_STATUSES.includes(a.status)).length,
+      overdue: allActions.filter((a) => isActionOverdue(a, now)).length,
+      dueSoon: allActions.filter((a) => isDueSoon(a, now)).length,
+      awaitingVerification: allActions.filter((a) => a.status === 'completed').length,
     };
-  }, [allActions, overdueActions]);
+  }, [allActions]);
 
-  const isLoading = risksLoading || actionsLoading;
+  const acceptanceRisks = (risks || []) as Array<Risk & AcceptanceRisk>;
+  const waitingAcceptances = acceptanceRisks.filter((r) => r.acceptance_state === 'requested').length;
 
-  if (isLoading) {
+  if (risksLoading || actionsLoading) {
     return (
       <PageLoader className="h-64" />
     );
   }
 
+  const tiles = [
+    { label: 'Open actions', value: stats.open, icon: ListTodo, tone: 'bg-primary-50 text-primary-600', filter: 'open' },
+    { label: 'Overdue', value: stats.overdue, icon: AlertTriangle, tone: 'bg-rose-50 text-rose-600', filter: 'overdue' },
+    { label: 'Due in 14 days', value: stats.dueSoon, icon: CalendarClock, tone: 'bg-amber-50 text-amber-600', filter: 'due_soon' },
+    { label: 'Done, unverified', value: stats.awaitingVerification, icon: ShieldCheck, tone: 'bg-blue-50 text-blue-600', filter: 'completed' },
+  ];
+
   return (
     <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
+      <h2 className="text-lg sm:text-xl font-semibold text-slate-900">Actions & Acceptances</h2>
+
+      <div className="rounded-lg border border-slate-200 bg-white px-3">
+        <nav className="flex gap-1" aria-label="Actions and acceptances">
+          {([['actions', 'Actions', ListTodo, stats.open], ['acceptances', 'Acceptances', Scale, waitingAcceptances]] as const).map(
+            ([id, label, Icon, count]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setTab(id)}
+                aria-current={tab === id ? 'page' : undefined}
+                className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                  tab === id ? 'border-primary-600 text-primary-700' : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+                {count > 0 && (
+                  <span className="ml-0.5 inline-flex h-4 min-w-[18px] items-center justify-center rounded-full bg-primary-100 px-1 text-[10px] font-semibold text-primary-700">
+                    {count}
+                  </span>
+                )}
+              </button>
+            ))}
+        </nav>
+      </div>
+
+      {tab === 'acceptances' ? (
+        <AcceptancesTab risks={acceptanceRisks} />
+      ) : (
+      <>
       <div className="grid gap-4 sm:grid-cols-4">
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-primary-50 p-2">
-              <ListTodo className="h-5 w-5 text-primary-600" />
+        {tiles.map(({ label, value, icon: Icon, tone, filter }) => (
+          <button
+            key={label}
+            type="button"
+            onClick={() => setStatusFilter(statusFilter === filter ? 'all' : filter)}
+            className={`rounded-xl border bg-white p-4 text-left ${statusFilter === filter ? 'border-primary-300 ring-1 ring-primary-200' : 'border-slate-200'}`}
+          >
+            <div className="flex items-center gap-3">
+              <div className={`rounded-lg p-2 ${tone}`}>
+                <Icon className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-slate-900">{value}</p>
+                <p className="text-sm text-slate-600">{label}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-2xl font-bold text-slate-900">{stats.total}</p>
-              <p className="text-sm text-slate-600">Total Actions</p>
-            </div>
-          </div>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-amber-50 p-2">
-              <Clock className="h-5 w-5 text-amber-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-slate-900">{stats.open}</p>
-              <p className="text-sm text-slate-600">Open Actions</p>
-            </div>
-          </div>
-        </div>
-        <div className="rounded-xl border border-rose-200 bg-white p-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-rose-50 p-2">
-              <AlertTriangle className="h-5 w-5 text-rose-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-rose-600">{stats.overdue}</p>
-              <p className="text-sm text-slate-600">Overdue Actions</p>
-            </div>
-          </div>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-emerald-50 p-2">
-              <CheckCircle className="h-5 w-5 text-emerald-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-slate-900">{stats.completedThisMonth}</p>
-              <p className="text-sm text-slate-600">Completed (Month)</p>
-            </div>
-          </div>
-        </div>
+          </button>
+        ))}
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -223,33 +254,35 @@ export default function MitigationActionsPage() {
             <SearchInput
               value={searchTerm}
               onChange={setSearchTerm}
-              placeholder="Search actions..."
+              placeholder="Search actions or risks..."
               size="md"
             />
           </div>
           <MultiSelectDropdown
             title="Status"
-            items={ACTION_STATUSES.map((s) => ({ value: s.value, label: s.label }))}
+            items={STATUS_FILTERS}
             selectedValues={statusFilter !== 'all' ? [statusFilter] : []}
             onApply={(values) => setStatusFilter(values[0] || 'all')}
             multiSelect={false}
             placeholder="All Statuses"
           />
           <MultiSelectDropdown
-            title="Priority"
-            items={ACTION_PRIORITIES.map((p) => ({ value: p.value, label: p.label }))}
-            selectedValues={priorityFilter !== 'all' ? [priorityFilter] : []}
-            onApply={(values) => setPriorityFilter(values[0] || 'all')}
+            title="Owner"
+            items={ownerOptions}
+            selectedValues={ownerFilter !== 'all' ? [ownerFilter] : []}
+            onApply={(values) => setOwnerFilter(values[0] || 'all')}
             multiSelect={false}
-            placeholder="All Priorities"
+            forceSearch
+            placeholder="All Owners"
           />
           <MultiSelectDropdown
-            title="Type"
-            items={ACTION_TYPES.map((t) => ({ value: t.value, label: t.label }))}
-            selectedValues={actionTypeFilter !== 'all' ? [actionTypeFilter] : []}
-            onApply={(values) => setActionTypeFilter(values[0] || 'all')}
+            title="Risk"
+            items={riskOptions}
+            selectedValues={riskFilter !== 'all' ? [riskFilter] : []}
+            onApply={(values) => setRiskFilter(values[0] || 'all')}
             multiSelect={false}
-            placeholder="All Types"
+            forceSearch
+            placeholder="All Risks"
           />
         </div>
         {canCreate && (
@@ -258,36 +291,43 @@ export default function MitigationActionsPage() {
           className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-[#0a0a0a] hover:bg-primary-700"
         >
           <Plus className="h-4 w-4" />
-          Add Action
+          New action
         </button>
         )}
       </div>
 
-      {filteredActions && filteredActions.length > 0 ? (
+      {verifyError && (
+        <div role="alert" className="flex items-start justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          <span><span className="font-medium">{verifyError.title}:</span> {verifyError.message}</span>
+          <button type="button" onClick={() => setVerifyError(null)} className="rounded p-0.5 hover:bg-rose-100" aria-label="Dismiss">
+            <XIcon className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {filteredActions.length > 0 ? (
         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
           <table className="w-full">
             <thead>
               <tr className="border-b border-slate-200">
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Title</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Action</th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Risk</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Type</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Owner</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Due</th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Status</th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Priority</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Owner</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Due Date</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Expected Reduction</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Expected reduction</th>
                 <th className="px-4 py-3 text-right text-sm font-medium text-slate-600">Actions</th>
                 <th className="w-10 px-2 py-3"></th>
               </tr>
             </thead>
             <tbody>
-              {filteredActions.map((action: RiskMitigationAction & { riskTitle?: string }) => {
-                const typeStyle = ACTION_TYPES.find((t) => t.value === action.action_type);
+              {filteredActions.map((action) => {
                 const statusStyle = ACTION_STATUSES.find((s) => s.value === action.status);
                 const priorityStyle = ACTION_PRIORITIES.find((p) => p.value === action.priority);
-                const isOverdue = action.due_date && new Date(action.due_date) < new Date() &&
-                  action.status !== 'completed' && action.status !== 'cancelled';
+                const isOverdue = isActionOverdue(action);
                 const isExpanded = expandedRows.has(action.id);
+                const isOpen = OPEN_STATUSES.includes(action.status);
 
                 // Main row stays compact (single-line clamp on the long
                 // text columns). The expanded detail is rendered as a
@@ -295,9 +335,8 @@ export default function MitigationActionsPage() {
                 // description / notes / linked evidence get the full
                 // table width instead of stretching one narrow column.
                 return (
-                  <>
+                  <Fragment key={action.id}>
                     <tr
-                      key={action.id}
                       className="border-b border-slate-200/50 hover:bg-slate-100/30 cursor-pointer"
                       onClick={(e) => {
                         // Don't toggle when clicking the row's own action
@@ -323,26 +362,11 @@ export default function MitigationActionsPage() {
                           className="flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700"
                         >
                           <LinkIcon className="h-3 w-3 flex-shrink-0" />
-                          <span className="min-w-0 truncate">{action.riskTitle || `Risk #${action.risk_id}`}</span>
+                          <span className="min-w-0 truncate">{action.risk_title || `Risk #${action.risk_id}`}</span>
                         </Link>
                       </td>
-                      <td className="px-4 py-3">
-                        <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${typeStyle?.color || ''}`}>
-                          {action.action_type}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusStyle?.color || ''}`}>
-                          {action.status?.replace('_', ' ')}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${priorityStyle?.color || ''}`}>
-                          {action.priority}
-                        </span>
-                      </td>
                       <td className="px-4 py-3 text-sm text-slate-700">
-                        {action.owner?.full_name || action.owner?.email || '—'}
+                        {action.owner_name || '—'}
                       </td>
                       <td className="px-4 py-3">
                         {action.due_date ? (
@@ -354,22 +378,56 @@ export default function MitigationActionsPage() {
                           <span className="text-sm text-slate-500">—</span>
                         )}
                       </td>
+                      <td className="px-4 py-3">
+                        <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap ${statusStyle?.color || ''}`}>
+                          {statusStyle?.label || action.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${priorityStyle?.color || ''}`}>
+                          {action.priority}
+                        </span>
+                      </td>
                       <td className="px-4 py-3 text-sm text-slate-700">
                         {action.expected_residual_reduction !== undefined && action.expected_residual_reduction !== null
                           ? `${action.expected_residual_reduction}%`
                           : '—'}
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex justify-end gap-1">
-                          {action.status !== 'completed' && action.status !== 'cancelled' && (
+                        <div className="flex items-center justify-end gap-1">
+                          {canEdit && isOpen && (
                             <button
                               onClick={() => setCompletingAction(action)}
                               className="rounded p-1.5 text-slate-600 hover:bg-emerald-50 hover:text-emerald-600"
-                              title="Complete Action"
+                              title="Mark done"
                             >
                               <CheckCircle className="h-4 w-4" />
                             </button>
                           )}
+                          {canEdit && action.status === 'completed' && (
+                            <button
+                              onClick={() => verifyMutation.mutate(action)}
+                              disabled={verifyMutation.isPending}
+                              className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                              title="Check the evidence and verify (not the person who did it)"
+                            >
+                              {verifyMutation.isPending && verifyMutation.variables?.id === action.id
+                                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                : <ShieldCheck className="h-3.5 w-3.5" />}
+                              Verify
+                            </button>
+                          )}
+                          {action.status === 'verified' && (
+                            <Link
+                              href={`/erm/risks/${action.risk_id}`}
+                              className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-primary-200 bg-primary-50 px-2 py-1 text-xs font-medium text-primary-700 hover:bg-primary-100"
+                              title="Verified: open the risk and re-assess its residual score"
+                            >
+                              Re-assess residual
+                              {action.expected_residual_reduction != null && ` (−${action.expected_residual_reduction}%)`}
+                            </Link>
+                          )}
+                          {canEdit && (
                           <button
                             onClick={() => setEditingAction(action)}
                             className="rounded p-1.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
@@ -377,6 +435,8 @@ export default function MitigationActionsPage() {
                           >
                             <Edit2 className="h-4 w-4" />
                           </button>
+                          )}
+                          {canDelete && (
                           <button
                             onClick={() => {
                               if (confirm('Are you sure you want to delete this action?')) {
@@ -388,6 +448,7 @@ export default function MitigationActionsPage() {
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
+                          )}
                         </div>
                       </td>
                       <td className="w-10 px-2 py-3 text-right">
@@ -407,13 +468,13 @@ export default function MitigationActionsPage() {
                       </td>
                     </tr>
                     {isExpanded && (
-                      <tr key={`${action.id}-detail`} className="border-b border-slate-200/70 bg-slate-50/60">
-                        <td colSpan={10} className="px-4 py-4">
+                      <tr className="border-b border-slate-200/70 bg-slate-50/60">
+                        <td colSpan={9} className="px-4 py-4">
                           <ExpandedActionDetail action={action} />
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 );
               })}
             </tbody>
@@ -422,9 +483,13 @@ export default function MitigationActionsPage() {
       ) : (
         <div className="flex flex-col items-center justify-center py-12 text-center rounded-xl border border-slate-200 bg-white">
           <ListTodo className="h-12 w-12 text-slate-500" />
-          <h3 className="mt-4 text-lg font-medium text-slate-900">No mitigation actions found</h3>
-          <p className="mt-1 text-slate-600">Create mitigation actions to track risk treatment progress</p>
+          <h3 className="mt-4 text-lg font-medium text-slate-900">
+            {allActions.length ? 'No actions match these filters.' : 'No open actions.'}
+          </h3>
+          <p className="mt-1 text-slate-600">Plan an action on a risk: an owner, a due date and the reduction it should bring.</p>
         </div>
+      )}
+      </>
       )}
 
       {(showCreateModal || editingAction) && (
@@ -438,8 +503,7 @@ export default function MitigationActionsPage() {
           onSuccess={() => {
             setShowCreateModal(false);
             setEditingAction(null);
-            queryClient.invalidateQueries({ queryKey: ['erm-all-mitigation-actions'] });
-            queryClient.invalidateQueries({ queryKey: ['erm-mitigation-actions-overdue'] });
+            refresh();
           }}
         />
       )}
@@ -450,8 +514,7 @@ export default function MitigationActionsPage() {
           onClose={() => setCompletingAction(null)}
           onSuccess={() => {
             setCompletingAction(null);
-            queryClient.invalidateQueries({ queryKey: ['erm-all-mitigation-actions'] });
-            queryClient.invalidateQueries({ queryKey: ['erm-mitigation-actions-overdue'] });
+            refresh();
           }}
         />
       )}
@@ -470,10 +533,10 @@ export default function MitigationActionsPage() {
  * linked-evidence picker each get sensible width — instead of stretching
  * the original narrow Title cell down the page.
  */
-function ExpandedActionDetail({ action }: { action: RiskMitigationAction & { riskTitle?: string } }) {
+function ExpandedActionDetail({ action }: { action: ActionRow }) {
   const queryClient = useQueryClient();
-  const { hasPermission } = usePermissions();
-  const canEdit = hasPermission('erm:mitigation_actions:edit');
+  const { hasAnyPermission } = usePermissions();
+  const canEdit = hasAnyPermission(['erm:mitigation_actions:edit', 'erm:risks:edit']);
 
   // Linked evidence list for this action.
   const { data: linkedEvidence, isLoading: linksLoading } = useQuery({
@@ -554,12 +617,16 @@ function ExpandedActionDetail({ action }: { action: RiskMitigationAction & { ris
         <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-600">
           <span>
             <span className="text-slate-500">Risk:</span>{' '}
-            <span className="text-slate-800">{action.riskTitle || `#${action.risk_id}`}</span>
+            <span className="text-slate-800">{action.risk_title || `#${action.risk_id}`}</span>
+          </span>
+          <span>
+            <span className="text-slate-500">Type:</span>{' '}
+            <span className="text-slate-800">{ACTION_TYPES.find((t) => t.value === action.action_type)?.label || action.action_type}</span>
           </span>
           <span>
             <span className="text-slate-500">Owner:</span>{' '}
             <span className="text-slate-800">
-              {action.owner?.full_name || action.owner?.email || 'Unassigned'}
+              {action.owner_name || 'Unassigned'}
             </span>
           </span>
           {action.expected_residual_reduction != null && (
@@ -572,6 +639,20 @@ function ExpandedActionDetail({ action }: { action: RiskMitigationAction & { ris
             <span>
               <span className="text-slate-500">Actual reduction:</span>{' '}
               <span className="text-slate-800">{action.actual_residual_reduction}%</span>
+            </span>
+          )}
+          {action.completed_at && (
+            <span>
+              <span className="text-slate-500">Done:</span>{' '}
+              <span className="text-slate-800">{new Date(action.completed_at).toLocaleDateString()}</span>
+            </span>
+          )}
+          {action.verified_at && (
+            <span>
+              <span className="text-slate-500">Verified by:</span>{' '}
+              <span className="text-slate-800">
+                {action.verified_by_name || '—'} on {new Date(action.verified_at).toLocaleDateString()}
+              </span>
             </span>
           )}
         </div>
@@ -674,7 +755,7 @@ function ActionModal({
   onClose,
   onSuccess,
 }: {
-  action: RiskMitigationAction | null;
+  action: ActionRow | null;
   risks: Risk[];
   onClose: () => void;
   onSuccess: () => void;
@@ -685,7 +766,7 @@ function ActionModal({
     risk_id: action?.risk_id || (risks[0]?.id || 0),
     action_type: action?.action_type || 'mitigate',
     priority: action?.priority || 'medium',
-    status: action?.status || 'open',
+    status: action?.status || 'planned',
     owner_id: action?.owner_id,
     due_date: action?.due_date?.split('T')[0] || '',
     expected_residual_reduction: action?.expected_residual_reduction,
@@ -762,13 +843,16 @@ function ActionModal({
     e.preventDefault();
     const submissionData = {
       ...formData,
-      due_date: formData.due_date || new Date().toISOString().split('T')[0],
+      due_date: formData.due_date || null,   // blank means no due date, not today
     };
 
     if (action) {
-      updateMutation.mutate({ id: action.id, updates: submissionData });
+      // send the status only when it changed: done and verified are reached through Mark done and Verify
+      const { status, ...rest } = submissionData;
+      updateMutation.mutate({ id: action.id, updates: status !== action.status ? submissionData : rest });
     } else {
-      createMutation.mutate(submissionData);
+      const { status: _ignored, ...rest } = submissionData;   // a new action starts as planned
+      createMutation.mutate(rest);
     }
   };
 
@@ -778,7 +862,7 @@ function ActionModal({
     <RightSlidePanel
       isOpen
       onClose={onClose}
-      title={action ? 'Edit Mitigation Action' : 'Create Mitigation Action'}
+      title={action ? 'Edit action' : 'New action'}
     >
       <form id="mitigation-action-form" onSubmit={handleSubmit} className="space-y-4">
         <div>
@@ -855,7 +939,7 @@ function ActionModal({
           <div className="rounded-xl border border-primary-200 bg-primary-50 p-4">
             <div className="mb-3 flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-primary-600" />
-              <span className="text-sm font-medium text-primary-700">AI Suggested Mitigations</span>
+              <span className="text-sm font-medium text-primary-700">Suggested actions</span>
               <span className="text-xs text-slate-500">Click to apply</span>
             </div>
             <div className="space-y-2">
@@ -923,24 +1007,27 @@ function ActionModal({
         </div>
 
         <div className="grid grid-cols-2 gap-4">
+          {action && (
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
             <MultiSelectDropdown
               title="Status"
-              items={ACTION_STATUSES.filter(s => s.value !== 'overdue').map((s) => ({ value: s.value, label: s.label }))}
+              items={EDITABLE_STATUSES.map((s) => ({ value: s.value, label: s.label }))}
               selectedValues={formData.status ? [formData.status] : []}
-              onApply={(values) => setFormData({ ...formData, status: (values[0] as ActionStatus) || 'open' })}
+              onApply={(values) => setFormData({ ...formData, status: (values[0] as ActionStatus) || 'planned' })}
               multiSelect={false}
               triggerVariant="input"
               triggerClassName="w-full"
-              placeholder="Select Status"
+              placeholder={STATUS_LABELS[formData.status || ''] || 'Select Status'}
               size="md"
             />
           </div>
+          )}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Due Date</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Due date{action ? '' : ' *'}</label>
             <input
               type="date"
+              required={!action}
               value={formData.due_date || ''}
               onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
@@ -952,10 +1039,10 @@ function ActionModal({
           <div>
             <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700 mb-1">
               <UserCircle2 className="h-3.5 w-3.5 text-slate-500" />
-              Assignee
+              Owner
             </label>
             <MultiSelectDropdown
-              title="Assignee"
+              title="Owner"
               items={tenantUsers.map((u) => ({
                 value: String(u.id),
                 label: u.display_name || u.username || u.email || `User #${u.id}`,
@@ -1038,22 +1125,33 @@ function CompleteActionModal({
   onClose,
   onSuccess,
 }: {
-  action: RiskMitigationAction;
+  action: ActionRow;
   onClose: () => void;
   onSuccess: () => void;
 }) {
   const [actualReduction, setActualReduction] = useState<number>(
     action.expected_residual_reduction || 0
   );
+  const [evidenceId, setEvidenceId] = useState<string>('');
+
+  // the proof the verifier will check; more can be linked from the row's detail
+  const { data: allEvidence } = useQuery({
+    queryKey: ['evidence-list-for-mitigation-link'],
+    queryFn: async () => {
+      const res = await evidenceApi.getAll();
+      return Array.isArray(res.data) ? (res.data as any[]) : [];
+    },
+  });
 
   const completeMutation = useMutation({
-    mutationFn: (reduction?: number) => ermApi.mitigationActions.complete(action.id, reduction),
+    mutationFn: (reduction?: number) =>
+      ermApi.mitigationActions.complete(action.id, reduction, evidenceId ? Number(evidenceId) : undefined),
     onSuccess,
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    completeMutation.mutate(actualReduction || undefined);
+    completeMutation.mutate(actualReduction);   // 0% achieved is a real answer, not "unset"
   };
 
   return (
@@ -1061,7 +1159,7 @@ function CompleteActionModal({
       isOpen
       onClose={onClose}
       width="w-full max-w-md"
-      title="Complete Action"
+      title="Mark done"
       subtitle={action.title}
     >
       <form id="complete-action-form" onSubmit={handleSubmit} className="space-y-4">
@@ -1079,6 +1177,37 @@ function CompleteActionModal({
             className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
           />
         </div>
+
+        <div>
+          <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700 mb-1">
+            <Paperclip className="h-3.5 w-3.5 text-slate-500" />
+            Evidence
+          </label>
+          <MultiSelectDropdown
+            title="Evidence"
+            items={(allEvidence || []).map((ev: any) => ({
+              value: String(ev.id),
+              label: ev.name || ev.title || ev.file_name || `Evidence #${ev.id}`,
+              subLabel: ev.evidence_type || ev.status || undefined,
+            }))}
+            selectedValues={evidenceId ? [evidenceId] : []}
+            onApply={(v) => setEvidenceId(v[0] || '')}
+            multiSelect={false}
+            forceSearch
+            triggerVariant="input"
+            triggerClassName="w-full"
+            placeholder={action.evidence?.length ? `${action.evidence.length} already linked` : 'Search & select evidence...'}
+            searchPlaceholder="Search evidence"
+            size="md"
+          />
+          <p className="mt-1 text-xs text-slate-500">Someone other than you then checks it and verifies the action.</p>
+        </div>
+
+        {completeMutation.isError && (
+          <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+            {errorDetail(completeMutation.error, 'Could not mark the action done')}
+          </div>
+        )}
 
         <div className="flex justify-end gap-2 pt-2">
           <button
@@ -1100,7 +1229,7 @@ function CompleteActionModal({
                 Saving...
               </>
             ) : (
-              'Mark Complete'
+              'Mark done'
             )}
           </button>
         </div>

@@ -11,7 +11,7 @@ from collections import defaultdict
 from datetime import date, datetime
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
 from ..models import (
@@ -24,13 +24,13 @@ from ..models import (
     ISProject, Issue, IssueAssetLink, IssueControlLink, IssueEvidenceLink,
     IssueRiskLink, IssueVendorLink, IssueVulnerabilityLink, ITAsset,
     NormalizedControl, PolicyException, RegulatoryChange, Risk, RiskAssetLink,
-    RiskControlLink, RiskEvidenceLink, RiskFrameworkControlLink, RiskIncident,
+    RiskControl, RiskEvidenceLink, RiskIncident,
     RiskKRI, Vendor, Vulnerability, VulnerabilityAssetLink, VulnerabilityControlLink,
 )
 # Expanded reporting datasets (Wave 2) — entities + their junctions/FKs to the hubs.
 from ..models import (
     AIRiskAssessmentEntry, AuditPackage, AuditPackageEvidence, InternalControl,
-    InternalControlEvidence, InternalControlFrameworkLink, InternalControlRiskLink,
+    InternalControlEvidence, InternalControlFrameworkLink,
     OversightAction, PolicyStatement, RCSAFinding, RiskAssessment, RiskAssessmentRisk,
     RiskReview, VendorAssessment,
 )
@@ -82,6 +82,16 @@ def _jn(base_col, target_col):
     return fn
 
 
+def _rc(source: str, from_risk: bool = True):
+    """risk ↔ control of one kind, from the one risk–control link (grc_risk_controls)."""
+    base, target = (RiskControl.risk_id, RiskControl.control_id) if from_risk else (RiskControl.control_id, RiskControl.risk_id)
+
+    def fn(db: Session, ids: List[int]) -> Dict[int, List[int]]:
+        return _pair_map(db.query(base, target).filter(RiskControl.control_source == source, base.in_(ids))
+                         .order_by(RiskControl.id).all())
+    return fn
+
+
 # ── Edge resolvers: base dataset → target dataset → {base_id: [target_ids]} ──
 
 def _assets_vulnerabilities(db: Session, ids: List[int]) -> Dict[int, List[int]]:
@@ -127,11 +137,7 @@ def _risks_assets(db: Session, ids: List[int]) -> Dict[int, List[int]]:
     return _pair_map(rows)
 
 
-def _risks_controls(db: Session, ids: List[int]) -> Dict[int, List[int]]:
-    rows = db.query(RiskControlLink.risk_id, RiskControlLink.normalized_control_id).filter(
-        RiskControlLink.risk_id.in_(ids)
-    ).all()
-    return _pair_map(rows)
+_risks_controls = _rc("normalized")
 
 
 def _risks_evidence(db: Session, ids: List[int]) -> Dict[int, List[int]]:
@@ -161,11 +167,7 @@ def _risks_incidents(db: Session, ids: List[int]) -> Dict[int, List[int]]:
     return out
 
 
-def _risks_framework_controls(db: Session, ids: List[int]) -> Dict[int, List[int]]:
-    rows = db.query(RiskFrameworkControlLink.risk_id, RiskFrameworkControlLink.framework_control_id).filter(
-        RiskFrameworkControlLink.risk_id.in_(ids)
-    ).all()
-    return _pair_map(rows)
+_risks_framework_controls = _rc("catalog")
 
 
 def _vulns_assets(db: Session, ids: List[int]) -> Dict[int, List[int]]:
@@ -217,11 +219,7 @@ def _evidence_incidents(db: Session, ids: List[int]) -> Dict[int, List[int]]:
     return _pair_map(rows)
 
 
-def _controls_risks(db: Session, ids: List[int]) -> Dict[int, List[int]]:
-    rows = db.query(RiskControlLink.normalized_control_id, RiskControlLink.risk_id).filter(
-        RiskControlLink.normalized_control_id.in_(ids)
-    ).all()
-    return _pair_map(rows)
+_controls_risks = _rc("normalized", from_risk=False)
 
 
 def _controls_assets(db: Session, ids: List[int]) -> Dict[int, List[int]]:
@@ -469,12 +467,13 @@ def _journeys_evidence(db: Session, ids: List[int]) -> Dict[int, List[int]]:
 
 def _journeys_risks(db: Session, ids: List[int]) -> Dict[int, List[int]]:
     """journey -> control_implementations.framework_control_id -> risks mapped
-    onto that same framework control via RiskFrameworkControlLink."""
+    onto that same framework control (the one risk–control link, source "catalog")."""
     rows = (
-        db.query(ControlImplementation.journey_id, RiskFrameworkControlLink.risk_id)
+        db.query(ControlImplementation.journey_id, RiskControl.risk_id)
         .join(
-            RiskFrameworkControlLink,
-            RiskFrameworkControlLink.framework_control_id == ControlImplementation.framework_control_id,
+            RiskControl,
+            and_(RiskControl.control_source == "catalog",
+                 RiskControl.control_id == ControlImplementation.framework_control_id),
         )
         .filter(ControlImplementation.journey_id.in_(ids))
         .all()
@@ -759,10 +758,10 @@ EDGE_RESOLVERS: Dict[Tuple[str, str], EdgeFn] = {
     ("criticality_info", "assets"): _criticality_info_assets,
     ("criticality_infra", "assets"): _criticality_infra_assets,
     # ── Expanded datasets (Wave 2) — new registers linked to the hubs ──────────
-    ("internal_controls", "risks"): _jn(InternalControlRiskLink.control_id, InternalControlRiskLink.risk_id),
+    ("internal_controls", "risks"): _rc("internal", from_risk=False),
     ("internal_controls", "evidence"): _jn(InternalControlEvidence.internal_control_id, InternalControlEvidence.evidence_id),
     ("internal_controls", "framework_controls"): _jn(InternalControlFrameworkLink.internal_control_id, InternalControlFrameworkLink.framework_control_id),
-    ("risks", "internal_controls"): _jn(InternalControlRiskLink.risk_id, InternalControlRiskLink.control_id),
+    ("risks", "internal_controls"): _rc("internal"),
     ("evidence", "internal_controls"): _jn(InternalControlEvidence.evidence_id, InternalControlEvidence.internal_control_id),
     ("risk_assessments", "risks"): _jn(RiskAssessmentRisk.assessment_id, RiskAssessmentRisk.risk_id),
     ("risks", "risk_assessments"): _jn(RiskAssessmentRisk.risk_id, RiskAssessmentRisk.assessment_id),

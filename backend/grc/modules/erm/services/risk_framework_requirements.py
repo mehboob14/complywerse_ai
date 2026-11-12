@@ -1,7 +1,7 @@
 """A tenant's installed frameworks (the framework library) as places a risk's controls can come from.
 
 An installed framework is an `UploadedFramework` with its `ParsedFrameworkControl` rows (the UAE IA Standard, ISO 27001, ...). A risk is linked
-to one of its controls with a `RiskFrameworkRequirementLink`; the register's Controls tab picks them here, and the Risk Library links every
+to one of its controls by the one risk–control link (grc_risk_controls, source "framework"); the register's Controls tab picks them here, and the Risk Library links every
 control of a library risk's objective when the risk is added to the register.
 """
 from __future__ import annotations
@@ -11,7 +11,8 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
-from ....models import ParsedFrameworkControl, Risk, RiskFrameworkRequirementLink, UploadedFramework
+from ....models import ParsedFrameworkControl, Risk, RiskControl, UploadedFramework
+from .risk_control_links import detail_lists, link_control
 
 EFFECTIVENESS = ("full", "partial", "minimal", "none")
 
@@ -66,25 +67,19 @@ def search_controls(db: Session, framework_id: int, text: Optional[str], skip: i
 def link_controls(db: Session, risk: Risk, framework: UploadedFramework, controls: Iterable[ParsedFrameworkControl],
                   effectiveness: str = "partial", notes: Optional[str] = None, user_id: Optional[int] = None) -> Dict[str, List[str]]:
     """Link the controls to the risk (those already linked are left as they are); the caller commits."""
-    have = {pid for (pid,) in db.query(RiskFrameworkRequirementLink.parsed_control_id).filter(RiskFrameworkRequirementLink.risk_id == risk.id)}
+    have = {pid for (pid,) in db.query(RiskControl.control_id).filter(RiskControl.risk_id == risk.id,
+                                                                        RiskControl.control_source == "framework")}
     out = {"linked": [], "already": []}
     for c in controls:
         if c.id in have:
             out["already"].append(c.control_id)
             continue
-        db.add(RiskFrameworkRequirementLink(risk_id=risk.id, uploaded_framework_id=framework.id, parsed_control_id=c.id,
-                                            control_code=c.control_id, mitigation_effectiveness=effectiveness, notes=notes, created_by=user_id))
+        link_control(db, risk, "framework", c.id, user_id, notes=notes, mitigation_effectiveness=effectiveness)
         have.add(c.id)
         out["linked"].append(c.control_id)
     return out
 
 
-def serialize_links(risk: Risk) -> List[dict]:
+def serialize_links(db: Session, risk: Risk) -> List[dict]:
     """The risk's framework-library links for its detail page: the framework, the control and what the link says."""
-    rows = sorted(risk.framework_requirement_links or [], key=lambda l: l.id)
-    return [{
-        "id": l.id, "framework_id": l.uploaded_framework_id, "framework_name": l.framework.name if l.framework else None,
-        "parsed_control_id": l.parsed_control_id, "code": l.control_code,
-        "title": l.control.title if l.control else None, "domain": l.control.domain if l.control else None,
-        "mitigation_effectiveness": l.mitigation_effectiveness, "notes": l.notes,
-    } for l in rows]
+    return detail_lists(db, risk)["linked_framework_requirements"]

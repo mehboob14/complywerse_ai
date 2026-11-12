@@ -4034,7 +4034,7 @@ def link_control_risk(
         db.rollback()
         raise HTTPException(404, str(e)) from e
     return {"link_id": link.id, "risk_id": link.risk_id,
-            "normalized_control_id": link.normalized_control_id}
+            "normalized_control_id": link.control_id}
 
 
 @common_router.delete("/controls/{scf_id}/risks/{link_id}")

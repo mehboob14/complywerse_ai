@@ -105,7 +105,7 @@ def test_the_dashboard_keeps_every_key_it_had(db, portfolio):
     assert {"scope", "kpis", "tier_distribution", "inherent_vs_residual", "findings_posture", "findings_severity",
             "findings_by_domain", "monitoring_feed", "top_residual_vendors"} <= set(got)
     assert {"active_vendors", "critical_coverage", "open_critical_findings", "overdue_reviews", "attention_open"} <= set(got["kpis"])
-    assert got["scope"] == "portfolio" and got["kpis"]["active_vendors"] == 5          # retired and archived are off it
+    assert got["scope"] == "portfolio" and got["kpis"]["active_vendors"] == 4          # retired, archived, offboarded are off it
 
 
 def test_severity_counts_are_of_open_findings_not_closed_or_accepted_ones(db, portfolio):

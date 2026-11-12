@@ -42,8 +42,21 @@ class Risk(Base):
     residual_likelihood = Column(Integer, nullable=True)
     residual_impact = Column(Integer, nullable=True)
     residual_score = Column(Float, nullable=True)
+    # Where the owner aims to bring the risk (likelihood × impact, the inherent/residual rule).
+    target_likelihood = Column(Integer, nullable=True)
+    target_impact = Column(Integer, nullable=True)
+    target_score = Column(Float, nullable=True)
     risk_appetite = Column(String(50), nullable=True)
     status = Column(String(50), default="open")
+    response = Column(String(20), nullable=True)  # mitigate | accept | transfer | avoid
+    # Acceptance is maker-checker: one person requests it, another approves; it lapses at acceptance_expires_at.
+    acceptance_status = Column(String(20), nullable=True)  # requested | approved | rejected
+    acceptance_reason = Column(Text, nullable=True)
+    acceptance_requested_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    acceptance_requested_at = Column(DateTime, nullable=True)
+    accepted_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    accepted_at = Column(DateTime, nullable=True)
+    acceptance_expires_at = Column(DateTime, nullable=True)
     # critical / high / medium / low when a person set it; empty means "from the score" (see effective_priority).
     priority = Column(String(20), nullable=True)
     treatment_plan = Column(Text, nullable=True)
@@ -85,11 +98,24 @@ class Risk(Base):
     source_label = None
     # Transient: where the risk stands against the Risk Register SLA (set by the list endpoint).
     sla = None
+    ACCEPTANCE_EXPIRING_DAYS = 60
 
     @property
     def effective_priority(self):
         """The priority the SLA follows: the one set on the risk, else the band its score falls in."""
         return self.priority or risk_priority_for_score(self.residual_score or self.inherent_score)
+
+    @property
+    def acceptance_state(self):
+        """none | requested | accepted | expiring (60 days or less left) | expired — derived on read, never stored."""
+        if self.acceptance_status == "requested":
+            return "requested"
+        if self.acceptance_status != "approved" or self.status != "accepted":
+            return "none"
+        if not self.acceptance_expires_at:
+            return "accepted"
+        left = (self.acceptance_expires_at - datetime.utcnow()).total_seconds()
+        return "expired" if left < 0 else "expiring" if left <= self.ACCEPTANCE_EXPIRING_DAYS * 86400 else "accepted"
 
     tenant = relationship("Tenant", back_populates="risks")
     owner = relationship("GRCUser", back_populates="owned_risks", foreign_keys=[owner_id])
@@ -262,6 +288,15 @@ class RiskKRI(Base):
     linked_control_ids = Column(JSON, default=list)       # cross-platform linkage
     linked_objective_ids = Column(JSON, default=list)
     linked_framework_id = Column(Integer, nullable=True)
+    # Define → Approve: a new KRI is 'draft' (and not active) until someone other than its creator approves the
+    # indicator and its thresholds; NULL is a KRI stored before that rule, which stays active.
+    status = Column(String(20), nullable=True)            # draft | active
+    created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    approved_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    approved_at = Column(DateTime, nullable=True)
+    # A threshold / direction change on an active KRI, and its outcome: {status pending|approved|rejected, changes,
+    # proposed_by, proposed_at, decided_by, decided_at, note}. The approved thresholds stay in force while it is pending.
+    threshold_change = Column(JSON, nullable=True)
 
     risk = relationship("Risk", back_populates="kris")
     owner = relationship("GRCUser", foreign_keys=[owner_id])
@@ -310,7 +345,7 @@ class RiskIncident(Base):
     incident_date = Column(DateTime, nullable=False)
     discovered_date = Column(DateTime, default=datetime.utcnow)
     severity = Column(String(50), default="medium")  # critical, high, medium, low
-    status = Column(String(50), default="open")  # open, investigating, contained, resolved, closed
+    status = Column(String(50), default="open")  # open, investigating, mitigating, resolved, closed
     financial_impact = Column(Float, nullable=True)
     operational_impact = Column(Text, nullable=True)
     root_cause = Column(Text, nullable=True)
@@ -323,7 +358,22 @@ class RiskIncident(Base):
     resolved_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+    # Basel loss event (OPE25). incident_date is the occurrence date. Keys: grc/modules/erm/loss_taxonomy.py.
+    event_type = Column(String(50), nullable=True)
+    event_type_l2 = Column(String(255), nullable=True)          # free text
+    business_line = Column(String(50), nullable=True)
+    gross_loss = Column(Numeric(18, 2, asdecimal=False), nullable=True)
+    recoveries = Column(Numeric(18, 2, asdecimal=False), nullable=True)
+    net_loss = Column(Numeric(18, 2, asdecimal=False), nullable=True)   # set on save: gross − recoveries, never negative
+    currency = Column(String(3), nullable=True)                 # ISO 4217
+    accounting_date = Column(DateTime, nullable=True)
+    is_near_miss = Column(Boolean, nullable=True, default=False)
+    boundary_type = Column(String(20), nullable=True, default="none")      # none | credit | market
+    validation_status = Column(String(20), nullable=True, default="pending")  # pending | validated | returned
+    validated_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    validated_at = Column(DateTime, nullable=True)
+    validation_note = Column(Text, nullable=True)
+
     tenant = relationship("Tenant")
     risk = relationship("Risk", back_populates="incidents", foreign_keys=[risk_id])
     reporter = relationship("GRCUser", foreign_keys=[reported_by])
@@ -337,6 +387,32 @@ class RiskIncident(Base):
         Index("ix_incident_tenant_status", "tenant_id", "status"),
         Index("ix_incident_risk", "risk_id"),
     )
+
+
+from sqlalchemy import event as _event  # noqa: E402
+
+# What a second person validates: a change to any of these after validation or return asks for validation again.
+_LOSS_VALIDATED_FIELDS = ("event_type", "event_type_l2", "business_line", "gross_loss", "recoveries", "currency",
+                          "accounting_date", "is_near_miss", "boundary_type", "financial_impact")
+
+
+@_event.listens_for(RiskIncident, "before_insert")
+@_event.listens_for(RiskIncident, "before_update")
+def _settle_loss_amounts(_mapper, _connection, incident):
+    """Every writer (the loss-event form, an old client or import sending financial_impact, the audit register) leaves the
+    record consistent: gross_loss wins and is mirrored into financial_impact; financial_impact alone becomes the gross loss."""
+    state = inspect(incident)
+    changed = lambda name: bool(state.persistent and state.attrs[name].history.has_changes())  # noqa: E731
+    # what the writer changed, read before the mirroring below changes anything itself
+    send_back = (incident.validation_status or "pending") != "pending" and any(map(changed, _LOSS_VALIDATED_FIELDS))
+    if changed("gross_loss") or (state.pending and incident.gross_loss is not None):
+        incident.financial_impact = incident.gross_loss
+    elif changed("financial_impact") or incident.gross_loss is None:
+        incident.gross_loss = incident.financial_impact
+    gross = incident.gross_loss
+    incident.net_loss = None if gross is None else max(0.0, float(gross) - float(incident.recoveries or 0))
+    if send_back:
+        incident.validation_status, incident.validated_by, incident.validated_at = "pending", None, None
 
 
 class IncidentAssetLink(Base):
@@ -410,7 +486,7 @@ class RiskReview(Base):
     risk_id = Column(Integer, ForeignKey("grc_risks.id"), nullable=False, index=True)
     review_cycle = Column(String(50), default="quarterly")  # monthly, quarterly, semi_annual, annual
     review_type = Column(String(50), default="periodic")  # periodic, triggered, adhoc
-    status = Column(String(50), default="pending")  # pending, in_review, approved, rejected
+    status = Column(String(50), default="pending")  # pending (scheduled), in_review, submitted, approved; older rows: completed, rejected
     due_date = Column(DateTime, nullable=False)
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
@@ -423,8 +499,14 @@ class RiskReview(Base):
     findings = Column(Text, nullable=True)
     recommendations = Column(Text, nullable=True)
     approval_notes = Column(Text, nullable=True)
+    # What the reviewer proposes; written to the risk only when a second person approves.
+    proposed_inherent_likelihood = Column(Integer, nullable=True)
+    proposed_inherent_impact = Column(Integer, nullable=True)
+    proposed_residual_likelihood = Column(Integer, nullable=True)
+    proposed_residual_impact = Column(Integer, nullable=True)
+    submitted_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
     risk = relationship("Risk", back_populates="reviews")
     reviewer = relationship("GRCUser", foreign_keys=[reviewer_id])
     approver = relationship("GRCUser", foreign_keys=[approver_id])
@@ -447,8 +529,10 @@ class RiskScoreHistory(Base):
     residual_likelihood = Column(Integer, nullable=True)
     residual_impact = Column(Integer, nullable=True)
     residual_score = Column(Float, nullable=True)
+    target_score = Column(Float, nullable=True)
     status = Column(String(50), nullable=True)
-    change_reason = Column(String(255), nullable=True)
+    change_reason = Column(String(255), nullable=True)  # what changed it: "Edited", "Review #3 approved", ...
+    reason = Column(Text, nullable=True)  # why, in the person's words
     changed_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
     recorded_at = Column(DateTime, default=datetime.utcnow)
     
@@ -496,12 +580,78 @@ class RiskAppetiteConfig(Base):
     alert_enabled = Column(Boolean, default=True)
     description = Column(Text, nullable=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+    # KRIs that measure this category's limit: a red published status on one is a breach. Replaced as a whole.
+    limit_kri_ids = Column(JSON, nullable=True)
+    # Third party only: the most critical or important vendors that may share one fourth party (vendor_risk/tpra/outsourcing.py).
+    concentration_limit = Column(Integer, nullable=True)
+    # Once a statement version is approved, a limit change is proposed and decided by someone else (the shape of
+    # RiskKRI.threshold_change; changes may hold "remove": true). The limits above stay in force while it is pending.
+    limit_change = Column(JSON, nullable=True)
+
     tenant = relationship("Tenant")
     escalation_owner = relationship("GRCUser")
-    
+
     __table_args__ = (
         UniqueConstraint("tenant_id", "category", name="uq_risk_appetite_tenant_category"),
+    )
+
+
+class RiskAppetiteStatement(Base):
+    """One version of the risk appetite statement. Drafted, submitted, approved by someone other than the submitter;
+    approving a version supersedes the one approved before it."""
+    __tablename__ = "grc_risk_appetite_statements"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    version = Column(Integer, nullable=False)
+    statement = Column(Text, nullable=False, default="")
+    status = Column(String(20), nullable=False, default="draft")  # draft | pending_approval | approved | superseded
+    created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    submitted_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    approved_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    approved_at = Column(DateTime, nullable=True)
+    effective_from = Column(DateTime, nullable=True)
+    approval_note = Column(Text, nullable=True)  # the approver's note, or why it was sent back
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    # The limits approved with this version, frozen at approval: {category: {appetite_level, max_acceptable_score,
+    # tolerance_threshold, limit_kri_ids, escalation_owner_id, concentration_limit}}. NULL on a version approved before.
+    limits = Column(JSON, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "version", name="uq_risk_appetite_statement_version"),
+    )
+
+
+class RiskAppetiteBreach(Base):
+    """A breach of a category's appetite limit by a risk or a linked KRI, from detection to resolution."""
+    __tablename__ = "grc_risk_appetite_breaches"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    category = Column(String(50), nullable=False, index=True)
+    # No foreign keys: the log outlives a deleted risk or KRI (detection then resolves the breach).
+    risk_id = Column(Integer, nullable=True, index=True)
+    kri_id = Column(Integer, nullable=True, index=True)
+    measured_value = Column(Float, nullable=True)
+    limit_value = Column(Float, nullable=True)
+    detected_at = Column(DateTime, default=datetime.utcnow)
+    # open | plan_proposed | plan_approved | excess_approved | resolved
+    status = Column(String(20), nullable=False, default="open")
+    plan = Column(Text, nullable=True)
+    plan_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    plan_at = Column(DateTime, nullable=True)
+    decided_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    decided_at = Column(DateTime, nullable=True)
+    decision_note = Column(Text, nullable=True)
+    excess_expires_at = Column(DateTime, nullable=True)
+    resolved_at = Column(DateTime, nullable=True)
+
+    # One open breach per subject (a risk, a KRI, or the category's concentration when both are empty), whatever races.
+    __table_args__ = (
+        Index("uq_risk_appetite_open_breach", "tenant_id", "category", text("coalesce(risk_id, 0)"),
+              text("coalesce(kri_id, 0)"), unique=True, postgresql_where=text("status <> 'resolved'"),
+              sqlite_where=text("status <> 'resolved'")),
     )
 
 
@@ -525,7 +675,9 @@ class RiskMitigationAction(Base):
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+    # Read-only since wave 2-E: risk actions are IssueActions. Set once the row is copied there, so it is never copied twice.
+    migrated_to_issue_action_id = Column(Integer, nullable=True, index=True)
+
     risk = relationship("Risk", back_populates="mitigation_actions")
     owner = relationship("GRCUser")
     evidence = relationship("Evidence")
@@ -614,11 +766,21 @@ class RiskReport(Base):
     generated_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
     report_data = Column(JSON, default={})
     file_path = Column(String(500), nullable=True)
-    status = Column(String(50), default="generated")  # draft, generated, reviewed, published
-    
+    status = Column(String(50), default="generated")  # draft, generated, reviewed, published; a committee pack: draft, ready, frozen
+    # Committee packs (report_type "committee_pack"): report_data is the snapshot taken when the pack was built; a second
+    # person approves and freezes it (approved_by/at), after which nothing on the row changes.
+    committee_id = Column(Integer, ForeignKey("grc_governance_committees.id"), nullable=True)
+    meeting_id = Column(Integer, ForeignKey("grc_committee_meetings.id"), nullable=True)
+    commentary = Column(JSON, nullable=True)  # {section key: text}
+    approved_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    approved_at = Column(DateTime, nullable=True)
+
     tenant = relationship("Tenant")
-    generator = relationship("GRCUser")
-    
+    generator = relationship("GRCUser", foreign_keys=[generated_by])
+    approver = relationship("GRCUser", foreign_keys=[approved_by])
+    committee = relationship("GovernanceCommittee")
+    meeting = relationship("CommitteeMeeting")
+
     __table_args__ = (
         Index("ix_report_tenant_type", "tenant_id", "report_type"),
     )
@@ -641,6 +803,7 @@ class RiskAssessment(Base):
     lead_assessor_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
     business_unit_id = Column(Integer, ForeignKey("grc_business_units.id"), nullable=True)
     framework_id = Column(Integer, ForeignKey("grc_frameworks.id"), nullable=True)
+    submitted_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)  # moved it to under_review: cannot approve it
     approved_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
     approved_at = Column(DateTime, nullable=True)
     notes = Column(Text, nullable=True)
@@ -763,8 +926,11 @@ class FrameworkRiskAssessment(Base):
     uploaded_framework_id = Column(Integer, ForeignKey("grc_uploaded_frameworks.id"), nullable=True, index=True)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
-    status = Column(String(50), default="in_progress")  # in_progress, completed, archived
+    status = Column(String(50), default="in_progress")  # in_progress, completed (awaiting approval), approved, archived
     created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=False)
+    submitted_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)  # marked it completed: cannot approve it
+    approved_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    approved_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

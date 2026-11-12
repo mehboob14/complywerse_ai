@@ -3,10 +3,10 @@ KRI engine: a per-user "My updates" data-entry queue, a submit → review → ap
 reject gate for reported values, and a CSV export of the report.
 
 Deliberately a SEPARATE router (prefix /kri-workflow) so it composes with the KRI
-engine (/erm/kris/*) without editing it. Values only "publish" (update the KRI's
-current value) once approved when the KRI has a reviewer; KRIs without a reviewer
-auto-publish on submit (matching the existing measure behaviour). Self-contained
-status logic so it never depends on the (actively-evolving) kris.py module.
+engine (/erm/kris/*). A KRI value only "publishes" (updates the KRI's current value)
+once a second person approves it; approval also moves the next due date on and
+escalates amber / red (kris.publish_value, kris.escalate_value). A KPI without a
+reviewer auto-publishes on submit (matching the measure behaviour).
 """
 from __future__ import annotations
 
@@ -22,10 +22,14 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from ....models import GRCUser, Risk, RiskKRI, RiskKRIMeasurement, get_db
-from ....routers.auth_router import get_user_tenants, require_auth
+from ....routers.auth_router import get_user_tenants, require_auth, require_tenant_permission
 from ....services import kri_feeds
+from ....services.segregation import ensure_independent
+from ..services.monitor_changes import notify
+from .kris import escalate_value, is_kri, may_check, may_supply, named_checker, publish_value, tell_checkers
 
 router = APIRouter(prefix="/kri-workflow", tags=["ERM - KRI Workflow"])
+CAN_EDIT = [Depends(require_tenant_permission("erm:kris:edit", "erm:risks:edit"))]
 
 
 def _status(value: Optional[float], green, amber, direction: str) -> str:
@@ -72,7 +76,7 @@ def my_updates(db: Session = Depends(get_db), current_user: GRCUser = Depends(re
             "frequency": k.frequency, "category": k.category, "target": k.target,
             "current_value": k.current_value, "next_due_date": due.isoformat() if due else None,
             "overdue": is_overdue, "reporting_period": k.reporting_period,
-            "needs_review": k.reviewer_id is not None,
+            "needs_review": is_kri(k) or k.reviewer_id is not None,
         })
     return {"items": items, "total": len(items), "overdue": overdue}
 
@@ -94,14 +98,15 @@ def _get_kri(db: Session, kri_id: int, tids: List[int]) -> RiskKRI:
 @router.post("/kris/{kri_id}/submit")
 def submit_value(kri_id: int, body: SubmitBody, db: Session = Depends(get_db),
                  current_user: GRCUser = Depends(require_auth)):
-    """Report an actual for the period. If the metric has a reviewer it enters as
-    'submitted' (pending, does NOT publish); otherwise it auto-approves and
-    publishes to the metric's current value."""
+    """Report an actual for the period. A KRI value, or one for a metric with a reviewer,
+    enters as 'submitted' (pending, does NOT publish); a KPI without a reviewer
+    auto-approves and publishes to the metric's current value."""
     tids = _tenant_ids(current_user, db)
     kri_feeds.ensure_kri_columns(db)
     k = _get_kri(db, kri_id, tids)
+    may_supply(k, current_user, db)
     now = datetime.utcnow()
-    gated = k.reviewer_id is not None
+    gated = is_kri(k) or k.reviewer_id is not None
     m = RiskKRIMeasurement(
         kri_id=k.id, value=body.value, notes=body.notes, period_label=body.period_label,
         target=k.target, measured_at=now, measured_by=current_user.id,
@@ -115,6 +120,8 @@ def submit_value(kri_id: int, body: SubmitBody, db: Session = Depends(get_db),
         k.last_measured_at = now
     db.add(m)
     db.commit()
+    if gated:
+        tell_checkers(db, k, m)
     db.refresh(m)
     return {"ok": True, "measurement_id": m.id, "review_status": m.review_status,
             "published": not gated}
@@ -123,24 +130,27 @@ def submit_value(kri_id: int, body: SubmitBody, db: Session = Depends(get_db),
 # ── Reviewer queue + approve / reject ─────────────────────────────────────────
 @router.get("/pending-reviews")
 def pending_reviews(db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
-    """Submitted values awaiting THIS user's review (they are the metric's reviewer
-    or, failing that, its owner)."""
+    """Submitted values awaiting THIS user's check (kris.named_checker: the metric's reviewer, else its owner, when they
+    hold the check permission and did not submit it; otherwise every holder but the submitter). The notice goes to the
+    same people."""
     tids = _tenant_ids(current_user, db)
     if not tids:
         return {"items": [], "total": 0}
     kri_feeds.ensure_kri_columns(db)
-    uid = current_user.id
-    rows = (db.query(RiskKRIMeasurement, RiskKRI)
-            .join(RiskKRI, RiskKRIMeasurement.kri_id == RiskKRI.id)
-            .filter(RiskKRI.tenant_id.in_(tids),
-                    RiskKRIMeasurement.review_status == "submitted",
-                    or_(RiskKRI.reviewer_id == uid,
-                        (RiskKRI.reviewer_id.is_(None)) & (RiskKRI.owner_id == uid)))
-            .all())
+    uid, holds = current_user.id, may_check(db)
+    if not holds(uid):
+        return {"items": [], "total": 0}
+    rows = [(m, k) for m, k in (db.query(RiskKRIMeasurement, RiskKRI)
+                                .join(RiskKRI, RiskKRIMeasurement.kri_id == RiskKRI.id)
+                                .filter(RiskKRI.tenant_id.in_(tids), RiskKRIMeasurement.review_status == "submitted")
+                                .order_by(RiskKRIMeasurement.measured_at.asc())
+                                .all())
+            if (named_checker(k, m.measured_by, holds) or uid) == uid and m.measured_by != uid]
     items = [{
         "measurement_id": m.id, "kri_id": k.id, "kri_name": k.name, "kind": k.kind or "kri",
         "value": m.value, "target": m.target, "unit": k.unit, "status": m.status,
-        "period_label": m.period_label, "notes": m.notes,
+        "period_label": m.period_label, "notes": m.notes, "data_source": k.data_source,
+        "previous_value": k.current_value,   # the last published value, for the change it makes
         "measured_by": m.measured_by, "measured_at": m.measured_at.isoformat() if m.measured_at else None,
     } for m, k in rows]
     return {"items": items, "total": len(items)}
@@ -150,46 +160,67 @@ class ReviewBody(BaseModel):
     notes: Optional[str] = None
 
 
-def _get_measurement(db: Session, mid: int, tids: List[int]):
+def _get_measurement(db: Session, mid: int, tids: List[int], user: GRCUser):
     row = (db.query(RiskKRIMeasurement, RiskKRI)
            .join(RiskKRI, RiskKRIMeasurement.kri_id == RiskKRI.id)
            .filter(RiskKRIMeasurement.id == mid, RiskKRI.tenant_id.in_(tids)).first())
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Measurement not found")
+    if row[0].review_status != "submitted":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail=f"Only a submitted value can be reviewed; this one is {row[0].review_status or 'approved'}")
+    ensure_independent(row[0].measured_by, user, "review this value")
     return row
 
 
-@router.post("/measurements/{measurement_id}/approve")
+def _claim(db: Session, m: RiskKRIMeasurement, outcome: str, user: GRCUser) -> None:
+    """Record the decision only while the value still waits: two checkers at the same moment cannot both decide it, so
+    a value is published and escalated once."""
+    claimed = (db.query(RiskKRIMeasurement)
+               .filter(RiskKRIMeasurement.id == m.id, RiskKRIMeasurement.review_status == "submitted")
+               .update({"review_status": outcome, "reviewed_by": user.id, "reviewed_at": datetime.utcnow()},
+                       synchronize_session="evaluate"))
+    if not claimed:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Someone else has just decided this value.")
+
+
+@router.post("/measurements/{measurement_id}/approve", dependencies=CAN_EDIT)
 def approve_measurement(measurement_id: int, db: Session = Depends(get_db),
                         current_user: GRCUser = Depends(require_auth)):
-    """Approve a submitted value → it publishes to the metric's current value."""
+    """Approve a submitted value → it publishes to the metric's current value, a KRI's next value falls due one period
+    on, and then, once: an amber / red KRI value is escalated, the appetite limits it measures are re-checked (the
+    breach log) and the submitter is told."""
     tids = _tenant_ids(current_user, db)
     kri_feeds.ensure_kri_columns(db)
-    m, k = _get_measurement(db, measurement_id, tids)
-    now = datetime.utcnow()
-    m.review_status = "approved"
-    m.reviewed_by = current_user.id
-    m.reviewed_at = now
-    k.current_value = m.value
-    k.last_measured_at = m.measured_at or now
+    m, k = _get_measurement(db, measurement_id, tids, current_user)
+    _claim(db, m, "approved", current_user)
+    publish_value(k, m)
     db.commit()
-    return {"ok": True, "measurement_id": m.id, "review_status": "approved",
-            "current_value": k.current_value}
+    result = {"ok": True, "measurement_id": m.id, "review_status": "approved", "current_value": k.current_value,
+              "next_due_date": k.next_due_date.isoformat() if k.next_due_date else None}
+    escalate_value(db, k, m, current_user)
+    from .appetite import recheck_kri_limits   # here: appetite imports kris, which this module imports
+    recheck_kri_limits(db, k)
+    notify(db, k.tenant_id, [m.measured_by], f"KRI value approved: {k.name}",
+           f"{m.value}{k.unit or ''} for {k.name} was approved and published.", "/erm/kris", actor_id=current_user.id)
+    return result
 
 
-@router.post("/measurements/{measurement_id}/reject")
+@router.post("/measurements/{measurement_id}/reject", dependencies=CAN_EDIT)
 def reject_measurement(measurement_id: int, body: ReviewBody, db: Session = Depends(get_db),
                        current_user: GRCUser = Depends(require_auth)):
-    """Reject a submitted value → it does NOT publish; sender can resubmit."""
+    """Reject a submitted value → it does NOT publish; the sender is told and can resubmit."""
     tids = _tenant_ids(current_user, db)
     kri_feeds.ensure_kri_columns(db)
-    m, k = _get_measurement(db, measurement_id, tids)
-    m.review_status = "rejected"
-    m.reviewed_by = current_user.id
-    m.reviewed_at = datetime.utcnow()
+    m, k = _get_measurement(db, measurement_id, tids, current_user)
+    _claim(db, m, "rejected", current_user)
     if body.notes:
         m.notes = f"{(m.notes or '').strip()}\n[rejected] {body.notes}".strip()
     db.commit()
+    notify(db, k.tenant_id, [m.measured_by], f"KRI value sent back: {k.name}",
+           f"{m.value}{k.unit or ''} for {k.name} was sent back" + (f": {body.notes}" if body.notes else ".")
+           + " Submit it again under Key Risk Indicators.", "/erm/kris?tab=due", actor_id=current_user.id)
     return {"ok": True, "measurement_id": m.id, "review_status": "rejected"}
 
 

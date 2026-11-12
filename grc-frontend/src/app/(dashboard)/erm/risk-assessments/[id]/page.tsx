@@ -4,8 +4,10 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { riskAssessmentApi, ermApi, adminApi } from '@/lib/api';
+import { riskAssessmentApi, ermApi, adminApi, rcsaApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
+import { riskBandForScore } from '@/lib/riskBands';
+import { apiErrorText } from '@/lib/apiError';
 import {
   ArrowLeft, Save, Plus, Trash2, Loader2, AlertTriangle, Activity,
   AlertCircle, FileText, ChevronDown, ChevronUp, CheckCircle, XCircle,
@@ -34,11 +36,8 @@ const STATUS_CONFIG: Record<AssessmentStatus, { label: string; color: string; bg
 };
 
 const getScoreColor = (score: number | null | undefined) => {
-  if (!score) return { text: 'text-slate-600', bg: 'bg-slate-100' };
-  if (score >= 21) return { text: 'text-rose-700', bg: 'bg-rose-50' };
-  if (score >= 13) return { text: 'text-orange-700', bg: 'bg-orange-50' };
-  if (score >= 6) return { text: 'text-amber-700', bg: 'bg-amber-50' };
-  return { text: 'text-emerald-700', bg: 'bg-emerald-50' };
+  const style = getRatingStyle(riskBandForScore(score));
+  return { text: style.color, bg: style.bg };
 };
 
 const getRatingStyle = (rating: string | null | undefined) => {
@@ -49,14 +48,6 @@ const getRatingStyle = (rating: string | null | undefined) => {
     case 'low': return { label: 'Low', color: 'text-emerald-700', bg: 'bg-emerald-50' };
     default: return { label: 'Unrated', color: 'text-slate-600', bg: 'bg-slate-100' };
   }
-};
-
-const computeRating = (score: number | null) => {
-  if (!score) return null;
-  if (score >= 21) return 'critical';
-  if (score >= 13) return 'high';
-  if (score >= 6) return 'medium';
-  return 'low';
 };
 
 const formatDate = (dateStr?: string | null) => {
@@ -117,9 +108,10 @@ export default function RiskAssessmentDetailPage() {
   const params = useParams();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { hasPermission } = usePermissions();
-  const canEdit = hasPermission('erm:risk_assessments:edit');
-  const canDelete = hasPermission('erm:risk_assessments:delete');
+  const { hasAnyPermission } = usePermissions();
+  // the server accepts either name for each write (risk editors held erm:risks:* before)
+  const canEdit = hasAnyPermission(['risks:risk_assessment:edit', 'erm:risks:edit']);
+  const canDelete = hasAnyPermission(['risks:risk_assessment:delete', 'erm:risks:delete']);
   const assessmentId = Number(params.id);
 
   const [expandedRisks, setExpandedRisks] = useState<Set<number>>(new Set());
@@ -164,6 +156,12 @@ export default function RiskAssessmentDetailPage() {
     queryKey: ['all-incidents'],
     queryFn: async () => { const res = await ermApi.incidents.getAll(); return res.data; },
     enabled: linkModal?.type === 'incident',
+  });
+
+  const { data: allFindings } = useQuery({
+    queryKey: ['all-rcsa-findings'],
+    queryFn: async () => { const res = await rcsaApi.getFindings({ limit: 500 }); return res.data; },
+    enabled: linkModal?.type === 'rcsa',
   });
 
   // Register rows behind each assessed risk — needed to surface the 1LINK
@@ -294,7 +292,7 @@ export default function RiskAssessmentDetailPage() {
     },
   });
 
-  const isEditable = assessment?.status === 'draft' || assessment?.status === 'in_progress';
+  const isEditable = canEdit && (assessment?.status === 'draft' || assessment?.status === 'in_progress');
 
   const toggleExpand = (arId: number) => {
     setExpandedRisks(prev => {
@@ -351,7 +349,7 @@ export default function RiskAssessmentDetailPage() {
       inherent_impact: ii,
       residual_likelihood: rl,
       residual_impact: ri,
-      risk_rating: data.risk_rating || computeRating(residualScore),
+      risk_rating: data.risk_rating || riskBandForScore(residualScore),
     };
     updateRiskMutation.mutate({ arId, data: payload });
   };
@@ -414,7 +412,7 @@ export default function RiskAssessmentDetailPage() {
             <BarChart3 size={14} />
             Analytics
           </Link>
-          {isEditable && canEdit && (
+          {isEditable && (
             <button
               onClick={() => setShowEditModal(true)}
               className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100"
@@ -423,8 +421,7 @@ export default function RiskAssessmentDetailPage() {
               Edit
             </button>
           )}
-          {assessment.status === 'draft' && canDelete && (
-            <>
+          {assessment.status === 'draft' && canEdit && (
               <button
                 onClick={() => statusMutation.mutate('in_progress')}
                 disabled={statusMutation.isPending}
@@ -433,15 +430,17 @@ export default function RiskAssessmentDetailPage() {
                 {statusMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Activity size={14} />}
                 Start Assessment
               </button>
+          )}
+          {assessment.status === 'draft' && canDelete && (
               <button
                 onClick={() => { if (confirm('Delete this assessment?')) deleteMutation.mutate(); }}
                 className="flex items-center gap-1.5 rounded-lg border border-rose-200 px-3 py-1.5 text-sm text-rose-600 hover:bg-rose-50"
+                title="Delete assessment"
               >
                 <Trash2 size={14} />
               </button>
-            </>
           )}
-          {assessment.status === 'in_progress' && (
+          {assessment.status === 'in_progress' && canEdit && (
             <button
               onClick={() => statusMutation.mutate('under_review')}
               disabled={statusMutation.isPending}
@@ -451,7 +450,7 @@ export default function RiskAssessmentDetailPage() {
               Submit for Review
             </button>
           )}
-          {assessment.status === 'under_review' && (
+          {assessment.status === 'under_review' && canEdit && (
             <>
               <button
                 onClick={() => statusMutation.mutate('approved')}
@@ -471,7 +470,7 @@ export default function RiskAssessmentDetailPage() {
               </button>
             </>
           )}
-          {assessment.status === 'approved' && (
+          {assessment.status === 'approved' && canEdit && (
             <button
               onClick={() => statusMutation.mutate('closed')}
               disabled={statusMutation.isPending}
@@ -483,6 +482,12 @@ export default function RiskAssessmentDetailPage() {
           )}
         </div>
       </div>
+
+      {statusMutation.error && (
+        <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          {apiErrorText(statusMutation.error, 'The status was not changed.')}
+        </p>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <div className="rounded-xl border border-slate-200 bg-white p-4">
@@ -544,7 +549,7 @@ export default function RiskAssessmentDetailPage() {
             const residualScore = rl && ri ? rl * ri : ar.residual_score;
             const inherentColor = getScoreColor(inherentScore);
             const residualColor = getScoreColor(residualScore);
-            const ratingStyle = getRatingStyle(editing.risk_rating as string || computeRating(residualScore));
+            const ratingStyle = getRatingStyle(editing.risk_rating as string || riskBandForScore(residualScore));
             const registerRisk = registerRiskById.get(ar.risk_id);
             const isOneLinkRisk = !!registerRisk && isOneLinkRegisterType(registerRisk.register_type);
             const categoryColors: Record<string, string> = {
@@ -846,6 +851,7 @@ export default function RiskAssessmentDetailPage() {
           arId={linkModal.arId}
           kris={allKRIs}
           incidents={allIncidents}
+          findings={allFindings}
           onClose={() => setLinkModal(null)}
           onLinkKRI={(data) => linkKRIMutation.mutate({ arId: linkModal.arId, data })}
           onLinkIncident={(data) => linkIncidentMutation.mutate({ arId: linkModal.arId, data })}
@@ -1056,7 +1062,7 @@ function OneLinkAssessmentSection({
       >
         <span className="flex items-center gap-2 text-sm font-medium text-slate-800">
           <FileText size={14} className="text-primary-500" />
-          1LINK Assessment Fields
+          Template Assessment Fields
           <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-medium text-slate-600">
             {filledCount} filled
           </span>
@@ -1080,7 +1086,7 @@ function OneLinkAssessmentSection({
                 className="flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50"
               >
                 {saveMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                Save 1LINK Fields
+                Save Template Fields
               </button>
             </div>
           )}
@@ -1187,13 +1193,14 @@ function EditAssessmentModal({
 }
 
 function LinkModal({
-  type, arId, kris, incidents, onClose,
+  type, arId, kris, incidents, findings, onClose,
   onLinkKRI, onLinkIncident, onLinkRCSA, isPending,
 }: {
   type: 'kri' | 'incident' | 'rcsa';
   arId: number;
   kris?: any[];
   incidents?: any[];
+  findings?: any[];
   onClose: () => void;
   onLinkKRI: (data: Record<string, unknown>) => void;
   onLinkIncident: (data: Record<string, unknown>) => void;
@@ -1212,7 +1219,8 @@ function LinkModal({
     else onLinkRCSA({ rcsa_finding_id: selectedId, relevance_notes: notes || undefined });
   };
 
-  const items = type === 'kri' ? (kris || []) : type === 'incident' ? (incidents || []) : [];
+  const items = type === 'kri' ? (kris || []) : type === 'incident' ? (incidents || []) : (findings || []);
+  const noun = type === 'kri' ? 'KRI' : type === 'incident' ? 'Incident' : 'RCSA Finding';
 
   return (
     <RightSlidePanel
@@ -1231,16 +1239,10 @@ function LinkModal({
       }
     >
         <div className="space-y-4">
-          {type === 'rcsa' ? (
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">RCSA Finding ID</label>
-              <input type="number" value={selectedId || ''} onChange={e => setSelectedId(Number(e.target.value) || null)} placeholder="Enter finding ID" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none" />
-            </div>
-          ) : (
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Select {type === 'kri' ? 'KRI' : 'Incident'}</label>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Select {noun}</label>
               {items.length === 0 ? (
-                <p className="text-sm text-slate-600 py-4">No {type === 'kri' ? 'KRIs' : 'incidents'} available.</p>
+                <p className="text-sm text-slate-600 py-4">No {noun}s available.</p>
               ) : (
                 <div className="space-y-1 max-h-48 overflow-y-auto">
                   {items.map((item: any) => (
@@ -1256,7 +1258,6 @@ function LinkModal({
                 </div>
               )}
             </div>
-          )}
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">
               {type === 'incident' ? 'Impact on Rating' : 'Notes'}

@@ -30,6 +30,9 @@ class TPRAFourthParty(Base):
     source = Column(String(30), default="manual")                 # manual | declared | questionnaire
     also_vendor_id = Column(Integer, nullable=True)               # when it is one of our vendors too
     notes = Column(Text, nullable=True)
+    # Sub-outsourcing of a critical or important service waits for approval: pending | approved | rejected; null: none needed.
+    approval_status = Column(String(20), nullable=True)
+    approval = Column(JSON, nullable=True)                        # {by, at, note}
     created_by = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

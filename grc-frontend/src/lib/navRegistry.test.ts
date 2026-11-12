@@ -123,8 +123,7 @@ test('a forward is another URL of an entry that is a page of its own, under the 
     ['/governance/attestations', '/governance/documents/attestation'],
     ['/governance/reviews/calendar', '/governance/reviews'],                // not a forward: the same page opened on its calendar view
     // the rest of the app (R-REG): forwards and second addresses of the same page; navPages/coverage.test.ts reads every page file and holds each one to its target
-    ['/erm/internal-controls', '/controls'],
-    ['/erm/internal-controls/:id', '/controls'],
+    ['/erm/internal-controls/:id', '/controls'],                             // its list page is the Risk Management > Treat > Controls leaf
     ['/erm/ai-risk-assessment', '/erm/risk-assessments/ai-risk-assessment'],
     ['/erm/risks/dashboard', '/erm/risks'],                                  // not a forward: /erm/risks renders this page
     ['/erm/risk-assessments/dashboard', '/erm/risk-assessments'],            // not a forward: /erm/risk-assessments renders this page
@@ -292,7 +291,7 @@ test('breadcrumbFor: the menu groups, the pages it hangs under, then the page (t
   assert.deepEqual(breadcrumbFor('/governance'), [{ label: 'Governance', href: '/governance' }, { label: 'Overview', href: '/governance' }]);
   assert.deepEqual(breadcrumbFor('/attest/abc'), [{ label: 'Acknowledge', href: '/attest/abc' }]);
   assert.deepEqual(breadcrumbFor('/tasks'), [{ label: 'Task Management', href: '/tasks' }]);
-  assert.deepEqual(breadcrumbFor('/erm/analytics/scenario').map((c) => c.label), ['Risk Management', 'Operational Risk', 'Scenario Analysis']);
+  assert.deepEqual(breadcrumbFor('/erm/analytics/scenario').map((c) => c.label), ['Risk Management', 'Assess', 'Scenario Analysis']);
 });
 
 test('an unknown or odd path falls back (undefined, an empty trail) and never throws', () => {

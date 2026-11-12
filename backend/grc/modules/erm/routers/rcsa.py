@@ -1,12 +1,13 @@
 from ....config import get_openai_model
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from io import BytesIO
 import os
 import json
+import re
 
 from pydantic import BaseModel
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
+from fastapi import APIRouter, Body, Depends, HTTPException, status, Query, UploadFile, File
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload, subqueryload
 from sqlalchemy import func, and_, or_
@@ -205,8 +206,8 @@ def get_question_specific_evidence(question_text: str, question_type: str = "", 
 from ....models import (
     RCSATemplate, RCSAQuestion, RCSACampaign, RCSAAssessment,
     RCSAResponse, RCSAFinding, RCSAApprovalWorkflow, RCSAApprovalTier,
-    RCSAApprovalHistory, Risk, InternalControl, RiskMitigationAction,
-    BusinessUnit, GRCUser, Tenant, get_db
+    RCSAApprovalHistory, Risk, InternalControl, RiskMitigationAction, RiskReview,
+    BusinessUnit, GRCUser, Tenant, UserRole, Issue, IssueControlLink, get_db
 )
 from ....schemas import (
     RCSATemplateCreate, RCSATemplateUpdate, RCSATemplateResponse, RCSATemplateDetailResponse,
@@ -214,18 +215,111 @@ from ....schemas import (
     RCSACampaignCreate, RCSACampaignUpdate, RCSACampaignResponse,
     RCSAAssessmentResponse, RCSAAssessmentDetailResponse, RCSAQuestionWithResponse, RCSAResponseDetail, RCSAEvidenceFile,
     RCSAResponseCreate, RCSAResponseUpdate, RCSAResponseResponse,
-    RCSABulkResponseSave, RCSAFindingCreate, RCSAFindingUpdate, RCSAFindingResponse,
-    RCSAApprovalWorkflowCreate, RCSAApprovalWorkflowUpdate, RCSAApprovalWorkflowResponse,
+    RCSABulkResponseSave, RCSAFindingCreate, RCSAFindingUpdate, RCSAFindingResponse, RCSAFindingDetailResponse,
+    RCSAPendingApprovalResponse, RCSAApprovalWorkflowCreate, RCSAApprovalWorkflowUpdate, RCSAApprovalWorkflowResponse,
     RCSAApprovalTierCreate, RCSAApprovalTierResponse, RCSAApprovalHistoryResponse,
     RCSAApprovalAction, RCSADelegateAction, RCSABUAssignRequest,
     RCSADashboardSummary, RCSAFindingsBySeverity, RCSABUProgress, RCSAAISuggestionResponse,
     EvidenceRecommendation, MessageResponse
 )
 from ....routers.auth_router import (require_auth, get_user_tenants, get_user_primary_tenant, is_tenant_admin, is_platform_account,
-                                     refuse_imported_accounts)
+                                     refuse_imported_accounts, require_tenant_permission,
+                                     has_tenant_permission, PLATFORM_GRANT)
 from ....services import evidence_review
+from ....services.segregation import ensure_independent
+from ...workflow_engine.services.notification_service import send_workflow_notification
+from .reviews import tell_approvers
 
 router = APIRouter(prefix="/rcsa", tags=["RCSA - Risk and Control Self-Assessment"])
+
+# Writes: the RCSA permission, or the matching erm:risks one so today's risk editors keep working (view-only users are refused).
+_CAN_CREATE = [Depends(require_tenant_permission("erm:rcsa:create", "erm:risks:create"))]
+_CAN_EDIT = [Depends(require_tenant_permission("erm:rcsa:edit", "erm:risks:edit"))]
+_CAN_DELETE = [Depends(require_tenant_permission("erm:rcsa:delete", "erm:risks:delete"))]
+_PENDING_APPROVAL = ("submitted", "under_review")
+
+
+def _ensure_checker(assessment: RCSAAssessment, user, what: str) -> None:
+    """Maker-checker: whoever submitted the assessment (its assessor, for one submitted before that was kept) cannot decide it."""
+    ensure_independent(assessment.submitted_by or assessment.assessor_id, user, what)
+
+
+def _can_self_assess(assessment, user, db: Session) -> bool:
+    """The assessor a unit's assessment is assigned to starts, answers and submits it with view access alone (the 1st line
+    owns its self-assessment); anyone else needs the RCSA edit grant."""
+    return assessment.assessor_id == user.id or has_tenant_permission(db, user, "erm:rcsa:edit", "erm:risks:edit")
+
+
+def _may_self_assess(assessment, user, db: Session) -> None:
+    if not _can_self_assess(assessment, user, db):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+
+
+def _total_tiers(db: Session, campaign: Optional[RCSACampaign]) -> int:
+    """How many approval tiers an assessment of this campaign passes: its workflow's, else one."""
+    if campaign is None or not campaign.approval_workflow_id:
+        return 1
+    count = db.query(func.count(RCSAApprovalTier.id)).filter(
+        RCSAApprovalTier.workflow_id == campaign.approval_workflow_id).scalar()
+    return count or 1
+
+
+def _since_submission(assessment: RCSAAssessment) -> int:
+    """The history id of the latest submission: tier decisions after it belong to this round."""
+    return max((h.id for h in assessment.approval_history if h.action == "submitted"), default=0)
+
+
+def _current_tier(db: Session, assessment: RCSAAssessment) -> Optional[RCSAApprovalTier]:
+    """The workflow tier the assessment waits at (tiers counted in tier order from 1), or None without a workflow."""
+    campaign = assessment.campaign
+    if campaign is None or not campaign.approval_workflow_id:
+        return None
+    tiers = (db.query(RCSAApprovalTier).filter(RCSAApprovalTier.workflow_id == campaign.approval_workflow_id)
+             .order_by(RCSAApprovalTier.tier_order).all())
+    n = assessment.current_approval_tier or 0
+    return tiers[n - 1] if 0 < n <= len(tiers) else None
+
+
+def _is_configured_approver(db: Session, tier: RCSAApprovalTier, user) -> bool:
+    """The tier names this person, or a role the platform gave them; a tier naming nobody is open to the RCSA editors."""
+    if not (tier.approver_user_id or tier.approver_role_id):
+        return True
+    return tier.approver_user_id == user.id or (bool(tier.approver_role_id) and db.query(UserRole.id).filter(
+        UserRole.user_id == user.id, UserRole.role_id == tier.approver_role_id, PLATFORM_GRANT).first() is not None)
+
+
+def _tier_approver_label(tier: RCSAApprovalTier) -> str:
+    person = tier.approver_user.display_name or tier.approver_user.username if tier.approver_user else None
+    role = f"the {tier.approver_role.name} role" if tier.approver_role else None
+    return " or ".join(x for x in (person, role) if x) or "its configured approver"
+
+
+def _ensure_tier_approver(db: Session, assessment: RCSAAssessment, user, what: str) -> None:
+    """A tier with a configured approver is decided by that approver, or by the person they delegated it to this round."""
+    tier = _current_tier(db, assessment)
+    if tier is None or _is_configured_approver(db, tier, user):
+        return
+    since = _since_submission(assessment)
+    if any(h.id > since and h.action == "delegated" and h.tier_number == assessment.current_approval_tier
+           and h.delegated_to == user.id for h in assessment.approval_history):
+        return
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                        detail=f"The {tier.tier_name} tier is for {_tier_approver_label(tier)}"
+                               f"{' or their delegate' if tier.can_delegate else ''}, so you cannot {what}.")
+
+
+def _approval_history(assessment: RCSAAssessment) -> List[RCSAApprovalHistoryResponse]:
+    return [
+        RCSAApprovalHistoryResponse(
+            id=h.id, assessment_id=h.assessment_id, tier_id=h.tier_id, action=h.action, tier_number=h.tier_number,
+            performed_by=h.performed_by,
+            performer_name=(h.performer.display_name or h.performer.username) if h.performer else None,
+            delegated_to=h.delegated_to,
+            delegate_name=(h.delegate.display_name or h.delegate.username) if h.delegate else None,
+            comments=h.comments, performed_at=h.performed_at,
+        )
+        for h in sorted(assessment.approval_history, key=lambda h: (h.performed_at or datetime.min, h.id))
+    ]
 
 
 def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
@@ -235,6 +329,107 @@ def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied to this tenant's data"
         )
+
+
+# What a question carries into a copy (a new version, a clone).
+_QUESTION_FIELDS = ("section", "question_order", "question_text", "question_type", "is_required", "options",
+                    "risk_category", "control_objective", "guidance_text", "ai_suggestion_enabled", "risk_id",
+                    "internal_control_id")
+# How far a control rating lowers the inherent likelihood, and how long a proposal it raises waits for the risk team.
+_CONTROL_STEP = {"effective": 2, "partially_effective": 1, "ineffective": 0}
+_PROPOSAL_DUE_DAYS = 14
+
+
+def _check_question_links(db: Session, questions: List[dict], tenant_id: Optional[int]) -> None:
+    """A question links only a register risk and an internal control of the template's own tenant."""
+    for model, field, label in ((Risk, "risk_id", "Risk"), (InternalControl, "internal_control_id", "Internal control")):
+        ids = {q[field] for q in questions if q.get(field)}
+        found = db.query(func.count(model.id)).filter(model.id.in_(ids), model.tenant_id == tenant_id).scalar() if ids else 0
+        if found != len(ids):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"{label} not found")
+
+
+def _launched(db: Session, template_id: int) -> bool:
+    """A campaign past draft uses the template, so its questions are what live assessments answer."""
+    return db.query(RCSACampaign.id).filter(RCSACampaign.template_id == template_id,
+                                            RCSACampaign.status != "draft").first() is not None
+
+
+def _next_version_label(version: Optional[str]) -> str:
+    """"1.0" -> "2.0", "v3" -> "4.0"; a label with no number -> "2.0"."""
+    match = re.search(r"\d+", version or "")
+    return f"{int(match.group()) + 1}.0" if match else "2.0"
+
+
+def _new_version(db: Session, old: RCSATemplate, user: GRCUser) -> tuple:
+    """The next version of a template a launched campaign uses: a copy, questions and links included, that replaces it
+    in the lists, while the campaign keeps the old row. Returns the new template and {old question id: new id}."""
+    new = RCSATemplate(tenant_id=old.tenant_id, name=old.name, description=old.description, category=old.category,
+                       source=old.source, version=_next_version_label(old.version), previous_version_id=old.id,
+                       risk_categories=old.risk_categories, regulatory_mapping=old.regulatory_mapping,
+                       created_by=user.id)
+    db.add(new)
+    db.flush()
+    copies = {q.id: RCSAQuestion(template_id=new.id, **{f: getattr(q, f) for f in _QUESTION_FIELDS}) for q in old.questions}
+    db.add_all(copies.values())
+    db.flush()
+    old.is_active = False
+    return new, {old_id: q.id for old_id, q in copies.items()}
+
+
+def _notify_assessors(db: Session, campaign: RCSACampaign, assessments: List[RCSAAssessment]) -> None:
+    """Tell each assessor which unit's assessment is theirs, with a link to it (in the app, and by email where SMTP is set)."""
+    due = campaign.due_date.strftime("%d %b %Y") if campaign.due_date else "no date set"
+    now = datetime.utcnow()
+    for a in assessments:
+        if not a.assessor_id:
+            continue
+        a.assigned_at = a.assigned_at or now
+        unit = a.business_unit.name if a.business_unit else "your unit"
+        send_workflow_notification(
+            db, tenant_id=campaign.tenant_id, subject=f"RCSA {campaign.name}: your assessment of {unit}",
+            message=f"You are the assessor for {unit} in the RCSA campaign {campaign.name}. It is due {due}.",
+            workflow_instance_id=None, user_ids=[a.assessor_id], link=f"/erm/rcsa/assessments/{a.id}")
+
+
+def _register_results(db: Session, assessment: RCSAAssessment, campaign: RCSACampaign, user: GRCUser) -> None:
+    """Approved results reach the register without writing it. For each linked risk whose weakest control rating implies
+    another residual, a submitted Risk Review proposes it: someone other than the assessor and this approver approves it
+    under Reviews, and only then the risk changes. Each ineffective control becomes a finding on the assessment.
+    shortcut: a rating lowers the inherent likelihood by a fixed step (_CONTROL_STEP) and impact stays as the register
+    has it; use the tenant's own control-effectiveness scale once one exists."""
+    weakest: dict = {}
+    for r in assessment.responses:
+        q, rating = r.question, r.control_effectiveness
+        if q is None or rating not in _CONTROL_STEP:
+            continue
+        if q.risk_id:
+            weakest[q.risk_id] = min(weakest.get(q.risk_id, rating), rating, key=_CONTROL_STEP.get)
+        if rating == "ineffective":
+            db.add(RCSAFinding(
+                tenant_id=assessment.tenant_id, assessment_id=assessment.id, finding_type="control_gap", severity="high",
+                title=f"Ineffective control: {q.control_objective or q.question_text}"[:255],
+                description=r.control_description or f"Rated ineffective in answer to: {q.question_text}",
+                risk_category=q.risk_category, linked_risk_id=q.risk_id, linked_internal_control_id=q.internal_control_id))
+    unit = assessment.business_unit.name if assessment.business_unit else "a unit"
+    now = datetime.utcnow()
+    for risk in db.query(Risk).filter(Risk.id.in_(weakest), Risk.tenant_id == assessment.tenant_id).all():
+        impact = risk.residual_impact or risk.inherent_impact
+        if not (risk.inherent_likelihood and impact):
+            continue        # nothing to lower from
+        likelihood = max(1, risk.inherent_likelihood - _CONTROL_STEP[weakest[risk.id]])
+        if (likelihood, impact) == (risk.residual_likelihood, risk.residual_impact):
+            continue
+        proposal = RiskReview(
+            risk_id=risk.id, review_cycle=campaign.period_type or "adhoc", review_type="triggered", status="submitted",
+            due_date=now + timedelta(days=_PROPOSAL_DUE_DAYS), started_at=now, reviewer_id=assessment.assessor_id,
+            submitted_by=user.id, previous_inherent_score=risk.inherent_score, previous_residual_score=risk.residual_score,
+            proposed_residual_likelihood=likelihood, proposed_residual_impact=impact,
+            findings=f"RCSA {campaign.name}, {unit}: the weakest control rating is "
+                     f"{weakest[risk.id].replace('_', ' ')}, so the residual likelihood would be {likelihood}.")
+        db.add(proposal)
+        db.flush()
+        tell_approvers(db, proposal, risk, user)
 
 
 # =============================================================================
@@ -338,6 +533,7 @@ def get_template(
         created_at=template.created_at,
         updated_at=template.updated_at,
         question_count=len(template.questions),
+        previous_version_id=template.previous_version_id,
         questions=[
             RCSAQuestionResponse(
                 id=q.id,
@@ -352,6 +548,10 @@ def get_template(
                 control_objective=q.control_objective,
                 guidance_text=q.guidance_text,
                 ai_suggestion_enabled=q.ai_suggestion_enabled,
+                risk_id=q.risk_id,
+                internal_control_id=q.internal_control_id,
+                risk_title=q.risk.title if q.risk else None,
+                control_name=q.internal_control.name if q.internal_control else None,
                 created_at=q.created_at
             )
             for q in sorted(template.questions, key=lambda x: (x.section or "", x.question_order))
@@ -359,7 +559,7 @@ def get_template(
     )
 
 
-@router.post("/templates", response_model=RCSATemplateResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/templates", response_model=RCSATemplateResponse, status_code=status.HTTP_201_CREATED, dependencies=_CAN_CREATE)
 def create_template(
     template: RCSATemplateCreate,
     db: Session = Depends(get_db),
@@ -368,7 +568,8 @@ def create_template(
     tenant_id = get_user_primary_tenant(current_user, db)
     if not tenant_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User not assigned to any tenant")
-    
+    _check_question_links(db, [q.model_dump() for q in template.questions], tenant_id)
+
     db_template = RCSATemplate(
         tenant_id=tenant_id,
         name=template.name,
@@ -385,19 +586,7 @@ def create_template(
     db.flush()
     
     for q in template.questions:
-        db_question = RCSAQuestion(
-            template_id=db_template.id,
-            section=q.section,
-            question_order=q.question_order,
-            question_text=q.question_text,
-            question_type=q.question_type,
-            is_required=q.is_required,
-            options=q.options,
-            risk_category=q.risk_category,
-            control_objective=q.control_objective,
-            guidance_text=q.guidance_text,
-            ai_suggestion_enabled=q.ai_suggestion_enabled
-        )
+        db_question = RCSAQuestion(template_id=db_template.id, **{f: getattr(q, f) for f in _QUESTION_FIELDS})
         db.add(db_question)
     
     db.commit()
@@ -422,7 +611,7 @@ def create_template(
     )
 
 
-@router.put("/templates/{template_id}", response_model=RCSATemplateResponse)
+@router.put("/templates/{template_id}", response_model=RCSATemplateResponse, dependencies=_CAN_EDIT)
 def update_template(
     template_id: int,
     template: RCSATemplateUpdate,
@@ -442,6 +631,16 @@ def update_template(
 
     update_data = template.model_dump(exclude_unset=True)
     questions_data = update_data.pop('questions', None)
+    if questions_data is not None:
+        _check_question_links(db, questions_data, db_template.tenant_id)
+    newer = db.query(RCSATemplate).filter(RCSATemplate.previous_version_id == template_id).first()
+    if newer:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail=f"Version {db_template.version} was replaced by version {newer.version}: edit that one.")
+    # A launched campaign's assessments answer this template: an edit (other than switching it off) makes the next version.
+    if (set(update_data) - {"is_active"} or questions_data is not None) and _launched(db, template_id):
+        db_template, new_ids = _new_version(db, db_template, current_user)
+        questions_data = [{**q, "id": new_ids.get(q.get("id"))} for q in questions_data] if questions_data is not None else None
 
     # Update scalar template fields
     for key, value in update_data.items():
@@ -451,7 +650,7 @@ def update_template(
     if questions_data is not None:
         # Direct query — avoids any refresh/lazy-load ordering issues
         existing_questions = db.query(RCSAQuestion).filter(
-            RCSAQuestion.template_id == template_id
+            RCSAQuestion.template_id == db_template.id
         ).all()
         existing_by_id = {q.id: q for q in existing_questions}
 
@@ -485,9 +684,13 @@ def update_template(
                 db_q.control_objective = q_data.get('control_objective') or None
                 db_q.guidance_text = guidance
                 db_q.ai_suggestion_enabled = q_data.get('ai_suggestion_enabled', True)
+                db_q.risk_id = q_data.get('risk_id', db_q.risk_id)      # a caller that does not send a link keeps it
+                db_q.internal_control_id = q_data.get('internal_control_id', db_q.internal_control_id)
             else:
                 db.add(RCSAQuestion(
-                    template_id=template_id,
+                    template_id=db_template.id,
+                    risk_id=q_data.get('risk_id'),
+                    internal_control_id=q_data.get('internal_control_id'),
                     question_text=q_data.get('question_text') or '',
                     question_type=q_data.get('question_type') or 'text',
                     question_order=order,
@@ -518,11 +721,12 @@ def update_template(
         created_by=db_template.created_by,
         created_at=db_template.created_at,
         updated_at=db_template.updated_at,
-        question_count=len(db_template.questions)
+        question_count=len(db_template.questions),
+        previous_version_id=db_template.previous_version_id,
     )
 
 
-@router.delete("/templates/{template_id}", response_model=MessageResponse)
+@router.delete("/templates/{template_id}", response_model=MessageResponse, dependencies=_CAN_DELETE)
 def delete_template(
     template_id: int,
     db: Session = Depends(get_db),
@@ -556,7 +760,7 @@ class CloneTemplateRequest(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
 
-@router.post("/templates/{template_id}/clone", response_model=RCSATemplateResponse)
+@router.post("/templates/{template_id}/clone", response_model=RCSATemplateResponse, dependencies=_CAN_CREATE)
 def clone_template(
     template_id: int,
     clone_data: Optional[CloneTemplateRequest] = None,
@@ -597,20 +801,12 @@ def clone_template(
     db.add(cloned_template)
     db.flush()
     
+    same_tenant = source_template.tenant_id == tenant_id     # links reach only the tenant's own risks and controls
     for q in source_template.questions:
-        db_question = RCSAQuestion(
-            template_id=cloned_template.id,
-            section=q.section,
-            question_order=q.question_order,
-            question_text=q.question_text,
-            question_type=q.question_type,
-            is_required=q.is_required,
-            options=q.options,
-            risk_category=q.risk_category,
-            control_objective=q.control_objective,
-            guidance_text=q.guidance_text,
-            ai_suggestion_enabled=q.ai_suggestion_enabled
-        )
+        copied = {f: getattr(q, f) for f in _QUESTION_FIELDS}
+        if not same_tenant:
+            copied.update(risk_id=None, internal_control_id=None)
+        db_question = RCSAQuestion(template_id=cloned_template.id, **copied)
         db.add(db_question)
     
     db.commit()
@@ -635,7 +831,7 @@ def clone_template(
     )
 
 
-@router.post("/templates/upload", response_model=RCSATemplateResponse)
+@router.post("/templates/upload", response_model=RCSATemplateResponse, dependencies=_CAN_CREATE)
 async def upload_template(
     file: UploadFile = File(...),
     name: str = Query(...),
@@ -987,6 +1183,8 @@ def download_template(
 def list_campaigns(
     tenant_id: Optional[int] = None,
     status_filter: Optional[str] = None,
+    status_alias: Optional[str] = Query(None, alias="status"),   # the pages send ?status=
+    period: Optional[str] = None,                                # matches the period label, e.g. "Q1 2026"
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
@@ -1004,9 +1202,12 @@ def list_campaigns(
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(RCSACampaign.tenant_id == tenant_id)
+    status_filter = status_filter or status_alias
     if status_filter:
         query = query.filter(RCSACampaign.status == status_filter)
-    
+    if period:
+        query = query.filter(RCSACampaign.period_label == period)
+
     campaigns = query.order_by(RCSACampaign.created_at.desc()).offset(skip).limit(limit).all()
     
     return [
@@ -1015,6 +1216,7 @@ def list_campaigns(
             tenant_id=c.tenant_id,
             template_id=c.template_id,
             template_name=c.template.name if c.template else None,
+            template_version=c.template.version if c.template else None,
             name=c.name,
             description=c.description,
             period_type=c.period_type,
@@ -1060,6 +1262,7 @@ def get_campaign(
         tenant_id=campaign.tenant_id,
         template_id=campaign.template_id,
         template_name=campaign.template.name if campaign.template else None,
+        template_version=campaign.template.version if campaign.template else None,
         name=campaign.name,
         description=campaign.description,
         period_type=campaign.period_type,
@@ -1162,6 +1365,7 @@ def get_campaign_detail(
         "description": campaign.description,
         "template_id": campaign.template_id,
         "template_name": campaign.template.name if campaign.template else None,
+        "template_version": campaign.template.version if campaign.template else None,
         "status": campaign.status,
         "period": campaign.period_label or campaign.period_type,
         "start_date": campaign.start_date.isoformat() if campaign.start_date else None,
@@ -1179,7 +1383,7 @@ def get_campaign_detail(
     }
 
 
-@router.post("/campaigns", response_model=RCSACampaignResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/campaigns", response_model=RCSACampaignResponse, status_code=status.HTTP_201_CREATED, dependencies=_CAN_CREATE)
 def create_campaign(
     campaign: RCSACampaignCreate,
     db: Session = Depends(get_db),
@@ -1231,6 +1435,7 @@ def create_campaign(
         tenant_id=db_campaign.tenant_id,
         template_id=db_campaign.template_id,
         template_name=template.name,
+        template_version=template.version,
         name=db_campaign.name,
         description=db_campaign.description,
         period_type=db_campaign.period_type,
@@ -1249,7 +1454,7 @@ def create_campaign(
     )
 
 
-@router.put("/campaigns/{campaign_id}", response_model=RCSACampaignResponse)
+@router.put("/campaigns/{campaign_id}", response_model=RCSACampaignResponse, dependencies=_CAN_EDIT)
 def update_campaign(
     campaign_id: int,
     campaign: RCSACampaignUpdate,
@@ -1285,6 +1490,7 @@ def update_campaign(
         tenant_id=db_campaign.tenant_id,
         template_id=db_campaign.template_id,
         template_name=template.name if template else None,
+        template_version=template.version if template else None,
         name=db_campaign.name,
         description=db_campaign.description,
         period_type=db_campaign.period_type,
@@ -1303,7 +1509,7 @@ def update_campaign(
     )
 
 
-@router.delete("/campaigns/{campaign_id}", response_model=MessageResponse)
+@router.delete("/campaigns/{campaign_id}", response_model=MessageResponse, dependencies=_CAN_DELETE)
 def delete_campaign(
     campaign_id: int,
     db: Session = Depends(get_db),
@@ -1328,7 +1534,7 @@ def delete_campaign(
     return MessageResponse(message="Campaign deleted successfully", id=campaign_id)
 
 
-@router.post("/campaigns/{campaign_id}/activate", response_model=RCSACampaignResponse)
+@router.post("/campaigns/{campaign_id}/activate", response_model=RCSACampaignResponse, dependencies=_CAN_EDIT)
 def activate_campaign(
     campaign_id: int,
     db: Session = Depends(get_db),
@@ -1406,9 +1612,12 @@ def activate_campaign(
                 )
                 db.add(assessment)
 
+    db.flush()
+    _notify_assessors(db, db_campaign, db.query(RCSAAssessment).filter(RCSAAssessment.campaign_id == campaign_id)
+                      .order_by(RCSAAssessment.id).all())
     db.commit()
     db.refresh(db_campaign)
-    
+
     template = db.query(RCSATemplate).filter(RCSATemplate.id == db_campaign.template_id).first()
     assessment_count = db.query(RCSAAssessment).filter(RCSAAssessment.campaign_id == campaign_id).count()
     
@@ -1417,6 +1626,7 @@ def activate_campaign(
         tenant_id=db_campaign.tenant_id,
         template_id=db_campaign.template_id,
         template_name=template.name if template else None,
+        template_version=template.version if template else None,
         name=db_campaign.name,
         description=db_campaign.description,
         period_type=db_campaign.period_type,
@@ -1435,7 +1645,7 @@ def activate_campaign(
     )
 
 
-@router.post("/campaigns/{campaign_id}/close", response_model=RCSACampaignResponse)
+@router.post("/campaigns/{campaign_id}/close", response_model=RCSACampaignResponse, dependencies=_CAN_EDIT)
 def close_campaign(
     campaign_id: int,
     db: Session = Depends(get_db),
@@ -1467,6 +1677,7 @@ def close_campaign(
         tenant_id=db_campaign.tenant_id,
         template_id=db_campaign.template_id,
         template_name=template.name if template else None,
+        template_version=template.version if template else None,
         name=db_campaign.name,
         description=db_campaign.description,
         period_type=db_campaign.period_type,
@@ -1485,7 +1696,7 @@ def close_campaign(
     )
 
 
-@router.post("/campaigns/{campaign_id}/assign", response_model=MessageResponse)
+@router.post("/campaigns/{campaign_id}/assign", response_model=MessageResponse, dependencies=_CAN_EDIT)
 def assign_business_units(
     campaign_id: int,
     request: RCSABUAssignRequest,
@@ -1503,7 +1714,7 @@ def assign_business_units(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
     
     refuse_imported_accounts(db, (request.assessor_ids or {}).values())
-    created_count = 0
+    created = []
     for bu_id in request.business_unit_ids:
         existing = db.query(RCSAAssessment).filter(
             RCSAAssessment.campaign_id == campaign_id,
@@ -1520,11 +1731,145 @@ def assign_business_units(
                 assigned_at=datetime.utcnow() if assessor_id else None
             )
             db.add(assessment)
-            created_count += 1
-    
+            created.append(assessment)
+
+    if db_campaign.status == "active":      # a draft campaign tells its assessors when it is activated
+        db.flush()
+        _notify_assessors(db, db_campaign, created)
     db.commit()
-    
-    return MessageResponse(message=f"Assigned {created_count} business units to campaign", id=campaign_id)
+
+    return MessageResponse(message=f"Assigned {len(created)} business units to campaign", id=campaign_id)
+
+
+_OPEN_FOR_ASSESSOR = ("not_started", "in_progress", "requires_changes")
+
+
+def _campaign_with_assessments(db: Session, campaign_id: int, current_user: GRCUser) -> RCSACampaign:
+    campaign = db.query(RCSACampaign).options(
+        joinedload(RCSACampaign.assessments).joinedload(RCSAAssessment.business_unit),
+        joinedload(RCSACampaign.assessments).joinedload(RCSAAssessment.assessor),
+    ).filter(RCSACampaign.id == campaign_id, RCSACampaign.tenant_id.in_(get_user_tenants(current_user, db))).first()
+    if not campaign:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+    return campaign
+
+
+@router.post("/campaigns/{campaign_id}/reminders", dependencies=_CAN_EDIT)
+def send_campaign_reminders(
+    campaign_id: int,
+    assessment_ids: Optional[List[int]] = Body(None, embed=True),   # the rows ticked on the page; none = every open one
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Email the assessor of each assessment still open, through the workflow engine's mailer (the tenant's SMTP settings)."""
+    import html
+    from ...workflow_engine.services.email_service import send_email
+
+    campaign = _campaign_with_assessments(db, campaign_id, current_user)
+    due = campaign.due_date.strftime("%d %b %Y") if campaign.due_date else "no date set"
+    sent = failed = no_assessor = 0
+    for a in campaign.assessments:
+        if a.status not in _OPEN_FOR_ASSESSOR or (assessment_ids and a.id not in assessment_ids):
+            continue
+        if not (a.assessor and a.assessor.email):
+            no_assessor += 1
+            continue
+        unit = a.business_unit.name if a.business_unit else "your unit"
+        body = (f"<p>Hello {html.escape(a.assessor.display_name or a.assessor.username or '')},</p>"
+                f"<p>The {html.escape(unit)} assessment in the RCSA campaign <b>{html.escape(campaign.name)}</b> "
+                f"is still open. It is due {html.escape(due)}.</p>")
+        result = send_email(db, campaign.tenant_id, a.assessor.email, f"Reminder: RCSA {campaign.name} is due {due}", body)
+        if result.get("success"):
+            sent += 1
+        else:
+            failed += 1
+    message = f"Sent {sent} reminder(s)"
+    if failed:
+        message += f"; {failed} could not be sent (check the email settings)"
+    if no_assessor:
+        message += f"; {no_assessor} open assessment(s) have no assessor with an email"
+    return {"message": message, "sent": sent, "failed": failed, "without_assessor": no_assessor}
+
+
+_ESCALATION_DAYS = 3        # a campaign's escalation_days_after when it has none
+
+
+def _escalation_targets(campaign: RCSACampaign, but_not: Optional[int]) -> dict:
+    """Whom an overdue assessment escalates to: its first approval tier's approver (a person or a role), else whoever set
+    the campaign up."""
+    tiers = sorted(campaign.approval_workflow.tiers, key=lambda t: t.tier_order) if campaign.approval_workflow else []
+    first = tiers[0] if tiers else None
+    if first and first.approver_role_id and not first.approver_user_id:
+        return {"role_ids": [first.approver_role_id]}
+    person = first.approver_user_id if first and first.approver_user_id else campaign.created_by
+    return {"user_ids": [person]} if person and person != but_not else {}
+
+
+def send_overdue_reminders(db: Session, tenant_ids: List[int], now: Optional[datetime] = None) -> dict:
+    """Assessments still open after their active campaign's due date: the assessor is reminded, and once the campaign's
+    grace period (escalation_days_after) has passed, the RCSA approver is told too. Run daily by the beat job."""
+    now = now or datetime.utcnow()
+    overdue = (db.query(RCSAAssessment).join(RCSACampaign, RCSACampaign.id == RCSAAssessment.campaign_id)
+               .filter(RCSAAssessment.tenant_id.in_(tenant_ids), RCSACampaign.status == "active",
+                       RCSACampaign.due_date < now, RCSAAssessment.status.in_(_OPEN_FOR_ASSESSOR)).all())
+    reminded = escalated = 0
+    for a in overdue:
+        campaign, link = a.campaign, f"/erm/rcsa/assessments/{a.id}"
+        unit = a.business_unit.name if a.business_unit else "a unit"
+        due = campaign.due_date.strftime("%d %b %Y")
+        if a.assessor_id:
+            send_workflow_notification(
+                db, tenant_id=a.tenant_id, subject=f"Overdue: RCSA {campaign.name}, {unit}",
+                message=f"Your self-assessment of {unit} in the RCSA campaign {campaign.name} was due on {due}. "
+                        "Finish it and submit it for approval.", workflow_instance_id=None, user_ids=[a.assessor_id],
+                link=link)
+            reminded += 1
+        grace = campaign.escalation_days_after if campaign.escalation_days_after is not None else _ESCALATION_DAYS
+        targets = _escalation_targets(campaign, a.assessor_id) if now >= campaign.due_date + timedelta(days=grace) else {}
+        if targets:
+            assessor = (a.assessor.display_name or a.assessor.username) if a.assessor else "nobody (no assessor assigned)"
+            send_workflow_notification(
+                db, tenant_id=a.tenant_id, subject=f"Escalated: RCSA {campaign.name}, {unit} is {(now - campaign.due_date).days} days late",
+                message=f"The {unit} self-assessment in {campaign.name} was due on {due} and is still "
+                        f"{a.status.replace('_', ' ')}. Assessor: {assessor}.", workflow_instance_id=None, link=link,
+                **targets)
+            escalated += 1
+    db.commit()
+    return {"reminded": reminded, "escalated": escalated}
+
+
+@router.get("/campaigns/{campaign_id}/export")
+def export_campaign_results(
+    campaign_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """The campaign's assessments as CSV: one row per business unit."""
+    import csv
+    import io
+    import re
+    from ....routers.admin_router import _csv_safe   # spreadsheet formula-injection guard
+
+    campaign = _campaign_with_assessments(db, campaign_id, current_user)
+    out = io.StringIO()
+    writer = csv.writer(out)
+    writer.writerow(["Business unit", "Assessor", "Status", "Submitted", "Completed",
+                     "Average risk score (1-25)", "Average control score (1-3)", "Responses", "Findings"])
+    for a in sorted(campaign.assessments, key=lambda a: (a.business_unit.name if a.business_unit else "")):
+        writer.writerow([_csv_safe(v) for v in (
+            a.business_unit.name if a.business_unit else "",
+            (a.assessor.display_name or a.assessor.username) if a.assessor else "",
+            a.status,
+            a.submitted_at.isoformat() if a.submitted_at else "",
+            a.completed_at.isoformat() if a.completed_at else "",
+            round(a.overall_risk_score, 2) if a.overall_risk_score is not None else "",
+            round(a.overall_control_score, 2) if a.overall_control_score is not None else "",
+            len(a.responses),
+            len(a.findings),
+        )])
+    filename = re.sub(r"[^A-Za-z0-9_-]+", "_", campaign.name or "").strip("_") or f"campaign_{campaign_id}"
+    return StreamingResponse(iter([out.getvalue()]), media_type="text/csv",
+                             headers={"Content-Disposition": f'attachment; filename="{filename}_results.csv"'})
 
 
 # =============================================================================
@@ -1536,6 +1881,7 @@ def list_assessments(
     campaign_id: Optional[int] = None,
     business_unit_id: Optional[int] = None,
     status_filter: Optional[str] = None,
+    status_alias: Optional[str] = Query(None, alias="status"),   # the pages send ?status=
     assessor_id: Optional[int] = None,
     mine: Optional[bool] = None,
     skip: int = 0,
@@ -1569,6 +1915,7 @@ def list_assessments(
         query = query.filter(RCSAAssessment.campaign_id == campaign_id)
     if business_unit_id:
         query = query.filter(RCSAAssessment.business_unit_id == business_unit_id)
+    status_filter = status_filter or status_alias
     if status_filter:
         query = query.filter(RCSAAssessment.status == status_filter)
     if assessor_id:
@@ -1606,6 +1953,37 @@ def list_assessments(
         )
         for a in assessments
     ]
+
+
+# Declared before /assessments/{assessment_id}, which would otherwise capture it (and answer 422).
+@router.get("/assessments/pending-approvals", response_model=List[RCSAPendingApprovalResponse])
+def list_pending_approvals(
+    campaign_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Assessments awaiting approval (submitted or under review), across the tenant."""
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return []
+    query = db.query(RCSAAssessment).options(
+        joinedload(RCSAAssessment.business_unit),
+        joinedload(RCSAAssessment.assessor),
+        joinedload(RCSAAssessment.campaign),
+    ).filter(RCSAAssessment.tenant_id.in_(user_tenants), RCSAAssessment.status.in_(_PENDING_APPROVAL))
+    if campaign_id:
+        query = query.filter(RCSAAssessment.campaign_id == campaign_id)
+    pending = []
+    for a in query.order_by(RCSAAssessment.submitted_at.asc()).all():
+        row = RCSAPendingApprovalResponse.model_validate(a)
+        pending.append(row.model_copy(update={
+            "campaign_name": a.campaign.name if a.campaign else None,
+            "business_unit_name": a.business_unit.name if a.business_unit else None,
+            "assessor_name": (a.assessor.display_name or a.assessor.username) if a.assessor else None,
+            "due_date": a.campaign.due_date if a.campaign else None,
+            "total_tiers": _total_tiers(db, a.campaign),
+        }))
+    return pending
 
 
 @router.get("/assessments/{assessment_id}", response_model=RCSAAssessmentResponse)
@@ -1671,7 +2049,8 @@ def get_assessment_detail(
         joinedload(RCSAAssessment.business_unit),
         joinedload(RCSAAssessment.assessor),
         joinedload(RCSAAssessment.responses).joinedload(RCSAResponse.evidence_links).joinedload(RCSAResponseEvidence.evidence),
-        joinedload(RCSAAssessment.campaign)
+        joinedload(RCSAAssessment.campaign),
+        joinedload(RCSAAssessment.approval_history),
     ).filter(
         RCSAAssessment.id == assessment_id,
         RCSAAssessment.tenant_id.in_(user_tenants)
@@ -1704,7 +2083,11 @@ def get_assessment_detail(
             question_order=q.question_order or 0,
             ai_suggestion_enabled=q.ai_suggestion_enabled or False,
             risk_category=q.risk_category,
-            control_objective=q.control_objective
+            control_objective=q.control_objective,
+            risk_id=q.risk_id,
+            internal_control_id=q.internal_control_id,
+            risk_title=q.risk.title if q.risk else None,
+            control_name=q.internal_control.name if q.internal_control else None,
         ))
     
     responses = []
@@ -1733,17 +2116,27 @@ def get_assessment_detail(
     answered = len([r for r in responses if r.likelihood or r.impact or r.effectiveness or r.yes_no_value is not None or r.text_value])
     progress = (answered / total_required * 100) if total_required > 0 else 0
     
+    bu_name = assessment.business_unit.name if assessment.business_unit else None
     return RCSAAssessmentDetailResponse(
         id=assessment.id,
         campaign_id=assessment.campaign_id,
         campaign_name=campaign.name,
-        business_unit=assessment.business_unit.name if assessment.business_unit else None,
+        business_unit=bu_name,
+        business_unit_name=bu_name,
         assessor_name=assessment.assessor.display_name if assessment.assessor else None,
         status=assessment.status,
         due_date=campaign.due_date,
         progress=progress,
+        submitted_at=assessment.submitted_at,
+        current_approval_tier=assessment.current_approval_tier or 0,
+        total_tiers=_total_tiers(db, campaign),
+        overall_risk_score=assessment.overall_risk_score,
+        overall_control_score=assessment.overall_control_score,
+        ai_quality_score=assessment.ai_quality_score,
         questions=questions,
-        responses=responses
+        responses=responses,
+        approval_history=_approval_history(assessment),
+        can_answer=_can_self_assess(assessment, current_user, db),
     )
 
 
@@ -1762,7 +2155,8 @@ def start_assessment(
     
     if not assessment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment not found")
-    
+    _may_self_assess(assessment, current_user, db)
+
     if assessment.status not in ["not_started", "requires_changes"]:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Assessment cannot be started")
     
@@ -1821,7 +2215,8 @@ def save_assessment_responses(
     
     if not assessment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment not found")
-    
+    _may_self_assess(assessment, current_user, db)
+
     if assessment.status not in ["in_progress", "requires_changes"]:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Assessment is not in editable status")
     
@@ -1884,10 +2279,11 @@ def submit_assessment(
         RCSAAssessment.id == assessment_id,
         RCSAAssessment.tenant_id.in_(user_tenants)
     ).first()
-    
+
     if not assessment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment not found")
-    
+    _may_self_assess(assessment, current_user, db)
+
     if assessment.status not in ["in_progress", "requires_changes"]:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Assessment cannot be submitted")
     
@@ -1906,6 +2302,7 @@ def submit_assessment(
     
     assessment.status = "submitted"
     assessment.submitted_at = datetime.utcnow()
+    assessment.submitted_by = current_user.id
     assessment.current_approval_tier = 1
     
     history = RCSAApprovalHistory(
@@ -2109,7 +2506,7 @@ def list_approval_workflows(
     ]
 
 
-@router.post("/approval-workflows", response_model=RCSAApprovalWorkflowResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/approval-workflows", response_model=RCSAApprovalWorkflowResponse, status_code=status.HTTP_201_CREATED, dependencies=_CAN_CREATE)
 def create_approval_workflow(
     workflow: RCSAApprovalWorkflowCreate,
     db: Session = Depends(get_db),
@@ -2161,7 +2558,7 @@ def create_approval_workflow(
     )
 
 
-@router.put("/approval-workflows/{workflow_id}", response_model=RCSAApprovalWorkflowResponse)
+@router.put("/approval-workflows/{workflow_id}", response_model=RCSAApprovalWorkflowResponse, dependencies=_CAN_EDIT)
 def update_approval_workflow(
     workflow_id: int,
     workflow: RCSAApprovalWorkflowUpdate,
@@ -2200,7 +2597,7 @@ def update_approval_workflow(
     )
 
 
-@router.post("/assessments/{assessment_id}/approve", response_model=RCSAAssessmentResponse)
+@router.post("/assessments/{assessment_id}/approve", response_model=RCSAAssessmentResponse, dependencies=_CAN_EDIT)
 def approve_assessment(
     assessment_id: int,
     action: RCSAApprovalAction,
@@ -2222,16 +2619,18 @@ def approve_assessment(
     
     if assessment.status not in ["submitted", "under_review"]:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Assessment is not pending approval")
-    
+    _ensure_checker(assessment, current_user, "approve this assessment")
+    _ensure_tier_approver(db, assessment, current_user, "approve it")
+    # Each tier is a different person: an approval of this submission (since it was last submitted) blocks the next tier.
+    since = _since_submission(assessment)
+    if any(h.id > since and h.action == "approved" and h.performed_by == current_user.id
+           for h in assessment.approval_history):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="You approved an earlier tier of this assessment, so someone else must approve this one.")
+
     campaign = db.query(RCSACampaign).filter(RCSACampaign.id == assessment.campaign_id).first()
-    workflow = None
-    if campaign and campaign.approval_workflow_id:
-        workflow = db.query(RCSAApprovalWorkflow).options(
-            joinedload(RCSAApprovalWorkflow.tiers)
-        ).filter(RCSAApprovalWorkflow.id == campaign.approval_workflow_id).first()
-    
     current_tier = assessment.current_approval_tier
-    max_tiers = len(workflow.tiers) if workflow else 1
+    max_tiers = _total_tiers(db, campaign)
     
     history = RCSAApprovalHistory(
         assessment_id=assessment_id,
@@ -2245,6 +2644,7 @@ def approve_assessment(
     if current_tier >= max_tiers:
         assessment.status = "approved"
         assessment.completed_at = datetime.utcnow()
+        _register_results(db, assessment, campaign, current_user)
     else:
         assessment.status = "under_review"
         assessment.current_approval_tier = current_tier + 1
@@ -2279,7 +2679,7 @@ def approve_assessment(
     )
 
 
-@router.post("/assessments/{assessment_id}/reject", response_model=RCSAAssessmentResponse)
+@router.post("/assessments/{assessment_id}/reject", response_model=RCSAAssessmentResponse, dependencies=_CAN_EDIT)
 def reject_assessment(
     assessment_id: int,
     action: RCSAApprovalAction,
@@ -2301,7 +2701,9 @@ def reject_assessment(
     
     if assessment.status not in ["submitted", "under_review"]:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Assessment is not pending approval")
-    
+    _ensure_checker(assessment, current_user, "reject this assessment")
+    _ensure_tier_approver(db, assessment, current_user, "reject it")
+
     history = RCSAApprovalHistory(
         assessment_id=assessment_id,
         action="rejected",
@@ -2343,7 +2745,7 @@ def reject_assessment(
     )
 
 
-@router.post("/assessments/{assessment_id}/return", response_model=RCSAAssessmentResponse)
+@router.post("/assessments/{assessment_id}/return", response_model=RCSAAssessmentResponse, dependencies=_CAN_EDIT)
 def return_assessment(
     assessment_id: int,
     action: RCSAApprovalAction,
@@ -2362,7 +2764,11 @@ def return_assessment(
     
     if not assessment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment not found")
-    
+    if assessment.status not in _PENDING_APPROVAL:   # like approve and reject: only what awaits approval goes back
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Assessment is not pending approval")
+    _ensure_checker(assessment, current_user, "return this assessment")
+    _ensure_tier_approver(db, assessment, current_user, "return it")
+
     history = RCSAApprovalHistory(
         assessment_id=assessment_id,
         action="returned",
@@ -2405,7 +2811,7 @@ def return_assessment(
     )
 
 
-@router.post("/assessments/{assessment_id}/delegate", response_model=MessageResponse)
+@router.post("/assessments/{assessment_id}/delegate", response_model=MessageResponse, dependencies=_CAN_EDIT)
 def delegate_approval(
     assessment_id: int,
     action: RCSADelegateAction,
@@ -2421,7 +2827,14 @@ def delegate_approval(
     
     if not assessment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment not found")
-    
+    tier = _current_tier(db, assessment)
+    # a tier with a configured approver is delegated by that approver alone, and only where the tier allows it
+    if tier is not None and (tier.approver_user_id or tier.approver_role_id) and not (
+            tier.can_delegate and _is_configured_approver(db, tier, current_user)):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail=f"Only {_tier_approver_label(tier)} delegates the {tier.tier_name} tier"
+                                   if tier.can_delegate else f"The {tier.tier_name} tier cannot be delegated.")
+
     delegate_user = db.query(GRCUser).filter(GRCUser.id == action.delegate_to_user_id).first()
     if not delegate_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Delegate user not found")
@@ -2448,12 +2861,44 @@ def delegate_approval(
 # Findings Endpoints
 # =============================================================================
 
+def _finding_response(f: RCSAFinding, cls=RCSAFindingResponse, **extra):
+    """One finding in the response shape, with the business unit and campaign it came from."""
+    assessment = f.assessment
+    return cls(
+        id=f.id,
+        tenant_id=f.tenant_id,
+        assessment_id=f.assessment_id,
+        finding_type=f.finding_type,
+        severity=f.severity,
+        title=f.title,
+        description=f.description,
+        risk_category=f.risk_category,
+        affected_controls=f.affected_controls or [],
+        ai_generated=f.ai_generated,
+        ai_recommendation=f.ai_recommendation,
+        linked_risk_id=f.linked_risk_id,
+        linked_internal_control_id=f.linked_internal_control_id,
+        linked_mitigation_action_id=f.linked_mitigation_action_id,
+        status=f.status,
+        remediation_due_date=f.remediation_due_date,
+        remediation_owner_id=f.remediation_owner_id,
+        remediation_owner_name=f.remediation_owner.display_name if f.remediation_owner else None,
+        business_unit_name=assessment.business_unit.name if assessment and assessment.business_unit else None,
+        assessment_name=assessment.campaign.name if assessment and assessment.campaign else None,
+        created_at=f.created_at,
+        updated_at=f.updated_at,
+        closed_at=f.closed_at,
+        **extra,
+    )
+
+
 @router.get("/findings", response_model=List[RCSAFindingResponse])
 def list_findings(
     tenant_id: Optional[int] = None,
     assessment_id: Optional[int] = None,
     severity: Optional[str] = None,
     status_filter: Optional[str] = None,
+    status_alias: Optional[str] = Query(None, alias="status"),   # the pages send ?status=
     finding_type: Optional[str] = None,
     skip: int = 0,
     limit: int = 100,
@@ -2475,6 +2920,7 @@ def list_findings(
         query = query.filter(RCSAFinding.assessment_id == assessment_id)
     if severity:
         query = query.filter(RCSAFinding.severity == severity)
+    status_filter = status_filter or status_alias
     if status_filter:
         query = query.filter(RCSAFinding.status == status_filter)
     if finding_type:
@@ -2482,35 +2928,78 @@ def list_findings(
     
     findings = query.order_by(RCSAFinding.created_at.desc()).offset(skip).limit(limit).all()
     
-    return [
-        RCSAFindingResponse(
-            id=f.id,
-            tenant_id=f.tenant_id,
-            assessment_id=f.assessment_id,
-            finding_type=f.finding_type,
-            severity=f.severity,
-            title=f.title,
-            description=f.description,
-            risk_category=f.risk_category,
-            affected_controls=f.affected_controls or [],
-            ai_generated=f.ai_generated,
-            ai_recommendation=f.ai_recommendation,
-            linked_risk_id=f.linked_risk_id,
-            linked_internal_control_id=f.linked_internal_control_id,
-            linked_mitigation_action_id=f.linked_mitigation_action_id,
-            status=f.status,
-            remediation_due_date=f.remediation_due_date,
-            remediation_owner_id=f.remediation_owner_id,
-            remediation_owner_name=f.remediation_owner.display_name if f.remediation_owner else None,
-            created_at=f.created_at,
-            updated_at=f.updated_at,
-            closed_at=f.closed_at
-        )
-        for f in findings
-    ]
+    return [_finding_response(f) for f in findings]
 
 
-@router.post("/findings", response_model=RCSAFindingResponse, status_code=status.HTTP_201_CREATED)
+@router.get("/findings/{finding_id}", response_model=RCSAFindingDetailResponse)
+def get_finding(
+    finding_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    f = db.query(RCSAFinding).filter(RCSAFinding.id == finding_id, RCSAFinding.tenant_id.in_(user_tenants)).first()
+    if not f:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Finding not found")
+    risk = db.query(Risk).filter(Risk.id == f.linked_risk_id).first() if f.linked_risk_id else None
+    control = (db.query(InternalControl).filter(InternalControl.id == f.linked_internal_control_id).first()
+               if f.linked_internal_control_id else None)
+    action = (db.query(RiskMitigationAction).filter(RiskMitigationAction.id == f.linked_mitigation_action_id).first()
+              if f.linked_mitigation_action_id else None)
+    if action is not None and action.migrated_to_issue_action_id:   # the live action on the CAPA tracker, not the frozen copy
+        from ....models import IssueAction
+        action = db.query(IssueAction).filter(IssueAction.id == action.migrated_to_issue_action_id).first() or action
+    issue = _finding_issue(db, f)
+    return _finding_response(
+        f, RCSAFindingDetailResponse,
+        linked_risk={"id": risk.id, "title": risk.title} if risk else None,
+        linked_control={"id": control.id, "name": control.name} if control else None,
+        mitigation_actions=[{"id": action.id, "title": action.title, "status": action.status,
+                             "due_date": action.due_date}] if action else [],
+        linked_issue={"id": issue.id, "code": issue.code, "title": issue.title, "severity": issue.severity,
+                      "workflow_state": issue.workflow_state} if issue else None,
+    )
+
+
+FINDING_ISSUE_SOURCE = "rcsa_finding"
+# The finding's severity as the issue engine's impact and urgency, so its matrix sets the severity and the SLA.
+_FINDING_IMPACT_URGENCY = {"critical": ("high", "high"), "high": ("high", "medium"), "medium": ("medium", "medium"),
+                           "low": ("low", "medium")}
+
+
+def _finding_issue(db: Session, f: RCSAFinding) -> Optional[Issue]:
+    """The latest Issue raised from this finding."""
+    return (db.query(Issue).filter(Issue.tenant_id == f.tenant_id, Issue.source_type == FINDING_ISSUE_SOURCE,
+                                   Issue.source_id == f.id).order_by(Issue.id.desc()).first())
+
+
+@router.post("/findings/{finding_id}/raise-issue", status_code=status.HTTP_201_CREATED, dependencies=_CAN_CREATE)
+def raise_finding_issue(finding_id: int, db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    """Raise the finding as an Issue (Issue Management's own create service), linked to the finding's risk and control.
+    One open issue per finding; once it is closed the finding can be raised again."""
+    from ...issue_management.services.auto_create import from_event
+
+    f = db.query(RCSAFinding).filter(RCSAFinding.id == finding_id,
+                                     RCSAFinding.tenant_id.in_(get_user_tenants(current_user, db))).first()
+    if not f:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Finding not found")
+    impact, urgency = _FINDING_IMPACT_URGENCY.get(f.severity, ("medium", "medium"))
+    issue = from_event(db=db, tenant_id=f.tenant_id, source_type=FINDING_ISSUE_SOURCE, source_id=f.id,
+                       title=f"RCSA finding: {f.title}"[:255], description=f.description, impact=impact, urgency=urgency,
+                       issue_type="process_gap", category="operations", assignee_id=f.remediation_owner_id,
+                       reporter_id=current_user.id, risk_id=f.linked_risk_id)
+    if issue is None:
+        open_issue = _finding_issue(db, f)
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail=f"This finding is already raised as issue {open_issue.code if open_issue else ''}".strip() + ".")
+    if f.linked_internal_control_id:
+        db.add(IssueControlLink(issue_id=issue.id, internal_control_id=f.linked_internal_control_id, link_type="gap",
+                                created_by=current_user.id))
+    db.commit()
+    return {"id": issue.id, "code": issue.code, "message": f"Raised as issue {issue.code}"}
+
+
+@router.post("/findings", response_model=RCSAFindingResponse, status_code=status.HTTP_201_CREATED, dependencies=_CAN_CREATE)
 def create_finding(
     finding: RCSAFindingCreate,
     assessment_id: int = Query(...),
@@ -2569,7 +3058,7 @@ def create_finding(
     )
 
 
-@router.put("/findings/{finding_id}", response_model=RCSAFindingResponse)
+@router.put("/findings/{finding_id}", response_model=RCSAFindingResponse, dependencies=_CAN_EDIT)
 def update_finding(
     finding_id: int,
     finding: RCSAFindingUpdate,
@@ -2625,10 +3114,10 @@ def update_finding(
     )
 
 
-@router.post("/findings/{finding_id}/link-risk", response_model=RCSAFindingResponse)
+@router.post("/findings/{finding_id}/link-risk", response_model=RCSAFindingResponse, dependencies=_CAN_EDIT)
 def link_finding_to_risk(
     finding_id: int,
-    risk_id: int = Query(...),
+    risk_id: int = Body(..., embed=True),        # the page sends {"risk_id": ...}
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -2679,10 +3168,10 @@ def link_finding_to_risk(
     )
 
 
-@router.post("/findings/{finding_id}/link-control", response_model=RCSAFindingResponse)
+@router.post("/findings/{finding_id}/link-control", response_model=RCSAFindingResponse, dependencies=_CAN_EDIT)
 def link_finding_to_control(
     finding_id: int,
-    control_id: int = Query(...),
+    control_id: int = Body(..., embed=True),     # the page sends {"control_id": ...}
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -2733,10 +3222,14 @@ def link_finding_to_control(
     )
 
 
-@router.post("/findings/{finding_id}/create-action", response_model=MessageResponse)
+@router.post("/findings/{finding_id}/create-action", response_model=MessageResponse, dependencies=_CAN_CREATE)
 def create_mitigation_action_from_finding(
     finding_id: int,
     risk_id: Optional[int] = Query(None, description="Risk ID to link the action to. Required if finding is not linked to a risk."),
+    # what the page's "Create Mitigation Action" form sends; each falls back to the finding's own
+    title: Optional[str] = Body(None),
+    description: Optional[str] = Body(None),
+    due_date: Optional[datetime] = Body(None),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -2767,12 +3260,12 @@ def create_mitigation_action_from_finding(
     
     action = RiskMitigationAction(
         risk_id=target_risk_id,
-        title=f"Remediate: {db_finding.title}",
-        description=db_finding.description or f"Mitigation action for RCSA finding: {db_finding.title}",
+        title=(title or "").strip() or f"Remediate: {db_finding.title}",
+        description=description or db_finding.description or f"Mitigation action for RCSA finding: {db_finding.title}",
         action_type="mitigate",
         priority="high" if db_finding.severity in ["critical", "high"] else "medium",
         status="open",
-        due_date=db_finding.remediation_due_date,
+        due_date=due_date or db_finding.remediation_due_date,
         owner_id=db_finding.remediation_owner_id
     )
     db.add(action)
@@ -2782,8 +3275,14 @@ def create_mitigation_action_from_finding(
     if not db_finding.linked_risk_id:
         db_finding.linked_risk_id = target_risk_id
     db.commit()
-    
-    return MessageResponse(message="Mitigation action created and linked to risk", id=action.id)
+    # shortcut: the finding's link is a FK to the legacy table, so the row is written there and copied to the CAPA tracker
+    # at once; add a linked_issue_action_id column if the legacy table is ever dropped.
+    from ...issue_management.services.risk_actions import migrate_legacy_actions
+    migrate_legacy_actions(db, [risk.tenant_id])
+    db.refresh(action)
+
+    return MessageResponse(message="Action added to the risk's Actions & Acceptances",
+                           id=action.migrated_to_issue_action_id or action.id)
 
 
 # =============================================================================
@@ -3026,7 +3525,12 @@ async def upload_rcsa_evidence(
         raise HTTPException(status_code=404, detail="Assessment not found")
     
     validate_tenant_access(current_user, assessment.tenant_id, db)
-    
+    _may_self_assess(assessment, current_user, db)
+    # the assessor adds evidence while answering; once submitted only the risk team can (e.g. during review)
+    if assessment.status not in ("in_progress", "requires_changes") \
+            and not has_tenant_permission(db, current_user, "erm:rcsa:edit", "erm:risks:edit"):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Evidence can only be added while the assessment is open")
+
     # Create uploads directory if it doesn't exist
     upload_dir = os.path.join(os.getcwd(), "uploads", "rcsa_evidence")
     os.makedirs(upload_dir, exist_ok=True)
@@ -3091,7 +3595,7 @@ async def upload_rcsa_evidence(
     }
 
 
-@router.delete("/evidence/{evidence_id}")
+@router.delete("/evidence/{evidence_id}", dependencies=_CAN_EDIT)
 def delete_rcsa_evidence(
     evidence_id: int,
     db: Session = Depends(get_db),

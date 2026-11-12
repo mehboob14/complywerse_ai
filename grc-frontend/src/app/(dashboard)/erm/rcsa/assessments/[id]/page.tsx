@@ -29,6 +29,9 @@ import Link from 'next/link';
 import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 import { PageLoader } from '@/components/ui';
 import EvidencePreviewButton from '@/components/evidence/EvidencePreviewButton';
+import { usePermissions } from '@/hooks/usePermissions';
+import { apiErrorText } from '@/lib/apiError';
+import { groupQuestions, questionGroup } from '../../questionLinks';
 
 interface Question {
   id: number;
@@ -42,6 +45,10 @@ interface Question {
   ai_suggestion_enabled?: boolean;
   risk_category?: string;
   control_objective?: string;
+  risk_id?: number | null;          // the register risk this question assesses
+  risk_title?: string | null;
+  internal_control_id?: number | null;
+  control_name?: string | null;
 }
 
 interface Response {
@@ -94,6 +101,7 @@ interface Assessment {
   progress: number;
   questions: Question[];
   responses: Response[];
+  can_answer?: boolean; // the server's rule: its assessor, or the RCSA edit grant
 }
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
@@ -101,6 +109,7 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }>
   in_progress: { bg: 'bg-primary-50', text: 'text-primary-700', label: 'In Progress' },
   submitted: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Submitted' },
   under_review: { bg: 'bg-orange-50', text: 'text-orange-700', label: 'Under Review' },
+  requires_changes: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Returned for changes' },
   approved: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Approved' },
   rejected: { bg: 'bg-rose-50', text: 'text-rose-700', label: 'Rejected' },
 };
@@ -132,6 +141,8 @@ export default function AssessmentDetailPage() {
   const params = useParams();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { hasAnyPermission } = usePermissions();
+  const canEdit = hasAnyPermission(['erm:rcsa:edit', 'erm:risks:edit']);
   const rawAssessmentId = Array.isArray(params.id) ? params.id[0] : params.id;
   const assessmentId = Number(rawAssessmentId);
   const isValidAssessmentId = Number.isFinite(assessmentId) && assessmentId > 0;
@@ -204,7 +215,7 @@ export default function AssessmentDetailPage() {
       setEvidenceFiles(evidenceMap);
     }
     if (assessment?.questions) {
-      const sections = new Set(assessment.questions.map(q => q.section));
+      const sections = new Set(assessment.questions.map(questionGroup));
       setExpandedSections(sections);
     }
   }, [assessment]);
@@ -213,6 +224,17 @@ export default function AssessmentDetailPage() {
     mutationFn: (data: { responses: Response[] }) => rcsaApi.saveResponses(assessmentId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rcsa-assessment', assessmentId] });
+    },
+    onError: () => {
+      alert('Your answers could not be saved. Please try again.');
+    },
+  });
+
+  const startMutation = useMutation({
+    mutationFn: () => rcsaApi.startAssessment(assessmentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['rcsa-assessment', assessmentId] });
+      queryClient.invalidateQueries({ queryKey: ['rcsa-assessments'] });
     },
   });
 
@@ -344,11 +366,7 @@ export default function AssessmentDetailPage() {
     ? [...assessment.questions].sort((a, b) => (a.question_order || a.sequence || 0) - (b.question_order || b.sequence || 0))
     : [];
 
-  const groupedQuestions = sortedQuestions.reduce((acc, q) => {
-    if (!acc[q.section]) acc[q.section] = [];
-    acc[q.section].push(q);
-    return acc;
-  }, {} as Record<string, Question[]>);
+  const groupedQuestions = groupQuestions(sortedQuestions);   // by register risk, unlinked ones by section
 
   const currentQuestion = sortedQuestions[currentQuestionIndex];
   const currentAISuggestion = currentQuestion
@@ -369,7 +387,7 @@ export default function AssessmentDetailPage() {
   const goToNextQuestion = () => {
     if (currentQuestionIndex < totalQuestions - 1) {
       setCurrentQuestionIndex(currentQuestionIndex + 1);
-      handleSave();
+      if (isEditable) handleSave();
     }
   };
 
@@ -438,8 +456,10 @@ export default function AssessmentDetailPage() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const isEditable = assessment?.status === 'in_progress' || assessment?.status === 'rejected' || assessment?.status === 'not_started';
-  const isReviewMode = assessment?.status === 'submitted' || assessment?.status === 'under_review';
+  // The server saves answers only while in progress or returned for changes; rejected is final, and not started needs Start.
+  const canAnswer = canEdit || !!assessment?.can_answer;
+  const isEditable = canAnswer && (assessment?.status === 'in_progress' || assessment?.status === 'requires_changes');
+  const isReviewMode = canEdit && (assessment?.status === 'submitted' || assessment?.status === 'under_review');
   const statusStyle = STATUS_STYLES[assessment?.status || 'not_started'];
 
   if (isLoading) {
@@ -482,6 +502,16 @@ export default function AssessmentDetailPage() {
             </span>
           </div>
         </div>
+        {canAnswer && assessment.status === 'not_started' && (
+          <button
+            onClick={() => startMutation.mutate()}
+            disabled={startMutation.isPending}
+            className="btn-primary flex items-center gap-2"
+          >
+            {startMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ChevronRight className="h-4 w-4" />}
+            Start
+          </button>
+        )}
         {isEditable && (
           <div className="flex items-center gap-2">
             <button
@@ -523,6 +553,12 @@ export default function AssessmentDetailPage() {
           </div>
         )}
       </div>
+
+      {(approveMutation.error || rejectMutation.error) && (
+        <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          {apiErrorText(approveMutation.error ?? rejectMutation.error, 'The decision was not saved.')}
+        </p>
+      )}
 
       {/* Reject Modal */}
       <RightSlidePanel
@@ -627,6 +663,12 @@ export default function AssessmentDetailPage() {
                 <span className="text-xs font-medium px-2 py-1 bg-slate-100 rounded text-slate-700">
                   {currentQuestion.section}
                 </span>
+                {currentQuestion.risk_title && (
+                  <span className="text-xs font-medium px-2 py-1 bg-rose-50 rounded text-rose-700">Risk: {currentQuestion.risk_title}</span>
+                )}
+                {currentQuestion.control_name && (
+                  <span className="text-xs font-medium px-2 py-1 bg-emerald-50 rounded text-emerald-700">Control: {currentQuestion.control_name}</span>
+                )}
                 <span className="text-xs text-slate-500">Question {currentQuestionIndex + 1}</span>
               </div>
               <p className="text-xl text-slate-900 font-medium">
@@ -922,7 +964,7 @@ export default function AssessmentDetailPage() {
       {/* List View Mode */}
       {viewMode === 'list' && (
       <div className="space-y-4">
-        {Object.entries(groupedQuestions).map(([section, questions]) => (
+        {groupedQuestions.map(([section, questions]) => (
           <div key={section} className="card overflow-hidden">
             <button
               onClick={() => toggleSection(section)}
@@ -951,6 +993,11 @@ export default function AssessmentDetailPage() {
                             {question.question_text}
                             {question.is_required && <span className="text-rose-600 ml-1">*</span>}
                           </p>
+                          {question.control_name && (
+                            <span className="mt-1 inline-block text-xs px-2 py-0.5 rounded bg-emerald-50 text-emerald-700">
+                              Control: {question.control_name}
+                            </span>
+                          )}
                           {question.guidance && (
                             <p className="text-sm text-slate-600 mt-1 flex items-start gap-1.5">
                               <HelpCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />

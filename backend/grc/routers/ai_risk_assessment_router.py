@@ -41,13 +41,19 @@ from ..models import (
     GRCUser,
     Risk,
     get_db,
+    risk_priority_for_score,
 )
-from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant, require_tenant_permission
 from ..services import evidence_review
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/erm/ai-risk-assessment", tags=["AI Risk Assessment"])
+
+
+def _may(action: str) -> list:
+    """A write needs the assessment permission, or the risk editor's grant."""
+    return [Depends(require_tenant_permission(f"risks:risk_assessment:{action}", f"erm:risks:{action}"))]
 
 
 # ── Lazy table self heal ─────────────────────────────────────────────────────
@@ -152,15 +158,10 @@ def _serialize(e: AIRiskAssessmentEntry) -> Dict[str, Any]:
     }
 
 
-def _residual_from_score(score: Optional[int]) -> str:
-    """Map computed risk_score (1..25) to a residual level bucket."""
-    if not score:
-        return "Low"
-    if score >= 15:
-        return "High"
-    if score >= 8:
-        return "Medium"
-    return "Low"
+def _residual_from_score(score: Optional[int]) -> Optional[str]:
+    """The template's level (High / Medium / Low) for a 1..25 score, on the shared bands; none when unscored."""
+    band = risk_priority_for_score(score)
+    return {"critical": "High", "high": "High", "medium": "Medium", "low": "Low"}.get(band)
 
 
 def _calc_score(likelihood: Optional[int], impact: Optional[int]) -> Optional[int]:
@@ -187,30 +188,9 @@ def list_entries(
     return [_serialize(r) for r in rows]
 
 
-@router.get("/{entry_id}")
-def read_entry(
-    entry_id: int,
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth),
-):
-    _ensure_table(db)
-    user_tenants = get_user_tenants(current_user, db)
-    row = (
-        db.query(AIRiskAssessmentEntry)
-        .filter(
-            AIRiskAssessmentEntry.id == entry_id,
-            AIRiskAssessmentEntry.tenant_id.in_(user_tenants),
-        )
-        .first()
-    )
-    if not row:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AI risk entry not found")
-    return _serialize(row)
-
-
 # ── Create ───────────────────────────────────────────────────────────────────
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED, dependencies=_may("create"))
 def create_entry(
     payload: AIRiskEntryCreate,
     db: Session = Depends(get_db),
@@ -233,7 +213,7 @@ def create_entry(
         data["status"] = "Open"
 
     row = AIRiskAssessmentEntry(
-        tenant_id=tenant.id,
+        tenant_id=tenant,
         source="manual",
         created_by_user_id=current_user.id,
         created_at=datetime.utcnow(),
@@ -248,7 +228,7 @@ def create_entry(
 
 # ── Update ───────────────────────────────────────────────────────────────────
 
-@router.put("/{entry_id}")
+@router.put("/{entry_id}", dependencies=_may("edit"))
 def update_entry(
     entry_id: int,
     payload: AIRiskEntryUpdate,
@@ -287,7 +267,7 @@ def update_entry(
 
 # ── Delete ───────────────────────────────────────────────────────────────────
 
-@router.delete("/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{entry_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=_may("delete"))
 def delete_entry(
     entry_id: int,
     db: Session = Depends(get_db),
@@ -359,6 +339,28 @@ def download_template(
     )
 
 
+# Declared after /template: a path parameter declared first would swallow it (422).
+@router.get("/{entry_id}")
+def read_entry(
+    entry_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    _ensure_table(db)
+    user_tenants = get_user_tenants(current_user, db)
+    row = (
+        db.query(AIRiskAssessmentEntry)
+        .filter(
+            AIRiskAssessmentEntry.id == entry_id,
+            AIRiskAssessmentEntry.tenant_id.in_(user_tenants),
+        )
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AI risk entry not found")
+    return _serialize(row)
+
+
 # ── Upload + parse xlsx ──────────────────────────────────────────────────────
 
 def _coerce_int(v: Any) -> Optional[int]:
@@ -394,7 +396,7 @@ def _coerce_str(v: Any, max_len: Optional[int] = None) -> Optional[str]:
     return s
 
 
-@router.post("/upload")
+@router.post("/upload", dependencies=_may("create"))
 async def upload_template(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -464,7 +466,7 @@ async def upload_template(
             residual = _residual_from_score(score)
 
         row = AIRiskAssessmentEntry(
-            tenant_id=tenant.id,
+            tenant_id=tenant,
             risk_id_external=risk_id_ext,
             ai_system_use_case=ai_system,
             risk_description=descr,
@@ -647,7 +649,7 @@ def _ai_llm_suggestion(entry: AIRiskAssessmentEntry, focus: Optional[str]) -> Op
     return None
 
 
-@router.post("/{entry_id}/ai-suggest")
+@router.post("/{entry_id}/ai-suggest", dependencies=_may("edit"))
 def ai_suggest(
     entry_id: int,
     payload: Optional[AISuggestRequest] = None,
@@ -698,7 +700,7 @@ def ai_suggest(
     }
 
 
-@router.post("/{entry_id}/accept-ai")
+@router.post("/{entry_id}/accept-ai", dependencies=_may("edit"))
 def accept_ai(
     entry_id: int,
     db: Session = Depends(get_db),
@@ -742,7 +744,7 @@ def accept_ai(
 
 # ── Bridge to general Risk ───────────────────────────────────────────────────
 
-@router.post("/{entry_id}/bridge-to-risk")
+@router.post("/{entry_id}/bridge-to-risk", dependencies=_may("create"))
 def bridge_to_risk(
     entry_id: int,
     db: Session = Depends(get_db),
@@ -768,7 +770,7 @@ def bridge_to_risk(
     # Map template status to Risk status.
     status_map = {
         "open": "open",
-        "in progress": "mitigating",
+        "in progress": "in_treatment",
         "closed": "closed",
         "accepted": "accepted",
     }
@@ -794,14 +796,13 @@ def bridge_to_risk(
         tenant_id=row.tenant_id,
         title=title[:200],
         description=row.risk_description,
+        category=rcat,              # NOT NULL on grc_risks: the bridge failed without it
         risk_category=rcat,
         risk_sub_category=row.risk_category,
         inherent_likelihood=row.likelihood,
         inherent_impact=row.impact,
         inherent_score=row.risk_score,
-        residual_likelihood=row.likelihood,
-        residual_impact=row.impact,
-        residual_score=row.risk_score,
+        # residual stays unset: a level (High / Medium / Low) is a band, not a score, and copying inherent claims no control effect
         status=risk_status,
         treatment_plan=row.mitigation_plan,
         owner_id=row.risk_owner_user_id,
@@ -930,7 +931,7 @@ class _LinkEvidenceIn(BaseModel):
     relationship_type: Optional[str] = "supports"
 
 
-@router.post("/{entry_id}/evidence/link", status_code=status.HTTP_201_CREATED)
+@router.post("/{entry_id}/evidence/link", status_code=status.HTTP_201_CREATED, dependencies=_may("edit"))
 def link_existing_evidence(
     entry_id: int,
     payload: _LinkEvidenceIn,
@@ -967,7 +968,7 @@ def link_existing_evidence(
     return _serialize_evidence(ev, link)
 
 
-@router.post("/{entry_id}/evidence/upload", status_code=status.HTTP_201_CREATED)
+@router.post("/{entry_id}/evidence/upload", status_code=status.HTTP_201_CREATED, dependencies=_may("edit"))
 async def upload_and_link_evidence(
     entry_id: int,
     file: UploadFile = File(...),
@@ -1032,7 +1033,7 @@ async def upload_and_link_evidence(
     return _serialize_evidence(ev, link)
 
 
-@router.delete("/{entry_id}/evidence/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{entry_id}/evidence/{link_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=_may("edit"))
 def unlink_evidence(
     entry_id: int,
     link_id: int,

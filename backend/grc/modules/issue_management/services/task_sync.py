@@ -43,6 +43,10 @@ def sync_action_from_task(task_id: int, db: Session, user_id: Optional[int] = No
         return
 
     target_status = _STATUS_MAP.get(task.status)
+    # Maker-checker: a task marked Verified verifies the action only when it was already completed by someone else;
+    # otherwise the sync records it as completed and leaves verification to a second person.
+    if target_status == "verified" and (action.status != "completed" or getattr(action, "completed_by", None) in (None, user_id)):
+        target_status = "completed"
     if target_status is None or action.status == target_status:
         return
 
@@ -50,6 +54,8 @@ def sync_action_from_task(task_id: int, db: Session, user_id: Optional[int] = No
     action.status = target_status
     if target_status == "completed" and not action.completed_at:
         action.completed_at = datetime.utcnow()
+    if target_status == "completed" and user_id and hasattr(action, "completed_by") and not action.completed_by:
+        action.completed_by = user_id
     if target_status == "verified" and not action.verified_at:
         action.verified_at = datetime.utcnow()
         if user_id and not action.verified_by_id:

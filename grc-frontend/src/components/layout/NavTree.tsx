@@ -50,7 +50,9 @@ function Panel({ id, open, animated, children }: { id: string; open: boolean; an
 // A nested collapsible (Assessments -> Cyber Security -> templates). Indented one level under its parent group.
 function NavSubGroup({ group, activeHref, animated, touch, onNavigate }: GroupProps) {
   const hasActive = groupHasActive(group, activeHref);
-  const [open, setOpen] = useState(hasActive);
+  const [open, setOpen] = useState(group.defaultOpen === true || hasActive);
+  // A page reached from elsewhere (a tile, a link) opens the sub-group that holds it; it never closes one the user opened.
+  useEffect(() => { if (hasActive) setOpen(true); }, [hasActive]);
   const panelId = useId();
   const Icon = group.icon;
   return (
@@ -133,6 +135,7 @@ export function NavGroupSection({ group, activeHref, animated, touch, onNavigate
   const hasActiveChild = groupHasActive(group, activeHref);
   // Closed by default: only the group holding the lit page opens (so a deep link still shows its context), or one marked defaultOpen.
   const [isOpen, setIsOpen] = useState(group.defaultOpen === true || hasActiveChild);
+  useEffect(() => { if (hasActiveChild) setIsOpen(true); }, [hasActiveChild]);
   const panelId = useId();
   const GroupIcon = group.icon;
   return (

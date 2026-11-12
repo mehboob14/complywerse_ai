@@ -13,9 +13,12 @@ import {
   X, Plus, ExternalLink, Rocket, Calendar, User, Trash2, ShieldCheck, ChevronRight,
 } from 'lucide-react';
 import { apiClient, issuesApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import { InlineLinkPicker } from '@/components/ui';
 import { SeverityChip, StateChip, SourceChip, formatDate, timeAgo } from '../_components/shared';
+import { ReopenIssueButton } from '../_components/ReopenIssueButton';
 import { RegisterPanel } from '@/components/audit-register/RegisterPanel';
+import { apiErrorText } from '@/lib/apiError';
 
 interface IssueDetail {
   id: number;
@@ -111,13 +114,15 @@ const LINK_PICKER: Record<LinkFamily, {
   },
 };
 
+// Closing and reopening have their own buttons (Approve Closure asks for notes,
+// Reopen for a reason), so they are not offered here as plain transitions.
 const TRANSITIONS: Record<string, string[]> = {
   new:             ['triage', 'in_progress', 'cancelled'],
   triage:          ['in_progress', 'cancelled'],
   in_progress:     ['resolution', 'closure_review', 'cancelled'],
   resolution:      ['closure_review', 'in_progress', 'cancelled'],
-  closure_review:  ['closed', 'in_progress'],
-  closed:          ['in_progress'],
+  closure_review:  ['in_progress'],
+  closed:          [],
   cancelled:       ['new'],
 };
 
@@ -126,6 +131,8 @@ export default function IssueDetailPage() {
   const router = useRouter();
   const qc = useQueryClient();
   const issueId = Number(params.id);
+  const { hasPermission } = usePermissions();
+  const canEdit = hasPermission('issue_management:issues:edit');
 
   const [showClose, setShowClose] = useState(false);
   const [openSection, setOpenSection] = useState<null | 'capa' | 'linked' | 'comments' | 'activity'>(null);
@@ -196,7 +203,7 @@ export default function IssueDetailPage() {
               {data.target_closure_date && <span>Target close: {formatDate(data.target_closure_date)}</span>}
             </div>
           </div>
-          <div className="flex flex-wrap gap-1.5">
+          {canEdit && <div className="flex flex-wrap gap-1.5">
             {allowed.map((s) => (
               <button
                 key={s}
@@ -209,24 +216,14 @@ export default function IssueDetailPage() {
             ))}
             {data.workflow_state === 'closure_review' && (
               <button
-                onClick={() => setShowClose(true)}
+                onClick={() => { closeMutation.reset(); setShowClose(true); }}
                 className="inline-flex items-center gap-1 rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-100"
               >
                 <CheckCircle2 className="h-3 w-3" /> Approve Closure
               </button>
             )}
-            {data.workflow_state === 'closed' && (
-              <button
-                onClick={() => {
-                  const reason = prompt('Reason for reopening?');
-                  if (reason) issuesApi.reopen(issueId, { reason }).then(() => qc.invalidateQueries({ queryKey: ['issue-detail', issueId] }));
-                }}
-                className="inline-flex items-center gap-1 rounded border border-primary-200 bg-primary-50 px-2 py-1 text-[10px] font-medium text-primary-700 hover:bg-primary-100"
-              >
-                Reopen
-              </button>
-            )}
-          </div>
+            {data.workflow_state === 'closed' && <ReopenIssueButton issueId={issueId} />}
+          </div>}
         </div>
       </div>
 
@@ -301,6 +298,11 @@ export default function IssueDetailPage() {
               <textarea value={closeNotes} onChange={(e) => setCloseNotes(e.target.value)} rows={5}
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
                 placeholder="What was done, verification evidence, lessons learned…" />
+              {closeMutation.error && (
+                <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                  {apiErrorText(closeMutation.error, 'The issue was not closed.')}
+                </p>
+              )}
             </div>
             <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-4 py-2.5 bg-slate-50">
               <button onClick={() => setShowClose(false)} className="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100">Cancel</button>
@@ -434,6 +436,7 @@ function CAPATab({ issueId }: { issueId: number }) {
   const [assigneeId, setAssigneeId] = useState<string>('');
   const [promotingId, setPromotingId] = useState<number | null>(null);
   const [selectedAction, setSelectedAction] = useState<CAPAActionRow | null>(null);
+  const [actionError, setActionError] = useState('');   // e.g. 409: whoever completed an action cannot verify it
 
   const resetForm = () => {
     setTitle(''); setDescription(''); setDueDate(''); setAssigneeId(''); setActionType('corrective');
@@ -459,7 +462,9 @@ function CAPATab({ issueId }: { issueId: number }) {
   const patchMutation = useMutation({
     mutationFn: ({ actionId, body }: { actionId: number; body: Record<string, unknown> }) =>
       issuesApi.actions.patch(actionId, body),
+    onError: (e) => setActionError(apiErrorText(e, 'The action was not saved.')),
     onSuccess: (_data, vars) => {
+      setActionError('');
       qc.invalidateQueries({ queryKey: ['issue-actions', issueId] });
       qc.invalidateQueries({ queryKey: ['issue-detail', issueId] });
       qc.invalidateQueries({ queryKey: ['capa-actions'] });
@@ -475,7 +480,9 @@ function CAPATab({ issueId }: { issueId: number }) {
   const verifyMutation = useMutation({
     mutationFn: ({ actionId, body }: { actionId: number; body: { effectiveness_review_at?: string; notes?: string } }) =>
       issuesApi.actions.verify(actionId, body),
+    onError: (e) => setActionError(apiErrorText(e, 'The action was not verified.')),
     onSuccess: () => {
+      setActionError('');
       qc.invalidateQueries({ queryKey: ['issue-actions', issueId] });
       qc.invalidateQueries({ queryKey: ['issue-detail', issueId] });
       setSelectedAction(null);
@@ -513,6 +520,9 @@ function CAPATab({ issueId }: { issueId: number }) {
           <Plus className="h-3 w-3" /> Add Action
         </button>
       </div>
+      {actionError && !selectedAction && (
+        <p role="alert" className="mb-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{actionError}</p>
+      )}
 
       {showAdd && (
         <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
@@ -593,7 +603,7 @@ function CAPATab({ issueId }: { issueId: number }) {
             return (
               <li
                 key={a.id}
-                onClick={() => setSelectedAction(a)}
+                onClick={() => { setActionError(''); setSelectedAction(a); }}
                 className="flex items-start gap-2 rounded-lg border border-slate-200 bg-white p-2 hover:bg-slate-50 cursor-pointer transition-colors"
                 title="Click to view / edit details"
               >
@@ -713,7 +723,8 @@ function CAPATab({ issueId }: { issueId: number }) {
         <CAPADetailModal
           action={selectedAction}
           tenantUsers={tenantUsers || []}
-          onClose={() => setSelectedAction(null)}
+          onClose={() => { setSelectedAction(null); setActionError(''); }}
+          error={actionError}
           onSave={(body) => patchMutation.mutate({ actionId: selectedAction.id, body })}
           onVerify={(body) => verifyMutation.mutate({ actionId: selectedAction.id, body })}
           onDelete={() => {
@@ -734,10 +745,11 @@ function CAPATab({ issueId }: { issueId: number }) {
 
 function CAPADetailModal({
   action, tenantUsers, onClose, onSave, onVerify, onDelete,
-  isSaving, isVerifying, isDeleting,
+  isSaving, isVerifying, isDeleting, error,
 }: {
   action: CAPAActionRow;
   tenantUsers: Array<{ id: number; display_name: string; email: string }>;
+  error?: string;
   onClose: () => void;
   onSave: (body: Record<string, unknown>) => void;
   onVerify: (body: { effectiveness_review_at?: string; notes?: string }) => void;
@@ -976,6 +988,9 @@ function CAPADetailModal({
           )}
         </div>
 
+        {error && (
+          <p role="alert" className="mx-5 mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</p>
+        )}
         <div className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-slate-200 bg-white px-5 py-3">
           <button
             onClick={onDelete}

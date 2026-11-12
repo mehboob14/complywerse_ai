@@ -25,16 +25,17 @@ interface KRIAlert {
   id: number;
   kri_id: number;
   kri_name: string;
-  risk_id: number;
-  risk_title: string;
+  risk_id: number | null;        // null for a standalone KRI
+  risk_title: string | null;
   current_value: number;
   threshold_breached: string;
   green_threshold: number;
   amber_threshold: number;
+  threshold_direction: 'lower_is_better' | 'higher_is_better';
   status: string;
   severity: string;
-  triggered_at: string;
-  owner: string;
+  triggered_at: string | null;   // last measured; null when no measurement time was recorded
+  owner: string | null;
   recommended_action: string;
 }
 
@@ -246,20 +247,26 @@ export default function KRITriggersPage() {
 
 function AlertCard({ alert }: { alert: KRIAlert }) {
   const isCritical = alert.severity === 'critical';
+  const higherIsBetter = alert.threshold_direction === 'higher_is_better';
+  const within = higherIsBetter ? '≥' : '≤';
   const maxThreshold = Math.max(alert.green_threshold, alert.amber_threshold, alert.current_value) * 1.2 || 100;
 
-  const greenWidth = (alert.green_threshold / maxThreshold) * 100;
-  const amberWidth = (alert.amber_threshold / maxThreshold) * 100;
+  // The scale runs low to high: green sits at the low end when lower is better, at the high end otherwise.
+  const lowCut = (Math.min(alert.green_threshold, alert.amber_threshold) / maxThreshold) * 100;
+  const highCut = (Math.max(alert.green_threshold, alert.amber_threshold) / maxThreshold) * 100;
+  const lowEnd = higherIsBetter ? 'bg-red-500/40' : 'bg-green-500/40';
+  const highEnd = higherIsBetter ? 'bg-green-500/40' : 'bg-red-500/40';
   const currentPosition = Math.min((alert.current_value / maxThreshold) * 100, 100);
 
-  const triggeredDate = new Date(alert.triggered_at);
-  const formattedDate = triggeredDate.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const formattedDate = alert.triggered_at
+    ? new Date(alert.triggered_at).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+    : 'Measurement time not recorded';
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-4">
@@ -290,7 +297,7 @@ function AlertCard({ alert }: { alert: KRIAlert }) {
         <h3 className="text-lg font-semibold text-slate-900">{alert.kri_name}</h3>
         <div className="mt-1 flex items-center gap-2">
           <Zap className="h-3.5 w-3.5 text-slate-500" />
-          <span className="text-sm text-slate-600">{alert.risk_title}</span>
+          <span className="text-sm text-slate-600">{alert.risk_title ?? 'Standalone KRI (no linked risk)'}</span>
         </div>
       </div>
 
@@ -298,23 +305,23 @@ function AlertCard({ alert }: { alert: KRIAlert }) {
         <div className="flex items-center gap-2 text-sm">
           <span className="font-medium text-slate-900">Current: {alert.current_value.toFixed(1)}</span>
           <span className="text-slate-600">|</span>
-          <span className="text-green-400">Green: ≤{alert.green_threshold.toFixed(1)}</span>
+          <span className="text-green-400">Green: {within}{alert.green_threshold.toFixed(1)}</span>
           <span className="text-slate-600">|</span>
-          <span className="text-amber-400">Amber: ≤{alert.amber_threshold.toFixed(1)}</span>
+          <span className="text-amber-400">Amber: {within}{alert.amber_threshold.toFixed(1)}</span>
         </div>
 
         <div className="relative h-3 w-full rounded-full bg-slate-100 overflow-hidden">
           <div
-            className="absolute inset-y-0 left-0 rounded-full bg-green-500/40"
-            style={{ width: `${greenWidth}%` }}
+            className={`absolute inset-y-0 left-0 rounded-full ${lowEnd}`}
+            style={{ width: `${lowCut}%` }}
           />
           <div
             className="absolute inset-y-0 rounded-full bg-amber-500/40"
-            style={{ left: `${greenWidth}%`, width: `${amberWidth - greenWidth}%` }}
+            style={{ left: `${lowCut}%`, width: `${highCut - lowCut}%` }}
           />
           <div
-            className="absolute inset-y-0 rounded-full bg-red-500/40"
-            style={{ left: `${amberWidth}%`, width: `${100 - amberWidth}%` }}
+            className={`absolute inset-y-0 rounded-full ${highEnd}`}
+            style={{ left: `${highCut}%`, width: `${100 - highCut}%` }}
           />
           <div
             className="absolute top-0 h-3 w-1 rounded-full bg-white shadow-lg shadow-white/20"
@@ -330,7 +337,7 @@ function AlertCard({ alert }: { alert: KRIAlert }) {
         </div>
         <div className="flex items-center gap-1.5">
           <User className="h-4 w-4" />
-          <span>{alert.owner}</span>
+          <span>{alert.owner ?? 'No owner'}</span>
         </div>
       </div>
 

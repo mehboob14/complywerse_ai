@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { rcsaApi } from '@/lib/api';
+import { apiErrorText } from '@/lib/apiError';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   AlertTriangle,
@@ -28,12 +29,12 @@ interface Finding {
   severity: 'critical' | 'high' | 'medium' | 'low';
   status: 'open' | 'in_progress' | 'remediated' | 'closed';
   assessment_id: number;
-  assessment_name: string;
-  business_unit: string;
+  assessment_name: string | null;
+  business_unit_name: string | null;
   created_at: string;
-  due_date?: string;
-  linked_risk_id?: number;
-  linked_control_id?: number;
+  remediation_due_date?: string | null;
+  linked_risk_id?: number | null;
+  linked_internal_control_id?: number | null;
 }
 
 const SEVERITY_STYLES: Record<string, { bg: string; text: string; label: string }> = {
@@ -212,7 +213,8 @@ export default function RCSAFindingsPage() {
   const [modalType, setModalType] = useState<'risk' | 'control' | 'action' | null>(null);
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
-  const canCreate = hasPermission('risks:rcsa:create');
+  const canCreate = hasPermission('erm:rcsa:create') || hasPermission('erm:risks:create');
+  const canEdit = hasPermission('erm:rcsa:edit') || hasPermission('erm:risks:edit');
 
   const { data: findings, isLoading, error } = useQuery({
     queryKey: ['rcsa-findings', severityFilter, statusFilter],
@@ -237,6 +239,7 @@ export default function RCSAFindingsPage() {
       setModalType(null);
       setSelectedFinding(null);
     },
+    onError: (err: unknown) => alert(apiErrorText(err, 'The change could not be saved')),
   });
 
   const linkControlMutation = useMutation({
@@ -247,6 +250,7 @@ export default function RCSAFindingsPage() {
       setModalType(null);
       setSelectedFinding(null);
     },
+    onError: (err: unknown) => alert(apiErrorText(err, 'The change could not be saved')),
   });
 
   const createActionMutation = useMutation({
@@ -257,6 +261,7 @@ export default function RCSAFindingsPage() {
       setModalType(null);
       setSelectedFinding(null);
     },
+    onError: (err: unknown) => alert(apiErrorText(err, 'The change could not be saved')),
   });
 
   const filteredFindings = useMemo(() => {
@@ -264,7 +269,7 @@ export default function RCSAFindingsPage() {
     return findings.filter(finding => {
       const matchesSearch = !searchTerm || 
         finding.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        finding.business_unit.toLowerCase().includes(searchTerm.toLowerCase());
+        (finding.business_unit_name || '').toLowerCase().includes(searchTerm.toLowerCase());
       return matchesSearch;
     });
   }, [findings, searchTerm]);
@@ -360,7 +365,7 @@ export default function RCSAFindingsPage() {
             {filteredFindings.map((finding) => {
               const severityStyle = getSeverityStyle(finding.severity);
               const statusStyle = getStatusStyle(finding.status);
-              const isOverdue = finding.due_date && new Date(finding.due_date) < new Date() && finding.status !== 'closed';
+              const isOverdue = finding.remediation_due_date && new Date(finding.remediation_due_date) < new Date() && finding.status !== 'closed';
               
               return (
                 <tr key={finding.id} className="border-b border-slate-200 hover:bg-slate-50">
@@ -369,7 +374,7 @@ export default function RCSAFindingsPage() {
                       <AlertTriangle className={`h-4 w-4 ${severityStyle.text}`} />
                       <span className="text-slate-900 font-medium">{finding.title}</span>
                     </div>
-                    {(finding.linked_risk_id || finding.linked_control_id) && (
+                    {(finding.linked_risk_id || finding.linked_internal_control_id) && (
                       <div className="flex items-center gap-2 mt-1">
                         {finding.linked_risk_id && (
                           <span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 flex items-center gap-1">
@@ -377,10 +382,10 @@ export default function RCSAFindingsPage() {
                             Risk #{finding.linked_risk_id}
                           </span>
                         )}
-                        {finding.linked_control_id && (
+                        {finding.linked_internal_control_id && (
                           <span className="text-xs px-1.5 py-0.5 rounded bg-primary-50 text-primary-700 flex items-center gap-1">
                             <Shield className="h-3 w-3" />
-                            Control #{finding.linked_control_id}
+                            Control #{finding.linked_internal_control_id}
                           </span>
                         )}
                       </div>
@@ -399,7 +404,7 @@ export default function RCSAFindingsPage() {
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-2 text-slate-700">
                       <Building2 className="h-4 w-4 text-slate-500" />
-                      {finding.business_unit}
+                      {finding.business_unit_name || '—'}
                     </div>
                   </td>
                   <td className="py-3 px-4 text-slate-700">
@@ -408,7 +413,7 @@ export default function RCSAFindingsPage() {
                   <td className="py-3 px-4">
                     <div className={`flex items-center gap-2 ${isOverdue ? 'text-rose-600' : 'text-slate-700'}`}>
                       <Calendar className="h-4 w-4" />
-                      {formatDate(finding.due_date)}
+                      {formatDate(finding.remediation_due_date || undefined)}
                     </div>
                   </td>
                   <td className="py-3 px-4">
@@ -420,6 +425,7 @@ export default function RCSAFindingsPage() {
                       >
                         <Eye className="h-4 w-4" />
                       </Link>
+                      {canEdit && (<>
                       <button
                         onClick={() => { setSelectedFinding(finding); setModalType('risk'); }}
                         className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100"
@@ -434,6 +440,7 @@ export default function RCSAFindingsPage() {
                       >
                         <Shield className="h-4 w-4" />
                       </button>
+                      </>)}
                       {canCreate && <button
                         onClick={() => { setSelectedFinding(finding); setModalType('action'); }}
                         className="p-1.5 rounded-lg text-slate-600 hover:text-emerald-700 hover:bg-emerald-50"

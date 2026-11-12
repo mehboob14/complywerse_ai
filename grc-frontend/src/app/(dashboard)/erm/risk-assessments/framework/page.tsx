@@ -52,9 +52,10 @@ const STATUS_BADGES: Record<string, string> = {
 export default function FrameworkRiskAssessmentsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { hasPermission } = usePermissions();
-  const canCreatePermission = hasPermission('erm:risk_assessments:create');
-  const canDelete = hasPermission('erm:risk_assessments:delete');
+  const { hasAnyPermission } = usePermissions();
+  // the server accepts either name for each write (risk editors held erm:risks:* before)
+  const canCreatePermission = hasAnyPermission(['risks:risk_assessment:create', 'erm:risks:create']);
+  const canDelete = hasAnyPermission(['risks:risk_assessment:delete', 'erm:risks:delete']);
   const [activeTab, setActiveTab] = useState<'assessments' | 'assigned'>('assessments');
   const [frameworkId, setFrameworkId] = useState('');
   const [name, setName] = useState('');
@@ -288,11 +289,20 @@ export default function FrameworkRiskAssessmentsPage() {
                 <div className="rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-subtle)] p-8 text-sm text-[var(--color-muted)]">No framework assessments yet.</div>
               ) : (
                 <div className="grid gap-3">
+                  {/* Each row is a focusable div, not a <button>: it holds the Delete button, and a button inside a button is invalid HTML */}
                   {sortedAssessments.map((assessment) => (
-                    <button
+                    <div
                       key={assessment.id}
+                      role="link"
+                      tabIndex={0}
                       onClick={() => router.push(`/erm/risk-assessments/framework/${assessment.id}`)}
-                      className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-left transition-colors hover:bg-[var(--color-subtle)]"
+                      onKeyDown={(e) => {
+                        if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+                          e.preventDefault();
+                          router.push(`/erm/risk-assessments/framework/${assessment.id}`);
+                        }
+                      }}
+                      className="w-full cursor-pointer rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-left transition-colors hover:bg-[var(--color-subtle)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-600"
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div>
@@ -325,7 +335,7 @@ export default function FrameworkRiskAssessmentsPage() {
                           <ChevronRight size={16} className="text-[var(--color-muted)]" />
                         </div>
                       </div>
-                    </button>
+                    </div>
                   ))}
                 </div>
               )}

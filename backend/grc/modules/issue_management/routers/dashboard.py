@@ -82,7 +82,8 @@ def get_issues_aggregate(
     ]
 
     # KPIs ───────────────────────────────────────────────────────────────
-    open_states = {"new", "triage", "in_progress", "resolution"}
+    # Awaiting closure is still open — same set as by_source and the auto-create de-dup.
+    open_states = {"new", "triage", "in_progress", "resolution", "closure_review"}
     closed_30d = sum(
         1 for i in all_issues
         if i.workflow_state == "closed" and i.closed_at and i.closed_at >= thirty_days_ago
@@ -704,7 +705,7 @@ def get_issue_scorecard_config(
     return sc_cfg.merged(db, tenants[0], "issue_incident")
 
 
-@router.put("/scorecard-config")
+@router.put("/scorecard-config", dependencies=[Depends(require_tenant_permission("issue_management:issues:edit"))])
 def put_issue_scorecard_config(
     body: dict = Body(...),
     db: Session = Depends(get_db),
@@ -725,7 +726,7 @@ def put_issue_scorecard_config(
     return {"ok": True, "config": cfg}
 
 
-@router.delete("/scorecard-config")
+@router.delete("/scorecard-config", dependencies=[Depends(require_tenant_permission("issue_management:issues:edit"))])
 def reset_issue_scorecard_config(
     section: Optional[str] = None,
     db: Session = Depends(get_db),

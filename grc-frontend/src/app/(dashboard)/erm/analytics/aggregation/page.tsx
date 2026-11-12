@@ -55,6 +55,9 @@ function getCategoryColor(category: string) {
   return CATEGORY_COLORS[category?.toLowerCase()] || '#1ed4b0';
 }
 
+// An average over no scored risks comes back as null: show a dash, not 0.
+const avg = (value: unknown) => (typeof value === 'number' ? value.toFixed(1) : '—');
+
 type TabType = 'category' | 'business_unit' | 'status';
 
 export default function RiskAggregationPage() {
@@ -87,15 +90,14 @@ export default function RiskAggregationPage() {
 
   const summary = data?.enterprise_summary || {
     total_risks: 0,
-    total_inherent_score: 0,
-    total_residual_score: 0,
-    avg_inherent_score: 0,
-    avg_residual_score: 0,
-    risk_reduction_pct: 0,
+    avg_inherent_score: null,
+    avg_residual_score: null,
+    risk_reduction_pct: null,
     critical_count: 0,
     high_count: 0,
     medium_count: 0,
     low_count: 0,
+    unscored_count: 0,
   };
 
   const byCategory = data?.by_category || [];
@@ -144,10 +146,10 @@ export default function RiskAggregationPage() {
             <div className="p-2 rounded-lg bg-orange-500/10">
               <BarChart3 className="h-5 w-5 text-orange-400" />
             </div>
-            <span className="text-sm font-medium text-slate-600">Total Inherent Score</span>
+            <span className="text-sm font-medium text-slate-600">Avg Inherent Score</span>
           </div>
-          <p className="text-3xl font-bold text-slate-900">{Number(summary.total_inherent_score || 0).toFixed(1)}</p>
-          <p className="text-xs text-slate-500 mt-1">Avg: {Number(summary.avg_inherent_score || 0).toFixed(1)}</p>
+          <p className="text-3xl font-bold text-slate-900">{avg(summary.avg_inherent_score)}</p>
+          <p className="text-xs text-slate-500 mt-1">over the risks with an inherent score</p>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-4">
@@ -155,10 +157,10 @@ export default function RiskAggregationPage() {
             <div className="p-2 rounded-lg bg-emerald-500/10">
               <Shield className="h-5 w-5 text-emerald-400" />
             </div>
-            <span className="text-sm font-medium text-slate-600">Total Residual Score</span>
+            <span className="text-sm font-medium text-slate-600">Avg Residual Score</span>
           </div>
-          <p className="text-3xl font-bold text-slate-900">{Number(summary.total_residual_score || 0).toFixed(1)}</p>
-          <p className="text-xs text-slate-500 mt-1">Avg: {Number(summary.avg_residual_score || 0).toFixed(1)}</p>
+          <p className="text-3xl font-bold text-slate-900">{avg(summary.avg_residual_score)}</p>
+          <p className="text-xs text-slate-500 mt-1">over the risks with a residual score</p>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-4">
@@ -168,7 +170,7 @@ export default function RiskAggregationPage() {
             </div>
             <span className="text-sm font-medium text-slate-600">Risk Reduction</span>
           </div>
-          <p className="text-3xl font-bold text-slate-900">{Number(summary.risk_reduction_pct || 0).toFixed(1)}%</p>
+          <p className="text-3xl font-bold text-slate-900">{avg(summary.risk_reduction_pct)}{typeof summary.risk_reduction_pct === 'number' ? '%' : ''}</p>
           <div className="mt-2 w-full bg-slate-100 rounded-full h-2">
             <div
               className="bg-primary-500 h-2 rounded-full transition-all"
@@ -200,6 +202,11 @@ export default function RiskAggregationPage() {
           <p className="text-xs text-emerald-400/70">Low</p>
         </div>
       </div>
+      {!!summary.unscored_count && (
+        <p className="-mt-2 text-xs text-slate-500">
+          {summary.unscored_count} risk{summary.unscored_count !== 1 ? 's have' : ' has'} no score yet and sit{summary.unscored_count !== 1 ? '' : 's'} in no band.
+        </p>
+      )}
 
       <div className="rounded-xl border border-slate-200 bg-white">
         <div className="flex border-b border-slate-200">
@@ -231,8 +238,6 @@ export default function RiskAggregationPage() {
                     <tr className="border-b border-slate-200">
                       <th className="text-left py-3 px-4 text-slate-600 font-medium">Category</th>
                       <th className="text-right py-3 px-4 text-slate-600 font-medium">Count</th>
-                      <th className="text-right py-3 px-4 text-slate-600 font-medium">Total Inherent</th>
-                      <th className="text-right py-3 px-4 text-slate-600 font-medium">Total Residual</th>
                       <th className="text-right py-3 px-4 text-slate-600 font-medium">Avg Inherent</th>
                       <th className="text-right py-3 px-4 text-slate-600 font-medium">Avg Residual</th>
                       <th className="text-right py-3 px-4 text-slate-600 font-medium">Reduction %</th>
@@ -245,7 +250,7 @@ export default function RiskAggregationPage() {
                   <tbody>
                     {byCategory.length === 0 ? (
                       <tr>
-                        <td colSpan={11} className="py-8 text-center text-slate-500">No category data available</td>
+                        <td colSpan={9} className="py-8 text-center text-slate-500">No category data available</td>
                       </tr>
                     ) : (
                       byCategory.map((cat: any, idx: number) => (
@@ -257,13 +262,11 @@ export default function RiskAggregationPage() {
                             </div>
                           </td>
                           <td className="text-right py-3 px-4 text-slate-900">{cat.count}</td>
-                          <td className="text-right py-3 px-4 text-slate-700">{Number(cat.total_inherent || 0).toFixed(1)}</td>
-                          <td className="text-right py-3 px-4 text-slate-700">{Number(cat.total_residual || 0).toFixed(1)}</td>
-                          <td className="text-right py-3 px-4 text-slate-700">{Number(cat.avg_inherent || 0).toFixed(1)}</td>
-                          <td className="text-right py-3 px-4 text-slate-700">{Number(cat.avg_residual || 0).toFixed(1)}</td>
+                          <td className="text-right py-3 px-4 text-slate-700">{avg(cat.avg_inherent)}</td>
+                          <td className="text-right py-3 px-4 text-slate-700">{avg(cat.avg_residual)}</td>
                           <td className="text-right py-3 px-4">
                             <span className={`${Number(cat.reduction_pct || 0) > 0 ? 'text-emerald-400' : 'text-slate-600'}`}>
-                              {Number(cat.reduction_pct || 0).toFixed(1)}%
+                              {avg(cat.reduction_pct)}{typeof cat.reduction_pct === 'number' ? '%' : ''}
                             </span>
                           </td>
                           <td className="text-center py-3 px-4">
@@ -332,8 +335,6 @@ export default function RiskAggregationPage() {
                   <tr className="border-b border-slate-200">
                     <th className="text-left py-3 px-4 text-slate-600 font-medium">Business Unit</th>
                     <th className="text-right py-3 px-4 text-slate-600 font-medium">Count</th>
-                    <th className="text-right py-3 px-4 text-slate-600 font-medium">Total Inherent</th>
-                    <th className="text-right py-3 px-4 text-slate-600 font-medium">Total Residual</th>
                     <th className="text-right py-3 px-4 text-slate-600 font-medium">Avg Inherent</th>
                     <th className="text-right py-3 px-4 text-slate-600 font-medium">Avg Residual</th>
                     <th className="text-center py-3 px-4 text-slate-600 font-medium">C</th>
@@ -345,7 +346,7 @@ export default function RiskAggregationPage() {
                 <tbody>
                   {byBusinessUnit.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="py-8 text-center text-slate-500">No business unit data available</td>
+                      <td colSpan={8} className="py-8 text-center text-slate-500">No business unit data available</td>
                     </tr>
                   ) : (
                     byBusinessUnit.map((bu: any, idx: number) => {
@@ -359,10 +360,8 @@ export default function RiskAggregationPage() {
                             </div>
                           </td>
                           <td className="text-right py-3 px-4 text-slate-900">{bu.count}</td>
-                          <td className="text-right py-3 px-4 text-slate-700">{Number(bu.total_inherent || 0).toFixed(1)}</td>
-                          <td className="text-right py-3 px-4 text-slate-700">{Number(bu.total_residual || 0).toFixed(1)}</td>
-                          <td className="text-right py-3 px-4 text-slate-700">{Number(bu.avg_inherent || 0).toFixed(1)}</td>
-                          <td className="text-right py-3 px-4 text-slate-700">{Number(bu.avg_residual || 0).toFixed(1)}</td>
+                          <td className="text-right py-3 px-4 text-slate-700">{avg(bu.avg_inherent)}</td>
+                          <td className="text-right py-3 px-4 text-slate-700">{avg(bu.avg_residual)}</td>
                           <td className="text-center py-3 px-4">
                             <span className="text-rose-400 font-medium">{bu.critical || 0}</span>
                           </td>
@@ -431,14 +430,13 @@ export default function RiskAggregationPage() {
                   <tr className="border-b border-slate-200">
                     <th className="text-left py-3 px-4 text-slate-600 font-medium">Status</th>
                     <th className="text-right py-3 px-4 text-slate-600 font-medium">Count</th>
-                    <th className="text-right py-3 px-4 text-slate-600 font-medium">Avg Score</th>
-                    <th className="text-right py-3 px-4 text-slate-600 font-medium">Total Score</th>
+                    <th className="text-right py-3 px-4 text-slate-600 font-medium">Avg Residual Score</th>
                   </tr>
                 </thead>
                 <tbody>
                   {byStatus.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="py-8 text-center text-slate-500">No status data available</td>
+                      <td colSpan={3} className="py-8 text-center text-slate-500">No status data available</td>
                     </tr>
                   ) : (
                     byStatus.map((s: any, idx: number) => {
@@ -451,8 +449,7 @@ export default function RiskAggregationPage() {
                             </span>
                           </td>
                           <td className="text-right py-3 px-4 text-slate-900 font-medium">{s.count}</td>
-                          <td className="text-right py-3 px-4 text-slate-700">{Number(s.avg_score || 0).toFixed(1)}</td>
-                          <td className="text-right py-3 px-4 text-slate-700">{Number(s.total_score || 0).toFixed(1)}</td>
+                          <td className="text-right py-3 px-4 text-slate-700">{avg(s.avg_score)}</td>
                         </tr>
                       );
                     })

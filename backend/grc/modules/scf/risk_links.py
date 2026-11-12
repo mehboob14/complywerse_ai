@@ -3,7 +3,8 @@
 Decision 4: ``control_status`` is an **indicator only**. These helpers never
 recalculate or mutate ``Risk.residual_score`` from failing controls.
 
-Canonical link table is ``grc_risk_control_links`` (normalized_control_id only).
+Links live in the one risk–control link, ``grc_risk_controls`` (source "normalized"), written through
+``grc.modules.erm.services.risk_control_links``.
 """
 from __future__ import annotations
 
@@ -15,7 +16,7 @@ from sqlalchemy.orm import Session, joinedload
 from grc.models import (
     NormalizedControl,
     Risk,
-    RiskControlLink,
+    RiskControl,
     SCFControl,
 )
 from grc.modules.scf.custom_controls import get_custom
@@ -134,15 +135,17 @@ def list_risks_for_control(db: Session, tenant_id: int, scf_id: str) -> List[Dic
     nc = ensure_normalized_for_control(db, tenant_id=tenant_id, scf_id_or_code=scf_id)
     status = control_status_indicator(db, nc, tenant_id=tenant_id)
     rows = (
-        db.query(RiskControlLink)
+        db.query(RiskControl)
         .options(
-            joinedload(RiskControlLink.risk).joinedload(Risk.owner),
+            joinedload(RiskControl.risk).joinedload(Risk.owner),
         )
-        .join(Risk, Risk.id == RiskControlLink.risk_id)
+        .join(Risk, Risk.id == RiskControl.risk_id)
         .filter(
-            RiskControlLink.normalized_control_id == nc.id,
+            RiskControl.control_source == "normalized",
+            RiskControl.control_id == nc.id,
             Risk.tenant_id == tenant_id,
         )
+        .order_by(RiskControl.id)
         .all()
     )
     out: List[Dict[str, Any]] = []
@@ -176,7 +179,9 @@ def link_risk(
     scf_id: str,
     risk_id: int,
     actor_id: Optional[int],
-) -> RiskControlLink:
+) -> RiskControl:
+    from grc.modules.erm.services.risk_control_links import find_link, link_control
+
     nc = ensure_normalized_for_control(db, tenant_id=tenant_id, scf_id_or_code=scf_id)
     risk = (
         db.query(Risk)
@@ -186,20 +191,11 @@ def link_risk(
     if risk is None:
         raise ValueError(f"Risk {risk_id} not found for tenant")
 
-    existing = (
-        db.query(RiskControlLink)
-        .filter(
-            RiskControlLink.risk_id == risk_id,
-            RiskControlLink.normalized_control_id == nc.id,
-        )
-        .first()
-    )
+    existing = find_link(db, risk_id, "normalized", nc.id)
     if existing is not None:
         return existing
 
-    link = RiskControlLink(risk_id=risk_id, normalized_control_id=nc.id)
-    db.add(link)
-    db.flush()
+    link = link_control(db, risk, "normalized", nc.id, actor_id)
 
     write_rich_audit_log(
         db=db,
@@ -222,22 +218,15 @@ def unlink_risk(
     link_id: int,
     actor_id: Optional[int] = None,
 ) -> None:
+    from grc.modules.erm.services.risk_control_links import link_by_id, unlink_control
+
     nc = ensure_normalized_for_control(db, tenant_id=tenant_id, scf_id_or_code=scf_id)
-    link = (
-        db.query(RiskControlLink)
-        .join(Risk, Risk.id == RiskControlLink.risk_id)
-        .filter(
-            RiskControlLink.id == link_id,
-            RiskControlLink.normalized_control_id == nc.id,
-            Risk.tenant_id == tenant_id,
-        )
-        .first()
-    )
+    link = link_by_id(db, link_id, "normalized", RiskControl.control_id == nc.id, RiskControl.tenant_id == tenant_id)
     if link is None:
         raise ValueError(f"Link {link_id} not found for control {scf_id}")
 
     risk_id = link.risk_id
-    db.delete(link)
+    unlink_control(db, link)
     db.flush()
 
     write_rich_audit_log(

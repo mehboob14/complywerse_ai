@@ -16,7 +16,7 @@ from sqlalchemy import and_, asc, case, desc, func, or_, select
 from sqlalchemy.orm import Session
 
 from ....models import (
-    get_db, GRCUser, Vendor, VendorAssessment, TPRAFinding, TPRARemediation,
+    get_db, GRCUser, Vendor, VendorAssessment, TPRAApproval, TPRAFinding, TPRARemediation,
     TPRAMonitoringSignal, TPRARiskSnapshot,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
@@ -35,6 +35,9 @@ _TIERS = ["critical", "high", "medium", "low"]
 _OPEN_F = ("open", "in_remediation")
 _DEFAULT_APPETITE = 45.0
 _REQUESTS = ("draft", "submitted", "rejected")      # onboarding requests the register leaves out unless asked for
+# Not counted as active: out of use (routers/vendors._OUT_OF_USE), suspended, being offboarded, or not yet approved.
+_NOT_ACTIVE = ("retired", "inactive", "terminated", "requested", "rejected", "suspended", "offboarded", "onboarding")
+_APPROVED = ("approve", "approve_with_conditions")
 
 
 def _avg(xs: List[float]) -> Optional[float]:
@@ -161,7 +164,7 @@ def program_dashboard(
     port_res = _avg([v.residual_risk_score for v in vendors]) or 0
     crit = [v for v in vendors if (v.tier or "").lower() == "critical"]
     covered = [v for v in crit if v.residual_risk_score is not None]
-    coverage = round(len(covered) / len(crit) * 100) if crit else 100
+    coverage = round(len(covered) / len(crit) * 100) if crit else None      # no critical vendors: nothing to cover
 
     # ── Findings posture / severity / domain ──
     # An archived supplier's findings and signals are not counted, as the supplier itself is not.
@@ -221,10 +224,14 @@ def program_dashboard(
         "source": s.source, "occurred_at": s.occurred_at.isoformat() if s.occurred_at else None,
         "acknowledged": s.acknowledged, "triggered_reassessment": s.triggered_reassessment,
     } for s in signals]
-    new_signals = sum(1 for s in signals if not s.acknowledged)
+    new_signals = sq.filter(or_(TPRAMonitoringSignal.acknowledged.is_(False),
+                                TPRAMonitoringSignal.acknowledged.is_(None))).count()       # all of them, not the feed's 12
 
-    # ── Onboarded this period (last 30 days) ──
-    onboarded_30 = sum(1 for v in vendors if v.created_at and (now - v.created_at).days <= 30)
+    # ── Onboarded this period: suppliers first approved in the last 30 days ──
+    first_approved = (db.query(func.min(TPRAApproval.created_at))
+                      .filter(TPRAApproval.vendor_id.in_(vids), TPRAApproval.decision.in_(_APPROVED))
+                      .group_by(TPRAApproval.vendor_id).all())
+    onboarded_30 = sum(1 for (at,) in first_approved if at and at >= now - timedelta(days=30))
 
     # ── Top-residual vendors (the grade never reads better than the rating beside it) ──
     top = sorted([v for v in vendors if v.residual_risk_score is not None],
@@ -242,7 +249,7 @@ def program_dashboard(
     return {
         "scope": scope,
         "kpis": {
-            "active_vendors": len(vendors),
+            "active_vendors": sum(1 for v in vendors if (v.status or "").lower() not in _NOT_ACTIVE),
             "onboarded_this_period": onboarded_30,
             "critical_coverage": coverage,
             "critical_count": len(crit),

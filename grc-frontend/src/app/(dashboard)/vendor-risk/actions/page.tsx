@@ -1,7 +1,7 @@
 'use client';
 
 // Planned actions across every supplier: what is coming, what is due now, and
-// what could not happen. Each is planned on its supplier's Action plan tab.
+// what could not happen. Each is planned in the Action plan on its supplier's Findings tab.
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -37,7 +37,7 @@ export default function PlannedActionsPage() {
         <h1 className="flex items-center gap-2 text-xl font-semibold text-slate-900"><CalendarClock className="h-5 w-5 text-slate-500" /> Planned actions</h1>
         <p className="mt-0.5 max-w-2xl text-sm text-slate-500">
           Every supplier’s action plan in one place. To-dos wait for a person to mark them done; questionnaires, check-ins
-          and reassessments happen on their date. Plan one from a supplier’s Action plan tab.
+          and reassessments happen on their date. Plan one in the Action plan on a supplier’s Findings tab.
         </p>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2">

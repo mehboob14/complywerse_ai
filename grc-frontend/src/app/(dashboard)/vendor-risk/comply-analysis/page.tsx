@@ -47,7 +47,7 @@ export default function FairPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Comply analyses</h1>
+          <h1 className="text-xl font-semibold text-slate-900">Loss quantification</h1>
           <p className="mt-0.5 max-w-2xl text-sm text-slate-500">
             One loss scenario at one supplier, taken apart factor by factor: how often a threat acts, how often that becomes a
             loss, and what each loss costs. Every factor is a range; thousands of simulated years show what a year could cost.
@@ -218,12 +218,12 @@ function NewAnalysis({ vendorId, onClose }: { vendorId: number | null; onClose: 
     onError: (e) => toast({ type: 'error', title: 'Could not start the analysis', message: errText(e, 'Try again.') }),
   });
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" role="dialog" aria-modal="true" aria-label="New Comply analysis"
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" role="dialog" aria-modal="true" aria-label="New loss quantification"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}>
       <form className="w-full max-w-md space-y-4 rounded-xl bg-white p-5 shadow-xl" onSubmit={(e) => { e.preventDefault(); start.mutate(); }}>
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="text-base font-semibold text-slate-900">New Comply analysis</h2>
+            <h2 className="text-base font-semibold text-slate-900">New loss quantification</h2>
             <p className="text-xs text-slate-500">It starts from what we hold about the supplier; every number says where it came from, and all of it can be changed.</p>
           </div>
           <button type="button" onClick={onClose} aria-label="Close" className="rounded p-1 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button>

@@ -23,6 +23,9 @@ import {
 import Link from 'next/link';
 import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 import { PageLoader } from '@/components/ui';
+import { usePermissions } from '@/hooks/usePermissions';
+import { riskBandForScore, type RiskBand } from '@/lib/riskBands';
+import { apiErrorText } from '@/lib/apiError';
 
 interface Question {
   id: number;
@@ -40,30 +43,43 @@ interface Response {
   text_value?: string;
 }
 
+// RCSAApprovalHistoryResponse
 interface ApprovalAction {
   id: number;
-  tier: number;
+  tier_number: number;
   action: string;
-  actor_name: string;
-  comments?: string;
-  created_at: string;
+  performer_name: string | null;
+  comments?: string | null;
+  performed_at: string;
 }
 
+// GET /erm/rcsa/assessments/{id}/detail (RCSAAssessmentDetailResponse)
 interface AssessmentDetail {
   id: number;
   campaign_id: number;
-  campaign_name: string;
-  business_unit: string;
-  assessor_name: string;
-  submission_date: string;
-  current_tier: number;
+  campaign_name: string | null;
+  business_unit_name: string | null;
+  assessor_name: string | null;
+  status: string;
+  submitted_at: string | null;
+  current_approval_tier: number;
   total_tiers: number;
-  score: number;
-  ai_quality_score?: number;
+  overall_risk_score: number | null;
+  ai_quality_score?: number | null;
   questions: Question[];
   responses: Response[];
   approval_history: ApprovalAction[];
 }
+
+const BAND_PILL: Record<RiskBand, string> = {
+  critical: 'bg-rose-100 text-rose-800',
+  high: 'bg-rose-50 text-rose-700',
+  medium: 'bg-amber-50 text-amber-700',
+  low: 'bg-emerald-50 text-emerald-700',
+};
+const BAND_TEXT: Record<RiskBand, string> = {
+  critical: 'text-rose-700', high: 'text-orange-600', medium: 'text-amber-600', low: 'text-emerald-600',
+};
 
 const EFFECTIVENESS_LABELS: Record<string, string> = {
   effective: 'Effective',
@@ -182,6 +198,8 @@ export default function ApprovalReviewPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const assessmentId = Number(params.id);
+  const { hasAnyPermission } = usePermissions();
+  const canApprove = hasAnyPermission(['erm:rcsa:edit', 'erm:risks:edit']);
 
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   const [modalType, setModalType] = useState<'approve' | 'reject' | 'return' | 'delegate' | null>(null);
@@ -230,7 +248,11 @@ export default function ApprovalReviewPage() {
     },
   });
 
+  const decisions = [approveMutation, rejectMutation, returnMutation, delegateMutation];
+  const decisionFailed = decisions.find((m) => m.error)?.error;   // e.g. 409: the submitter cannot decide it
+
   const handleConfirmAction = (data: Record<string, unknown>) => {
+    decisions.forEach((m) => m.reset());
     switch (modalType) {
       case 'approve': approveMutation.mutate(data); break;
       case 'reject': rejectMutation.mutate(data); break;
@@ -263,20 +285,21 @@ export default function ApprovalReviewPage() {
     if (!response) return <span className="text-slate-500">No response</span>;
 
     switch (question.question_type) {
-      case 'risk_rating':
+      case 'risk_rating': {
+        const score = (response.likelihood || 0) * (response.impact || 0);
+        const band = riskBandForScore(score);
         return (
           <div className="flex items-center gap-4">
-            <span className="text-slate-600">Likelihood: <span className="text-slate-900 font-medium">{response.likelihood}</span></span>
-            <span className="text-slate-600">Impact: <span className="text-slate-900 font-medium">{response.impact}</span></span>
-            <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-              (response.likelihood || 0) * (response.impact || 0) >= 15 ? 'bg-rose-50 text-rose-700' :
-              (response.likelihood || 0) * (response.impact || 0) >= 8 ? 'bg-amber-50 text-amber-700' :
-              'bg-emerald-50 text-emerald-700'
-            }`}>
-              Score: {(response.likelihood || 0) * (response.impact || 0)}
-            </span>
+            <span className="text-slate-600">Likelihood: <span className="text-slate-900 font-medium">{response.likelihood ?? '-'}</span></span>
+            <span className="text-slate-600">Impact: <span className="text-slate-900 font-medium">{response.impact ?? '-'}</span></span>
+            {band && (
+              <span className={`px-2 py-0.5 rounded text-xs font-medium ${BAND_PILL[band]}`}>
+                Score: {score}
+              </span>
+            )}
           </div>
         );
+      }
       case 'control_rating':
         return <span className="text-slate-900">{EFFECTIVENESS_LABELS[response.effectiveness || ''] || response.effectiveness}</span>;
       case 'yes_no':
@@ -321,18 +344,19 @@ export default function ApprovalReviewPage() {
           <div className="flex items-center gap-4 mt-1 text-sm text-slate-600">
             <span className="flex items-center gap-1.5">
               <Building2 className="h-4 w-4" />
-              {assessment.business_unit}
+              {assessment.business_unit_name || '—'}
             </span>
             <span className="flex items-center gap-1.5">
               <User className="h-4 w-4" />
-              {assessment.assessor_name}
+              {assessment.assessor_name || 'Unassigned'}
             </span>
             <span className="flex items-center gap-1.5">
               <Calendar className="h-4 w-4" />
-              Submitted {formatDate(assessment.submission_date)}
+              Submitted {formatDate(assessment.submitted_at || undefined)}
             </span>
           </div>
         </div>
+        {canApprove && (assessment.status === 'submitted' || assessment.status === 'under_review') && (
         <div className="flex items-center gap-2">
           <button onClick={() => setModalType('delegate')} className="btn-secondary flex items-center gap-2">
             <Forward className="h-4 w-4" />
@@ -351,19 +375,30 @@ export default function ApprovalReviewPage() {
             Approve
           </button>
         </div>
+        )}
       </div>
+
+      {decisionFailed && (
+        <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          {apiErrorText(decisionFailed, 'The decision was not saved.')}
+        </p>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="card p-4">
           <p className="text-sm text-slate-600">Approval Tier</p>
-          <p className="text-xl font-semibold text-slate-900">{assessment.current_tier} of {assessment.total_tiers}</p>
+          <p className="text-xl font-semibold text-slate-900">{assessment.current_approval_tier} of {assessment.total_tiers}</p>
         </div>
         <div className="card p-4">
-          <p className="text-sm text-slate-600">Assessment Score</p>
-          <p className={`text-xl font-semibold ${
-            assessment.score >= 80 ? 'text-emerald-600' :
-            assessment.score >= 60 ? 'text-amber-600' : 'text-rose-600'
-          }`}>{assessment.score}%</p>
+          <p className="text-sm text-slate-600">Avg Risk Score (1–25)</p>
+          {(() => {
+            const band = riskBandForScore(assessment.overall_risk_score);
+            return (
+              <p className={`text-xl font-semibold ${band ? BAND_TEXT[band] : 'text-slate-500'}`}>
+                {band && assessment.overall_risk_score != null ? assessment.overall_risk_score.toFixed(1) : '-'}
+              </p>
+            );
+          })()}
         </div>
         <div className="card p-4">
           <p className="text-sm text-slate-600 flex items-center gap-1">
@@ -373,7 +408,7 @@ export default function ApprovalReviewPage() {
           <p className={`text-xl font-semibold ${
             (assessment.ai_quality_score || 0) >= 80 ? 'text-emerald-600' :
             (assessment.ai_quality_score || 0) >= 60 ? 'text-amber-600' : 'text-rose-600'
-          }`}>{assessment.ai_quality_score || '-'}%</p>
+          }`}>{assessment.ai_quality_score != null ? `${assessment.ai_quality_score}%` : '-'}</p>
         </div>
         <div className="card p-4">
           <p className="text-sm text-slate-600">Questions Answered</p>
@@ -384,6 +419,9 @@ export default function ApprovalReviewPage() {
       <div className="card p-4">
         <h3 className="text-lg font-medium text-slate-900 mb-4">Approval History</h3>
         <div className="space-y-3">
+          {assessment.approval_history.length === 0 && (
+            <p className="text-sm text-slate-500">No approval actions yet.</p>
+          )}
           {assessment.approval_history.map((action) => (
             <div key={action.id} className="flex items-center gap-4 p-3 rounded-lg bg-white/50">
               <div className={`p-2 rounded-lg ${
@@ -399,7 +437,9 @@ export default function ApprovalReviewPage() {
               </div>
               <div className="flex-1">
                 <p className="text-slate-900 font-medium capitalize">{action.action}</p>
-                <p className="text-sm text-slate-600">by {action.actor_name} • {formatDate(action.created_at)}</p>
+                <p className="text-sm text-slate-600">
+                  {action.tier_number > 0 ? `Tier ${action.tier_number} · ` : ''}by {action.performer_name || 'Unknown'} • {formatDate(action.performed_at)}
+                </p>
               </div>
               {action.comments && (
                 <p className="text-sm text-slate-700 italic">"{action.comments}"</p>

@@ -16,10 +16,12 @@ from openai import OpenAI
 from ....models import (
     Framework, FrameworkControl, FrameworkDomain, ControlObjective,
     FrameworkRiskAssessment, FrameworkRiskQuestion, FrameworkRiskQuestionEvidence,
-    GRCUser, TenantUser, Evidence, Risk, get_db, UploadedFramework, ParsedFrameworkControl
+    GRCUser, TenantUser, Evidence, Risk, get_db, UploadedFramework, ParsedFrameworkControl, risk_priority_for_score
 )
-from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....routers.auth_router import (require_auth, get_user_tenants, get_user_primary_tenant, require_tenant_permission,
+                                     has_tenant_permission)
 from ....services import evidence_review
+from ....services.segregation import ensure_independent
 from ..framework_methodologies import (
     Methodology,
     all_methodologies,
@@ -37,6 +39,27 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 DEFAULT_QUESTION_COUNT = 20
 VALID_QUESTION_STATUSES = {"not_started", "in_progress", "completed", "blocked"}
+VALID_ASSESSMENT_STATUSES = {"in_progress", "completed", "approved", "archived"}      # what the page offers
+
+
+def _may(action: str) -> list:
+    """A write needs the assessment permission, or the risk editor's grant it was open to before."""
+    return [Depends(require_tenant_permission(f"risks:risk_assessment:{action}", f"erm:risks:{action}"))]
+
+
+_EDIT_GRANTS = ("risks:risk_assessment:edit", "erm:risks:edit")
+# rewording, reassigning and accepting the risk are the risk team's decisions, not the answering assignee's
+_ASSIGNER_ONLY_FIELDS = {"question_text", "assigned_user_id", "is_risk_accepted", "acceptance_notes"}
+
+
+def _may_answer(question, user, db: Session, changing: set = frozenset()) -> None:
+    """The person a question is assigned to answers it (scores, status, notes, evidence) with view access alone; rewording
+    or reassigning it, and answering someone else's, needs the edit grant."""
+    if has_tenant_permission(db, user, *_EDIT_GRANTS):
+        return
+    if question.assigned_user_id == user.id and not (changing & _ASSIGNER_ONLY_FIELDS):
+        return
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
 
 
 _AVAILABLE_STATUSES = ('parsed', 'classified', 'completed', 'published')
@@ -230,6 +253,9 @@ def _serialize_assessment(a: FrameworkRiskAssessment, questions: Optional[List[F
         "status": a.status,
         "created_by": a.created_by,
         "creator_name": a.creator.display_name if a.creator else None,
+        "submitted_by": a.submitted_by,
+        "approved_by": a.approved_by,
+        "approved_at": a.approved_at.isoformat() if a.approved_at else None,
         "created_at": a.created_at.isoformat() if a.created_at else None,
         "updated_at": a.updated_at.isoformat() if a.updated_at else None,
         "questions": [_serialize_question(q) for q in (questions or [])],
@@ -274,6 +300,19 @@ def _get_assessment_or_404(assessment_id: int, user_tenants: List[int], db: Sess
     if not assessment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Framework risk assessment not found")
     return assessment
+
+
+def _approved(assessment: FrameworkRiskAssessment) -> bool:
+    """Approved, and not reopened since (archiving an approved one keeps it approved)."""
+    return assessment.status == "approved" or assessment.approved_at is not None
+
+
+def _ensure_open(assessment: FrameworkRiskAssessment) -> None:
+    """An approved assessment's questions, answers, ratings and evidence are final."""
+    if _approved(assessment):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="This assessment is approved, so its answers, ratings and evidence are final. Start a "
+                                   "new assessment, or ask someone who may approve it to reopen it with a reason.")
 
 
 def _get_question_or_404(assessment_id: int, question_id: int, db: Session) -> FrameworkRiskQuestion:
@@ -741,7 +780,7 @@ def list_framework_risk_assessments(
     return results
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED, dependencies=_may("create"))
 def create_framework_risk_assessment(
     data: FrameworkRiskAssessmentCreate,
     db: Session = Depends(get_db),
@@ -803,7 +842,7 @@ def get_framework_risk_assessment(
     return _serialize_assessment(assessment, questions)
 
 
-@router.put("/{assessment_id}")
+@router.put("/{assessment_id}", dependencies=_may("edit"))
 def update_framework_risk_assessment(
     assessment_id: int,
     data: FrameworkRiskAssessmentUpdate,
@@ -814,10 +853,30 @@ def update_framework_risk_assessment(
     assessment = _get_assessment_or_404(assessment_id, user_tenants, db)
 
     update_data = data.model_dump(exclude_unset=True)
+    new_status = update_data.get("status")
+    if "status" in update_data and new_status not in VALID_ASSESSMENT_STATUSES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid assessment status")
+    approving = new_status == "approved" and assessment.status != "approved"
+    if _approved(assessment) and new_status not in (None, assessment.status, "archived"):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="This assessment is approved; it can only be archived, or reopened with a reason.")
+    if approving:
+        if assessment.status != "completed":
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                                detail="Mark the assessment completed before it is approved.")
+        ensure_independent(assessment.submitted_by or assessment.created_by, current_user, "approve this assessment")
+    if new_status == "completed" and assessment.status != "completed":
+        assessment.submitted_by = current_user.id
     for key, value in update_data.items():
         setattr(assessment, key, value)
 
     assessment.updated_at = datetime.utcnow()
+    if approving:
+        assessment.approved_by, assessment.approved_at = current_user.id, assessment.updated_at
+        for question in db.query(FrameworkRiskQuestion).filter(FrameworkRiskQuestion.assessment_id == assessment_id,
+                                                               FrameworkRiskQuestion.linked_risk_id.is_(None)).all():
+            if _unacceptable(question):
+                _raise_as_register_risk(db, assessment, question, MoveQuestionToRiskRegisterRequest())
     db.commit()
     db.refresh(assessment)
 
@@ -834,7 +893,7 @@ def update_framework_risk_assessment(
     return _serialize_assessment(assessment, questions)
 
 
-@router.delete("/{assessment_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{assessment_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=_may("delete"))
 def delete_framework_risk_assessment(
     assessment_id: int,
     db: Session = Depends(get_db),
@@ -847,7 +906,41 @@ def delete_framework_risk_assessment(
     return None
 
 
-@router.post("/{assessment_id}/generate-questions")
+class ReopenRequest(BaseModel):
+    reason: str
+
+
+@router.post("/{assessment_id}/reopen", dependencies=_may("edit"))
+def reopen_framework_risk_assessment(
+    assessment_id: int,
+    data: ReopenRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Reopen an approved assessment so its answers can change again: by someone who may approve it (the edit grant, not
+    whoever completed it), with a reason kept in the audit log. It is approved afresh; register risks it raised stay."""
+    from ....rich_audit import write_rich_audit_log
+
+    assessment = _get_assessment_or_404(assessment_id, get_user_tenants(current_user, db), db)
+    if not _approved(assessment):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only an approved assessment is reopened.")
+    reason = (data.reason or "").strip()
+    if not reason:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Say why the assessment is reopened.")
+    ensure_independent(assessment.submitted_by or assessment.created_by, current_user, "reopen this assessment")
+    write_rich_audit_log(db=db, tenant_id=assessment.tenant_id, user_id=current_user.id,
+                         action="framework_assessment_reopened", resource_type="framework_risk_assessment",
+                         resource_id=assessment.id, resource_name=assessment.name, summary=reason,
+                         snapshot={"status": assessment.status, "approved_by": assessment.approved_by,
+                                   "approved_at": assessment.approved_at.isoformat() if assessment.approved_at else None})
+    assessment.status, assessment.approved_by, assessment.approved_at, assessment.submitted_by = "in_progress", None, None, None
+    assessment.updated_at = datetime.utcnow()
+    db.commit()
+    questions = db.query(FrameworkRiskQuestion).filter(FrameworkRiskQuestion.assessment_id == assessment_id).all()
+    return _serialize_assessment(_get_assessment_or_404(assessment_id, [assessment.tenant_id], db), questions)
+
+
+@router.post("/{assessment_id}/generate-questions", dependencies=_may("edit"))
 def generate_framework_questions(
     assessment_id: int,
     data: GenerateQuestionsRequest,
@@ -864,10 +957,11 @@ def generate_framework_questions(
          and an empty methodology_fields dict for the assessor to fill in.
       2. Otherwise, fall back to the existing AI generator (gpt-4o), which
          is itself backed by a deterministic template fallback if the LLM
-         is unreachable\]
+         is unreachable.
     """
     user_tenants = get_user_tenants(current_user, db)
     assessment = _get_assessment_or_404(assessment_id, user_tenants, db)
+    _ensure_open(assessment)
 
     count = data.count or DEFAULT_QUESTION_COUNT
     if count < 1 or count > 200:
@@ -1010,7 +1104,7 @@ def generate_framework_questions(
     }
 
 
-@router.post("/{assessment_id}/questions", status_code=status.HTTP_201_CREATED)
+@router.post("/{assessment_id}/questions", status_code=status.HTTP_201_CREATED, dependencies=_may("edit"))
 def create_framework_question(
     assessment_id: int,
     data: FrameworkRiskQuestionCreate,
@@ -1018,7 +1112,7 @@ def create_framework_question(
     current_user: GRCUser = Depends(require_auth)
 ):
     user_tenants = get_user_tenants(current_user, db)
-    _get_assessment_or_404(assessment_id, user_tenants, db)
+    _ensure_open(_get_assessment_or_404(assessment_id, user_tenants, db))
 
     if not data.question_text or not data.question_text.strip():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Question text is required")
@@ -1064,9 +1158,11 @@ def update_framework_question(
 ):
     user_tenants = get_user_tenants(current_user, db)
     assessment = _get_assessment_or_404(assessment_id, user_tenants, db)
+    _ensure_open(assessment)
     question = _get_question_or_404(assessment_id, question_id, db)
 
     update_data = data.model_dump(exclude_unset=True)
+    _may_answer(question, current_user, db, set(update_data))
     if "question_text" in update_data and (not update_data["question_text"] or not str(update_data["question_text"]).strip()):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Question text is required")
 
@@ -1127,6 +1223,7 @@ def ai_suggest_question_fields(
     user_tenants = get_user_tenants(current_user, db)
     assessment = _get_assessment_or_404(assessment_id, user_tenants, db)
     question = _get_question_or_404(assessment_id, question_id, db)
+    _may_answer(question, current_user, db)      # AI budget: whoever may answer the question (its assignee, or an editor)
 
     # Resolve methodology context. Methodology-driven questions carry
     # `methodology_code`; AI-generated / manual questions don't, in which
@@ -1274,7 +1371,7 @@ def ai_suggest_question_fields(
     }
 
 
-@router.post("/{assessment_id}/questions/{question_id}/move-to-risk-register")
+@router.post("/{assessment_id}/questions/{question_id}/move-to-risk-register", dependencies=_may("create"))
 def move_framework_question_to_risk_register(
     assessment_id: int,
     question_id: int,
@@ -1301,9 +1398,38 @@ def move_framework_question_to_risk_register(
     if not question.is_risk_accepted:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Set 'Accept Risk' before moving this question to the risk register"
+            detail="Mark the question to be raised as a register risk first"
         )
 
+    risk = _raise_as_register_risk(db, assessment, question, data)
+    db.commit()
+    db.refresh(question)
+
+    question = db.query(FrameworkRiskQuestion).options(
+        joinedload(FrameworkRiskQuestion.assignee),
+        joinedload(FrameworkRiskQuestion.evidence_uploads).joinedload(FrameworkRiskQuestionEvidence.uploader)
+    ).filter(FrameworkRiskQuestion.id == question.id).first()
+
+    return {
+        "message": "Risk moved to risk register successfully",
+        "risk_id": risk.id,
+        "risk_title": risk.title,
+        "register_type": risk.register_type,
+        "question": _serialize_question(question),
+    }
+
+
+def _unacceptable(question: FrameworkRiskQuestion) -> bool:
+    """Raised to the register when the assessment is approved: scored High or Critical after controls (before them when
+    there is no after-controls score), or marked for the register by the risk team (the flag the old Move button needed)."""
+    score = question.residual_score or question.inherent_score
+    return bool(question.is_risk_accepted) or risk_priority_for_score(score) in ("high", "critical")
+
+
+def _raise_as_register_risk(db: Session, assessment: FrameworkRiskAssessment, question: FrameworkRiskQuestion,
+                            data: MoveQuestionToRiskRegisterRequest) -> Risk:
+    """A register risk from the question, linked back to it. Open, not accepted: acceptance is the register's own approval.
+    The caller commits."""
     owner_id = data.owner_id or question.assigned_user_id
     if owner_id:
         _validate_assigned_user_for_tenant(assessment.tenant_id, owner_id, db)
@@ -1384,7 +1510,7 @@ def move_framework_question_to_risk_register(
         residual_impact=question.residual_impact,
         residual_score=question.residual_score,
         treatment_plan=(data.treatment_plan or question.acceptance_notes),
-        status="accepted",
+        status="open",
         # Provenance — lets the auditor portal recover the framework link
         # even if `register_type` was edited manually downstream.
         source_type="assessment",
@@ -1398,25 +1524,10 @@ def move_framework_question_to_risk_register(
     if question.status == "not_started":
         question.status = "completed"
     question.updated_at = datetime.utcnow()
-
-    db.commit()
-    db.refresh(question)
-
-    question = db.query(FrameworkRiskQuestion).options(
-        joinedload(FrameworkRiskQuestion.assignee),
-        joinedload(FrameworkRiskQuestion.evidence_uploads).joinedload(FrameworkRiskQuestionEvidence.uploader)
-    ).filter(FrameworkRiskQuestion.id == question.id).first()
-
-    return {
-        "message": "Risk moved to risk register successfully",
-        "risk_id": risk.id,
-        "risk_title": risk.title,
-        "register_type": register_type_value,
-        "question": _serialize_question(question),
-    }
+    return risk
 
 
-@router.delete("/{assessment_id}/questions/{question_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{assessment_id}/questions/{question_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=_may("edit"))
 def delete_framework_question(
     assessment_id: int,
     question_id: int,
@@ -1424,7 +1535,7 @@ def delete_framework_question(
     current_user: GRCUser = Depends(require_auth)
 ):
     user_tenants = get_user_tenants(current_user, db)
-    _get_assessment_or_404(assessment_id, user_tenants, db)
+    _ensure_open(_get_assessment_or_404(assessment_id, user_tenants, db))
     question = _get_question_or_404(assessment_id, question_id, db)
 
     for evidence in question.evidence_uploads:
@@ -1446,7 +1557,9 @@ async def upload_question_evidence(
 ):
     user_tenants = get_user_tenants(current_user, db)
     assessment = _get_assessment_or_404(assessment_id, user_tenants, db)
+    _ensure_open(assessment)
     question = _get_question_or_404(assessment_id, question_id, db)
+    _may_answer(question, current_user, db)
 
     file_ext = os.path.splitext(file.filename or "")[1]
     unique_filename = f"{uuid.uuid4()}{file_ext}"
@@ -1522,7 +1635,7 @@ def list_question_evidence(
     }
 
 
-@router.delete("/{assessment_id}/evidence/{evidence_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{assessment_id}/evidence/{evidence_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=_may("edit"))
 def delete_question_evidence(
     assessment_id: int,
     evidence_id: int,
@@ -1530,7 +1643,7 @@ def delete_question_evidence(
     current_user: GRCUser = Depends(require_auth)
 ):
     user_tenants = get_user_tenants(current_user, db)
-    _get_assessment_or_404(assessment_id, user_tenants, db)
+    _ensure_open(_get_assessment_or_404(assessment_id, user_tenants, db))
 
     evidence = db.query(FrameworkRiskQuestionEvidence).options(
         joinedload(FrameworkRiskQuestionEvidence.question)

@@ -20,19 +20,25 @@ import { SearchInput } from '@/components/ui/SearchInput';
 import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
 import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 import { PageLoader } from '@/components/ui';
+import { usePermissions } from '@/hooks/usePermissions';
+import { riskBandForScore } from '@/lib/riskBands';
+import { apiErrorText } from '@/lib/apiError';
 
+// GET /erm/rcsa/assessments/pending-approvals (RCSAPendingApprovalResponse).
 interface PendingApproval {
   id: number;
   campaign_id: number;
-  campaign_name: string;
-  business_unit: string;
-  assessor_name: string;
-  submission_date: string;
-  current_tier: number;
+  campaign_name: string | null;
+  business_unit_name: string | null;
+  assessor_name: string | null;
+  submitted_at: string | null;
+  current_approval_tier: number;
   total_tiers: number;
-  score: number;
-  ai_quality_score?: number;
+  overall_risk_score: number | null;
+  ai_quality_score?: number | null;
 }
+
+const SCORE_COLOR = { critical: 'text-rose-700', high: 'text-orange-600', medium: 'text-amber-600', low: 'text-emerald-600' } as const;
 
 interface Campaign {
   id: number;
@@ -56,9 +62,10 @@ interface ActionModalProps {
   assessmentName: string;
   actionType: 'approve' | 'reject';
   isLoading: boolean;
+  error?: string;
 }
 
-function ActionModal({ isOpen, onClose, onConfirm, title, assessmentName, actionType, isLoading }: ActionModalProps) {
+function ActionModal({ isOpen, onClose, onConfirm, title, assessmentName, actionType, isLoading, error }: ActionModalProps) {
   const [comments, setComments] = useState('');
 
   const handleSubmit = () => {
@@ -99,6 +106,9 @@ function ActionModal({ isOpen, onClose, onConfirm, title, assessmentName, action
         </div>
       }
     >
+      {error && (
+        <p role="alert" className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>
+      )}
       <div className="mb-4">
         <label className="mb-1 block text-sm font-medium text-slate-700">
           Comments {actionType === 'reject' && <span className="text-rose-500">*</span>}
@@ -123,6 +133,8 @@ export default function RCSAApprovalsPage() {
   const [selectedApproval, setSelectedApproval] = useState<PendingApproval | null>(null);
   const [actionType, setActionType] = useState<'approve' | 'reject'>('approve');
   const queryClient = useQueryClient();
+  const { hasAnyPermission } = usePermissions();
+  const canApprove = hasAnyPermission(['erm:rcsa:edit', 'erm:risks:edit']);
 
   const { data: pendingApprovals, isLoading, error } = useQuery({
     queryKey: ['rcsa-pending-approvals', campaignFilter],
@@ -170,19 +182,20 @@ export default function RCSAApprovalsPage() {
 
   const filteredApprovals = useMemo(() => {
     if (!pendingApprovals) return [];
-    return pendingApprovals.filter(approval => {
-      const matchesSearch = !searchTerm || 
-        approval.campaign_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        approval.business_unit.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        approval.assessor_name.toLowerCase().includes(searchTerm.toLowerCase());
-      return matchesSearch;
-    });
+    const term = searchTerm.toLowerCase();
+    return pendingApprovals.filter(approval => !term ||
+      [approval.campaign_name, approval.business_unit_name, approval.assessor_name]
+        .some((v) => (v || '').toLowerCase().includes(term)));
   }, [pendingApprovals, searchTerm]);
 
   const handleAction = (approval: PendingApproval, type: 'approve' | 'reject') => {
+    approveMutation.reset();
+    rejectMutation.reset();
     setSelectedApproval(approval);
     setActionType(type);
   };
+
+  const actionFailed = approveMutation.error ?? rejectMutation.error;   // e.g. 409: the submitter cannot decide it
 
   const handleConfirmAction = (comments: string) => {
     if (!selectedApproval) return;
@@ -254,15 +267,15 @@ export default function RCSAApprovalsPage() {
                   <div className="flex items-center gap-4 text-sm text-slate-600 mt-1">
                     <span className="flex items-center gap-1">
                       <Building2 className="h-3.5 w-3.5" />
-                      {approval.business_unit}
+                      {approval.business_unit_name || '—'}
                     </span>
                     <span className="flex items-center gap-1">
                       <User className="h-3.5 w-3.5" />
-                      {approval.assessor_name}
+                      {approval.assessor_name || 'Unassigned'}
                     </span>
                     <span className="flex items-center gap-1">
                       <Calendar className="h-3.5 w-3.5" />
-                      Submitted {formatDate(approval.submission_date)}
+                      Submitted {formatDate(approval.submitted_at || undefined)}
                     </span>
                   </div>
                 </div>
@@ -271,16 +284,16 @@ export default function RCSAApprovalsPage() {
               <div className="flex items-center gap-6">
                 <div className="text-center">
                   <p className="text-xs text-slate-600">Approval Tier</p>
-                  <p className="text-slate-900 font-medium">{approval.current_tier} of {approval.total_tiers}</p>
+                  <p className="text-slate-900 font-medium">{approval.current_approval_tier} of {approval.total_tiers}</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-xs text-slate-600">Score</p>
-                  <p className={`font-medium ${
-                    approval.score >= 80 ? 'text-emerald-600' :
-                    approval.score >= 60 ? 'text-amber-600' : 'text-rose-600'
-                  }`}>
-                    {approval.score}%
-                  </p>
+                  <p className="text-xs text-slate-600">Avg Risk Score</p>
+                  {(() => {
+                    const band = riskBandForScore(approval.overall_risk_score);
+                    return band && approval.overall_risk_score != null
+                      ? <p className={`font-medium ${SCORE_COLOR[band]}`}>{approval.overall_risk_score.toFixed(1)}</p>
+                      : <p className="font-medium text-slate-500">-</p>;
+                  })()}
                 </div>
                 {approval.ai_quality_score && (
                   <div className="text-center">
@@ -302,6 +315,7 @@ export default function RCSAApprovalsPage() {
                   >
                     <Eye className="h-4 w-4" />
                   </Link>
+                  {canApprove && (<>
                   <button
                     onClick={() => handleAction(approval, 'approve')}
                     className="p-2 rounded-lg text-emerald-600 hover:bg-emerald-50"
@@ -316,6 +330,7 @@ export default function RCSAApprovalsPage() {
                   >
                     <XCircle className="h-4 w-4" />
                   </button>
+                  </>)}
                 </div>
               </div>
             </div>
@@ -340,9 +355,10 @@ export default function RCSAApprovalsPage() {
         onClose={() => setSelectedApproval(null)}
         onConfirm={handleConfirmAction}
         title={actionType === 'approve' ? 'Approve Assessment' : 'Reject Assessment'}
-        assessmentName={selectedApproval ? `${selectedApproval.business_unit}` : ''}
+        assessmentName={selectedApproval?.business_unit_name || ''}
         actionType={actionType}
         isLoading={approveMutation.isPending || rejectMutation.isPending}
+        error={actionFailed ? apiErrorText(actionFailed, 'The decision was not saved.') : undefined}
       />
     </div>
   );

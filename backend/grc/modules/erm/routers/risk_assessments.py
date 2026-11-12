@@ -19,14 +19,21 @@ from ....models import (
     Risk, RiskKRI, RiskIncident, RCSAFinding,
     GRCUser, BusinessUnit, Framework,
     FrameworkRiskAssessment, FrameworkRiskQuestion,
-    UploadedFramework, get_db,
+    UploadedFramework, get_db, risk_priority_for_score,
 )
-from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant, require_tenant_permission
 from ....services.ai_gateway.field_policies import ai_view
+from ....services.segregation import ensure_independent
+from .risks import record_risk_change, risk_snapshot
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/risk-assessments", tags=["ERM - Risk Assessments"])
+
+
+def _may(action: str) -> list:
+    """A write needs the assessment permission, or the risk editor's grant it was open to before."""
+    return [Depends(require_tenant_permission(f"risks:risk_assessment:{action}", f"erm:risks:{action}"))]
 
 
 def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
@@ -164,6 +171,35 @@ def _get_assessment_or_404(assessment_id: int, user_tenants: list, db: Session) 
     if not assessment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Risk assessment not found")
     return assessment
+
+
+def _ensure_open(assessment: RiskAssessment) -> RiskAssessment:
+    """An approved or closed assessment is the record that was signed off: nothing under it changes."""
+    if assessment.status in ("approved", "closed"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"This assessment is {assessment.status}; its risks and links can no longer be changed.",
+        )
+    return assessment
+
+
+def _write_approved_scores(db: Session, assessment: RiskAssessment, user: GRCUser) -> None:
+    """Approval is what the register waits for: each assessed risk takes the scores the assessment gave it, with the
+    assessment as the reason in its history. A side (before / after controls) scored only by half keeps the register's."""
+    reason = f"Risk assessment '{assessment.name}' (#{assessment.id}) approved"
+    for ar in assessment.assessed_risks:
+        changes = {}
+        for side in ("inherent", "residual"):
+            likelihood, impact = getattr(ar, f"{side}_likelihood"), getattr(ar, f"{side}_impact")
+            if likelihood and impact:
+                changes.update({f"{side}_likelihood": likelihood, f"{side}_impact": impact,
+                                f"{side}_score": likelihood * impact})
+        if ar.risk is None or not changes:
+            continue
+        before = risk_snapshot(ar.risk)
+        for field, value in changes.items():
+            setattr(ar.risk, field, value)
+        record_risk_change(db, ar.risk, before, user, reason, label=f"Assessment #{assessment.id} approved")
 
 
 def _get_assessment_risk_or_404(assessment_id: int, assessment_risk_id: int, db: Session) -> RiskAssessmentRisk:
@@ -475,15 +511,9 @@ def get_risk_assessment_breakdown(
         else:
             by_effectiveness["unrated"] += 1
 
-        score = it.residual_score or it.inherent_score or 0
-        if score >= 20:
-            by_score_range["critical"] += 1
-        elif score >= 12:
-            by_score_range["high"] += 1
-        elif score >= 6:
-            by_score_range["medium"] += 1
-        else:
-            by_score_range["low"] += 1
+        band = risk_priority_for_score(it.residual_score or it.inherent_score)
+        if band:        # an unscored risk has no band; it is not Low
+            by_score_range[band] += 1
 
         if it.inherent_score:
             inherent_total += float(it.inherent_score)
@@ -619,7 +649,7 @@ def get_risk_assessment_detail(
     }
 
 
-@router.post("", response_model=RiskAssessmentResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=RiskAssessmentResponse, status_code=status.HTTP_201_CREATED, dependencies=_may("create"))
 def create_risk_assessment(
     data: RiskAssessmentCreate,
     db: Session = Depends(get_db),
@@ -674,7 +704,7 @@ def create_risk_assessment(
     )
 
 
-@router.put("/{assessment_id}", response_model=RiskAssessmentResponse)
+@router.put("/{assessment_id}", response_model=RiskAssessmentResponse, dependencies=_may("edit"))
 def update_risk_assessment(
     assessment_id: int,
     data: RiskAssessmentUpdate,
@@ -724,7 +754,7 @@ def update_risk_assessment(
     )
 
 
-@router.post("/{assessment_id}/status", response_model=RiskAssessmentResponse)
+@router.post("/{assessment_id}/status", response_model=RiskAssessmentResponse, dependencies=_may("edit"))
 def update_assessment_status(
     assessment_id: int,
     data: StatusUpdate,
@@ -740,15 +770,20 @@ def update_assessment_status(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid status transition from '{assessment.status}' to '{data.status}'. Allowed: {allowed}"
         )
+    if data.status == "approved":
+        ensure_independent(assessment.submitted_by or assessment.lead_assessor_id, current_user, "approve this assessment")
 
     assessment.status = data.status
     if data.notes:
         assessment.notes = data.notes
 
     now = datetime.utcnow()
+    if data.status == "under_review":
+        assessment.submitted_by = current_user.id
     if data.status == "approved":
         assessment.approved_by = current_user.id
         assessment.approved_at = now
+        _write_approved_scores(db, assessment, current_user)
     if data.status == "closed":
         assessment.completed_at = now
 
@@ -780,21 +815,21 @@ def update_assessment_status(
     )
 
 
-@router.delete("/{assessment_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{assessment_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=_may("delete"))
 def delete_risk_assessment(
     assessment_id: int,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
     user_tenants = get_user_tenants(current_user, db)
-    assessment = _get_assessment_or_404(assessment_id, user_tenants, db)
+    assessment = _ensure_open(_get_assessment_or_404(assessment_id, user_tenants, db))
 
     db.delete(assessment)
     db.commit()
     return None
 
 
-@router.post("/{assessment_id}/risks", status_code=status.HTTP_201_CREATED)
+@router.post("/{assessment_id}/risks", status_code=status.HTTP_201_CREATED, dependencies=_may("edit"))
 def add_risk_to_assessment(
     assessment_id: int,
     data: AssessmentRiskCreate,
@@ -802,7 +837,7 @@ def add_risk_to_assessment(
     current_user: GRCUser = Depends(require_auth)
 ):
     user_tenants = get_user_tenants(current_user, db)
-    assessment = _get_assessment_or_404(assessment_id, user_tenants, db)
+    assessment = _ensure_open(_get_assessment_or_404(assessment_id, user_tenants, db))
 
     risk = db.query(Risk).filter(
         Risk.id == data.risk_id,
@@ -870,7 +905,7 @@ def add_risk_to_assessment(
     }
 
 
-@router.put("/{assessment_id}/risks/{assessment_risk_id}")
+@router.put("/{assessment_id}/risks/{assessment_risk_id}", dependencies=_may("edit"))
 def update_assessment_risk(
     assessment_id: int,
     assessment_risk_id: int,
@@ -879,7 +914,7 @@ def update_assessment_risk(
     current_user: GRCUser = Depends(require_auth)
 ):
     user_tenants = get_user_tenants(current_user, db)
-    _get_assessment_or_404(assessment_id, user_tenants, db)
+    _ensure_open(_get_assessment_or_404(assessment_id, user_tenants, db))
     ar = _get_assessment_risk_or_404(assessment_id, assessment_risk_id, db)
 
     update_data = data.model_dump(exclude_unset=True)
@@ -922,7 +957,7 @@ def update_assessment_risk(
     }
 
 
-@router.delete("/{assessment_id}/risks/{assessment_risk_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{assessment_id}/risks/{assessment_risk_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=_may("edit"))
 def remove_risk_from_assessment(
     assessment_id: int,
     assessment_risk_id: int,
@@ -930,7 +965,7 @@ def remove_risk_from_assessment(
     current_user: GRCUser = Depends(require_auth)
 ):
     user_tenants = get_user_tenants(current_user, db)
-    _get_assessment_or_404(assessment_id, user_tenants, db)
+    _ensure_open(_get_assessment_or_404(assessment_id, user_tenants, db))
     ar = _get_assessment_risk_or_404(assessment_id, assessment_risk_id, db)
 
     db.delete(ar)
@@ -938,7 +973,7 @@ def remove_risk_from_assessment(
     return None
 
 
-@router.post("/{assessment_id}/risks/bulk", status_code=status.HTTP_201_CREATED)
+@router.post("/{assessment_id}/risks/bulk", status_code=status.HTTP_201_CREATED, dependencies=_may("edit"))
 def bulk_add_risks(
     assessment_id: int,
     data: BulkAddRisks,
@@ -946,7 +981,7 @@ def bulk_add_risks(
     current_user: GRCUser = Depends(require_auth)
 ):
     user_tenants = get_user_tenants(current_user, db)
-    _get_assessment_or_404(assessment_id, user_tenants, db)
+    _ensure_open(_get_assessment_or_404(assessment_id, user_tenants, db))
 
     existing_risk_ids = {
         r.risk_id for r in db.query(RiskAssessmentRisk.risk_id).filter(
@@ -993,7 +1028,7 @@ def bulk_add_risks(
     return {"message": f"Added {len(added)} risks to assessment", "added_risk_ids": added}
 
 
-@router.post("/{assessment_id}/risks/{assessment_risk_id}/kris", status_code=status.HTTP_201_CREATED)
+@router.post("/{assessment_id}/risks/{assessment_risk_id}/kris", status_code=status.HTTP_201_CREATED, dependencies=_may("edit"))
 def link_kri_to_assessment_risk(
     assessment_id: int,
     assessment_risk_id: int,
@@ -1002,7 +1037,7 @@ def link_kri_to_assessment_risk(
     current_user: GRCUser = Depends(require_auth)
 ):
     user_tenants = get_user_tenants(current_user, db)
-    _get_assessment_or_404(assessment_id, user_tenants, db)
+    _ensure_open(_get_assessment_or_404(assessment_id, user_tenants, db))
     _get_assessment_risk_or_404(assessment_id, assessment_risk_id, db)
 
     kri = db.query(RiskKRI).filter(RiskKRI.id == data.kri_id).first()
@@ -1031,7 +1066,7 @@ def link_kri_to_assessment_risk(
     }
 
 
-@router.delete("/{assessment_id}/risks/{assessment_risk_id}/kris/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{assessment_id}/risks/{assessment_risk_id}/kris/{link_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=_may("edit"))
 def unlink_kri(
     assessment_id: int,
     assessment_risk_id: int,
@@ -1040,7 +1075,7 @@ def unlink_kri(
     current_user: GRCUser = Depends(require_auth)
 ):
     user_tenants = get_user_tenants(current_user, db)
-    _get_assessment_or_404(assessment_id, user_tenants, db)
+    _ensure_open(_get_assessment_or_404(assessment_id, user_tenants, db))
     _get_assessment_risk_or_404(assessment_id, assessment_risk_id, db)
 
     link = db.query(RiskAssessmentKRI).filter(
@@ -1055,7 +1090,7 @@ def unlink_kri(
     return None
 
 
-@router.post("/{assessment_id}/risks/{assessment_risk_id}/incidents", status_code=status.HTTP_201_CREATED)
+@router.post("/{assessment_id}/risks/{assessment_risk_id}/incidents", status_code=status.HTTP_201_CREATED, dependencies=_may("edit"))
 def link_incident_to_assessment_risk(
     assessment_id: int,
     assessment_risk_id: int,
@@ -1064,7 +1099,7 @@ def link_incident_to_assessment_risk(
     current_user: GRCUser = Depends(require_auth)
 ):
     user_tenants = get_user_tenants(current_user, db)
-    _get_assessment_or_404(assessment_id, user_tenants, db)
+    _ensure_open(_get_assessment_or_404(assessment_id, user_tenants, db))
     _get_assessment_risk_or_404(assessment_id, assessment_risk_id, db)
 
     incident = db.query(RiskIncident).filter(RiskIncident.id == data.incident_id).first()
@@ -1089,7 +1124,7 @@ def link_incident_to_assessment_risk(
     }
 
 
-@router.delete("/{assessment_id}/risks/{assessment_risk_id}/incidents/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{assessment_id}/risks/{assessment_risk_id}/incidents/{link_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=_may("edit"))
 def unlink_incident(
     assessment_id: int,
     assessment_risk_id: int,
@@ -1098,7 +1133,7 @@ def unlink_incident(
     current_user: GRCUser = Depends(require_auth)
 ):
     user_tenants = get_user_tenants(current_user, db)
-    _get_assessment_or_404(assessment_id, user_tenants, db)
+    _ensure_open(_get_assessment_or_404(assessment_id, user_tenants, db))
     _get_assessment_risk_or_404(assessment_id, assessment_risk_id, db)
 
     link = db.query(RiskAssessmentIncident).filter(
@@ -1113,7 +1148,7 @@ def unlink_incident(
     return None
 
 
-@router.post("/{assessment_id}/risks/{assessment_risk_id}/rcsa-findings", status_code=status.HTTP_201_CREATED)
+@router.post("/{assessment_id}/risks/{assessment_risk_id}/rcsa-findings", status_code=status.HTTP_201_CREATED, dependencies=_may("edit"))
 def link_rcsa_finding_to_assessment_risk(
     assessment_id: int,
     assessment_risk_id: int,
@@ -1122,7 +1157,7 @@ def link_rcsa_finding_to_assessment_risk(
     current_user: GRCUser = Depends(require_auth)
 ):
     user_tenants = get_user_tenants(current_user, db)
-    _get_assessment_or_404(assessment_id, user_tenants, db)
+    _ensure_open(_get_assessment_or_404(assessment_id, user_tenants, db))
     _get_assessment_risk_or_404(assessment_id, assessment_risk_id, db)
 
     finding = db.query(RCSAFinding).filter(RCSAFinding.id == data.rcsa_finding_id).first()
@@ -1147,7 +1182,7 @@ def link_rcsa_finding_to_assessment_risk(
     }
 
 
-@router.delete("/{assessment_id}/risks/{assessment_risk_id}/rcsa-findings/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{assessment_id}/risks/{assessment_risk_id}/rcsa-findings/{link_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=_may("edit"))
 def unlink_rcsa_finding(
     assessment_id: int,
     assessment_risk_id: int,
@@ -1156,7 +1191,7 @@ def unlink_rcsa_finding(
     current_user: GRCUser = Depends(require_auth)
 ):
     user_tenants = get_user_tenants(current_user, db)
-    _get_assessment_or_404(assessment_id, user_tenants, db)
+    _ensure_open(_get_assessment_or_404(assessment_id, user_tenants, db))
     _get_assessment_risk_or_404(assessment_id, assessment_risk_id, db)
 
     link = db.query(RiskAssessmentRCSAFinding).filter(
@@ -1252,7 +1287,7 @@ def _get_openai_client() -> OpenAI:
     return OpenAI(api_key=api_key, base_url=base_url)
 
 
-@router.post("/{assessment_id}/risks/{assessment_risk_id}/ai-suggest")
+@router.post("/{assessment_id}/risks/{assessment_risk_id}/ai-suggest", dependencies=_may("edit"))  # AI budget: writers only
 def ai_suggest_assessment_risk(
     assessment_id: int,
     assessment_risk_id: int,
@@ -1389,13 +1424,14 @@ def _fallback_suggestion(risk_context, kri_info, incident_info, rcsa_info):
     has_breached_kris = any(k.get("threshold_status") == "breached" for k in kri_info)
     has_incidents = len(incident_info) > 0
 
-    if residual_score and residual_score >= 21:
+    band = risk_priority_for_score(residual_score)
+    if band == "critical":
         treatment = "avoid"
         effectiveness = "ineffective"
-    elif residual_score and residual_score >= 13:
+    elif band == "high":
         treatment = "mitigate"
         effectiveness = "partially_effective" if has_breached_kris or has_incidents else "effective"
-    elif residual_score and residual_score >= 6:
+    elif band == "medium":
         treatment = "mitigate"
         effectiveness = "partially_effective"
     else:
@@ -1603,7 +1639,7 @@ def _map_control_effectiveness(raw: str) -> str:
     return "partially_effective"
 
 
-@router.post("/upload-excel")
+@router.post("/upload-excel", dependencies=_may("create"))
 async def upload_excel_risk_assessment(
     file: UploadFile = File(...),
     name: Optional[str] = Form(None),
@@ -1688,6 +1724,10 @@ async def upload_excel_risk_assessment(
         created_risks = []
         skipped_rows = []
         error_rows = []
+        # A row whose title the register already holds is skipped, not imported a second time.
+        register_titles = {
+            t.strip().lower() for (t,) in db.query(Risk.title).filter(Risk.tenant_id == tenant_id) if t
+        }
 
         for row_idx, row in enumerate(rows[header_row_index + 1:], start=header_row_index + 2):
             try:
@@ -1704,6 +1744,9 @@ async def upload_excel_risk_assessment(
                 title_str = str(title_val).strip()
                 if title_str.lower() in ["risk title", "title", "risk name", "name"]:
                     skipped_rows.append({"row": row_idx, "reason": "Header-like row"})
+                    continue
+                if title_str.lower() in register_titles:
+                    skipped_rows.append({"row": row_idx, "reason": "Already in the risk register", "title": title_str})
                     continue
 
                 raw_category = str(row[col_map["category"]]).strip() if "category" in col_map and row[col_map["category"]] else ""
@@ -1725,11 +1768,12 @@ async def upload_excel_risk_assessment(
                 # downstream charts continue to work.
                 if res_score is None and res_score_raw is not None:
                     text_level = str(res_score_raw).strip().lower()
+                    # each score sits inside the same-named risk_priority_for_score band (Medium was 12, which bands as High)
                     text_score_map = {
                         "critical": 22, "very high": 22,
                         "high": 18, "h": 18,
-                        "medium": 12, "med": 12, "moderate": 12, "m": 12,
-                        "low": 6, "l": 6,
+                        "medium": 9, "med": 9, "moderate": 9, "m": 9,
+                        "low": 4, "l": 4,
                         "minimal": 3, "very low": 3, "negligible": 3,
                     }
                     if text_level in text_score_map:
@@ -1774,6 +1818,7 @@ async def upload_excel_risk_assessment(
                 )
                 db.add(risk)
                 db.flush()
+                register_titles.add(title_str.lower())
 
                 assessment_risk = RiskAssessmentRisk(
                     assessment_id=assessment.id,

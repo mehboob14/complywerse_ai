@@ -96,6 +96,7 @@ def serialize_incident(inc: VendorIncident) -> dict:
         "impact_description": inc.impact_description,
         "corrective_actions": inc.corrective_actions,
         "linked_issue_id": getattr(inc, "linked_issue_id", None),
+        "loss_event_id": getattr(inc, "loss_event_id", None),
         "reported_by": inc.reported_by,
         "created_at": inc.created_at.isoformat() if inc.created_at else None,
         "updated_at": inc.updated_at.isoformat() if inc.updated_at else None,

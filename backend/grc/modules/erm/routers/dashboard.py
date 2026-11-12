@@ -9,7 +9,7 @@ while the module is being built out.
 Score bands (likelihood 1-5 x impact 1-5, range 1-25): critical >= 20,
 high >= 12, medium >= 6, low < 6 — the platform's existing bands.
 """
-from typing import Optional
+from typing import Literal, Optional
 from datetime import datetime, timedelta, date
 
 from fastapi import APIRouter, Depends, Body
@@ -17,20 +17,21 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
 from ....models import (
-    Risk, RiskControlLink, RiskAssetLink, RiskEvidenceLink,
-    RiskFrameworkControlLink, RiskGovernanceLink,
+    Risk, RiskControl, RiskAssetLink, RiskEvidenceLink,
+    RiskGovernanceLink,
     RiskAssessment, RiskAssessmentRisk,
     FrameworkRiskAssessment, FrameworkRiskQuestion, FrameworkRiskQuestionEvidence,
-    InternalControl, InternalControlTest, InternalControlRiskLink,
+    InternalControl, InternalControlTest,
     RCSACampaign, RCSAAssessment, RCSAFinding, RCSAResponse, RCSAResponseEvidence,
     Vendor, VendorAssessment, TPRAFinding, TPRARemediation, TPRAMonitoringSignal,
     TPRAControlObligation,
-    RiskKRI, RiskAppetiteConfig, RiskMitigationAction, RiskMitigationActionEvidence,
+    RiskKRI, RiskAppetiteConfig, IssueAction, IssueActionEvidence,
     RiskReview, RiskIncident,
     AIRiskAssessmentEntry,
     GRCUser, get_db,
 )
-from ....routers.auth_router import require_auth, get_user_tenants
+from ....routers.auth_router import require_auth, get_user_tenants, require_tenant_permission
+from ...issue_management.services.risk_actions import OPEN_ACTION_STATUSES, migrate_legacy_actions, risk_actions_query
 
 router = APIRouter(prefix="/dashboard", tags=["ERM Sections Dashboard"])
 
@@ -72,6 +73,7 @@ def get_sections_overview(
     if not scoped:
         return {"as_of": now.isoformat(), "sections": {}, "attention_queue": {},
                 "performance": {"score": None, "grade": None, "components": []}}
+    migrate_legacy_actions(db, scoped)      # risk actions live on the CAPA engine; copy old rows first (once each)
 
     # ================= Risk Register =========================================
     risks = db.query(
@@ -79,7 +81,7 @@ def get_sections_overview(
         Risk.inherent_score, Risk.residual_score,
         Risk.closed_by, Risk.closure_status, Risk.closure_notes,
         Risk.treatment_plan.isnot(None).label("has_plan"),
-    ).filter(Risk.tenant_id.in_(scoped)).all()
+    ).filter(Risk.tenant_id.in_(scoped), Risk.status.is_distinct_from("draft")).all()   # a library draft is not in the register yet
 
     active = [r for r in risks if (r.status or "open") != "closed"]
     active_ids = {r.id for r in active}
@@ -104,9 +106,8 @@ def get_sections_overview(
             db.rollback()
             return set()
 
-    linked_ids = (link_ids(RiskAssetLink) | link_ids(RiskControlLink)
-                  | link_ids(RiskEvidenceLink) | link_ids(InternalControlRiskLink)
-                  | link_ids(RiskFrameworkControlLink) | link_ids(RiskGovernanceLink)) & active_ids
+    linked_ids = (link_ids(RiskAssetLink) | link_ids(RiskControl)          # RiskControl: a control of any kind
+                  | link_ids(RiskEvidenceLink) | link_ids(RiskGovernanceLink)) & active_ids
 
     # Acceptance governance: accepted risks that carry a documented sign-off
     # (closer/closure status/closure notes). No acceptance-expiry column exists on
@@ -274,8 +275,8 @@ def get_sections_overview(
             InternalControlTest.control_id, InternalControlTest.exceptions_found,
         ).filter(InternalControlTest.control_id.in_(ic_ids)).all() if ic_ids else []
         tested_ids = {t.control_id for t in ic_tests}
-        ic_risk_linked = {l.control_id for l in db.query(InternalControlRiskLink.control_id).filter(
-            InternalControlRiskLink.control_id.in_(ic_ids)).all()} if ic_ids else set()
+        ic_risk_linked = {l.control_id for l in db.query(RiskControl.control_id).filter(
+            RiskControl.control_source == "internal", RiskControl.control_id.in_(ic_ids)).all()} if ic_ids else set()
     except SQLAlchemyError:
         db.rollback()
         ic, ic_tests, tested_ids, ic_risk_linked = [], [], set(), set()
@@ -486,24 +487,20 @@ def get_sections_overview(
 
     # ================= Mitigation Actions =====================================
     try:
-        actions = db.query(
-            RiskMitigationAction.id, RiskMitigationAction.status,
-            RiskMitigationAction.due_date, RiskMitigationAction.evidence_id,
-            RiskMitigationAction.expected_residual_reduction,
-            RiskMitigationAction.actual_residual_reduction,
-        ).join(Risk, RiskMitigationAction.risk_id == Risk.id).filter(
-            Risk.tenant_id.in_(scoped)).all()
-        evidenced_actions = {r.mitigation_action_id for r in db.query(
-            RiskMitigationActionEvidence.mitigation_action_id
-        ).filter(RiskMitigationActionEvidence.tenant_id.in_(scoped)).all()}
+        actions = risk_actions_query(db, scoped).with_entities(
+            IssueAction.id, IssueAction.status, IssueAction.due_date, IssueAction.evidence_id,
+            IssueAction.expected_residual_reduction, IssueAction.actual_residual_reduction,
+        ).all()
+        evidenced_actions = {r.issue_action_id for r in db.query(
+            IssueActionEvidence.issue_action_id
+        ).filter(IssueActionEvidence.tenant_id.in_(scoped)).all()}
     except SQLAlchemyError:
         db.rollback()
         actions, evidenced_actions = [], set()
 
-    open_actions = [a for a in actions if a.status in ("open", "in_progress", "overdue")]
-    overdue_actions = sum(1 for a in open_actions
-                          if a.status == "overdue" or (a.due_date and a.due_date < now))
-    completed_actions = [a for a in actions if a.status == "completed"]
+    open_actions = [a for a in actions if a.status in OPEN_ACTION_STATUSES]
+    overdue_actions = sum(1 for a in open_actions if a.due_date and a.due_date < now)
+    completed_actions = [a for a in actions if a.status in ("completed", "verified")]
     evidenced_completed = sum(1 for a in completed_actions
                               if a.evidence_id or a.id in evidenced_actions)
     # Treatment effectiveness: did completed actions actually deliver the residual
@@ -548,7 +545,7 @@ def get_sections_overview(
     done_reviews = [r for r in reviews
                     if r.completed_at or r.status in ("approved", "completed")]
     open_reviews = [r for r in reviews
-                    if not r.completed_at and r.status in ("pending", "in_review")]
+                    if not r.completed_at and r.status in ("pending", "in_review", "submitted")]
     overdue_reviews = sum(1 for r in open_reviews if r.due_date and r.due_date < now)
     window_365 = now - timedelta(days=365)
     done_365 = [r for r in done_reviews if r.completed_at and r.completed_at >= window_365]
@@ -769,6 +766,20 @@ def get_sections_overview(
     }
 
 
+@router.get("/audience")
+def get_audience_dashboard(
+    view: Literal["board", "team", "owner", "audit", "third_party"] = "team",
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """The Overview for one audience (Board / CRO, risk team, risk owner, internal audit, third party) in one request:
+    its questions and their measures, each with a drill-down link; board and team also carry the section scores."""
+    from .audience_dashboard import NEEDS_PROGRAMME, build
+    tenants = get_user_tenants(current_user, db)
+    programme = get_sections_overview(None, db, current_user) if view in NEEDS_PROGRAMME else None
+    return build(view, db, tenants, current_user, programme)
+
+
 @router.get("/scorecard-config")
 def get_scorecard_config(
     db: Session = Depends(get_db),
@@ -782,7 +793,7 @@ def get_scorecard_config(
     return sc_cfg.merged(db, tenants[0], "erm")
 
 
-@router.put("/scorecard-config")
+@router.put("/scorecard-config", dependencies=[Depends(require_tenant_permission("erm:risks:edit", "risks:risk_register:edit"))])
 def put_scorecard_config(
     body: dict = Body(...),
     db: Session = Depends(get_db),
@@ -804,7 +815,7 @@ def put_scorecard_config(
     return {"ok": True, "config": cfg}
 
 
-@router.delete("/scorecard-config")
+@router.delete("/scorecard-config", dependencies=[Depends(require_tenant_permission("erm:risks:edit", "risks:risk_register:edit"))])
 def reset_scorecard_config(
     section: Optional[str] = None,
     db: Session = Depends(get_db),

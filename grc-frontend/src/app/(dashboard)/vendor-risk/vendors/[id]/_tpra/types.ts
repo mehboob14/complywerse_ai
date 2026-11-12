@@ -151,6 +151,8 @@ export interface Approval {
   approver_id: number | null;
   residual_rating: string | null;
   created_at: string;
+  committee_id?: number | null;   // the committee and meeting that decided a critical or important outsourcing
+  meeting_id?: number | null;
 }
 
 export interface MonitoringSignal {

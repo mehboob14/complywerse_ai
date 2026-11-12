@@ -133,7 +133,7 @@ export interface MetricFormState {
   target: string; green_threshold: string; amber_threshold: string; threshold_direction: string; frequency: string; next_due_date: string;
 }
 
-export const FREQUENCIES = ['daily', 'weekly', 'monthly', 'quarterly', 'annual'] as const;
+export const FREQUENCIES = ['daily', 'weekly', 'monthly', 'quarterly', 'annually'] as const;  // the backend's values (it reads a stored "annual" as "annually")
 /** The longest each text field may be: the columns of grc_risk_kris (a longer text used to fail on the server with no message). */
 export const LIMITS = { name: 255, category: 100, unit: 50, period: 40 } as const;
 

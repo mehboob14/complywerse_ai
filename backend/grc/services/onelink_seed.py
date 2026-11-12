@@ -409,8 +409,9 @@ def seed_onelink(db: Session, tenant_id: int) -> dict:
     """Idempotently seed 1LINK's ERM framework into one tenant. Additive only."""
     from ..models import (
         GovernanceCommittee, LikelihoodImpactScale, Risk, RiskAppetiteConfig,
-        RiskKRI, RiskMitigationAction,
+        RiskKRI,
     )
+    from ..modules.issue_management.services.risk_actions import LEGACY_STATUS, add_risk_action
     summary = {"scales": 0, "committees": 0, "appetite": 0, "risks": 0,
                "mitigation_actions": 0, "kris": 0}
     owner_id = _first_user_id(db, tenant_id)
@@ -490,10 +491,10 @@ def seed_onelink(db: Session, tenant_id: int) -> dict:
         summary["risks"] += 1
 
         m = r["mitigation"]
-        db.add(RiskMitigationAction(
-            risk_id=risk.id, title=m["title"], action_type=m["action_type"],
-            status=m["status"], priority=m["priority"], owner_id=owner_id,
-            description=r["treatment"]))
+        action_status = LEGACY_STATUS.get(m["status"], "planned")       # the old words on the CAPA tracker
+        add_risk_action(db, risk, None, title=m["title"], action_type=m["action_type"], status=action_status,
+                        priority=m["priority"], assignee_id=owner_id, description=r["treatment"],
+                        completed_at=now if action_status == "completed" else None)
         summary["mitigation_actions"] += 1
 
         k = r.get("kri")

@@ -59,7 +59,7 @@ const SOURCE_LABELS: Record<string, string> = {
   rcsa: 'RCSA finding',
   framework_gap: 'Framework gap',
   risk_library: 'Risk library',
-  ubl_import: 'UBL register',
+  ubl_import: 'Template register',
   nca_import: 'NCA register',
   unknown: 'Unspecified',
 };
@@ -74,12 +74,14 @@ const SEVERITY_COLORS: Record<string, string> = {
   high: '#f97316',
   medium: '#f59e0b',
   low: '#10b981',
+  unscored: '#94a3b8',
 };
 const SEVERITY_LABELS: Record<string, string> = {
   critical: 'Critical',
   high: 'High',
   medium: 'Medium',
   low: 'Low',
+  unscored: 'Unscored',
 };
 
 export default function RiskRegisterDashboardPage() {
@@ -92,6 +94,13 @@ export default function RiskRegisterDashboardPage() {
     queryKey: ['erm', 'risks', 'dashboard', 'by-source'],
     queryFn: async () => (await ermApi.risks.getDashboardBySource()).data,
   });
+  // acceptances near or past their expiry: across the whole register, not the filters below
+  const acceptanceQuery = useQuery({
+    queryKey: ['erm', 'risks', 'dashboard'],
+    queryFn: async () => (await ermApi.risks.getDashboard()).data,
+  });
+  const expiring = acceptanceQuery.data?.acceptances_expiring ?? 0;
+  const expired = acceptanceQuery.data?.acceptances_expired ?? 0;
 
   // ---- Filters ----
   const [registerFilter, setRegisterFilter] = useState<string>('');   // '' = all
@@ -128,12 +137,13 @@ export default function RiskRegisterDashboardPage() {
         acc.high += r.by_score_range.high || 0;
         acc.medium += r.by_score_range.medium || 0;
         acc.low += r.by_score_range.low || 0;
+        acc.unscored += r.by_score_range.unscored || 0;
         r.top_owners.forEach((o) => acc.assignees.add(o.owner));
         return acc;
       },
       {
         open: 0, in_treatment: 0, mitigated: 0, accepted: 0, closed: 0,
-        critical: 0, high: 0, medium: 0, low: 0, total: 0,
+        critical: 0, high: 0, medium: 0, low: 0, unscored: 0, total: 0,
         assignees: new Set<string>(),
       },
     );
@@ -145,6 +155,7 @@ export default function RiskRegisterDashboardPage() {
     { name: 'High',     key: 'high',     value: totals.high },
     { name: 'Medium',   key: 'medium',   value: totals.medium },
     { name: 'Low',      key: 'low',      value: totals.low },
+    { name: 'Unscored', key: 'unscored', value: totals.unscored },
   ];
 
   // Stacked status mix across the filtered registers.
@@ -273,6 +284,15 @@ export default function RiskRegisterDashboardPage() {
         <Kpi label="Closed" value={totals.closed} accent="bg-slate-100 text-slate-700" />
         <Kpi label="Assignees" value={totals.assignees.size} accent="bg-primary-50 text-primary-700" />
       </div>
+
+      {(expiring > 0 || expired > 0) && (
+        <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Risk acceptances: {expiring > 0 && <><strong>{expiring}</strong> expiring within 60 days</>}
+          {expiring > 0 && expired > 0 && ' · '}
+          {expired > 0 && <><strong>{expired}</strong> expired and due for a new decision</>}
+          {' · '}<Link href="/erm/risks/list" className="font-medium underline">Open the register</Link>
+        </p>
+      )}
 
       {/* ============== Quantified cyber risk (CRQM) — renders only when
           loss models exist, so non-adopting tenants see no change ========= */}
@@ -445,7 +465,7 @@ type RegisterDatum = {
   total: number;
   by_status: { open: number; in_treatment: number; mitigated: number; accepted: number; closed: number };
   by_category: Record<string, number>;
-  by_score_range: { critical: number; high: number; medium: number; low: number };
+  by_score_range: { critical: number; high: number; medium: number; low: number; unscored: number };
   top_owners: Array<{ owner: string; count: number }>;
   contributors: number;
   avg_residual_score: number;
@@ -636,6 +656,7 @@ function RegisterDetail({ register: r }: { register: RegisterDatum }) {
     { name: 'High',     key: 'high',     value: r.by_score_range.high },
     { name: 'Medium',   key: 'medium',   value: r.by_score_range.medium },
     { name: 'Low',      key: 'low',      value: r.by_score_range.low },
+    { name: 'Unscored', key: 'unscored', value: r.by_score_range.unscored || 0 },
   ];
   const severityTotal = severity.reduce((s, x) => s + x.value, 0);
 

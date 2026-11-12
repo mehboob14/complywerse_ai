@@ -17,7 +17,7 @@ from ..models import (
     NormalizedControl, ControlMapping, GRCRequiredEvidence,
     FrameworkControl, Framework, GRCUser, get_db,
     ParsedFrameworkControl, UploadedFramework, Evidence, EvidenceControlMapping,
-    Risk, RiskFrameworkControlLink, ControlImplementation, FrameworkControlOwnership,
+    Risk, RiskControl, ControlImplementation, FrameworkControlOwnership,
 )
 from ..schemas import (
     NormalizedControlCreate, NormalizedControlUpdate, NormalizedControlResponse,
@@ -278,13 +278,13 @@ def get_control_ai_recommendations(
             }
         
         # ── Real register linkage: actual ERM risks this control already addresses
-        # (via RiskFrameworkControlLink) — not generic AI text. Best-effort.
+        # (the one risk–control link, source "catalog") — not generic AI text. Best-effort.
         addressed_risks = []
         try:
             tids = get_user_tenants(current_user, db)
-            links = db.query(RiskFrameworkControlLink).options(
-                joinedload(RiskFrameworkControlLink.risk)
-            ).filter(RiskFrameworkControlLink.framework_control_id == request.control_id).all()
+            links = db.query(RiskControl).options(joinedload(RiskControl.risk)).filter(
+                RiskControl.control_source == "catalog", RiskControl.control_id == request.control_id,
+                RiskControl.tenant_id.in_(tids)).order_by(RiskControl.id).all()
             for ln in links:
                 r = ln.risk
                 if r and r.tenant_id in tids:
@@ -388,16 +388,10 @@ def promote_control_risk(
     db.add(risk)
     db.flush()
 
-    # Link the control as a mitigating control (idempotent on the unique key).
-    if not db.query(RiskFrameworkControlLink).filter(
-        RiskFrameworkControlLink.risk_id == risk.id,
-        RiskFrameworkControlLink.framework_control_id == request.control_id,
-    ).first():
-        db.add(RiskFrameworkControlLink(
-            risk_id=risk.id, framework_control_id=request.control_id,
-            mitigation_effectiveness="full",
-            notes=f"Promoted from control AI analysis — implementing this control mitigates the risk.",
-        ))
+    # Link the control as a mitigating control (the one risk–control link; made once).
+    from ..modules.erm.services.risk_control_links import link_control
+    link_control(db, risk, "catalog", request.control_id, current_user.id, mitigation_effectiveness="full",
+                 notes="Promoted from control AI analysis — implementing this control mitigates the risk.")
     db.commit()
     db.refresh(risk)
     return {"risk_id": risk.id, "title": risk.title, "category": risk.category,

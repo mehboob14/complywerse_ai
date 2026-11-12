@@ -21,12 +21,13 @@ const LISTS = ['services_provided', 'data_types_accessed', 'systems_in_scope', '
 // People and business units: a number, or none (editing: null clears it).
 const IDS = ['owner_id', 'security_owner_id', 'relationship_owner_id', 'business_unit_id'] as const;
 
-/** A new vendor's form: what the register's old add form started with (active, medium, internal data). */
+/** A new vendor's form (internal data). It has no status: the server starts a new vendor on the intake path (onboarding),
+ *  and its tier is worked out by tiering; 'medium' is only the placeholder an untiered vendor's record holds. */
 export const emptyForm = (): VendorForm => ({
   name: '', vendor_type: '', industry: '', website: '', business_unit_id: '', services_provided: '', tags: '',
   holds_personal_data: false, data_classification: '', data_location: '', systems_in_scope: '', data_types_accessed: '',
   owner_id: '', security_owner_id: '', relationship_owner_id: '',
-  description: '', notes: '', status: 'active', data_access_level: 'internal', tier: 'medium', tier_justification: '',
+  description: '', notes: '', status: '', data_access_level: 'internal', tier: 'medium', tier_justification: '',
   primary_contact_name: '', primary_contact_email: '', primary_contact_phone: '',
   contract_start_date: '', contract_end_date: '', contract_value: '',
 });
@@ -56,11 +57,11 @@ export const splitList = (value: string): string[] => Array.from(new Set(value.s
 
 const amount = (value: string): number | null => (value.trim() !== '' && Number.isFinite(Number(value)) ? Number(value) : null);
 
-/** The body of POST /vendor-risk/vendors. Blank text is left out (the server holds nothing), lists are always sent. */
+/** The body of POST /vendor-risk/vendors. Blank text is left out (the server holds nothing), lists are always sent. No tier or
+ *  status: tiering and approval set those, and the server ignores them on create. */
 export function createBody(f: VendorForm): Record<string, unknown> {
   const body: Record<string, unknown> = {
-    name: f.name.trim(), tier: f.tier, status: f.status || 'active', data_access_level: f.data_access_level,
-    holds_personal_data: f.holds_personal_data,
+    name: f.name.trim(), data_access_level: f.data_access_level, holds_personal_data: f.holds_personal_data,
   };
   for (const key of TEXT) if (f[key].trim()) body[key] = f[key].trim();
   for (const key of LISTS) body[key] = splitList(f[key]);

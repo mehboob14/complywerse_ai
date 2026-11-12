@@ -18,7 +18,7 @@ departments. Over HTTP with real tokens on in-memory SQLite, on a session that d
 import os
 
 os.environ.setdefault("SESSION_SECRET", "unit-test-secret")
-os.environ.setdefault("OPENAI_API_KEY", "dummy")
+os.environ["OPENAI_API_KEY"] = os.environ.get("OPENAI_API_KEY") or "dummy"   # an empty key in .env counts as none
 
 from datetime import datetime, timedelta  # noqa: E402
 from types import SimpleNamespace  # noqa: E402

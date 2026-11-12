@@ -9,37 +9,60 @@ tenant; what a tenant did with it (a library risk added to its register) is on t
 from __future__ import annotations
 
 import json
+import logging
 from functools import lru_cache
 from pathlib import Path
 from typing import Dict, List, Optional
 
 LIBRARY_DIR = Path(__file__).resolve().parents[3] / "seed_data" / "risk_library"
 SOURCE_TYPE = "risk_library"
+logger = logging.getLogger(__name__)
+
+
+SHORT_NAMES = {"uae_ia": "UAE IA"}          # what a file that gives no `framework.short_name` is called in the register and reasons
+
+
+def _read(path: Path) -> dict:
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    key = raw["framework"]["key"]
+    families = {f["id"]: f for f in raw["families"]}
+    objectives = {o["id"]: o for o in raw["objectives"]}
+    risks = []
+    for r in raw["risks"]:
+        objective = objectives[r["objective_id"]]
+        family = families[objective["family_id"]]
+        risks.append({
+            "id": r["id"], "framework_key": key, "title": r["title"], "description": r["description"],
+            "family_id": family["id"], "family_name": family["name"], "family_kind": family["kind"],
+            "objective_id": objective["id"], "objective_title": objective["title"], "objective": objective["objective"],
+            "suggested_category": family["suggested_category"],
+            "controls": [{"control_id": c["control_id"], "title": c["title"], "priority": c.get("priority"),
+                          "applicability": c.get("applicability")} for c in objective["controls"]],
+        })
+    return {"framework": raw["framework"], "families": raw["families"], "objectives": raw["objectives"], "risks": risks,
+            "by_id": {r["id"]: r for r in risks}}
 
 
 @lru_cache(maxsize=1)
 def _load() -> Dict[str, dict]:
+    """Every library file in the folder (another standard is another file); a file that does not hold a library is left out
+    and logged, so one bad file does not take the others down."""
     libraries: Dict[str, dict] = {}
     for path in sorted(LIBRARY_DIR.glob("*.json")):
-        raw = json.loads(path.read_text(encoding="utf-8"))
-        key = raw["framework"]["key"]
-        families = {f["id"]: f for f in raw["families"]}
-        objectives = {o["id"]: o for o in raw["objectives"]}
-        risks = []
-        for r in raw["risks"]:
-            objective = objectives[r["objective_id"]]
-            family = families[objective["family_id"]]
-            risks.append({
-                "id": r["id"], "framework_key": key, "title": r["title"], "description": r["description"],
-                "family_id": family["id"], "family_name": family["name"], "family_kind": family["kind"],
-                "objective_id": objective["id"], "objective_title": objective["title"], "objective": objective["objective"],
-                "suggested_category": family["suggested_category"],
-                "controls": [{"control_id": c["control_id"], "title": c["title"], "priority": c.get("priority"),
-                              "applicability": c.get("applicability")} for c in objective["controls"]],
-            })
-        libraries[key] = {"framework": raw["framework"], "families": raw["families"], "objectives": raw["objectives"], "risks": risks,
-                          "by_id": {r["id"]: r for r in risks}}
+        try:
+            lib = _read(path)
+        except (KeyError, TypeError, ValueError) as exc:
+            logger.error("Risk library file %s left out: %r", path.name, exc)
+            continue
+        libraries[lib["framework"]["key"]] = lib
     return libraries
+
+
+def short_name(key: str) -> str:
+    """The standard's short name ("UAE IA"): the file's own, else the known one, else its full name."""
+    lib = library(key)
+    framework = lib["framework"] if lib else {}
+    return framework.get("short_name") or SHORT_NAMES.get(key) or framework.get("name") or key
 
 
 def frameworks() -> List[dict]:

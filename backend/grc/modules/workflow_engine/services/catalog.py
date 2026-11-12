@@ -500,10 +500,9 @@ ROUTER_MODULE_OVERRIDE: dict[tuple[str, str], tuple[str, str]] = {
 # (module_dir.name, fn_name) → (module_display_name, submodule_display_name)
 # Redirects a SINGLE function to a different submodule, independent of its router.
 FUNCTION_MODULE_OVERRIDE: dict[tuple[str, str], tuple[str, str]] = {
-    # "Create Risk Mitigation Action" is defined in erm/risks.py (Risk Register) but
-    # creates records shown on the Mitigation Actions page — move it there so users
-    # building mitigation workflows find the Create node in the right submodule.
-    ("erm", "create_risk_mitigation_action"): ("Risk Management", "Mitigation Actions"),
+    # (2026-11-11) erm/risks.py's duplicate create_risk_mitigation_action route was removed: it shadowed
+    # mitigation_actions.create_risk_action and saved actions as "pending". The live node is
+    # "Add Mitigation Action To Risk"; workflows built on the old node need it re-picked.
 
     # ── Governance Exceptions: hide comment CRUD from palette (out of scope) ───
     # add_comment is a POST /comments endpoint which the catalog classifies as
@@ -1559,8 +1558,9 @@ DUE_DATE_EVENTS: list[_DueEvent] = [
      "DocumentObligation", "due_date", "overdue", 0, frozenset({"done", "cancelled", "rejected"})),
     ("committee_action_overdue", "Committee action overdue", None,
      "OversightAction", "due_date", "overdue", 0, _WORK_DONE),
+    # risk actions are CAPA actions on the risk's treatment issue; the column is None on every other CAPA action
     ("mitigation_action_overdue", "Mitigation action overdue", None,
-     "RiskMitigationAction", "due_date", "overdue", 0, _WORK_DONE),
+     "IssueAction", "risk_action_due_date", "overdue", 0, _WORK_DONE),
     ("critical_task_overdue", "Critical task overdue", None, "CriticalTask", "due_date", "overdue", 0, _WORK_DONE),
     ("vulnerability_sla_warning", "Vulnerability SLA warning (approaching)", None,
      "Vulnerability", "due_date", "soon", 7, _WORK_DONE),

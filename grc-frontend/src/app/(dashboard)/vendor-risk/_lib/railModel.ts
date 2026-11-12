@@ -42,9 +42,9 @@ export const RAIL: RailEntry[] = [
   ] },
   { key: 'insights', name: 'Insights', href: `${V}/risk-360`, tabs: [
     { name: 'Risk 360°', href: `${V}/risk-360` },
-    { name: 'Comply analyses', href: `${V}/comply-analysis` },
+    { name: 'Loss quantification', href: `${V}/comply-analysis` },
     { name: 'Reports', href: `${V}/reports` },
-    { name: 'Exchange', href: `${V}/exchange` },
+    { name: 'Shared assessments', href: `${V}/exchange` },
   ] },
   { key: 'setup', name: 'Setup', href: `${V}/roster`, tabs: [
     { name: 'Roster', href: `${V}/roster` },

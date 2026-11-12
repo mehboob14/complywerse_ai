@@ -18,12 +18,13 @@ except ImportError:
     openpyxl = None
 
 from ....models import (
-    InternalControl, InternalControlTest, InternalControlRiskLink,
+    InternalControl, InternalControlTest,
     InternalControlFrameworkLink, InternalControlEscalation,
     InternalControlWorkflowAction, InternalControlEvidence,
     Risk, FrameworkControl, Evidence,
-    NormalizedControl, GovernanceDocument, GRCUser, Tenant, BusinessUnit, get_db
+    NormalizedControl, GovernanceDocument, GRCUser, Tenant, BusinessUnit, RiskControl, get_db
 )
+from ..services.risk_control_links import find_link, link_by_id, link_control, risk_control_links, unlink_control
 from ....schemas import (
     InternalControlCreate, InternalControlUpdate, InternalControlResponse,
     InternalControlDetailResponse, InternalControlTestCreate,
@@ -35,10 +36,18 @@ from ....schemas import (
     InternalControlWorkflowActionResponse, InternalControlDashboard,
     MessageResponse
 )
-from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant, refuse_imported_accounts
+from ....routers.auth_router import (
+    require_auth, require_tenant_permission, get_user_tenants, get_user_primary_tenant, refuse_imported_accounts,
+)
 from ....services.ai_gateway.field_policies import pick
+from ....services.segregation import ensure_independent
 
 router = APIRouter(prefix="/internal-controls", tags=["ERM - Internal Controls"])
+
+# Writes need the module's own grant, or the broad risk-editor one that kept today's editors working.
+CAN_CREATE = [Depends(require_tenant_permission("erm:internal_controls:create", "erm:risks:create"))]
+CAN_EDIT = [Depends(require_tenant_permission("erm:internal_controls:edit", "erm:risks:edit"))]
+CAN_DELETE = [Depends(require_tenant_permission("erm:internal_controls:delete", "erm:risks:delete"))]
 
 
 class InternalControlAIUploadItem(BaseModel):
@@ -529,7 +538,7 @@ def _next_auto_control_id(db: Session, tenant_id: int) -> str:
     return f"IC-{highest + 1:04d}"
 
 
-@router.post("", response_model=InternalControlResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=InternalControlResponse, status_code=status.HTTP_201_CREATED, dependencies=CAN_CREATE)
 def create_internal_control(
     control: InternalControlCreate,
     db: Session = Depends(get_db),
@@ -598,7 +607,7 @@ def create_internal_control(
     return db_control
 
 
-@router.post("/upload-manual", response_model=None)
+@router.post("/upload-manual", response_model=None, dependencies=CAN_CREATE)
 def upload_internal_controls_manual(
     file: UploadFile = File(...),
     auto_create: bool = Form(False),
@@ -699,7 +708,8 @@ class AISuggestControlResponse(BaseModel):
     suggestion_confidence: Optional[float] = None
 
 
-@router.post("/ai-suggest-category", response_model=AISuggestControlResponse)
+@router.post("/ai-suggest-category", response_model=AISuggestControlResponse, dependencies=[Depends(require_tenant_permission(
+    "erm:internal_controls:create", "erm:risks:create", "erm:internal_controls:edit", "erm:risks:edit"))])  # AI budget
 def ai_suggest_control_category(
     request: AISuggestControlRequest,
     current_user: GRCUser = Depends(require_auth),
@@ -797,7 +807,6 @@ def get_internal_control(
         joinedload(InternalControl.backup_owner),
         joinedload(InternalControl.department),
         joinedload(InternalControl.tests),
-        joinedload(InternalControl.risk_links).joinedload(InternalControlRiskLink.risk),
         joinedload(InternalControl.framework_links),
         joinedload(InternalControl.escalations)
     ).filter(
@@ -831,7 +840,7 @@ def get_internal_control(
             "link_type": rl.link_type,
             "effectiveness_rating": rl.effectiveness_rating
         }
-        for rl in control.risk_links
+        for rl in _control_links(db, control)
     ]
     
     framework_links = [
@@ -897,7 +906,7 @@ def get_internal_control(
     )
 
 
-@router.put("/{control_id}", response_model=InternalControlResponse)
+@router.put("/{control_id}", response_model=InternalControlResponse, dependencies=CAN_EDIT)
 def update_internal_control(
     control_id: int,
     control_update: InternalControlUpdate,
@@ -929,7 +938,7 @@ def update_internal_control(
     return control
 
 
-@router.delete("/{control_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{control_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=CAN_DELETE)
 def delete_internal_control(
     control_id: int,
     db: Session = Depends(get_db),
@@ -937,13 +946,15 @@ def delete_internal_control(
 ):
     user_tenants = get_user_tenants(current_user, db)
     control = get_control_or_404(control_id, user_tenants, db)
-    
+
+    for link in _control_links(db, control):
+        unlink_control(db, link)            # its risks no longer list it
     db.delete(control)
     db.commit()
     return None
 
 
-@router.post("/{control_id}/submit", response_model=MessageResponse)
+@router.post("/{control_id}/submit", response_model=MessageResponse, dependencies=CAN_EDIT)
 def submit_control_for_approval(
     control_id: int,
     action_data: InternalControlWorkflowActionCreate,
@@ -962,6 +973,7 @@ def submit_control_for_approval(
     from_status = control.status
     control.status = "pending_approval"
     control.workflow_status = "pending_review"
+    control.submitted_by = current_user.id
     control.updated_at = datetime.utcnow()
     
     workflow_action = InternalControlWorkflowAction(
@@ -978,7 +990,7 @@ def submit_control_for_approval(
     return MessageResponse(message="Control submitted for approval")
 
 
-@router.post("/{control_id}/approve", response_model=MessageResponse)
+@router.post("/{control_id}/approve", response_model=MessageResponse, dependencies=CAN_EDIT)
 def approve_control(
     control_id: int,
     action_data: InternalControlWorkflowActionCreate,
@@ -993,7 +1005,8 @@ def approve_control(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Control is not pending approval"
         )
-    
+    ensure_independent(control.submitted_by or control.created_by, current_user, "approve this control")
+
     from_status = control.status
     control.status = "active"
     control.workflow_status = "approved"
@@ -1015,7 +1028,7 @@ def approve_control(
     return MessageResponse(message="Control approved successfully")
 
 
-@router.post("/{control_id}/reject", response_model=MessageResponse)
+@router.post("/{control_id}/reject", response_model=MessageResponse, dependencies=CAN_EDIT)
 def reject_control(
     control_id: int,
     action_data: InternalControlWorkflowActionCreate,
@@ -1030,7 +1043,8 @@ def reject_control(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Control is not pending approval"
         )
-    
+    ensure_independent(control.submitted_by or control.created_by, current_user, "reject this control")
+
     from_status = control.status
     control.status = "rejected"
     control.workflow_status = "rejected"
@@ -1125,7 +1139,7 @@ def list_control_tests(
     ]
 
 
-@router.post("/{control_id}/tests", response_model=InternalControlTestResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/{control_id}/tests", response_model=InternalControlTestResponse, status_code=status.HTTP_201_CREATED, dependencies=CAN_CREATE)
 def create_control_test(
     control_id: int,
     test_data: InternalControlTestCreate,
@@ -1184,7 +1198,7 @@ def create_control_test(
     )
 
 
-@router.put("/{control_id}/tests/{test_id}", response_model=InternalControlTestResponse)
+@router.put("/{control_id}/tests/{test_id}", response_model=InternalControlTestResponse, dependencies=CAN_EDIT)
 def update_control_test(
     control_id: int,
     test_id: int,
@@ -1253,29 +1267,24 @@ def list_linked_risks(
     user_tenants = get_user_tenants(current_user, db)
     control = get_control_or_404(control_id, user_tenants, db)
     
-    links = db.query(InternalControlRiskLink).options(
-        joinedload(InternalControlRiskLink.risk)
-    ).filter(
-        InternalControlRiskLink.control_id == control_id
-    ).all()
-    
-    return [
-        InternalControlRiskLinkResponse(
-            id=link.id,
-            control_id=link.control_id,
-            risk_id=link.risk_id,
-            link_type=link.link_type,
-            effectiveness_rating=link.effectiveness_rating,
-            notes=link.notes,
-            created_at=link.created_at,
-            created_by=link.created_by,
-            risk_title=link.risk.title if link.risk else None
-        )
-        for link in links
-    ]
+    return [_link_out(link) for link in _control_links(db, control)]
 
 
-@router.post("/{control_id}/risks", response_model=InternalControlRiskLinkResponse, status_code=status.HTTP_201_CREATED)
+def _control_links(db: Session, control: InternalControl) -> List[RiskControl]:
+    """The control's links to its own tenant's risks (the one risk–control link)."""
+    return (db.query(RiskControl).join(Risk, Risk.id == RiskControl.risk_id)
+            .filter(RiskControl.control_source == "internal", RiskControl.control_id == control.id,
+                    Risk.tenant_id == control.tenant_id).order_by(RiskControl.id).all())
+
+
+def _link_out(link: RiskControl) -> InternalControlRiskLinkResponse:
+    return InternalControlRiskLinkResponse(
+        id=link.id, control_id=link.control_id, risk_id=link.risk_id, link_type=link.link_type or "mitigates",
+        effectiveness_rating=link.effectiveness_rating, notes=link.notes, created_at=link.created_at,
+        created_by=link.created_by, risk_title=link.risk.title if link.risk else None)
+
+
+@router.post("/{control_id}/risks", response_model=InternalControlRiskLinkResponse, status_code=status.HTTP_201_CREATED, dependencies=CAN_EDIT)
 def link_control_to_risk(
     control_id: int,
     link_data: InternalControlRiskLinkCreate,
@@ -1301,42 +1310,20 @@ def link_control_to_risk(
             detail="Risk must belong to the same tenant as the control"
         )
     
-    existing = db.query(InternalControlRiskLink).filter(
-        InternalControlRiskLink.control_id == control_id,
-        InternalControlRiskLink.risk_id == link_data.risk_id
-    ).first()
-    if existing:
+    if find_link(db, risk.id, "internal", control_id):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Link already exists"
         )
-    
-    db_link = InternalControlRiskLink(
-        control_id=control_id,
-        risk_id=link_data.risk_id,
-        link_type=link_data.link_type,
-        effectiveness_rating=link_data.effectiveness_rating,
-        notes=link_data.notes,
-        created_by=current_user.id
-    )
-    db.add(db_link)
+
+    link = link_control(db, risk, "internal", control_id, current_user.id, link_type=link_data.link_type,
+                        notes=link_data.notes, effectiveness_rating=link_data.effectiveness_rating)
     db.commit()
-    db.refresh(db_link)
-    
-    return InternalControlRiskLinkResponse(
-        id=db_link.id,
-        control_id=db_link.control_id,
-        risk_id=db_link.risk_id,
-        link_type=db_link.link_type,
-        effectiveness_rating=db_link.effectiveness_rating,
-        notes=db_link.notes,
-        created_at=db_link.created_at,
-        created_by=db_link.created_by,
-        risk_title=risk.title
-    )
+    db.refresh(link)
+    return _link_out(link)
 
 
-@router.delete("/{control_id}/risks/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{control_id}/risks/{link_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=CAN_EDIT)
 def unlink_control_from_risk(
     control_id: int,
     link_id: int,
@@ -1346,19 +1333,41 @@ def unlink_control_from_risk(
     user_tenants = get_user_tenants(current_user, db)
     control = get_control_or_404(control_id, user_tenants, db)
     
-    link = db.query(InternalControlRiskLink).filter(
-        InternalControlRiskLink.id == link_id,
-        InternalControlRiskLink.control_id == control_id
-    ).first()
+    link = link_by_id(db, link_id, "internal", RiskControl.control_id == control.id, RiskControl.tenant_id == control.tenant_id)
     if not link:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Link not found"
         )
-    
-    db.delete(link)
+    unlink_control(db, link)
     db.commit()
     return None
+
+
+@router.get("/risk-links/{risk_id}")
+def list_risk_controls(risk_id: int, db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    """The risk's controls of every kind (the one risk–control link), with type, latest tested effectiveness and dates."""
+    risk = _risk_or_404(db, risk_id, current_user)
+    return risk_control_links(db, [risk.id])[risk.id]
+
+
+@router.delete("/risk-links/{risk_id}/{link_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=CAN_EDIT)
+def unlink_risk_control(risk_id: int, link_id: int, db: Session = Depends(get_db),
+                        current_user: GRCUser = Depends(require_auth)):
+    risk = _risk_or_404(db, risk_id, current_user)
+    link = db.query(RiskControl).filter(RiskControl.id == link_id, RiskControl.risk_id == risk.id).first()
+    if not link:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Link not found")
+    unlink_control(db, link)
+    db.commit()
+    return None
+
+
+def _risk_or_404(db: Session, risk_id: int, current_user: GRCUser) -> Risk:
+    risk = db.query(Risk).filter(Risk.id == risk_id, Risk.tenant_id.in_(get_user_tenants(current_user, db))).first()
+    if not risk:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Risk not found")
+    return risk
 
 
 @router.get("/{control_id}/escalations", response_model=List[InternalControlEscalationResponse])
@@ -1400,7 +1409,7 @@ def list_escalations(
     ]
 
 
-@router.post("/{control_id}/escalations", response_model=InternalControlEscalationResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/{control_id}/escalations", response_model=InternalControlEscalationResponse, status_code=status.HTTP_201_CREATED, dependencies=CAN_CREATE)
 def create_escalation(
     control_id: int,
     escalation_data: InternalControlEscalationCreate,
@@ -1447,7 +1456,7 @@ def create_escalation(
     )
 
 
-@router.put("/{control_id}/escalations/{esc_id}", response_model=InternalControlEscalationResponse)
+@router.put("/{control_id}/escalations/{esc_id}", response_model=InternalControlEscalationResponse, dependencies=CAN_EDIT)
 def update_escalation(
     control_id: int,
     esc_id: int,
@@ -1497,7 +1506,7 @@ def update_escalation(
     )
 
 
-@router.delete("/{control_id}/escalations/{esc_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{control_id}/escalations/{esc_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=CAN_DELETE)
 def delete_escalation(
     control_id: int,
     esc_id: int,
@@ -1559,7 +1568,7 @@ def list_framework_links(
     ]
 
 
-@router.post("/{control_id}/framework-links", response_model=InternalControlFrameworkLinkResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/{control_id}/framework-links", response_model=InternalControlFrameworkLinkResponse, status_code=status.HTTP_201_CREATED, dependencies=CAN_EDIT)
 def create_framework_link(
     control_id: int,
     link_data: InternalControlFrameworkLinkCreate,
@@ -1639,7 +1648,7 @@ def create_framework_link(
     )
 
 
-@router.delete("/{control_id}/framework-links/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{control_id}/framework-links/{link_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=CAN_EDIT)
 def delete_framework_link(
     control_id: int,
     link_id: int,
@@ -1722,7 +1731,7 @@ def list_control_evidence(
     return result
 
 
-@router.post("/{control_id}/evidence", response_model=ICEvidenceLinkResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/{control_id}/evidence", response_model=ICEvidenceLinkResponse, status_code=status.HTTP_201_CREATED, dependencies=CAN_EDIT)
 def link_evidence_to_control(
     control_id: int,
     data: ICEvidenceLinkCreate,
@@ -1771,7 +1780,7 @@ def link_evidence_to_control(
     )
 
 
-@router.delete("/{control_id}/evidence/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{control_id}/evidence/{link_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=CAN_EDIT)
 def unlink_evidence_from_control(
     control_id: int,
     link_id: int,

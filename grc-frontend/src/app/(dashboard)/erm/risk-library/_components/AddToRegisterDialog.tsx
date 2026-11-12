@@ -1,9 +1,10 @@
 'use client';
 
-// The pop-up that moves a library risk into the risk register: the library's words are filled in, the person adds what only they
-// know (who owns it, how likely and how severe it is here) and the register gets a normal risk that remembers its source.
-// It follows the register's own form: the organisation's category and status lists, field names and hidden fields, and its
-// Custom fields tab (required ones are enforced). The risk is also linked to the controls of the objective the person keeps ticked.
+// An administrator's shortcut past the owner's draft: the library's words are filled in, the person adds what only they know (who
+// owns it, how likely and how severe it is here) and the register gets a Draft risk that remembers its source; it joins the register
+// when someone else in the risk team accepts it (Proposals tab). Everyone else proposes the risk to its owner (ProposeDialog).
+// It follows the register's own form: the organisation's category list, field names and hidden fields, and its Custom fields tab
+// (required ones are enforced). The risk is also linked to the controls of the objective the person keeps ticked.
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -12,7 +13,7 @@ import { AlertTriangle } from 'lucide-react';
 import { teamsApi } from '@/lib/api';
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
 import {
-  CustomFieldsTab, CustomFieldsTabBar, builtinLabel, errorText, listOptions, showBuiltin, statusChoices, tabOf, useModuleSettings, valuesToSave,
+  CustomFieldsTab, CustomFieldsTabBar, builtinLabel, errorText, listOptions, showBuiltin, tabOf, useModuleSettings, valuesToSave,
   type CustomValues,
 } from '@/components/settings/CustomFields';
 import { riskLibraryApi, type AddedRisk } from '../_lib/api';
@@ -21,23 +22,17 @@ import {
   type AddForm, type Band, type LibraryRisk,
 } from '../_lib/model';
 
-const FIELD = 'mt-1 h-10 w-full rounded-lg border border-[#c9d1d9] bg-[#ffffff] px-3 text-[14px] text-[#1f2933] focus:border-[#0f766e] focus:outline-none focus:ring-2 focus:ring-[#0f766e]/30';
-const AREA = 'mt-1 w-full rounded-lg border border-[#c9d1d9] bg-[#ffffff] px-3 py-2 text-[14px] leading-5 text-[#1f2933] focus:border-[#0f766e] focus:outline-none focus:ring-2 focus:ring-[#0f766e]/30';
-const LABEL = 'block text-[13px] font-medium text-[#26323d]';
-const BTN = 'inline-flex h-9 items-center justify-center rounded-lg border border-[#c9d1d9] bg-[#ffffff] px-4 text-[14px] font-medium text-[#26323d] hover:bg-[#f4f6f8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]';
-const BTN_PRIMARY = 'inline-flex h-9 items-center justify-center rounded-lg bg-[#0f766e] px-4 text-[14px] font-medium text-[#ffffff] hover:bg-[#115e59] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e] focus-visible:ring-offset-2';
+export const FIELD = 'mt-1 h-10 w-full rounded-lg border border-[#c9d1d9] bg-[#ffffff] px-3 text-[14px] text-[#1f2933] focus:border-[#0f766e] focus:outline-none focus:ring-2 focus:ring-[#0f766e]/30';
+export const AREA = 'mt-1 w-full rounded-lg border border-[#c9d1d9] bg-[#ffffff] px-3 py-2 text-[14px] leading-5 text-[#1f2933] focus:border-[#0f766e] focus:outline-none focus:ring-2 focus:ring-[#0f766e]/30';
+export const LABEL = 'block text-[13px] font-medium text-[#26323d]';
+export const BTN = 'inline-flex h-9 items-center justify-center rounded-lg border border-[#c9d1d9] bg-[#ffffff] px-4 text-[14px] font-medium text-[#26323d] hover:bg-[#f4f6f8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]';
+export const BTN_PRIMARY = 'inline-flex h-9 items-center justify-center rounded-lg bg-[#0f766e] px-4 text-[14px] font-medium text-[#ffffff] hover:bg-[#115e59] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e] focus-visible:ring-offset-2';
 
 const BAND_STYLE: Record<Band, string> = {
   critical: 'bg-[#fde8e8] text-[#9b1c1c]', high: 'bg-[#ffedd5] text-[#9a3412]', medium: 'bg-[#fef3c7] text-[#92400e]', low: 'bg-[#dcfce7] text-[#166534]',
 };
 
-// the register's own status list, used until the organisation has set its own
-const STATUSES = [
-  { value: 'open', label: 'Open' }, { value: 'in_treatment', label: 'In treatment' }, { value: 'mitigated', label: 'Mitigated' },
-  { value: 'accepted', label: 'Accepted' }, { value: 'closed', label: 'Closed' },
-];
-
-function Score({ likelihood, impact }: { likelihood: string; impact: string }) {
+export function Score({ likelihood, impact }: { likelihood: string; impact: string }) {
   const score = inherentScore({ inherent_likelihood: likelihood, inherent_impact: impact });
   const band = bandOf(score);
   if (!score || !band) return <span className="text-[13px] text-[#586472]">Score shows here</span>;
@@ -64,16 +59,10 @@ export default function AddToRegisterDialog({ risk, framework, onClose, onAdded 
     queryFn: async () => { try { return (await teamsApi.list(false)).data || []; } catch { return []; } },
   });
   const already = risk?.in_register || null;
-  const statuses = statusChoices(settings, STATUSES);
   const categories = listOptions(settings, 'category', form?.category, CATEGORIES);
 
-  // an organisation that renamed its statuses may have no "open": start from its first one instead
-  useEffect(() => {
-    if (form && statuses.length && !statuses.some((s) => s.value === form.status)) setForm({ ...form, status: statuses[0].value });
-  }, [form?.status, settings]);   // eslint-disable-line react-hooks/exhaustive-deps
-
   const add = useMutation({
-    mutationFn: (f: AddForm) => riskLibraryApi.add(risk!.id, requestBody(f, !!already, valuesToSave(settings, custom))),
+    mutationFn: (f: AddForm) => riskLibraryApi.add(risk!.id, requestBody(f, !!already || !!risk!.proposals?.length, valuesToSave(settings, custom))),
     onSuccess: (added) => { onAdded(added); },
     onError: (e) => setError(errorText(e, 'Could not add the risk.')),
   });
@@ -99,7 +88,7 @@ export default function AddToRegisterDialog({ risk, framework, onClose, onAdded 
           <div className="flex shrink-0 gap-2">
             <button type="button" className={BTN} onClick={onClose}>Cancel</button>
             <button type="submit" form="risk-library-add" className={BTN_PRIMARY} disabled={!!blocked || add.isPending} title={blocked || undefined}>
-              {add.isPending ? 'Adding…' : already ? 'Add again' : 'Add to register'}
+              {add.isPending ? 'Adding…' : 'Add as draft'}
             </button>
           </div>
         </div>
@@ -114,6 +103,9 @@ export default function AddToRegisterDialog({ risk, framework, onClose, onAdded 
               <span className="font-medium">{risk.family_id} {risk.family_name}.</span> {risk.objective}
             </p>
           </div>
+          <p className="text-[13px] leading-5 text-[#586472]">
+            It starts as a draft. It joins the register when someone else in the risk team accepts it on the Proposals tab.
+          </p>
 
           {already && (
             <div className="flex items-start gap-2 rounded-lg bg-[#fef3c7] px-3 py-2">
@@ -142,14 +134,6 @@ export default function AddToRegisterDialog({ risk, framework, onClose, onAdded 
                 <label htmlFor="rl-category" className={LABEL}>{builtinLabel(settings, 'category', 'Category')}</label>
                 <select id="rl-category" className={FIELD} value={form.category} onChange={(e) => set({ category: e.target.value })}>
                   {categories.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-                </select>
-              </div>
-            )}
-            {showBuiltin(settings, 'status') && (
-              <div>
-                <label htmlFor="rl-status" className={LABEL}>{builtinLabel(settings, 'status', 'Status')}</label>
-                <select id="rl-status" className={FIELD} value={form.status} onChange={(e) => set({ status: e.target.value })}>
-                  {statuses.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
                 </select>
               </div>
             )}

@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from ....models import (
     Risk,
     RiskAssetLink,
-    RiskControlLink,
+    RiskControl,
     RiskLossModel,
     RiskSimulationRun,
 )
@@ -115,10 +115,12 @@ def build_control_effects(db: Session, risk_id: int, control_link_ids: Optional[
     equal the baseline)."""
     if not control_link_ids:
         return []
-    links = db.query(RiskControlLink).filter(
-        RiskControlLink.risk_id == risk_id,
-        RiskControlLink.id.in_(control_link_ids),
-    ).all()
+    from ..services.risk_control_links import risk_control_links
+    links = db.query(RiskControl).filter(            # the one risk–control link carries the effect
+        RiskControl.risk_id == risk_id,
+        RiskControl.id.in_(control_link_ids),
+    ).order_by(RiskControl.id).all()
+    names = {c["link_id"]: c["name"] for c in risk_control_links(db, [risk_id])[risk_id]} if links else {}
     effects = []
     for link in links:
         freq = None
@@ -131,12 +133,7 @@ def build_control_effects(db: Session, risk_id: int, control_link_ids: Optional[
             mag = (link.mag_reduction_min_pct or 0.0,
                    link.mag_reduction_ml_pct,
                    link.mag_reduction_max_pct or link.mag_reduction_ml_pct)
-        label = None
-        try:
-            label = getattr(link.normalized_control, "name", None) or getattr(
-                link.normalized_control, "title", None)
-        except Exception:
-            pass
+        label = names.get(link.id)
         effects.append({
             "control_link_id": link.id,
             "label": label or f"control link {link.id}",

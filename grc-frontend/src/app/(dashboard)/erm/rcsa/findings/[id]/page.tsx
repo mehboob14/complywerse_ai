@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { rcsaApi } from '@/lib/api';
+import { apiErrorText } from '@/lib/apiError';
 import {
   ArrowLeft,
   AlertTriangle,
@@ -22,6 +23,7 @@ import {
 import Link from 'next/link';
 import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 import { PageLoader } from '@/components/ui';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface Finding {
   id: number;
@@ -30,15 +32,16 @@ interface Finding {
   severity: 'critical' | 'high' | 'medium' | 'low';
   status: 'open' | 'in_progress' | 'remediated' | 'closed';
   assessment_id: number;
-  assessment_name: string;
-  business_unit: string;
+  assessment_name: string | null;
+  business_unit_name: string | null;
   created_at: string;
   updated_at: string;
-  due_date?: string;
+  remediation_due_date?: string | null;
   ai_recommendation?: string;
   linked_risk?: { id: number; title: string };
   linked_control?: { id: number; name: string };
   mitigation_actions?: { id: number; title: string; status: string; due_date?: string }[];
+  linked_issue?: { id: number; code: string | null; title: string; severity: string; workflow_state: string } | null;
 }
 
 const SEVERITY_STYLES: Record<string, { bg: string; text: string; border: string; label: string }> = {
@@ -210,6 +213,9 @@ export default function FindingDetailPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const findingId = Number(params.id);
+  const { hasAnyPermission } = usePermissions();
+  const canEdit = hasAnyPermission(['erm:rcsa:edit', 'erm:risks:edit']);
+  const canCreate = hasAnyPermission(['erm:rcsa:create', 'erm:risks:create']);
 
   const [linkModalType, setLinkModalType] = useState<'risk' | 'control' | null>(null);
   const [showActionModal, setShowActionModal] = useState(false);
@@ -240,6 +246,7 @@ export default function FindingDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['rcsa-finding', findingId] });
       setLinkModalType(null);
     },
+    onError: (err: unknown) => alert(apiErrorText(err, 'The change could not be saved')),
   });
 
   const linkControlMutation = useMutation({
@@ -248,6 +255,7 @@ export default function FindingDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['rcsa-finding', findingId] });
       setLinkModalType(null);
     },
+    onError: (err: unknown) => alert(apiErrorText(err, 'The change could not be saved')),
   });
 
   const createActionMutation = useMutation({
@@ -256,6 +264,14 @@ export default function FindingDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['rcsa-finding', findingId] });
       setShowActionModal(false);
     },
+    onError: (err: unknown) => alert(apiErrorText(err, 'The change could not be saved')),
+  });
+
+  // Issue Management takes it from here (its SLA, CAPA and closure), linked to the finding's risk and control.
+  const raiseIssueMutation = useMutation({
+    mutationFn: () => rcsaApi.raiseFindingIssue(findingId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['rcsa-finding', findingId] }),
+    onError: (err: unknown) => alert(apiErrorText(err, 'The issue could not be raised')),
   });
 
   const handleStatusChange = (newStatus: string) => {
@@ -309,7 +325,7 @@ export default function FindingDetailPage() {
           <div className="flex items-center gap-4 mt-1 text-sm text-slate-600">
             <span className="flex items-center gap-1.5">
               <Building2 className="h-4 w-4" />
-              {finding.business_unit}
+              {finding.business_unit_name || '—'}
             </span>
             <span className="flex items-center gap-1.5">
               <Calendar className="h-4 w-4" />
@@ -339,8 +355,8 @@ export default function FindingDetailPage() {
             return (
               <div key={status} className="flex items-center">
                 <button
-                  onClick={() => isNext && handleStatusChange(status)}
-                  disabled={!isNext || updateStatusMutation.isPending}
+                  onClick={() => canEdit && isNext && handleStatusChange(status)}
+                  disabled={!canEdit || !isNext || updateStatusMutation.isPending}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
                     isActive ? `${style.bg} ${style.text} ring-2 ring-offset-2 ring-offset-white ${style.text.replace('text-', 'ring-')}` :
                     isPast ? 'bg-slate-100 text-slate-700' :
@@ -382,6 +398,7 @@ export default function FindingDetailPage() {
           <div className="card p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium text-slate-900">Mitigation Actions</h3>
+              {canCreate && (
               <button
                 onClick={() => setShowActionModal(true)}
                 className="btn-secondary text-sm flex items-center gap-1.5"
@@ -389,6 +406,7 @@ export default function FindingDetailPage() {
                 <Plus className="h-4 w-4" />
                 Add Action
               </button>
+              )}
             </div>
             {finding.mitigation_actions && finding.mitigation_actions.length > 0 ? (
               <div className="space-y-3">
@@ -420,12 +438,12 @@ export default function FindingDetailPage() {
             <div className="space-y-3">
               <div>
                 <p className="text-sm text-slate-600">Assessment</p>
-                <p className="text-slate-900">{finding.assessment_name}</p>
+                <p className="text-slate-900">{finding.assessment_name || '—'}</p>
               </div>
               <div>
                 <p className="text-sm text-slate-600">Due Date</p>
-                <p className={`${finding.due_date && new Date(finding.due_date) < new Date() && finding.status !== 'closed' ? 'text-rose-600' : 'text-slate-900'}`}>
-                  {formatDate(finding.due_date)}
+                <p className={`${finding.remediation_due_date && new Date(finding.remediation_due_date) < new Date() && finding.status !== 'closed' ? 'text-rose-600' : 'text-slate-900'}`}>
+                  {formatDate(finding.remediation_due_date || undefined)}
                 </p>
               </div>
               <div>
@@ -444,7 +462,7 @@ export default function FindingDetailPage() {
                     <Target className="h-4 w-4" />
                     Linked Risk
                   </p>
-                  {!finding.linked_risk && (
+                  {canEdit && !finding.linked_risk && (
                     <button
                       onClick={() => setLinkModalType('risk')}
                       className="text-xs text-primary-700 hover:text-primary-600"
@@ -471,7 +489,7 @@ export default function FindingDetailPage() {
                     <Shield className="h-4 w-4" />
                     Linked Control
                   </p>
-                  {!finding.linked_control && (
+                  {canEdit && !finding.linked_control && (
                     <button
                       onClick={() => setLinkModalType('control')}
                       className="text-xs text-primary-700 hover:text-primary-600"
@@ -490,6 +508,39 @@ export default function FindingDetailPage() {
                   </Link>
                 ) : (
                   <p className="text-slate-500 text-sm">No control linked</p>
+                )}
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm text-slate-600 flex items-center gap-1.5">
+                    <AlertTriangle className="h-4 w-4" />
+                    Issue
+                  </p>
+                  {canCreate && (!finding.linked_issue || ['closed', 'cancelled'].includes(finding.linked_issue.workflow_state)) && (
+                    <button
+                      onClick={() => raiseIssueMutation.mutate()}
+                      disabled={raiseIssueMutation.isPending}
+                      className="text-xs text-primary-700 hover:text-primary-600 disabled:opacity-50"
+                    >
+                      {raiseIssueMutation.isPending ? 'Raising…' : 'Raise as issue'}
+                    </button>
+                  )}
+                </div>
+                {finding.linked_issue ? (
+                  <Link
+                    href={`/issues/${finding.linked_issue.id}`}
+                    className="p-2 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-between gap-2 hover:bg-slate-100"
+                  >
+                    <span className="text-slate-900 truncate">
+                      {finding.linked_issue.code || `Issue #${finding.linked_issue.id}`}
+                    </span>
+                    <span className="flex items-center gap-2 text-xs text-slate-600">
+                      {(finding.linked_issue.workflow_state || 'new').replace(/_/g, ' ')}
+                      <ExternalLink className="h-4 w-4" />
+                    </span>
+                  </Link>
+                ) : (
+                  <p className="text-slate-500 text-sm">Not raised as an issue</p>
                 )}
               </div>
             </div>

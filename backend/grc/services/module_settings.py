@@ -276,8 +276,12 @@ MODULES: Dict[str, Dict[str, Any]] = {
                 ("operational", "Operational", ("Process", "Human Resources", "Supply Chain", "Business Continuity", "Quality", "Other")),
                 ("financial", "Financial", ("Credit", "Market Risk", "Liquidity", "Accounting", "Budget", "Other")),
                 ("compliance", "Compliance", ("Regulatory", "Legal", "Contractual", "Ethical", "Data Privacy", "Other")),
-                ("technology", "Technology", ("Cybersecurity", "Infrastructure", "Data", "System Availability", "Software", "Other")),
-                ("third_party", "Third Party", ("Vendor", "Outsourcing", "Partnership", "Contractor", "Other")),
+                ("technology", "IT / Cyber", ("Cybersecurity", "Infrastructure", "Data", "System Availability", "Software", "Other")),
+                ("third_party", "Third-party", ("Vendor", "Outsourcing", "Partnership", "Contractor", "Other")),
+                # risk types (approved decision 5): categories on the one register, not separate modules
+                ("credit", "Credit", ("Counterparty", "Concentration", "Collateral", "Settlement", "Other")),
+                ("market", "Market", ("Interest Rate", "Foreign Exchange", "Equity", "Commodity", "Other")),
+                ("liquidity", "Liquidity", ("Funding", "Market Liquidity", "Intraday", "Other")),
                 ("project_change", "Project/Change", ("Project Delivery", "Change Management", "Integration", "Scope", "Other")),
                 ("internal", "Internal", ("Fraud", "Governance", "Culture", "Process Integrity", "Other")))},
             "register_type": {"label": "Register", "free_text": True, "options": _options(

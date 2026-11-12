@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useParams, useSearchParams } from 'next/navigation';
-import { rcsaApi } from '@/lib/api';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { ermApi, rcsaApi } from '@/lib/api';
+import { newVersionNotice } from '../../questionLinks';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   FileText,
   ArrowLeft,
@@ -43,6 +45,15 @@ interface Question {
   risk_category?: string;
   control_objective?: string;
   ai_suggestion_enabled?: boolean;
+  risk_id?: number | null;            // the register risk the question assesses
+  internal_control_id?: number | null; // the internal control it rates
+  risk_title?: string | null;
+  control_name?: string | null;
+}
+
+interface LinkOption {
+  id: number;
+  label: string;
 }
 
 interface Template {
@@ -57,6 +68,8 @@ interface Template {
   created_at: string;
   updated_at: string;
   is_active: boolean;
+  version?: string;
+  previous_version_id?: number | null;
 }
 
 const QUESTION_TYPES = [
@@ -78,9 +91,12 @@ const TYPE_COLORS: Record<string, { bg: string; text: string }> = {
 export default function TemplateDetailPage() {
   const params = useParams();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const templateId = Number(params.id);
   const isEditMode = searchParams.get('edit') === 'true';
   const queryClient = useQueryClient();
+  const { hasAnyPermission } = usePermissions();
+  const canEdit = hasAnyPermission(['erm:rcsa:edit', 'erm:risks:edit']);
 
   const [questions, setQuestions] = useState<Question[]>([]);
   const [isQuestionModalOpen, setIsQuestionModalOpen] = useState(false);
@@ -89,6 +105,19 @@ export default function TemplateDetailPage() {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [expandedQuestionId, setExpandedQuestionId] = useState<number | null>(null);
+  const [versionNotice, setVersionNotice] = useState<string | null>(null);
+
+  // What a question can link: the register's risks and the internal controls (the lists the server checks against).
+  const { data: riskOptions = [] } = useQuery({
+    queryKey: ['rcsa-template-risk-options'],
+    queryFn: async () => ((await ermApi.risks.getAll()).data as Array<{ id: number; title: string }>)
+      .map((r): LinkOption => ({ id: r.id, label: r.title })),
+  });
+  const { data: controlOptions = [] } = useQuery({
+    queryKey: ['rcsa-template-control-options'],
+    queryFn: async () => ((await ermApi.internalControls.getAll()).data as Array<{ id: number; control_id?: string; name: string }>)
+      .map((c): LinkOption => ({ id: c.id, label: c.control_id ? `${c.control_id} ${c.name}` : c.name })),
+  });
 
   const { data: template, isLoading, error } = useQuery({
     queryKey: ['rcsa-template', templateId],
@@ -112,6 +141,10 @@ export default function TemplateDetailPage() {
         risk_category: q.risk_category,
         control_objective: q.control_objective,
         ai_suggestion_enabled: q.ai_suggestion_enabled,
+        risk_id: q.risk_id,
+        internal_control_id: q.internal_control_id,
+        risk_title: q.risk_title,
+        control_name: q.control_name,
       }));
       return {
         ...data,
@@ -132,12 +165,17 @@ export default function TemplateDetailPage() {
 
   const saveMutation = useMutation({
     mutationFn: (data: { questions: Question[] }) => rcsaApi.updateTemplate(templateId, data as Record<string, unknown>),
-    onSuccess: () => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['rcsa-template', templateId] });
       queryClient.invalidateQueries({ queryKey: ['rcsa-templates'] });
       setHasChanges(false);
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
+      const notice = newVersionNotice(templateId, res.data);
+      if (notice) {
+        setVersionNotice(notice);
+        router.replace(`/erm/rcsa/templates/${res.data.id}?edit=true`);
+      }
     },
     onError: (err: unknown) => {
       setSaveStatus('error');
@@ -182,6 +220,10 @@ export default function TemplateDetailPage() {
       category: questionData.category,
       weight: questionData.weight || 1,
       guidance: questionData.guidance,
+      risk_id: questionData.risk_id ?? null,
+      internal_control_id: questionData.internal_control_id ?? null,
+      risk_title: questionData.risk_title ?? null,
+      control_name: questionData.control_name ?? null,
     };
     setQuestions([...questions, newQuestion]);
     setHasChanges(true);
@@ -214,7 +256,7 @@ export default function TemplateDetailPage() {
     saveMutation.mutate({ questions });
   };
 
-  const isEditable = template?.source === 'custom' && isEditMode;
+  const isEditable = canEdit && template?.source === 'custom' && isEditMode;
 
   if (isLoading) {
     return (
@@ -258,8 +300,15 @@ export default function TemplateDetailPage() {
               <span className={`text-xs px-2 py-0.5 rounded-full ${template.source === 'system' ? 'bg-primary-50 text-primary-700' : 'bg-slate-100 text-slate-700'}`}>
                 {template.source}
               </span>
+              {template.version && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">Version {template.version}</span>
+              )}
+              {!template.is_active && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">Replaced by a newer version</span>
+              )}
             </div>
             <p className="text-slate-600 mt-1">{template.description}</p>
+            {versionNotice && <p className="text-sm text-primary-700 mt-1">{versionNotice}</p>}
           </div>
           <div className="flex items-center gap-3">
             {hasChanges && (
@@ -290,7 +339,7 @@ export default function TemplateDetailPage() {
                 {saveMutation.isPending ? 'Saving...' : 'Save Changes'}
               </button>
             )}
-            {template.source === 'custom' && !isEditMode && (
+            {canEdit && template.source === 'custom' && !isEditMode && (
               <Link
                 href={`/erm/rcsa/templates/${templateId}?edit=true`}
                 className="btn-secondary flex items-center gap-2"
@@ -375,6 +424,12 @@ export default function TemplateDetailPage() {
                       )}
                       {question.is_required && (
                         <span className="text-xs text-rose-600">Required</span>
+                      )}
+                      {question.risk_title && (
+                        <span className="text-xs px-2 py-0.5 rounded bg-rose-50 text-rose-700">Risk: {question.risk_title}</span>
+                      )}
+                      {question.control_name && (
+                        <span className="text-xs px-2 py-0.5 rounded bg-emerald-50 text-emerald-700">Control: {question.control_name}</span>
                       )}
                       {question.question_type === 'multiple_choice' && question.options && (
                         <span className="text-xs text-slate-500">
@@ -531,6 +586,8 @@ export default function TemplateDetailPage() {
       <QuestionModal
         isOpen={isQuestionModalOpen}
         question={editingQuestion}
+        riskOptions={riskOptions}
+        controlOptions={controlOptions}
         onClose={() => {
           setIsQuestionModalOpen(false);
           setEditingQuestion(null);
@@ -550,11 +607,15 @@ export default function TemplateDetailPage() {
 function QuestionModal({
   isOpen,
   question,
+  riskOptions,
+  controlOptions,
   onClose,
   onSave,
 }: {
   isOpen: boolean;
   question: Question | null;
+  riskOptions: LinkOption[];
+  controlOptions: LinkOption[];
   onClose: () => void;
   onSave: (data: Partial<Question>) => void;
 }) {
@@ -585,7 +646,13 @@ function QuestionModal({
         onSubmit={(e) => {
           e.preventDefault();
           const formData = new FormData(e.currentTarget);
+          const riskId = Number(formData.get('risk_id')) || null;
+          const controlId = Number(formData.get('internal_control_id')) || null;
           onSave({
+            risk_id: riskId,
+            internal_control_id: controlId,
+            risk_title: riskOptions.find(o => o.id === riskId)?.label ?? null,
+            control_name: controlOptions.find(o => o.id === controlId)?.label ?? null,
             question_text: formData.get('question_text') as string,
             question_type: questionType as Question['question_type'],
             category: formData.get('category') as string,
@@ -679,6 +746,23 @@ function QuestionModal({
                 className="input w-full"
                 placeholder="e.g., Risk Assessment, Control Testing"
               />
+            </div>
+
+            <div>
+              <label htmlFor="risk_id" className="block text-sm font-medium text-slate-700 mb-1">Register risk (optional)</label>
+              <select id="risk_id" name="risk_id" defaultValue={question?.risk_id ?? ''} className="input w-full">
+                <option value="">Not linked</option>
+                {riskOptions.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+              </select>
+              <p className="text-xs text-slate-500 mt-1">An approved control rating proposes this risk&apos;s residual for the risk team to approve.</p>
+            </div>
+
+            <div>
+              <label htmlFor="internal_control_id" className="block text-sm font-medium text-slate-700 mb-1">Control (optional)</label>
+              <select id="internal_control_id" name="internal_control_id" defaultValue={question?.internal_control_id ?? ''} className="input w-full">
+                <option value="">Not linked</option>
+                {controlOptions.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+              </select>
             </div>
 
             <div>

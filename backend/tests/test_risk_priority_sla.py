@@ -15,7 +15,7 @@ from sqlalchemy.pool import StaticPool
 
 from grc.models import Base, GRCUser, Risk, Tenant, get_db
 from grc.models._11_enterprise_risk_management import risk_priority_for_score
-from grc.routers.auth_router import require_auth
+from grc.routers.auth_router import create_access_token, require_auth
 from grc.services import module_settings
 
 # the module itself: the package re-exports its APIRouter under a similar name
@@ -27,7 +27,7 @@ def db():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     s = sessionmaker(bind=engine)()
-    s.add(Tenant(id=1, name="Bank", slug="bank"))
+    s.add(Tenant(id=1, name="Bank", slug="bank", primary_contact_email="officer@bank.test"))   # an administrator: risk writes check a permission
     s.add(GRCUser(id=7, username="officer", display_name="Officer", email="officer@bank.test", is_active=True))
     s.commit()
     yield s
@@ -40,7 +40,7 @@ def http(db):
     app.include_router(risks.router)
     app.dependency_overrides[get_db] = lambda: db
     app.dependency_overrides[require_auth] = lambda: db.get(GRCUser, 7)
-    return TestClient(app)
+    return TestClient(app, headers={"Authorization": "Bearer " + create_access_token({"sub": "officer"})})
 
 
 def listed(http):

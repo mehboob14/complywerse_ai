@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient, { assetsApi, controlsApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   ArrowLeft, Edit2, Loader2, Sparkles, AlertCircle, Plus, Trash2,
   Save, X, CheckCircle, Layers, Shield, ListTodo, Calendar, User,
@@ -46,6 +47,8 @@ interface NcaRiskEntry {
   lifecycle_status: string;
   ai_recommendation: string | null;
   ai_recommendation_generated_at: string | null;
+  /** The register Risk this entry is copied into: what the register's edit form opens. */
+  bridged_risk_id: number | null;
 }
 
 interface MitigationAction {
@@ -352,6 +355,7 @@ export default function NcaRiskDetailPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const id = Number(params?.id);
+  const canEdit = usePermissions().hasAnyPermission(['erm:risks:edit', 'risks:risk_register:edit']);
 
   const { data: entry, isLoading, error } = useQuery<NcaRiskEntry>({
     queryKey: ['nca-risk-entry', id],
@@ -481,12 +485,14 @@ export default function NcaRiskDetailPage() {
               {aiMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
               {entry.ai_recommendation ? 'Regenerate AI' : 'Generate AI'}
             </button>
-            <button
-              onClick={() => router.push('/erm/risks/list?register_type=NCA%20Template&edit=' + entry.id)}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-[#0a0a0a] bg-primary-600 rounded-lg hover:bg-primary-700"
+            {canEdit && <button
+              onClick={() => router.push(`/erm/risks/list?edit=${entry.bridged_risk_id}`)}
+              disabled={!entry.bridged_risk_id}
+              title={entry.bridged_risk_id ? undefined : 'Not available yet'}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-[#0a0a0a] bg-primary-600 rounded-lg hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Edit2 className="h-4 w-4" /> Edit Fields
-            </button>
+            </button>}
           </div>
         </div>
 

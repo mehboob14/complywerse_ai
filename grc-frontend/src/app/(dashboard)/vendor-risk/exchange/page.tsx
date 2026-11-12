@@ -75,7 +75,7 @@ export default function ExchangePage() {
       if (!publishVendor?.active_assessment_id) throw new Error('This vendor has no active assessment to publish.');
       return tpraApi.publishShared(publishVendor.active_assessment_id);
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['tpra-shared'] }); setPublishVendorId(''); toast({ type: 'success', title: 'Published to exchange' }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['tpra-shared'] }); setPublishVendorId(''); toast({ type: 'success', title: 'Published to shared assessments' }); },
     onError: (e) => toast({ type: 'error', title: 'Publish failed', message: errMsg(e) }),
   });
 
@@ -124,7 +124,7 @@ export default function ExchangePage() {
     <div className="space-y-6">
       <div>
         <h1 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
-          <Share2 className="h-5 w-5 text-primary-600" strokeWidth={1.75} /> Vendor Exchange
+          <Share2 className="h-5 w-5 text-primary-600" strokeWidth={1.75} /> Shared assessments
         </h1>
         <p className="text-sm text-slate-500">Reuse a completed, validated assessment across engagements — publish once, share by token, or export a portable package. Imported answers are re-scored with your own engine.</p>
       </div>

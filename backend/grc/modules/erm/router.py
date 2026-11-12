@@ -27,6 +27,8 @@ from .routers import (
     risk_library_router,
     risk_framework_requirements_router,
 )
+from .routers.assessments_hub import router as assessments_hub_router
+from .routers.scenarios import router as scenarios_router
 
 router = APIRouter(
     prefix="/erm",
@@ -54,11 +56,13 @@ router.include_router(rcsa_router, tags=["RCSA - Risk and Control Self-Assessmen
 router.include_router(rcsa_custom_router, tags=["RCSA - Custom Templates"])
 router.include_router(risk_assessments_router, tags=["ERM - Risk Assessments"])
 router.include_router(framework_risk_assessments_router, tags=["ERM - Framework Risk Assessments"])
+router.include_router(assessments_hub_router, tags=["ERM - Assessments"])
 router.include_router(advanced_analytics_router, tags=["ERM - Advanced Analytics"])
 router.include_router(sections_dashboard_router, tags=["ERM Sections Dashboard"])
 router.include_router(onboarding_router, tags=["ERM Onboarding"])
 router.include_router(kris_workflow_router, tags=["ERM - KRI Workflow"])
 router.include_router(quantification_router, tags=["ERM - Risk Quantification"])
+router.include_router(scenarios_router, tags=["ERM - Scenario Analysis"])
 router.include_router(ctem_scopes_router, tags=["CTEM - Scopes & Cycles"])
 
 
@@ -80,6 +84,7 @@ def erm_module_info():
             "/internal-controls",
             "/rcsa",
             "/risk-assessments",
-            "/framework-risk-assessments"
+            "/framework-risk-assessments",
+            "/assessments"
         ]
     }

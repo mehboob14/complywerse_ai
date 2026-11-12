@@ -11,11 +11,12 @@ from sqlalchemy import func, null
 from ....models import (
     Vendor, VendorAssessment,
     VendorQuestionnaireResponse, VendorQuestionnaireEvidence, GRCUser, TenantUser, get_db,
-    TPRAFinding, TPRAStageInstance, TPRAEngagement,
+    TPRAStageInstance, TPRAEngagement,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 from ..tpra import assessment_view, portal, rbac, versions
 from ..tpra import service as tpra_service
+from ..tpra.outsourcing import scope_of as outsourcing_scope
 from ..tpra.engine_tiering import score_to_tier
 from .questionnaires import _response_or_404, serialize_questionnaire_response
 from ..tpra import questionnaire_evidence as qevidence
@@ -72,18 +73,6 @@ def _split(items) -> tuple:
     for item in items or []:
         (ai if isinstance(item, dict) else analyst).append(item)
     return analyst, ai
-
-
-OPEN_FINDING = ("open", "in_remediation")
-
-
-def _open_findings(db: Session, assessment_id: int) -> int:
-    """Governed findings still open on this assessment."""
-    return db.query(TPRAFinding).filter(
-        TPRAFinding.assessment_id == assessment_id,
-        TPRAFinding.deleted_at.is_(None),
-        TPRAFinding.status.in_(OPEN_FINDING),
-    ).count()
 
 
 def serialize_assessment(a: VendorAssessment) -> dict:
@@ -483,6 +472,9 @@ def approve_assessment(
     problem = tpra_service.approval_problem(db, current_user, assessment)
     if problem:
         raise HTTPException(*problem)
+    if getattr(outsourcing_scope(db, assessment), "critical_important", None) is True:
+        raise HTTPException(status_code=409, detail="A critical or important outsourcing is approved by a committee: "
+                                                    "run it through the vendor's lifecycle to its Approval stage.")
 
     # The approver is not the reviewer: who approved goes on the audit trail below.
     assessment.status = "approved"
@@ -516,46 +508,10 @@ def approve_assessment(
                              actor_id=current_user.id, to_value="approve",
                              reason="Approved on the Assessments page")
 
-    # ── Linkage: surface the vendor's residual risk in the enterprise Risk
-    # Register so it rolls up to the ERM dashboard. Fully guarded — a linkage
-    # failure must never block the approval itself.
-    try:
-        if vendor is not None:
-            from ....models import Risk
-            desc = (
-                f"Residual third-party risk from the {assessment.assessment_type} assessment of "
-                f"vendor '{vendor.name}'. Rating: {assessment.risk_rating or 'n/a'}. "
-                f"Open findings: {_open_findings(db, assessment.id)}."
-            )
-            existing = None
-            if getattr(assessment, "linked_risk_id", None):
-                existing = db.query(Risk).filter(Risk.id == assessment.linked_risk_id).first()
-            if existing:
-                existing.description = desc
-                existing.inherent_score = assessment.inherent_score
-                existing.residual_score = assessment.residual_score
-                existing.updated_at = datetime.utcnow()
-            else:
-                risk = Risk(
-                    tenant_id=assessment.tenant_id,
-                    business_unit_id=vendor.business_unit_id,
-                    title=f"Third-party risk: {vendor.name}",
-                    description=desc,
-                    category="third_party",
-                    risk_category="third_party",
-                    register_type="Third-Party Risk",
-                    owner_id=vendor.owner_id,
-                    inherent_score=assessment.inherent_score,
-                    residual_score=assessment.residual_score,
-                    status="open",
-                    source_type="assessment",
-                    source_reference=f"vendor:{vendor.id}/vendor_assessment:{assessment.id}",
-                )
-                db.add(risk)
-                db.flush()
-                assessment.linked_risk_id = risk.id
-    except Exception:  # noqa: BLE001 — linkage is best-effort
-        logger.warning("vendor assessment → Risk Register linkage skipped", exc_info=True)
+    # Linkage: the vendor's residual risk in the enterprise Risk Register, on the register's 1–25 scale, through the
+    # one sync the lifecycle uses (best-effort: it never blocks the approval).
+    if vendor is not None:
+        tpra_service.sync_risk_register(db, vendor, assessment)
 
     db.commit()
     db.refresh(assessment)

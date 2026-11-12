@@ -395,6 +395,8 @@ def complete_offboarding(
         raise HTTPException(status_code=409, detail={"message": "Some offboarding steps are not done.",
                                                      "open": open_steps})
     archive_vendor(db, vendor, current_user.id, "Offboarding complete")
+    tpra_service.close_register_risks(db, vendor, current_user.id,
+                                      f"Closed by Third-Party Risk: offboarding of {vendor.name} was completed.")
     db.commit()
     return serialize_vendor(vendor)
 

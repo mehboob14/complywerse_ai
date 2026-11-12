@@ -11,7 +11,7 @@ import { clsx } from 'clsx';
 const AI_HREF = '/erm/risk-assessments/ai-risk-assessment';
 const tabs = [
   { name: 'Risk Assessments', href: '/erm/risk-assessments', icon: ClipboardList },
-  { name: 'AI Risk Assessment', href: AI_HREF, icon: Bot },
+  { name: 'AI Systems Risk Register', href: AI_HREF, icon: Bot },
 ];
 
 export default function RiskAssessmentsLayout({ children }: { children: React.ReactNode }) {

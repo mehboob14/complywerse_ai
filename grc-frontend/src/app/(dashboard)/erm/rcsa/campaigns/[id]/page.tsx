@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import { rcsaApi } from '@/lib/api';
 import apiClient from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   ClipboardList,
   ArrowLeft,
@@ -33,7 +34,7 @@ interface Assessment {
   assessor_id?: number;
   assessor_name?: string;
   assessor_email?: string;
-  status: 'not_started' | 'in_progress' | 'submitted' | 'approved' | 'rejected';
+  status: 'not_started' | 'in_progress' | 'submitted' | 'under_review' | 'requires_changes' | 'approved' | 'rejected';
   progress: number;
   risk_score?: number;
   control_score?: number;
@@ -49,6 +50,7 @@ interface Campaign {
   description?: string;
   template_id: number;
   template_name: string;
+  template_version?: string | null; // the version it launched with: a later edit makes a new one, this campaign keeps it
   status: 'draft' | 'active' | 'closed';
   period: string;
   start_date: string;
@@ -93,6 +95,8 @@ const ASSESSMENT_STATUS_COLORS: Record<string, { bg: string; text: string; icon:
   not_started: { bg: 'bg-slate-100', text: 'text-slate-700', icon: Clock },
   in_progress: { bg: 'bg-amber-50', text: 'text-amber-700', icon: Clock },
   submitted: { bg: 'bg-primary-50', text: 'text-primary-700', icon: FileText },
+  under_review: { bg: 'bg-primary-50', text: 'text-primary-700', icon: FileText },
+  requires_changes: { bg: 'bg-amber-50', text: 'text-amber-700', icon: Clock },
   approved: { bg: 'bg-emerald-50', text: 'text-emerald-700', icon: CheckCircle },
   rejected: { bg: 'bg-rose-50', text: 'text-rose-700', icon: XCircle },
 };
@@ -101,6 +105,8 @@ export default function CampaignDetailPage() {
   const params = useParams();
   const campaignId = Number(params.id);
   const queryClient = useQueryClient();
+  const { hasAnyPermission } = usePermissions();
+  const canEdit = hasAnyPermission(['erm:rcsa:edit', 'erm:risks:edit']);
 
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [selectedAssessments, setSelectedAssessments] = useState<number[]>([]);
@@ -155,20 +161,23 @@ export default function CampaignDetailPage() {
   });
 
   const sendRemindersMutation = useMutation({
-    mutationFn: () => rcsaApi.sendReminders(campaignId),
-    onSuccess: () => {
-      alert('Reminders sent successfully');
+    mutationFn: (assessmentIds?: number[]) => rcsaApi.sendReminders(campaignId, assessmentIds),
+    onSuccess: (response) => {
+      alert(response.data.message);
+    },
+    onError: () => {
+      alert('Reminders could not be sent');
     },
   });
 
   const exportMutation = useMutation({
     mutationFn: async () => {
       const response = await rcsaApi.exportResults(campaignId);
-      const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const blob = new Blob([response.data], { type: 'text/csv' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${campaign?.name.replace(/\s+/g, '_')}_results.xlsx`;
+      a.download = `${campaign?.name.replace(/\s+/g, '_')}_results.csv`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -236,7 +245,7 @@ export default function CampaignDetailPage() {
   }
 
   const statusStyle = STATUS_COLORS[campaign.status] || STATUS_COLORS.draft;
-  const pendingAssessments = (campaign.assessments || []).filter(a => a.status === 'not_started' || a.status === 'in_progress');
+  const pendingAssessments = (campaign.assessments || []).filter(a => a.status === 'not_started' || a.status === 'in_progress' || a.status === 'requires_changes');
 
   return (
     <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
@@ -255,10 +264,10 @@ export default function CampaignDetailPage() {
             <p className="text-slate-600 mt-1">{campaign.description || `Using ${campaign.template_name} template`}</p>
           </div>
           <div className="flex items-center gap-3">
-            {campaign.status === 'draft' && (
+            {canEdit && campaign.status === 'draft' && (
               <button
                 onClick={() => {
-                  if (confirm('Activate this campaign? This will notify all assigned assessors.')) {
+                  if (confirm('Activate this campaign?')) {
                     activateMutation.mutate();
                   }
                 }}
@@ -269,10 +278,10 @@ export default function CampaignDetailPage() {
                 Activate Campaign
               </button>
             )}
-            {campaign.status === 'active' && (
+            {canEdit && campaign.status === 'active' && (
               <>
                 <button
-                  onClick={() => sendRemindersMutation.mutate()}
+                  onClick={() => sendRemindersMutation.mutate(undefined)}
                   className="btn-secondary flex items-center gap-2"
                   disabled={sendRemindersMutation.isPending}
                 >
@@ -307,7 +316,10 @@ export default function CampaignDetailPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mt-6">
           <div className="card p-4">
             <p className="text-slate-600 text-sm">Template</p>
-            <p className="text-slate-900 font-medium">{campaign.template_name}</p>
+            <p className="text-slate-900 font-medium">
+              {campaign.template_name}
+              {campaign.template_version && <span className="ml-1 text-xs text-slate-500">v{campaign.template_version}</span>}
+            </p>
           </div>
           <div className="card p-4">
             <p className="text-slate-600 text-sm">Period</p>
@@ -349,15 +361,17 @@ export default function CampaignDetailPage() {
             Assessment Progress ({(campaign.assessments || []).length} Business Units)
           </h3>
           <div className="flex items-center gap-3">
-            {selectedAssessments.length > 0 && (
+            {canEdit && selectedAssessments.length > 0 && (
               <button
-                onClick={() => sendRemindersMutation.mutate()}
+                onClick={() => sendRemindersMutation.mutate(selectedAssessments)}
+                disabled={sendRemindersMutation.isPending}
                 className="btn-secondary flex items-center gap-2 text-sm"
               >
                 <Mail className="h-4 w-4" />
                 Send Reminder ({selectedAssessments.length})
               </button>
             )}
+            {canEdit && (
             <button
               onClick={() => setIsAssignModalOpen(true)}
               className="btn-primary flex items-center gap-2"
@@ -365,6 +379,7 @@ export default function CampaignDetailPage() {
               <Plus className="h-4 w-4" />
               Assign Business Unit
             </button>
+            )}
           </div>
         </div>
 

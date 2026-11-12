@@ -6,7 +6,7 @@ from sqlalchemy import func
 
 from ....models import (
     UploadedFramework, ParsedFrameworkControl, GRCUser, get_db,
-    EvidenceControlMapping, EvidenceAIAssessment, RiskFrameworkRequirementLink,
+    EvidenceControlMapping, EvidenceAIAssessment, RiskControl, RiskFrameworkRequirementLink,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 
@@ -215,7 +215,12 @@ def delete_uploaded_framework(
             EvidenceControlMapping.uploaded_framework_id == framework_id
         ).delete(synchronize_session=False)
         
-        # Risks linked to this framework's controls (Risk Library / register Controls tab) lose those links
+        # Risks linked to this framework's controls (Risk Library / register Controls tab) lose those links: the one
+        # risk–control link, and the old rows that still point at the controls
+        if parsed_control_ids:
+            db.query(RiskControl).filter(
+                RiskControl.control_source == "framework", RiskControl.control_id.in_(parsed_control_ids)
+            ).delete(synchronize_session=False)
         db.query(RiskFrameworkRequirementLink).filter(
             RiskFrameworkRequirementLink.uploaded_framework_id == framework_id
         ).delete(synchronize_session=False)

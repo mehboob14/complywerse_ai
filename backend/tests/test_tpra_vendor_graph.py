@@ -12,12 +12,13 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from grc.models import (
-    Base, GRCUser, Tenant, TPRAAuditLog, TPRAFourthParty, TPRAPlatformAlias, TPRASurfaceScan, Vendor, get_db,
+    Base, GRCUser, Tenant, TPRAAuditLog, TPRAEngagement, TPRAFourthParty, TPRAPlatformAlias, TPRASurfaceScan, Vendor, get_db,
 )
 from grc.modules.vendor_risk.tpra import graph, rbac
 from grc.routers.auth_router import require_auth
 
-_TABLES = [Tenant, GRCUser, Vendor, TPRAAuditLog, TPRAFourthParty, TPRAPlatformAlias, TPRASurfaceScan]
+# TPRAEngagement: an engagement's materiality decides whether a new fourth party waits for approval (wave 4-M)
+_TABLES = [Tenant, GRCUser, Vendor, TPRAAuditLog, TPRAFourthParty, TPRAPlatformAlias, TPRASurfaceScan, TPRAEngagement]
 
 
 @pytest.fixture()
@@ -123,7 +124,7 @@ from grc.modules.vendor_risk.tpra import monitoring_connectors as feeds, service
 _WIDE = _TABLES + [ITAsset, SoftwareIdentifier, BcmPlan, BcmBiaRecord, BcmBiaDependency, ControlRecordLink,
                    SCFControlState, NormalizedControl, TPRAVendorLink, TPRAVendorProduct, TPRAMonitoringSignal,
                    TPRAMonitoringCursor, TPRASignalRejection, TPRATieringConfig, Evidence, TPRAEvidenceLink,
-                   VendorAssessment, IntegrationConnection, TPRAEngagement, TPRAAlertRule]
+                   VendorAssessment, IntegrationConnection, TPRAAlertRule]
 
 
 @pytest.fixture()

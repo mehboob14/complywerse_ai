@@ -16,7 +16,9 @@ class RCSATemplate(Base):
     category = Column(String(100), nullable=False)  # operational_risk, it_cyber, compliance, credit, fraud, business_continuity, third_party
     source = Column(String(50), default="custom")  # sama, sbp, basel, custom
     version = Column(String(50), default="1.0")
-    
+    # The version this one replaced: a template a launched campaign uses is never edited in place, an edit makes the next.
+    previous_version_id = Column(Integer, ForeignKey("grc_rcsa_templates.id"), nullable=True, index=True)
+
     is_system_template = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
     
@@ -57,12 +59,18 @@ class RCSAQuestion(Base):
     risk_category = Column(String(100), nullable=True)  # Basel category mapping
     control_objective = Column(String(255), nullable=True)
     guidance_text = Column(Text, nullable=True)  # Help text for assessors
-    
+
     ai_suggestion_enabled = Column(Boolean, default=True)  # Whether AI can suggest answers
-    
+
+    # The register risk and internal control the question assesses: an approved control rating proposes the risk's residual.
+    risk_id = Column(Integer, ForeignKey("grc_risks.id"), nullable=True, index=True)
+    internal_control_id = Column(Integer, ForeignKey("grc_internal_controls.id"), nullable=True, index=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
     template = relationship("RCSATemplate", back_populates="questions")
+    risk = relationship("Risk")
+    internal_control = relationship("InternalControl")
     responses = relationship("RCSAResponse", back_populates="question", cascade="all, delete-orphan")
     
     __table_args__ = (
@@ -128,8 +136,9 @@ class RCSAAssessment(Base):
     assigned_at = Column(DateTime, nullable=True)
     started_at = Column(DateTime, nullable=True)
     submitted_at = Column(DateTime, nullable=True)
+    submitted_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)  # the maker: cannot approve it (maker-checker)
     completed_at = Column(DateTime, nullable=True)
-    
+
     overall_risk_score = Column(Float, nullable=True)  # Calculated aggregate risk score
     overall_control_score = Column(Float, nullable=True)  # Calculated aggregate control effectiveness
     ai_quality_score = Column(Integer, nullable=True)  # AI assessment of response quality (0-100)

@@ -30,6 +30,9 @@ router = APIRouter(
 )
 
 
+# On for a tenant that never stored its flags (a red KRI raises an issue unless the tenant turned it off).
+DEFAULT_ON = frozenset({"kri_red_breach"})
+
 _FIELDS = (
     "refresh_document_review",
     "kri_red_breach",
@@ -54,7 +57,7 @@ def _serialize(row: IssueAutomationFlags) -> Dict[str, Any]:
 def _get_or_create(tenant_id: int, db: Session) -> IssueAutomationFlags:
     row = db.query(IssueAutomationFlags).filter(IssueAutomationFlags.tenant_id == tenant_id).first()
     if row is None:
-        row = IssueAutomationFlags(tenant_id=tenant_id)
+        row = IssueAutomationFlags(tenant_id=tenant_id, **{f: True for f in DEFAULT_ON})
         db.add(row)
         db.flush()
     return row
@@ -93,10 +96,10 @@ def update_flags(
 # ── Internal helper — used by hook sites to gate auto-create calls ──────
 def is_enabled(tenant_id: int, flag: str, db: Session) -> bool:
     """Returns True iff the tenant has opted in to the given automation
-    trigger (or has all_enabled=True). Safe default = False."""
+    trigger (or has all_enabled=True). With no stored flags, only DEFAULT_ON is on."""
     row = db.query(IssueAutomationFlags).filter(IssueAutomationFlags.tenant_id == tenant_id).first()
     if row is None:
-        return False
+        return flag in DEFAULT_ON
     if row.all_enabled:
         return True
     return bool(getattr(row, flag, False))

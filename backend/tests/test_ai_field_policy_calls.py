@@ -274,6 +274,7 @@ def erm(wire, monkeypatch):
     db = sessionmaker(bind=engine)()
     db.add(m.Tenant(id=1, name="Bank", slug="bank"))
     db.add(m.GRCUser(id=7, username="qmarlowe", display_name="Quentin Marlowe", email="quentin@bank.test", is_active=True))
+    db.add_all([m.Role(id=1, name="Administrator"), m.UserRole(user_id=7, role_id=1, tenant_id=1)])   # ai-suggest is for writers
     db.add(m.Risk(
         id=1, tenant_id=1, title="Core banking outage", description="The ledger may be unavailable for hours", category="operational",
         risk_category="technology", risk_sub_category="availability", inherent_likelihood=4, inherent_impact=5, inherent_score=20,
@@ -297,6 +298,8 @@ def erm(wire, monkeypatch):
     app.dependency_overrides[get_db] = lambda: db
     app.dependency_overrides[require_auth] = lambda: db.get(m.GRCUser, 7)
     client = TestClient(app)
+    from grc.routers.auth_router import create_access_token
+    client.headers["Authorization"] = "Bearer " + create_access_token({"sub": "qmarlowe"})
     client.db = db
     yield client
     db.close()

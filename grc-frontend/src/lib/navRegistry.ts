@@ -273,7 +273,7 @@ const SECTION: Record<string, string> = {
   'third-party-vendor-risk': 'Third-Party Vendor Risk',
   'compliance-management': 'Compliance Management',
   'controls-automation': 'Controls Automation',
-  'issue-incident-management': 'Issue & Incident Management',
+  'issue-management': 'Issue Management',
   'auditor-portal': 'Auditor Portal',
   reports: 'Reports',
   'performance-overview': 'Performance Overview',

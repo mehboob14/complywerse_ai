@@ -28,6 +28,7 @@ from ....routers.auth_router import (
     require_auth, get_user_tenants, get_user_primary_tenant,
     require_tenant_permission,
 )
+from ....services.segregation import ensure_independent
 from ..services.severity_resolver import resolve_severity
 from ..services.code_generator import next_issue_code
 
@@ -421,7 +422,6 @@ def _apply_inline_linkages(
     for ic_id in _ids_in_tenant(InternalControl, body.get("linked_internal_control_ids") or []):
         db.add(IssueControlLink(
             issue_id=issue.id,
-            target_type="internal",
             internal_control_id=ic_id,
             created_by=user_id,
         ))
@@ -455,11 +455,7 @@ def _apply_inline_linkages(
             ok = db.query(model.id).filter(model.id == cid).first()
         if not ok:
             continue
-        link_row = IssueControlLink(
-            issue_id=issue.id,
-            target_type=target_type,
-            created_by=user_id,
-        )
+        link_row = IssueControlLink(issue_id=issue.id, created_by=user_id)     # the filled FK column says which family
         setattr(link_row, fk_name, cid)
         db.add(link_row)
         counts[f"controls_{target_type}"] = counts.get(f"controls_{target_type}", 0) + 1
@@ -614,17 +610,19 @@ def transition_issue(
     current_state = issue.workflow_state or "new"
     if target not in ALLOWED_TRANSITIONS.get(current_state, set()):
         raise HTTPException(status_code=400, detail=f"Invalid transition {current_state} → {target}")
+    if target == "closed":
+        # Closing goes through the formal close: notes required, closer and closed_at recorded.
+        return close_issue(issue_id, {"closure_notes": body.get("closure_notes") or body.get("notes")},
+                           db=db, current_user=current_user)
+    if current_state == "closed":
+        # Reopening goes through the formal reopen: a reason, kept in the issue's history.
+        return reopen_issue(issue_id, {"reason": body.get("reason") or body.get("notes")}, db=db, current_user=current_user)
 
     issue.workflow_state = target
     if target == "resolution":
         issue.resolved_at = datetime.utcnow()
     elif target == "cancelled":
         issue.status = "closed"
-    elif target == "in_progress" and current_state == "closed":
-        issue.status = "open"
-        issue.closed_at = None
-        issue.approved_at = None
-        issue.approved_by_id = None
 
     _recompute_sla_breached(issue)
     _log_activity(db, issue.id, current_user.id, "status_change", {
@@ -651,24 +649,42 @@ def close_issue(
     issue = _get_issue_or_404(issue_id, current_user, db)
     if issue.workflow_state == "closed":
         return _serialize_issue_summary(issue)
-    if issue.workflow_state not in {"closure_review", "in_progress", "resolution"}:
-        raise HTTPException(status_code=400, detail=f"Cannot close from {issue.workflow_state}")
-    issue.workflow_state = "closed"
-    issue.status = "closed"
-    issue.closed_at = datetime.utcnow()
-    issue.approved_by_id = current_user.id
-    issue.approved_at = datetime.utcnow()
-    issue.closure_notes = closure_notes
-    issue.sla_breached = False  # terminal
-    _log_activity(db, issue.id, current_user.id, "approved", {"closure_notes": closure_notes})
+    close_issue_record(db, issue, current_user, closure_notes)
     db.commit()
     db.refresh(issue)
     return _serialize_issue_summary(issue)
 
 
+def close_issue_record(db: Session, issue: Issue, user: GRCUser, closure_notes: str, **activity) -> None:
+    """The one way an issue closes, from the API, a workflow step or a settled vendor finding: from closure review, in
+    progress or resolution; never by its owner or assignee (409); not while a CAPA action is open (409). Raises
+    HTTPException before writing anything; the caller commits."""
+    if issue.workflow_state not in {"closure_review", "in_progress", "resolution"}:
+        raise HTTPException(status_code=400, detail=f"Cannot close from {issue.workflow_state}")
+    # Maker-checker: whoever owns or did the remediation does not sign off its closure.
+    ensure_independent(issue.assignee_id, user, "close this issue")
+    ensure_independent(issue.owner_id, user, "close this issue")
+    open_actions = [a.title for a in db.query(IssueAction).filter(
+        IssueAction.issue_id == issue.id, IssueAction.status.notin_(("completed", "verified", "cancelled")))]
+    if open_actions:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="Complete or verify these CAPA actions before closing: " + "; ".join(open_actions))
+    issue.workflow_state = "closed"
+    issue.status = "closed"
+    issue.closed_at = datetime.utcnow()
+    issue.approved_by_id = user.id
+    issue.approved_at = datetime.utcnow()
+    issue.closure_notes = closure_notes
+    issue.sla_breached = False  # terminal
+    _log_activity(db, issue.id, user.id, "approved", {"closure_notes": closure_notes, **activity})
+
+
 # ────────────────────────────────────────────────────────────────────────
 # REOPEN
 # ────────────────────────────────────────────────────────────────────────
+REOPEN_MIN_REASON = 10
+
+
 @router.post("/{issue_id}/reopen", dependencies=[Depends(_require_edit)])
 def reopen_issue(
     issue_id: int,
@@ -677,8 +693,9 @@ def reopen_issue(
     current_user: GRCUser = Depends(require_auth),
 ):
     reason = (body.get("reason") or "").strip()
-    if not reason:
-        raise HTTPException(status_code=400, detail="reason is required to reopen")
+    if len(reason) < REOPEN_MIN_REASON:
+        raise HTTPException(status_code=400,
+                            detail=f"A reason of at least {REOPEN_MIN_REASON} characters is required to reopen a closed issue")
     issue = _get_issue_or_404(issue_id, current_user, db)
     if issue.workflow_state != "closed":
         raise HTTPException(status_code=400, detail="Only closed issues can be reopened")

@@ -1,9 +1,8 @@
 from ....config import get_openai_api_key, get_openai_model
-from ....services.licence_guard import is_restricted_control
 from ....services.ai_gateway.field_policies import ai_view
 
 from typing import Any, Dict, List, Optional
-from datetime import datetime, date
+from datetime import datetime, date, timedelta, timezone
 from io import BytesIO
 import os
 import json
@@ -20,14 +19,15 @@ from openai import OpenAI
 logger = logging.getLogger(__name__)
 
 from ....models import (
-    Risk, RiskControlLink, RiskAssetLink, RiskEvidenceLink,
-    RiskFrameworkControlLink, RiskGovernanceLink,
+    Risk, RiskControl, RiskAssetLink, RiskEvidenceLink,
+    RiskGovernanceLink,
     NormalizedControl, FrameworkControl, ITAsset, Evidence,
     GovernanceObjective, Issue, GRCUser, Tenant, get_db,
     ParsedFrameworkControl, UploadedFramework, RiskMitigationAction,
     Vulnerability, VulnerabilityAssetLink, RiskAssessmentRisk,
     Team, BusinessUnit, Vendor,
-    InternalControl, InternalControlRiskLink, CertificationJourney, ControlObjective, FrameworkDomain,
+    InternalControl, CertificationJourney, ControlObjective, FrameworkDomain,
+    risk_priority_for_score, AuditLog, RiskScoreHistory,
 )
 from ....schemas import (
     RiskCreate, RiskUpdate, RiskResponse,
@@ -35,12 +35,26 @@ from ....schemas import (
     RiskControlLinkCreate, RiskAssetLinkCreate, RiskEvidenceLinkCreate,
     RiskFrameworkControlLinkCreate, RiskGovernanceLinkCreate,
     RiskDetailResponse, RiskHeatmapData, MessageResponse,
-    RiskMitigationActionCreate, RiskMitigationActionResponse
+    RiskAcceptanceRequest, RiskAcceptanceDecision,
 )
-from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant, refuse_imported_accounts
+from ....routers.auth_router import (
+    require_auth, require_tenant_permission, get_user_tenants, get_user_primary_tenant, refuse_imported_accounts,
+)
+from ....rich_audit import model_to_dict, write_rich_audit_log
+from ....services.segregation import ensure_independent
 from ..schema_migrations import ensure_register_labels
+from ..services.risk_control_links import (detail_lists, find_link, link_by_id, link_control, risk_control_links,
+                                           unlink_control)
 
 router = APIRouter(prefix="/risks", tags=["ERM - Risk Register"])
+
+# Write checks: the module's own name, or the legacy Risk Management one (admins pass either way).
+CAN_CREATE = [Depends(require_tenant_permission("erm:risks:create", "risks:risk_register:create"))]
+CAN_EDIT = [Depends(require_tenant_permission("erm:risks:edit", "risks:risk_register:edit"))]
+CAN_DELETE = [Depends(require_tenant_permission("erm:risks:delete", "risks:risk_register:delete"))]
+# Approving or refusing an acceptance: the treatment right or the register edit right, and never the person who asked.
+CAN_DECIDE_ACCEPTANCE = [Depends(require_tenant_permission("risks:risk_treatment:edit", "erm:risks:edit"))]
+ACCEPTANCE_MAX_DAYS = 366  # "at most 12 months": 366 days so the same date next year is allowed in a leap year
 
 UBL_TEMPLATE_REGISTER_TYPE = "UBL Template"
 UBL_REGISTER_TYPE_ALIASES = {
@@ -445,7 +459,7 @@ def import_ubl_risk_register(
     if not target_sheets:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="UBL template sheets not found. Expected sheets like Technology Risk Register, 3rdParty Risk Assessment, Process Risk Register, or ISMS.",
+            detail="Template sheets not found. Expected sheets like Technology Risk Register, 3rdParty Risk Assessment, Process Risk Register, or ISMS.",
         )
 
     final_register_type = (register_type or "").strip() or UBL_TEMPLATE_REGISTER_TYPE
@@ -516,7 +530,7 @@ def import_ubl_risk_register(
             origin_source="manual",  # stamped once at birth; never mutated
             tenant_id=tenant_id,
             name=(asset_name_text or ip_or_url_text)[:255],
-            description="Auto-created from UBL Template risk register upload",
+            description="Auto-created from a risk register upload",
             asset_type=inferred_type,
             owner_id=current_user.id,
             owner_name=(current_user.display_name or current_user.email),
@@ -728,11 +742,11 @@ def import_ubl_risk_register(
 
             generated_risk_id = format_ubl_risk_id(next_ubl_risk_sequence)
 
-            title_source = associated_risks or scenario or threat or vulnerability or asset_name or generated_risk_id or "Imported UBL Risk"
+            title_source = associated_risks or scenario or threat or vulnerability or asset_name or generated_risk_id or "Imported Risk"
             title = str(title_source).replace("\n", " ").strip()
             if asset_name and title and str(asset_name).strip().lower() not in title.lower():
                 title = f"{str(asset_name).strip()} - {title}"
-            title = title[:200] if title else "Imported UBL Risk"
+            title = title[:200] if title else "Imported Risk"
 
             description_lines = []
             description_lines.append(f"Risk ID: {generated_risk_id}")
@@ -857,7 +871,7 @@ def import_ubl_risk_register(
             try:
                 db_risk = Risk(
                     tenant_id=tenant_id,
-                    title=title or "Imported UBL Risk",
+                    title=title or "Imported Risk",
                     description=description,
                     category=category,
                     risk_category=category,
@@ -912,7 +926,7 @@ def import_ubl_risk_register(
                         vulnerability_entry.asset_links.append(
                             VulnerabilityAssetLink(
                                 asset=asset,
-                                notes="Linked from UBL Template risk register import",
+                                notes="Linked from a risk register import",
                                 created_by=current_user.id,
                                 link_source="nca_bridge",
                                 auto_linked=True,
@@ -926,6 +940,8 @@ def import_ubl_risk_register(
             except Exception as e:
                 errors.append(f"{sheet_name} row {row_num}: {str(e)}")
 
+    from .appetite import check_appetite  # imported risks over their limit are in the breach log at once
+    check_appetite(db, [tenant_id])
     db.commit()
     return {
         "message": f"Successfully imported {created_count} risks",
@@ -945,6 +961,126 @@ def resolve_risk_category(category: Optional[str], risk_category: Optional[str])
 
 def calculate_risk_score(likelihood: int, impact: int) -> float:
     return likelihood * impact
+
+
+def rescore_after_edit(risk: Risk, update_data: Dict[str, Any]) -> None:
+    """After an edit, the rule create follows: a score sent wins, else likelihood × impact (none when either is missing)."""
+    for side in ("inherent", "residual", "target"):
+        sent = {f"{side}_likelihood", f"{side}_impact", f"{side}_score"} & update_data.keys()
+        if not sent or update_data.get(f"{side}_score") is not None:
+            continue
+        likelihood, impact = getattr(risk, f"{side}_likelihood"), getattr(risk, f"{side}_impact")
+        setattr(risk, f"{side}_score", calculate_risk_score(likelihood, impact) if likelihood and impact else None)
+
+
+_SCORE_FIELDS = tuple(f"{side}_{part}" for side in ("inherent", "residual", "target")
+                      for part in ("likelihood", "impact", "score"))
+# A change to any of these is kept in the risk's history (an audit row with from / to and the reason).
+_TRACKED_FIELDS = _SCORE_FIELDS + ("owner_id", "business_owner_id", "status", "response", "category", "review_date",
+                                   "due_date", "acceptance_status", "acceptance_expires_at")
+_HISTORY_SCORE_FIELDS = ("inherent_likelihood", "inherent_impact", "inherent_score", "residual_likelihood",
+                         "residual_impact", "residual_score", "target_score")
+
+
+def risk_snapshot(risk: Risk) -> Dict[str, Any]:
+    """The tracked fields as they stand, taken before a change so record_risk_change can tell what moved."""
+    return {field: getattr(risk, field) for field in _TRACKED_FIELDS}
+
+
+def _plain(value: Any) -> Any:
+    return value.isoformat() if isinstance(value, (datetime, date)) else value
+
+
+def record_risk_change(db: Session, risk: Risk, before: Dict[str, Any], user: GRCUser, reason: Optional[str] = None,
+                       action: str = "updated", label: str = "Edited") -> None:
+    """Keep what changed since `before`: a score-history row when a score moved, and an audit row with each changed
+    field's from / to and the reason. Nothing when nothing tracked changed. The caller commits."""
+    changes = {field: {"from": _plain(before[field]), "to": _plain(getattr(risk, field))}
+               for field in _TRACKED_FIELDS if before[field] != getattr(risk, field)}
+    if not changes:
+        return
+    reason = (reason or "").strip() or None
+    if changes.keys() & set(_SCORE_FIELDS):
+        db.add(RiskScoreHistory(risk_id=risk.id, status=risk.status, change_reason=label, reason=reason,
+                                changed_by=user.id, **{f: getattr(risk, f) for f in _HISTORY_SCORE_FIELDS}))
+    write_rich_audit_log(db=db, tenant_id=risk.tenant_id, user_id=user.id, action=f"risk_{action}",
+                         resource_type="risk", resource_id=risk.id, resource_name=risk.title, summary=reason,
+                         snapshot={"changes": changes, "reason": reason})
+    from .appetite import check_appetite  # re-check appetite for the category the risk is in now and was in before
+    check_appetite(db, [risk.tenant_id], {risk.risk_category, before["category"]})
+
+
+REGISTER_STATUSES = ("open", "in_treatment", "mitigated", "accepted", "closed")      # Draft is the Risk Library's alone
+
+
+def refuse_direct_acceptance(risk: Optional[Risk], new_status: Optional[str]) -> None:
+    """The status a create (risk None) or an edit may set: a register status. Accepted is reached only through the
+    acceptance request and a second person's approval; Draft only through the Risk Library's propose → draft, and a
+    draft leaves Draft only when the risk team accepts it. An old word a risk still holds may be sent back unchanged."""
+    current = risk.status if risk is not None else None
+    word = (new_status or "").strip().lower()
+    if current == DRAFT_STATUS and new_status is not None and word != DRAFT_STATUS:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="A draft risk joins the register when the risk team accepts it from the Risk Library.")
+    if new_status is None or new_status == current:
+        return
+    if word == DRAFT_STATUS:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="A risk becomes a draft only when it is proposed from the Risk Library.")
+    if word == "accepted" and current != "accepted":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="A risk is accepted only with an approval. Request acceptance instead.")
+    if new_status not in REGISTER_STATUSES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"\"{new_status}\" is not a register status. Use one of: {', '.join(REGISTER_STATUSES)}.")
+
+
+def audit_risk_deletion(db: Session, risk: Risk, user: GRCUser) -> None:
+    """Before a risk is deleted: an audit row holding every field, so the record of it survives the delete."""
+    write_rich_audit_log(db=db, tenant_id=risk.tenant_id, user_id=user.id, action="risk_deleted", resource_type="risk",
+                         resource_id=risk.id, resource_name=risk.title, summary=f"Deleted risk {risk.title}",
+                         snapshot=model_to_dict(risk))
+
+
+def delete_risk_record(db: Session, risk: Risk, user: GRCUser) -> None:
+    """Delete a risk: audit snapshot first, release its issue links and cancel its treatment issue (kept for audit), then
+    delete. Anything else still pointing at the risk turns into a 409 telling the person to close it instead."""
+    from sqlalchemy.exc import IntegrityError
+    from ....models import Issue, IssueAction, IssueRiskLink
+    audit_risk_deletion(db, risk, user)
+    db.query(IssueRiskLink).filter(IssueRiskLink.risk_id == risk.id).delete(synchronize_session=False)
+    for issue in db.query(Issue).filter(Issue.issue_type == "risk_treatment", Issue.source_type == "risk",
+                                        Issue.source_id == risk.id).all():
+        db.query(IssueAction).filter(IssueAction.issue_id == issue.id,
+                                     IssueAction.status.in_(("planned", "in_progress", "blocked"))) \
+            .update({IssueAction.status: "cancelled"}, synchronize_session=False)
+        issue.workflow_state, issue.status = "cancelled", "closed"
+        issue.closure_notes = f"Risk deleted: {risk.title}"
+    try:
+        db.delete(risk)
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        table = getattr(getattr(exc.orig, "diag", None), "table_name", None) or "other records"
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail=f"This risk is still referenced by {table}. Close the risk instead of deleting it.")
+
+
+def _user_names(db: Session, user_ids) -> Dict[int, Optional[str]]:
+    ids = {i for i in user_ids if isinstance(i, int)}
+    return dict(db.query(GRCUser.id, GRCUser.display_name).filter(GRCUser.id.in_(ids)).all()) if ids else {}
+
+
+def risk_record_fields(db: Session, risk: Risk) -> Dict[str, Any]:
+    """The risk-record fields the hand-built detail responses add: target, response, acceptance (with who asked and
+    who approved, by name)."""
+    fields = ("business_owner_id", "target_likelihood", "target_impact", "target_score", "response",
+              "acceptance_status", "acceptance_state", "acceptance_reason", "acceptance_requested_by",
+              "acceptance_requested_at", "accepted_by", "accepted_at", "acceptance_expires_at")
+    names = _user_names(db, (risk.acceptance_requested_by, risk.accepted_by))
+    return {**{f: getattr(risk, f) for f in fields},
+            "acceptance_requested_by_name": names.get(risk.acceptance_requested_by),
+            "accepted_by_name": names.get(risk.accepted_by)}
 
 
 def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
@@ -988,6 +1124,8 @@ def _attach_source_labels(db: Session, risks: List[Risk]) -> None:
 
 
 RISK_PRIORITIES = ("critical", "high", "medium", "low")
+# Drafted from the Risk Library and waiting for the risk team to accept it (risk_library.py): not in the list, dashboards or appetite yet.
+DRAFT_STATUS = "draft"
 
 
 def _clean_priority(value: Optional[str]) -> Optional[str]:
@@ -1019,8 +1157,9 @@ def list_risks(
     status_filter: Optional[str] = None,
     min_score: Optional[float] = None,
     max_score: Optional[float] = None,
-    skip: int = 0,
-    limit: int = 100,
+    skip: int = Query(0, ge=0),
+    # the pages read the whole register at once, so the list and the dashboards count the same risks
+    limit: int = Query(1000, ge=1, le=1000),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -1078,6 +1217,8 @@ def list_risks(
         query = query.filter(normalized_risk_register_type == register_type_value)
     if status_filter:
         query = query.filter(Risk.status == status_filter)
+    else:
+        query = query.filter(Risk.status.is_distinct_from(DRAFT_STATUS))
     if min_score is not None:
         query = query.filter(Risk.inherent_score >= min_score)
     if max_score is not None:
@@ -1086,10 +1227,14 @@ def list_risks(
     risks = query.order_by(Risk.created_at.desc()).offset(skip).limit(limit).all()
     _attach_source_labels(db, risks)
     _attach_sla(db, risks)
+    from ...issue_management.services.risk_actions import risk_action_counts   # actions live on the CAPA engine
+    counts = risk_action_counts(db, risks)
+    for r in risks:
+        r.mitigation_action_count = counts.get(r.id, 0)
     return risks
 
 
-@router.post("", response_model=RiskResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=RiskResponse, status_code=status.HTTP_201_CREATED, dependencies=CAN_CREATE)
 def create_risk(
     risk: RiskCreate,
     tenant_id: Optional[int] = Query(None),
@@ -1133,6 +1278,10 @@ def create_risk(
     if residual_score is None and risk.residual_likelihood and risk.residual_impact:
         residual_score = calculate_risk_score(risk.residual_likelihood, risk.residual_impact)
 
+    target_score = risk.target_score
+    if target_score is None and risk.target_likelihood and risk.target_impact:
+        target_score = calculate_risk_score(risk.target_likelihood, risk.target_impact)
+
     risk_sub_category = risk.risk_sub_category
     if is_ubl_register and isinstance(sanitized_ubl_fields, dict):
         ubl_sub_source = str(sanitized_ubl_fields.get("sub_source_activity") or "").strip()
@@ -1156,6 +1305,7 @@ def create_risk(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     refuse_imported_accounts(db, [risk.owner_id, risk.business_owner_id])
+    refuse_direct_acceptance(None, risk.status or None)
 
     db_risk = Risk(
         tenant_id=tenant_id,
@@ -1178,6 +1328,12 @@ def create_risk(
         residual_likelihood=risk.residual_likelihood,
         residual_impact=risk.residual_impact,
         residual_score=residual_score,
+        target_likelihood=risk.target_likelihood,
+        target_impact=risk.target_impact,
+        target_score=target_score,
+        response=risk.response,
+        due_date=risk.due_date,
+        review_date=risk.review_date,
         risk_appetite=risk.risk_appetite,
         status=risk.status or "open",
         priority=_clean_priority(risk.priority),
@@ -1188,6 +1344,8 @@ def create_risk(
         closure_status=risk.closure_status,
     )
     db.add(db_risk)
+    from .appetite import check_appetite  # a risk created over its category's limit is in the breach log at once
+    check_appetite(db, [tenant_id], {resolved_category})
     db.commit()
     db.refresh(db_risk)
     return db_risk
@@ -1205,24 +1363,26 @@ def get_risk_dashboard(
             "total_risks": 0,
             "by_category": {},
             "by_status": {},
-            "by_score_range": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "by_score_range": {"critical": 0, "high": 0, "medium": 0, "low": 0, "unscored": 0},
             "avg_inherent_score": 0,
             "avg_residual_score": 0,
             "open_risks": 0,
-            "risks_needing_review": 0
+            "risks_needing_review": 0,
+            "acceptances_expiring": 0,
+            "acceptances_expired": 0,
         }
-    
-    query = db.query(Risk).filter(Risk.tenant_id.in_(user_tenants))
-    
+
+    query = db.query(Risk).filter(Risk.tenant_id.in_(user_tenants), Risk.status.is_distinct_from(DRAFT_STATUS))
+
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(Risk.tenant_id == tenant_id)
-    
+
     risks = query.all()
-    
+
     by_category = {}
     by_status = {}
-    by_score_range = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    by_score_range = {"critical": 0, "high": 0, "medium": 0, "low": 0, "unscored": 0}
     total_inherent_score = 0
     total_residual_score = 0
     risks_with_score = 0
@@ -1234,16 +1394,8 @@ def get_risk_dashboard(
         status_val = risk.status or "open"
         by_status[status_val] = by_status.get(status_val, 0) + 1
         
-        score = risk.residual_score or risk.inherent_score or 0
-        if score >= 20:
-            by_score_range["critical"] += 1
-        elif score >= 12:
-            by_score_range["high"] += 1
-        elif score >= 6:
-            by_score_range["medium"] += 1
-        else:
-            by_score_range["low"] += 1
-        
+        by_score_range[risk_priority_for_score(risk.residual_score or risk.inherent_score) or "unscored"] += 1
+
         if risk.inherent_score:
             total_inherent_score += risk.inherent_score
             risks_with_score += 1
@@ -1258,7 +1410,9 @@ def get_risk_dashboard(
         "avg_inherent_score": round(total_inherent_score / risks_with_score, 1) if risks_with_score > 0 else 0,
         "avg_residual_score": round(total_residual_score / risks_with_score, 1) if risks_with_score > 0 else 0,
         "open_risks": by_status.get("open", 0),
-        "risks_needing_review": sum(1 for r in risks if r.review_date and r.review_date < datetime.utcnow())
+        "risks_needing_review": sum(1 for r in risks if r.review_date and r.review_date < datetime.utcnow()),
+        "acceptances_expiring": sum(1 for r in risks if r.acceptance_state == "expiring"),
+        "acceptances_expired": sum(1 for r in risks if r.acceptance_state == "expired"),
     }
 
 
@@ -1301,7 +1455,7 @@ def get_risk_dashboard_by_register(
     if not user_tenants:
         return {"registers": [], "total_risks": 0}
 
-    query = db.query(Risk).filter(Risk.tenant_id.in_(user_tenants))
+    query = db.query(Risk).filter(Risk.tenant_id.in_(user_tenants), Risk.status.is_distinct_from(DRAFT_STATUS))
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(Risk.tenant_id == tenant_id)
@@ -1324,7 +1478,7 @@ def get_risk_dashboard_by_register(
             "by_status": {s: 0 for s in RISK_STATUS_BUCKETS},
             "by_category": {},
             "by_owner": {},
-            "by_score_range": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "by_score_range": {"critical": 0, "high": 0, "medium": 0, "low": 0, "unscored": 0},
             "owner_ids": set(),
             "avg_residual_score": 0.0,
             "_residual_total": 0.0,
@@ -1338,15 +1492,7 @@ def get_risk_dashboard_by_register(
             label = owners_by_id.get(risk.owner_id, f"User #{risk.owner_id}")
             b["by_owner"][label] = b["by_owner"].get(label, 0) + 1
             b["owner_ids"].add(risk.owner_id)
-        score = risk.residual_score or risk.inherent_score or 0
-        if score >= 20:
-            b["by_score_range"]["critical"] += 1
-        elif score >= 12:
-            b["by_score_range"]["high"] += 1
-        elif score >= 6:
-            b["by_score_range"]["medium"] += 1
-        else:
-            b["by_score_range"]["low"] += 1
+        b["by_score_range"][risk_priority_for_score(risk.residual_score or risk.inherent_score) or "unscored"] += 1
         if risk.residual_score:
             b["_residual_total"] += float(risk.residual_score)
             b["_residual_count"] += 1
@@ -1408,7 +1554,7 @@ def get_risk_dashboard_by_source(
     if not user_tenants:
         return {"sources": [], "total_risks": 0}
 
-    query = db.query(Risk).filter(Risk.tenant_id.in_(user_tenants))
+    query = db.query(Risk).filter(Risk.tenant_id.in_(user_tenants), Risk.status.is_distinct_from(DRAFT_STATUS))
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(Risk.tenant_id == tenant_id)
@@ -1454,7 +1600,7 @@ def get_risk_heatmap(
     if not user_tenants:
         return []
     
-    query = db.query(Risk).filter(Risk.tenant_id.in_(user_tenants))
+    query = db.query(Risk).filter(Risk.tenant_id.in_(user_tenants), Risk.status.is_distinct_from(DRAFT_STATUS))
     
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
@@ -1483,6 +1629,48 @@ def get_risk_heatmap(
     return list(heatmap.values())
 
 
+# Declared before "/{risk_id}", which would otherwise take "aging" for a risk id.
+@router.get("/aging")
+def get_risks_with_aging(
+    tenant_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return []
+
+    query = db.query(Risk).filter(Risk.tenant_id.in_(user_tenants))
+
+    if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
+        query = query.filter(Risk.tenant_id == tenant_id)
+
+    risks = query.order_by(Risk.created_at.asc()).all()
+
+    now = datetime.utcnow()
+    result = []
+    for risk in risks:
+        days_since_created = (now - risk.created_at).days if risk.created_at else 0
+        days_since_updated = (now - risk.updated_at).days if risk.updated_at else days_since_created
+
+        result.append({
+            "id": risk.id,
+            "title": risk.title,
+            "category": risk.risk_category or risk.category,
+            "status": risk.status,
+            "inherent_score": risk.inherent_score,
+            "residual_score": risk.residual_score,
+            "created_at": risk.created_at.isoformat() if risk.created_at else None,
+            "updated_at": risk.updated_at.isoformat() if risk.updated_at else None,
+            "days_since_created": days_since_created,
+            "days_since_updated": days_since_updated,
+            "owner_id": risk.owner_id
+        })
+
+    return result
+
+
 @router.get("/{risk_id}/detail")
 def get_risk_detail(
     risk_id: int,
@@ -1492,10 +1680,8 @@ def get_risk_detail(
     user_tenants = get_user_tenants(current_user, db)
     
     risk = db.query(Risk).options(
-        joinedload(Risk.control_links).joinedload(RiskControlLink.normalized_control),
         joinedload(Risk.asset_links).joinedload(RiskAssetLink.asset),
         joinedload(Risk.evidence_links).joinedload(RiskEvidenceLink.evidence),
-        joinedload(Risk.framework_control_links).joinedload(RiskFrameworkControlLink.framework_control),
         joinedload(Risk.governance_links).joinedload(RiskGovernanceLink.governance_objective),
         joinedload(Risk.owner)
     ).filter(
@@ -1509,60 +1695,7 @@ def get_risk_detail(
             detail="Risk not found"
         )
     
-    linked_controls = []
-    from grc.modules.scf.risk_links import control_status_indicator
-    for link in risk.control_links:
-        if link.normalized_control:
-            nc = link.normalized_control
-            linked_controls.append({
-                "id": link.id,
-                "control_id": nc.id,
-                "code": nc.code,
-                "name": nc.name,
-                "scf_id": nc.scf_id,
-                "source": nc.source,
-                "custom": nc.source == "custom",
-                "control_status": control_status_indicator(db, nc, tenant_id=risk.tenant_id),
-                # Decision 4: indicator only — residual is NOT auto-updated
-                "control_status_indicator": True,
-            })
-
-    linked_internal_controls = []
-    internal_links = (
-        db.query(InternalControlRiskLink)
-        .join(InternalControl, InternalControl.id == InternalControlRiskLink.control_id)
-        .filter(
-            InternalControlRiskLink.risk_id == risk_id,
-            InternalControl.tenant_id.in_(user_tenants),
-        )
-        .all()
-    )
-    for link in internal_links:
-        ctrl = link.control
-        if ctrl:
-            linked_internal_controls.append({
-                "id": ctrl.id,
-                "name": ctrl.name,
-                "title": ctrl.name,
-                "status": ctrl.status,
-                "link_id": link.id,
-                "control_id": ctrl.control_id,
-            })
-    
-    linked_framework_controls = []
-    for link in risk.framework_control_links:
-        if link.framework_control:
-            linked_framework_controls.append({
-                "id": link.id,
-                "framework_control_id": link.framework_control.id,
-                "code": link.framework_control.code,
-                "name": link.framework_control.name,
-                "mitigation_effectiveness": link.mitigation_effectiveness,
-                "notes": link.notes
-            })
-    
-    from ..services.risk_framework_requirements import serialize_links as _requirement_links
-    linked_framework_requirements = _requirement_links(risk)
+    controls = detail_lists(db, risk)       # the one risk–control link, in the lists' old shapes
 
     linked_assets = []
     for link in risk.asset_links:
@@ -1619,13 +1752,11 @@ def get_risk_detail(
         "review_date": risk.review_date.isoformat() if risk.review_date else None,
         "created_at": risk.created_at.isoformat(),
         "updated_at": risk.updated_at.isoformat(),
-        "linked_controls": linked_controls,
-        "linked_internal_controls": linked_internal_controls,
-        "linked_framework_controls": linked_framework_controls,
-        "linked_framework_requirements": linked_framework_requirements,
+        **controls,
         "linked_assets": linked_assets,
         "linked_evidence": linked_evidence,
-        "linked_governance": linked_governance
+        "linked_governance": linked_governance,
+        **risk_record_fields(db, risk),
     }
 
 
@@ -1638,7 +1769,6 @@ def get_risk(
     user_tenants = get_user_tenants(current_user, db)
     
     risk = db.query(Risk).options(
-        joinedload(Risk.control_links),
         joinedload(Risk.asset_links),
         joinedload(Risk.evidence_links)
     ).filter(
@@ -1674,13 +1804,14 @@ def get_risk(
         "treatment_plan": risk.treatment_plan,
         "created_at": risk.created_at.isoformat(),
         "updated_at": risk.updated_at.isoformat(),
-        "linked_controls": [link.normalized_control_id for link in risk.control_links],
+        "linked_controls": [c for (c,) in db.query(RiskControl.control_id).filter(          # library controls
+            RiskControl.risk_id == risk.id, RiskControl.control_source == "normalized").order_by(RiskControl.id)],
         "linked_assets": [link.asset_id for link in risk.asset_links],
         "linked_evidence": [link.evidence_id for link in risk.evidence_links]
     }
 
 
-@router.put("/{risk_id}", response_model=RiskResponse)
+@router.put("/{risk_id}", response_model=RiskResponse, dependencies=CAN_EDIT)
 def update_risk(
     risk_id: int,
     risk_update: RiskUpdate,
@@ -1700,8 +1831,11 @@ def update_risk(
         )
     
     update_data = risk_update.model_dump(exclude_unset=True)
+    reason = update_data.pop("reason", None)
+    refuse_direct_acceptance(risk, update_data.get("status"))
     refuse_imported_accounts(db, [update_data.get("owner_id"), update_data.get("business_owner_id")],
                              kept=[risk.owner_id, risk.business_owner_id])
+    before = risk_snapshot(risk)
     target_register_type = update_data.get("register_type", risk.register_type)
     is_target_ubl = is_ubl_template_register_type(target_register_type)
 
@@ -1768,6 +1902,8 @@ def update_risk(
 
     for field, value in update_data.items():
         setattr(risk, field, value)
+    rescore_after_edit(risk, update_data)
+    record_risk_change(db, risk, before, current_user, reason)
 
     risk.updated_at = datetime.utcnow()
     db.commit()
@@ -1775,7 +1911,7 @@ def update_risk(
     return risk
 
 
-@router.delete("/{risk_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{risk_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=CAN_DELETE)
 def delete_risk(
     risk_id: int,
     db: Session = Depends(get_db),
@@ -1792,13 +1928,13 @@ def delete_risk(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Risk not found"
         )
-    
-    db.delete(risk)
-    db.commit()
+
+    delete_risk_record(db, risk, current_user)
     return None
 
 
-@router.post("/{risk_id}/assess", response_model=RiskResponse)
+@router.post("/{risk_id}/assess", response_model=RiskResponse, dependencies=[
+    Depends(require_tenant_permission("erm:risks:edit", "risks:risk_register:edit", "risks:risk_assessment:edit"))])
 def assess_risk(
     risk_id: int,
     assessment: RiskAssessment,
@@ -1817,13 +1953,14 @@ def assess_risk(
             detail="Risk not found"
         )
     
+    before = risk_snapshot(risk)
     risk.inherent_likelihood = assessment.inherent_likelihood
     risk.inherent_impact = assessment.inherent_impact
     risk.inherent_score = calculate_risk_score(
         assessment.inherent_likelihood,
         assessment.inherent_impact
     )
-    
+
     if assessment.residual_likelihood and assessment.residual_impact:
         risk.residual_likelihood = assessment.residual_likelihood
         risk.residual_impact = assessment.residual_impact
@@ -1831,17 +1968,23 @@ def assess_risk(
             assessment.residual_likelihood,
             assessment.residual_impact
         )
-    
+    if assessment.target_likelihood and assessment.target_impact:
+        risk.target_likelihood = assessment.target_likelihood
+        risk.target_impact = assessment.target_impact
+        risk.target_score = calculate_risk_score(assessment.target_likelihood, assessment.target_impact)
+
     if assessment.risk_appetite:
         risk.risk_appetite = assessment.risk_appetite
-    
+    record_risk_change(db, risk, before, current_user, assessment.reason, action="assessed", label="Assessed")
+
     risk.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(risk)
     return risk
 
 
-@router.post("/{risk_id}/treatment", response_model=RiskResponse)
+@router.post("/{risk_id}/treatment", response_model=RiskResponse, dependencies=[
+    Depends(require_tenant_permission("erm:risks:edit", "risks:risk_register:edit", "risks:risk_treatment:edit"))])
 def add_treatment_plan(
     risk_id: int,
     treatment: RiskTreatment,
@@ -1860,15 +2003,135 @@ def add_treatment_plan(
             detail="Risk not found"
         )
     
+    before = risk_snapshot(risk)
     risk.treatment_plan = treatment.treatment_plan
-    risk.status = "mitigating"
+    risk.status = "in_treatment"
+    record_risk_change(db, risk, before, current_user, treatment.reason, action="treatment", label="Treatment plan")
     risk.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(risk)
     return risk
 
 
-@router.post("/{risk_id}/controls", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
+def _tenant_risk(db: Session, user: GRCUser, risk_id: int) -> Risk:
+    risk = db.query(Risk).filter(Risk.id == risk_id, Risk.tenant_id.in_(get_user_tenants(user, db))).first()
+    if not risk:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Risk not found")
+    return risk
+
+
+@router.get("/{risk_id}/history")
+def get_risk_history(
+    risk_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Who changed the risk, what and why (audit rows), and its scores over time; newest first."""
+    risk = _tenant_risk(db, current_user, risk_id)
+    rows = (db.query(AuditLog)
+            .filter(AuditLog.tenant_id == risk.tenant_id, AuditLog.resource_type == "risk", AuditLog.resource_id == risk.id)
+            .order_by(AuditLog.timestamp.desc(), AuditLog.id.desc()).all())
+    scores = (db.query(RiskScoreHistory).filter(RiskScoreHistory.risk_id == risk.id)
+              .order_by(RiskScoreHistory.recorded_at.desc(), RiskScoreHistory.id.desc()).all())
+    changes = []
+    for row in rows:
+        snap = (row.changes or {}).get("snapshot") or {}
+        changes.append({"id": row.id, "at": row.timestamp, "action": row.action, "user_id": row.user_id,
+                        "reason": snap.get("reason"), "changes": snap.get("changes") or {}})
+    # who acted, and the people an owner change moved between
+    owners = {side.get(end) for c in changes for f in ("owner_id", "business_owner_id")
+              for side in [c["changes"].get(f) or {}] for end in ("from", "to")}
+    names = _user_names(db, {r.user_id for r in rows} | {s.changed_by for s in scores} | owners)
+    for change in changes:
+        change["user_name"] = names.get(change["user_id"])
+    return {
+        "people": {str(uid): name for uid, name in names.items()},
+        "changes": changes,
+        "scores": [{"id": s.id, "at": s.recorded_at, "user_id": s.changed_by, "user_name": names.get(s.changed_by),
+                    "label": s.change_reason, "reason": s.reason, "status": s.status,
+                    **{f: getattr(s, f) for f in _HISTORY_SCORE_FIELDS}} for s in scores],
+    }
+
+
+def _naive_utc(value: datetime) -> datetime:
+    return value.astimezone(timezone.utc).replace(tzinfo=None) if value.tzinfo else value
+
+
+@router.post("/{risk_id}/acceptance/request", response_model=RiskResponse, dependencies=CAN_EDIT)
+def request_risk_acceptance(
+    risk_id: int,
+    body: RiskAcceptanceRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Choose to accept the risk: the reason and an expiry (future, at most 12 months); a second person approves."""
+    risk = _tenant_risk(db, current_user, risk_id)
+    reason, expires_at, now = body.reason.strip(), _naive_utc(body.expires_at), datetime.utcnow()
+    if not reason:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Say why the risk should be accepted")
+    if expires_at <= now:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The acceptance must expire in the future")
+    if expires_at > now + timedelta(days=ACCEPTANCE_MAX_DAYS):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="An acceptance can last at most 12 months")
+    if risk.acceptance_status == "requested":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An acceptance request is already waiting for approval")
+    before = risk_snapshot(risk)
+    risk.response, risk.acceptance_status, risk.acceptance_reason = "accept", "requested", reason
+    risk.acceptance_requested_by, risk.acceptance_requested_at, risk.acceptance_expires_at = current_user.id, now, expires_at
+    risk.accepted_by = risk.accepted_at = None
+    record_risk_change(db, risk, before, current_user, reason, action="acceptance_requested", label="Acceptance requested")
+    risk.updated_at = now
+    db.commit()
+    db.refresh(risk)
+    return risk
+
+
+def _decide_acceptance(db: Session, user: GRCUser, risk_id: int, note: Optional[str], approve: bool) -> Risk:
+    risk = _tenant_risk(db, user, risk_id)
+    if risk.acceptance_status != "requested":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="No acceptance request is waiting for this risk")
+    ensure_independent(risk.acceptance_requested_by, user,
+                       "approve accepting this risk" if approve else "decide on accepting this risk")
+    now = datetime.utcnow()
+    before = risk_snapshot(risk)
+    if approve:
+        if risk.acceptance_expires_at and risk.acceptance_expires_at <= now:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                                detail="The requested expiry has passed. Ask for a new acceptance.")
+        risk.acceptance_status, risk.status, risk.accepted_by, risk.accepted_at = "approved", "accepted", user.id, now
+    else:
+        if not (note or "").strip():
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Say why the acceptance is refused")
+        risk.acceptance_status, risk.status = "rejected", "in_treatment"
+    record_risk_change(db, risk, before, user, note, action="acceptance_approved" if approve else "acceptance_rejected",
+                       label="Acceptance approved" if approve else "Acceptance refused")
+    risk.updated_at = now
+    db.commit()
+    db.refresh(risk)
+    return risk
+
+
+@router.post("/{risk_id}/acceptance/approve", response_model=RiskResponse, dependencies=CAN_DECIDE_ACCEPTANCE)
+def approve_risk_acceptance(
+    risk_id: int,
+    body: RiskAcceptanceDecision,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    return _decide_acceptance(db, current_user, risk_id, body.note, approve=True)
+
+
+@router.post("/{risk_id}/acceptance/reject", response_model=RiskResponse, dependencies=CAN_DECIDE_ACCEPTANCE)
+def reject_risk_acceptance(
+    risk_id: int,
+    body: RiskAcceptanceDecision,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    return _decide_acceptance(db, current_user, risk_id, body.note, approve=False)
+
+
+@router.post("/{risk_id}/controls", response_model=MessageResponse, status_code=status.HTTP_201_CREATED, dependencies=CAN_EDIT)
 def link_risk_to_control(
     risk_id: int,
     link: RiskControlLinkCreate,
@@ -1896,27 +2159,19 @@ def link_risk_to_control(
             detail="Control not found"
         )
     
-    existing = db.query(RiskControlLink).filter(
-        RiskControlLink.risk_id == risk_id,
-        RiskControlLink.normalized_control_id == link.normalized_control_id
-    ).first()
-    if existing:
+    if find_link(db, risk.id, "normalized", control.id):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Link already exists"
         )
     
-    db_link = RiskControlLink(
-        risk_id=risk_id,
-        normalized_control_id=link.normalized_control_id
-    )
-    db.add(db_link)
+    link_control(db, risk, "normalized", control.id, current_user.id)
     db.commit()
     
     return MessageResponse(message="Control linked successfully")
 
 
-@router.post("/{risk_id}/link-framework-control", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/{risk_id}/link-framework-control", response_model=MessageResponse, status_code=status.HTTP_201_CREATED, dependencies=CAN_EDIT)
 def link_risk_to_framework_control(
     risk_id: int,
     link: RiskFrameworkControlLinkCreate,
@@ -1944,29 +2199,20 @@ def link_risk_to_framework_control(
             detail="Framework control not found"
         )
     
-    existing = db.query(RiskFrameworkControlLink).filter(
-        RiskFrameworkControlLink.risk_id == risk_id,
-        RiskFrameworkControlLink.framework_control_id == link.framework_control_id
-    ).first()
-    if existing:
+    if find_link(db, risk.id, "catalog", framework_control.id):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Link already exists"
         )
     
-    db_link = RiskFrameworkControlLink(
-        risk_id=risk_id,
-        framework_control_id=link.framework_control_id,
-        mitigation_effectiveness=link.mitigation_effectiveness,
-        notes=link.notes
-    )
-    db.add(db_link)
+    link_control(db, risk, "catalog", framework_control.id, current_user.id, notes=link.notes,
+                 mitigation_effectiveness=link.mitigation_effectiveness)
     db.commit()
     
     return MessageResponse(message="Framework control linked successfully")
 
 
-@router.delete("/{risk_id}/link-framework-control/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{risk_id}/link-framework-control/{link_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=CAN_EDIT)
 def unlink_risk_from_framework_control(
     risk_id: int,
     link_id: int,
@@ -1985,22 +2231,19 @@ def unlink_risk_from_framework_control(
             detail="Risk not found"
         )
     
-    link = db.query(RiskFrameworkControlLink).filter(
-        RiskFrameworkControlLink.id == link_id,
-        RiskFrameworkControlLink.risk_id == risk_id
-    ).first()
+    link = link_by_id(db, link_id, "catalog", RiskControl.risk_id == risk.id)
     if not link:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Framework control link not found"
         )
     
-    db.delete(link)
+    unlink_control(db, link)
     db.commit()
     return None
 
 
-@router.post("/{risk_id}/link-governance", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/{risk_id}/link-governance", response_model=MessageResponse, status_code=status.HTTP_201_CREATED, dependencies=CAN_EDIT)
 def link_risk_to_governance(
     risk_id: int,
     link: RiskGovernanceLinkCreate,
@@ -2050,7 +2293,7 @@ def link_risk_to_governance(
     return MessageResponse(message="Governance objective linked successfully")
 
 
-@router.delete("/{risk_id}/link-governance/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{risk_id}/link-governance/{link_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=CAN_EDIT)
 def unlink_risk_from_governance(
     risk_id: int,
     link_id: int,
@@ -2084,7 +2327,7 @@ def unlink_risk_from_governance(
     return None
 
 
-@router.delete("/{risk_id}/controls/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{risk_id}/controls/{link_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=CAN_EDIT)
 def unlink_risk_from_control(
     risk_id: int,
     link_id: int,
@@ -2103,22 +2346,19 @@ def unlink_risk_from_control(
             detail="Risk not found"
         )
     
-    link = db.query(RiskControlLink).filter(
-        RiskControlLink.id == link_id,
-        RiskControlLink.risk_id == risk_id
-    ).first()
+    link = link_by_id(db, link_id, "normalized", RiskControl.risk_id == risk.id)
     if not link:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Control link not found"
         )
     
-    db.delete(link)
+    unlink_control(db, link)
     db.commit()
     return None
 
 
-@router.post("/{risk_id}/assets", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/{risk_id}/assets", response_model=MessageResponse, status_code=status.HTTP_201_CREATED, dependencies=CAN_EDIT)
 def link_risk_to_asset(
     risk_id: int,
     link: RiskAssetLinkCreate,
@@ -2164,7 +2404,7 @@ def link_risk_to_asset(
     return MessageResponse(message="Asset linked successfully")
 
 
-@router.delete("/{risk_id}/assets/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{risk_id}/assets/{link_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=CAN_EDIT)
 def unlink_risk_from_asset(
     risk_id: int,
     link_id: int,
@@ -2198,7 +2438,7 @@ def unlink_risk_from_asset(
     return None
 
 
-@router.post("/{risk_id}/evidence", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/{risk_id}/evidence", response_model=MessageResponse, status_code=status.HTTP_201_CREATED, dependencies=CAN_EDIT)
 def link_risk_to_evidence(
     risk_id: int,
     link: RiskEvidenceLinkCreate,
@@ -2244,7 +2484,7 @@ def link_risk_to_evidence(
     return MessageResponse(message="Evidence linked successfully")
 
 
-@router.delete("/{risk_id}/evidence/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{risk_id}/evidence/{link_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=CAN_EDIT)
 def unlink_risk_from_evidence(
     risk_id: int,
     link_id: int,
@@ -2347,7 +2587,7 @@ def download_risk_register_template(
     )
 
 
-@router.post("/upload")
+@router.post("/upload", dependencies=CAN_CREATE)
 async def upload_risk_register(
     file: UploadFile = File(...),
     register_type: Optional[str] = Query(None),
@@ -2598,9 +2838,11 @@ async def upload_risk_register(
                 created_count += 1
             except Exception as e:
                 errors.append(f"Row {row_num}: {str(e)}")
-        
+
+        from .appetite import check_appetite  # imported risks over their limit are in the breach log at once
+        check_appetite(db, [tenant_id])
         db.commit()
-        
+
         return {
             "message": f"Successfully imported {created_count} risks",
             "created": created_count,
@@ -2615,48 +2857,7 @@ async def upload_risk_register(
         )
 
 
-@router.get("/aging")
-def get_risks_with_aging(
-    tenant_id: Optional[int] = None,
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
-):
-    user_tenants = get_user_tenants(current_user, db)
-    if not user_tenants:
-        return []
-    
-    query = db.query(Risk).filter(Risk.tenant_id.in_(user_tenants))
-    
-    if tenant_id:
-        validate_tenant_access(current_user, tenant_id, db)
-        query = query.filter(Risk.tenant_id == tenant_id)
-    
-    risks = query.order_by(Risk.created_at.asc()).all()
-    
-    now = datetime.utcnow()
-    result = []
-    for risk in risks:
-        days_since_created = (now - risk.created_at).days if risk.created_at else 0
-        days_since_updated = (now - risk.updated_at).days if risk.updated_at else days_since_created
-        
-        result.append({
-            "id": risk.id,
-            "title": risk.title,
-            "category": risk.risk_category or risk.category,
-            "status": risk.status,
-            "inherent_score": risk.inherent_score,
-            "residual_score": risk.residual_score,
-            "created_at": risk.created_at.isoformat() if risk.created_at else None,
-            "updated_at": risk.updated_at.isoformat() if risk.updated_at else None,
-            "days_since_created": days_since_created,
-            "days_since_updated": days_since_updated,
-            "owner_id": risk.owner_id
-        })
-    
-    return result
-
-
-@router.post("/{risk_id}/close", response_model=RiskResponse)
+@router.post("/{risk_id}/close", response_model=RiskResponse, dependencies=CAN_EDIT)
 def close_risk(
     risk_id: int,
     closure_notes: Optional[str] = None,
@@ -2694,7 +2895,7 @@ def close_risk(
     return risk
 
 
-@router.post("/{risk_id}/reopen", response_model=RiskResponse)
+@router.post("/{risk_id}/reopen", response_model=RiskResponse, dependencies=CAN_EDIT)
 def reopen_risk(
     risk_id: int,
     db: Session = Depends(get_db),
@@ -2944,53 +3145,11 @@ GUIDELINES:
 Return ONLY valid JSON, no additional text."""
 
 
-@router.get("/{risk_id}/mitigation-actions", response_model=List[RiskMitigationActionResponse])
-def get_risk_mitigation_actions(
-    risk_id: int,
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
-):
-    user_tenants = get_user_tenants(current_user, db)
-    risk = db.query(Risk).filter(Risk.id == risk_id, Risk.tenant_id.in_(user_tenants)).first()
-    if not risk:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Risk not found")
-    actions = db.query(RiskMitigationAction).filter(
-        RiskMitigationAction.risk_id == risk_id
-    ).order_by(RiskMitigationAction.created_at.desc()).all()
-    return actions
+# GET/POST "/{risk_id}/mitigation-actions" are served by mitigation_actions.py (risk_actions_router), which saves new actions as "open".
 
 
-@router.post("/{risk_id}/mitigation-actions", response_model=RiskMitigationActionResponse, status_code=status.HTTP_201_CREATED)
-def create_risk_mitigation_action(
-    risk_id: int,
-    data: RiskMitigationActionCreate,
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
-):
-    user_tenants = get_user_tenants(current_user, db)
-    risk = db.query(Risk).filter(Risk.id == risk_id, Risk.tenant_id.in_(user_tenants)).first()
-    if not risk:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Risk not found")
-    refuse_imported_accounts(db, [data.owner_id])
-    action = RiskMitigationAction(
-        risk_id=risk_id,
-        title=data.title,
-        description=data.description,
-        action_type=data.action_type,
-        priority=data.priority,
-        owner_id=data.owner_id,
-        due_date=data.due_date,
-        expected_residual_reduction=data.expected_residual_reduction,
-        notes=data.notes,
-        status="pending",
-    )
-    db.add(action)
-    db.commit()
-    db.refresh(action)
-    return action
-
-
-@router.post("/ai-suggest", response_model=RiskAISuggestionResponse)
+@router.post("/ai-suggest", response_model=RiskAISuggestionResponse, dependencies=[Depends(require_tenant_permission(
+    "erm:risks:create", "risks:risk_register:create", "erm:risks:edit", "risks:risk_register:edit"))])  # AI budget: writers only
 def get_risk_ai_suggestions(
     request: RiskAISuggestionRequest,
     db: Session = Depends(get_db),
@@ -3102,10 +3261,7 @@ def generate_ai_treatment_plan(
 ):
     user_tenants = get_user_tenants(current_user, db)
 
-    risk = db.query(Risk).options(
-        joinedload(Risk.control_links).joinedload(RiskControlLink.normalized_control),
-        joinedload(Risk.framework_control_links).joinedload(RiskFrameworkControlLink.framework_control),
-    ).filter(
+    risk = db.query(Risk).filter(
         Risk.id == risk_id,
         Risk.tenant_id.in_(user_tenants)
     ).first()
@@ -3116,19 +3272,12 @@ def generate_ai_treatment_plan(
             detail="Risk not found"
         )
 
-    linked_controls = []
-    for link in risk.control_links:
-        nc = link.normalized_control
-        if nc:
-            # An SCF control is named by a placeholder, not skipped: dropping it would
-            # tell the model the risk has no controls and the plan would recommend
-            # building ones that exist. Its name and code are SCF content (CC BY-ND).
-            linked_controls.append(
-                f"Linked control {nc.id} (wording withheld: licensed text)" if is_restricted_control(nc)
-                else f"{nc.code}: {nc.name}")
-    for link in risk.framework_control_links:
-        if link.framework_control:
-            linked_controls.append(f"{link.framework_control.code}: {link.framework_control.name}")
+    # An SCF control is named by a placeholder, not skipped: dropping it would
+    # tell the model the risk has no controls and the plan would recommend
+    # building ones that exist. Its name and code are SCF content (CC BY-ND).
+    linked_controls = [
+        f"Linked control {c['control_id']} (wording withheld: licensed text)" if c["restricted"] else f"{c['code']}: {c['name']}"
+        for c in risk_control_links(db, [risk.id])[risk.id]]
 
     controls_text = "\n".join(f"- {c}" for c in linked_controls) if linked_controls else "No controls currently linked."
 

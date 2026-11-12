@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { apiClient, issuesApi } from '@/lib/api';
 import { formatDate, daysFromNow } from './shared';
+import { apiErrorText } from '@/lib/apiError';
 
 interface ActionRow {
   id: number;
@@ -73,25 +74,25 @@ export function CAPABoard() {
   const verifyMutation = useMutation({
     mutationFn: (id: number) => issuesApi.actions.verify(id, {}),
     onSuccess: () => { setActionError(null); invalidate(); setSelected(null); },
-    onError: (err: any) => setActionError(err?.response?.data?.detail || 'Verify failed'),
+    onError: (err) => setActionError(apiErrorText(err, 'Verify failed')),
   });
   const updateStatusMutation = useMutation({
     mutationFn: ({ id, status }: { id: number; status: string }) =>
       issuesApi.actions.patch(id, { status }),
     onSuccess: () => { setActionError(null); invalidate(); },
-    onError: (err: any) => setActionError(err?.response?.data?.detail || 'Update failed'),
+    onError: (err) => setActionError(apiErrorText(err, 'Update failed')),
   });
   const patchMutation = useMutation({
     mutationFn: ({ id, body }: { id: number; body: Record<string, unknown> }) =>
       issuesApi.actions.patch(id, body),
     onSuccess: () => { setActionError(null); invalidate(); setSelected(null); },
-    onError: (err: any) => setActionError(err?.response?.data?.detail || 'Save failed'),
+    onError: (err) => setActionError(apiErrorText(err, 'Save failed')),
   });
   const createMutation = useMutation({
     mutationFn: ({ issueId, body }: { issueId: number; body: Record<string, unknown> }) =>
       issuesApi.actions.create(issueId, body),
     onSuccess: () => { setActionError(null); invalidate(); setCreating(false); },
-    onError: (err: any) => setActionError(err?.response?.data?.detail || 'Create failed'),
+    onError: (err) => setActionError(apiErrorText(err, 'Create failed')),
   });
 
   if (isLoading) {
@@ -164,7 +165,7 @@ export function CAPABoard() {
                       </div>
                       <button
                         type="button"
-                        onClick={() => setSelected(a)}
+                        onClick={() => { setActionError(null); setSelected(a); }}
                         className="block w-full text-left text-xs font-medium text-slate-900 line-clamp-2 hover:text-primary-700"
                         title="Open to update this action"
                       >
@@ -220,7 +221,7 @@ export function CAPABoard() {
                         )}
                         <button
                           type="button"
-                          onClick={() => setSelected(a)}
+                          onClick={() => { setActionError(null); setSelected(a); }}
                           className="inline-flex items-center justify-center rounded border border-slate-200 bg-white px-1.5 py-1 text-slate-500 hover:bg-slate-50"
                           title="Edit / update"
                         >
@@ -244,7 +245,8 @@ export function CAPABoard() {
         <BoardActionEditor
           action={selected}
           tenantUsers={tenantUsers || []}
-          onClose={() => setSelected(null)}
+          onClose={() => { setSelected(null); setActionError(null); }}
+          error={actionError}
           isSaving={patchMutation.isPending}
           onSave={(body) => patchMutation.mutate({ id: selected.id, body })}
         />
@@ -267,12 +269,14 @@ function BoardActionEditor({
   onClose,
   onSave,
   isSaving,
+  error,
 }: {
   action: ActionRow;
   tenantUsers: Array<{ id: number; display_name: string; email: string }>;
   onClose: () => void;
   onSave: (body: Record<string, unknown>) => void;
   isSaving: boolean;
+  error?: string | null;
 }) {
   const [status, setStatus] = useState(action.status);
   const [assigneeId, setAssigneeId] = useState(action.assignee_id ? String(action.assignee_id) : '');
@@ -328,6 +332,7 @@ function BoardActionEditor({
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full rounded border border-slate-300 px-2 py-1.5 text-xs resize-none" />
           </div>
         </div>
+        {error && <p role="alert" className="mx-4 mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</p>}
         <div className="flex items-center justify-between gap-2 border-t border-slate-200 bg-slate-50 px-4 py-2.5">
           <Link href={`/issues/${action.issue_id}`} className="text-[11px] font-medium text-primary-700 hover:underline">
             Open parent issue →

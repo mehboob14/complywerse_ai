@@ -3,8 +3,9 @@
   POST /issues/from-source
        { source_type, source_id, ...optional title/description/impact/urgency overrides }
 
-Looks up the source (vulnerability / risk / asset / control_test / incident),
-pre-fills sensible defaults, creates the issue + the relevant linkage row
+Looks up the source (vulnerability / risk / asset / control / governance
+document / policy statement / IS project), pre-fills sensible defaults,
+creates the issue + the source's linkage row + any links picked in the form
 in a single transaction, and returns the new issue id so the client can
 redirect to /issues/{id}.
 """
@@ -16,10 +17,10 @@ from sqlalchemy.orm import Session
 
 from ....models import (
     Issue, IssueActivity,
-    IssueVulnerabilityLink, IssueRiskLink, IssueAssetLink, IssueControlLink,
     Vulnerability, Risk, ITAsset,
     FrameworkControl, ParsedFrameworkControl, NormalizedControl, InternalControl,
     VulnerabilityAssetLink, RiskAssetLink,
+    GovernanceDocument, PolicyStatement, ISProject,
     GRCUser, get_db,
 )
 from ....routers.auth_router import (
@@ -28,6 +29,7 @@ from ....routers.auth_router import (
 )
 from ..services.severity_resolver import resolve_severity
 from ..services.code_generator import next_issue_code
+from .issues import _apply_inline_linkages, _log_activity
 
 
 _require_create = require_tenant_permission("issue_management:issues:create")
@@ -39,14 +41,32 @@ router = APIRouter(
 )
 
 
+# Sources with their own record and link table, beyond vulnerability / risk / asset / control.
+# Event sources (kri_breach, mitigation_overdue, control_test_failed) are raised by those
+# modules through services.auto_create.from_event, not here: they have no link table, so
+# they are refused rather than looked up as a control by the same id.
+_RECORD_SOURCES = {
+    # source_type: (model, inline-link key, default title, category, issue_type)
+    "governance_document": (GovernanceDocument, "linked_governance_document_ids",
+                            lambda d: f"Document gap: {d.title}", "regulatory", "non_conformance"),
+    "policy_statement": (PolicyStatement, "linked_policy_statement_ids",
+                         lambda p: f"Policy non-conformance: {p.statement_code or f'PS-{p.id}'}",
+                         "regulatory", "non_conformance"),
+    "is_project": (ISProject, "linked_is_project_ids",
+                   lambda p: f"Issue on project {p.name}", "operations", "incident"),
+}
+
 SUPPORTED_SOURCES = {
     "vulnerability", "risk", "asset",
     "control_framework", "control_parsed", "control_normalized", "control_internal",
-    # v2 — governance + event-driven sources. UI uses these for the "+ Create
-    # Issue from..." buttons on document/policy detail pages and the auto-create
-    # hooks in KRI / mitigation / control-test flows.
-    "governance_document", "policy_statement",
-    "kri_breach", "mitigation_overdue", "control_test_failed", "is_project",
+    *_RECORD_SOURCES,
+}
+
+# Where the source itself is pinned, in the create body's inline-link vocabulary.
+_SOURCE_LINK_KEY = {
+    "vulnerability": "linked_vulnerability_ids", "risk": "linked_risk_ids",
+    "asset": "linked_asset_ids", "control_internal": "linked_internal_control_ids",
+    **{k: v[1] for k, v in _RECORD_SOURCES.items()},
 }
 
 
@@ -143,6 +163,20 @@ def create_from_source(
         if not issue_type:
             issue_type = "incident"
 
+    elif source_type in _RECORD_SOURCES:
+        model, _key, default_title, default_category, default_type = _RECORD_SOURCES[source_type]
+        src = db.query(model).filter(model.id == source_id, model.tenant_id.in_(user_tenants)).first()
+        if not src:
+            raise HTTPException(status_code=404, detail=f"{source_type.replace('_', ' ').capitalize()} not found")
+        if not title:
+            title = default_title(src)
+        if not category:
+            category = default_category
+        if not issue_type:
+            issue_type = default_type
+        if not impact:
+            impact = "medium"
+
     else:  # control_framework / control_parsed / control_normalized / control_internal
         target_type = source_type.replace("control_", "")
         if target_type == "framework":
@@ -205,30 +239,26 @@ def create_from_source(
     db.flush()
     issue.code = next_issue_code(tenant_id, db)
 
-    # Pin the canonical linkage based on the source
-    if source_type == "vulnerability":
-        db.add(IssueVulnerabilityLink(issue_id=issue.id, vulnerability_id=source_id, created_by=current_user.id))
-    elif source_type == "risk":
-        db.add(IssueRiskLink(issue_id=issue.id, risk_id=source_id, created_by=current_user.id))
-    elif source_type == "asset":
-        db.add(IssueAssetLink(issue_id=issue.id, asset_id=source_id, created_by=current_user.id))
-    else:  # control_*
-        target_type = source_type.replace("control_", "")
-        cl = IssueControlLink(issue_id=issue.id, created_by=current_user.id)
-        if target_type == "framework":    cl.framework_control_id = source_id
-        elif target_type == "parsed":     cl.parsed_framework_control_id = source_id
-        elif target_type == "normalized": cl.normalized_control_id = source_id
-        elif target_type == "internal":   cl.internal_control_id = source_id
-        db.add(cl)
+    # Pin the source, the assets found through it, and the links picked in the form,
+    # through the same helper /issues uses (it de-duplicates ids and keeps them in tenant).
+    links = dict(body)
 
-    # Auto-attach assets we discovered through the vuln/risk source
-    for asset_id in set(extra_asset_ids):
-        db.add(IssueAssetLink(issue_id=issue.id, asset_id=asset_id, created_by=current_user.id))
+    def _with(key: str, *items: Any) -> None:
+        links[key] = [*(links.get(key) or []), *items]
+
+    if source_type in _SOURCE_LINK_KEY:
+        _with(_SOURCE_LINK_KEY[source_type], source_id)
+    else:  # control_framework / control_parsed / control_normalized
+        _with("linked_controls", {"target_type": source_type.replace("control_", ""), "control_id": source_id})
+    _with("linked_asset_ids", *extra_asset_ids)
+    link_counts = _apply_inline_linkages(db, issue=issue, tenant_id=tenant_id, body=links, user_id=current_user.id)
 
     db.add(IssueActivity(
         issue_id=issue.id, user_id=current_user.id, type="created",
         payload={"source_type": source_type, "source_id": source_id, "auto_pinned_assets": len(extra_asset_ids)},
     ))
+    if link_counts:
+        _log_activity(db, issue.id, current_user.id, "linked_on_create", link_counts)
     from ..services.capa_defaults import ensure_initial_capa
     ensure_initial_capa(db, issue=issue, user_id=current_user.id)
     db.commit()

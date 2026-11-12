@@ -14,12 +14,9 @@ Endpoint family rooted at ``/erm/rcsa/custom-templates``:
     GET    /custom-templates/{id}/download       re-download the original .xlsx
     POST   /custom-templates/{id}/export         export current rows as .xlsx in the same layout
 
-    POST   /custom-templates/{id}/import-rows    seed/append rows from the originally uploaded data
     GET    /custom-templates/{id}/rows           list rows (paginated, filterable)
-    POST   /custom-templates/{id}/rows           create one row
     GET    /custom-templates/{id}/rows/{row_id}  fetch one row
-    PUT    /custom-templates/{id}/rows/{row_id}  update one row
-    DELETE /custom-templates/{id}/rows/{row_id}  delete one row
+    POST/PUT/DELETE on rows, and import-rows     409: an imported matrix is read-only (upload a new file)
 
     POST   /custom-templates/{id}/rows/{row_id}/promote-to-risk
                                                  link this row to the platform's Risk Register
@@ -40,7 +37,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy.orm import Session, joinedload
 
 from ....models import (
@@ -196,18 +193,6 @@ class RowExplanationResponse(BaseModel):
     explanation: str
     generated_at: datetime
     from_cache: bool
-
-
-class CustomRowCreate(BaseModel):
-    data: Dict[str, Any] = Field(default_factory=dict)
-    risk_id_text: Optional[str] = None
-    field_origins: Optional[Dict[str, Any]] = None
-
-
-class CustomRowUpdate(BaseModel):
-    data: Optional[Dict[str, Any]] = None
-    risk_id_text: Optional[str] = None
-    field_origins: Optional[Dict[str, Any]] = None
 
 
 class PromoteToRiskRequest(BaseModel):
@@ -730,50 +715,21 @@ def export_current_rows(
     )
 
 
+def _refuse_matrix_edit(template_id: int, current_user: GRCUser, db: Session) -> None:
+    """An imported matrix is the bank's spreadsheet as uploaded, kept for reference and export: its rows never change
+    here. Campaigns run on the versioned question templates instead."""
+    _get_template_or_404(template_id, _tenant_id_or_403(current_user, db), db)
+    raise HTTPException(status.HTTP_409_CONFLICT, "An imported matrix is read-only: upload a new file to change it.")
+
+
 @router.post("/{template_id}/import-rows")
 def reimport_rows_from_original(
     template_id: int,
-    replace: bool = Query(False, description="When true, delete existing rows before importing."),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
     _perm: bool = Depends(_require_edit),
 ):
-    """Re-extract data rows from the stored original .xlsx and insert them.
-    Use ``replace=true`` to wipe existing rows first. Useful when the
-    operator updated the original file outside the platform and uploaded
-    a new version, or when seeding was disabled on the original upload.
-    """
-    tenant_id = _tenant_id_or_403(current_user, db)
-    t = _get_template_or_404(template_id, tenant_id, db)
-    if not t.original_file:
-        raise HTTPException(404, "Original template bytes unavailable for re-import")
-    try:
-        parsed = parse_rcsa_template(
-            t.original_file,
-            original_filename=t.original_filename,
-            sheet_name=t.sheet_name,
-        )
-    except ValueError as exc:
-        raise HTTPException(422, f"Could not re-parse stored template: {exc}")
-    if replace:
-        db.query(RCSACustomRow).filter(RCSACustomRow.template_id == t.id).delete()
-        db.flush()
-    inserted = 0
-    for row_data in parsed.data_rows:
-        denorm = _denorm_from_data(t, row_data)
-        db.add(
-            RCSACustomRow(
-                tenant_id=tenant_id,
-                template_id=t.id,
-                data=row_data,
-                field_origins={k: "imported" for k in row_data.keys()},
-                created_by=current_user.id,
-                **denorm,
-            )
-        )
-        inserted += 1
-    db.commit()
-    return {"template_id": t.id, "imported": inserted, "replaced": replace}
+    _refuse_matrix_edit(template_id, current_user, db)
 
 
 # ─── Row endpoints ──────────────────────────────────────────────────────────
@@ -804,31 +760,11 @@ def list_rows(
 @router.post("/{template_id}/rows", response_model=CustomRowResponse, status_code=201)
 def create_row(
     template_id: int,
-    body: CustomRowCreate,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
     _perm: bool = Depends(_require_edit),
 ):
-    tenant_id = _tenant_id_or_403(current_user, db)
-    t = _get_template_or_404(template_id, tenant_id, db)
-    data = body.data or {}
-    denorm = _denorm_from_data(t, data)
-    # Caller's risk_id_text override wins when supplied.
-    if body.risk_id_text:
-        denorm["risk_id_text"] = body.risk_id_text[:60]
-    r = RCSACustomRow(
-        tenant_id=tenant_id,
-        template_id=t.id,
-        data=data,
-        field_origins=body.field_origins or {k: "user" for k in data.keys()},
-        created_by=current_user.id,
-        updated_by=current_user.id,
-        **denorm,
-    )
-    db.add(r)
-    db.commit()
-    db.refresh(r)
-    return _row_to_response(r)
+    _refuse_matrix_edit(template_id, current_user, db)
 
 
 @router.get("/{template_id}/rows/{row_id}", response_model=CustomRowResponse)
@@ -849,36 +785,11 @@ def get_row(
 def update_row(
     template_id: int,
     row_id: int,
-    body: CustomRowUpdate,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
     _perm: bool = Depends(_require_edit),
 ):
-    tenant_id = _tenant_id_or_403(current_user, db)
-    t = _get_template_or_404(template_id, tenant_id, db)
-    r = _get_row_or_404(row_id, tenant_id, template_id, db)
-    if body.data is not None:
-        # Merge: preserve any field the caller didn't include. Lets the UI
-        # PATCH-style without sending the full payload every time.
-        merged = dict(r.data or {})
-        merged.update(body.data)
-        r.data = merged
-        denorm = _denorm_from_data(t, merged)
-        for k, v in denorm.items():
-            setattr(r, k, v)
-        # Mark every touched field as user-edited.
-        origins = dict(r.field_origins or {})
-        for k in body.data.keys():
-            origins[k] = "user"
-        r.field_origins = origins
-    if body.risk_id_text is not None:
-        r.risk_id_text = body.risk_id_text[:60] or None
-    if body.field_origins is not None:
-        r.field_origins = body.field_origins
-    r.updated_by = current_user.id
-    db.commit()
-    db.refresh(r)
-    return _row_to_response(r)
+    _refuse_matrix_edit(template_id, current_user, db)
 
 
 @router.delete("/{template_id}/rows/{row_id}")
@@ -889,12 +800,7 @@ def delete_row(
     current_user: GRCUser = Depends(require_auth),
     _perm: bool = Depends(_require_edit),
 ):
-    tenant_id = _tenant_id_or_403(current_user, db)
-    _get_template_or_404(template_id, tenant_id, db)
-    r = _get_row_or_404(row_id, tenant_id, template_id, db)
-    db.delete(r)
-    db.commit()
-    return {"deleted": row_id}
+    _refuse_matrix_edit(template_id, current_user, db)
 
 
 @router.post("/{template_id}/rows/{row_id}/promote-to-risk")

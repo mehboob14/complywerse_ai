@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { riskAssessmentApi, ermApi } from '@/lib/api';
+import { riskAssessmentApi, ermApi, aiRiskAssessmentApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   ClipboardCheck,
@@ -20,7 +20,7 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 import { PageLoader } from '@/components/ui';
@@ -102,20 +102,24 @@ const FRAMEWORK_STATUS_CONFIG: Record<string, { label: string; color: string; bg
 
 const FRAMEWORK_STATUS_TO_STANDARD: Partial<Record<string, AssessmentStatus>> = {
   in_progress: 'in_progress',
-  completed: 'approved',
+  completed: 'under_review',      // completed waits for a second person's approval
+  approved: 'approved',
   archived: 'closed',
   not_started: 'draft',
 };
 
 export default function RiskAssessmentsPage() {
   const router = useRouter();
-  const { hasPermission } = usePermissions();
-  const canCreate = hasPermission('risks:risk_assessment:create');
-  const canDelete = hasPermission('risks:risk_assessment:delete');
+  const { hasAnyPermission } = usePermissions();
+  // the server accepts either name for each write (risk editors held erm:risks:* before)
+  const canCreate = hasAnyPermission(['risks:risk_assessment:create', 'erm:risks:create']);
+  const canDelete = hasAnyPermission(['risks:risk_assessment:delete', 'erm:risks:delete']);
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<AssessmentStatus | 'all'>('all');
   const [searchTerm, setSearchTerm] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  // ?action=new opens the form: the Assessments page's "Plan assessment" lands here
+  const opensForm = useSearchParams().get('action') === 'new';
+  const [isModalOpen, setIsModalOpen] = useState(opensForm);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadFormData, setUploadFormData] = useState({
@@ -141,6 +145,15 @@ export default function RiskAssessmentsPage() {
     assessment_period_start: '',
     assessment_period_end: '',
     notes: '',
+    lead_assessor_id: '',
+  });
+
+  // The tenant's people, as the AI Risk Assessment tab's owner picker loads them.
+  const { data: tenantUsers = [] } = useQuery({
+    queryKey: ['ai-risk-assessment-tenant-users'],
+    queryFn: () => aiRiskAssessmentApi.getTenantUsers().then((r) => r.data).catch(() => []),
+    enabled: isModalOpen,
+    staleTime: 5 * 60_000,
   });
 
   const { data: assessments, isLoading, error } = useQuery({
@@ -242,6 +255,7 @@ export default function RiskAssessmentsPage() {
       assessment_period_start: '',
       assessment_period_end: '',
       notes: '',
+      lead_assessor_id: '',
     });
   };
 
@@ -257,6 +271,7 @@ export default function RiskAssessmentsPage() {
     if (formData.assessment_period_start) payload.assessment_period_start = formData.assessment_period_start;
     if (formData.assessment_period_end) payload.assessment_period_end = formData.assessment_period_end;
     if (formData.notes) payload.notes = formData.notes;
+    if (formData.lead_assessor_id) payload.lead_assessor_id = Number(formData.lead_assessor_id);
     createMutation.mutate(payload);
   };
 
@@ -785,6 +800,21 @@ export default function RiskAssessmentsPage() {
                   className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
                   placeholder="Define the scope of this assessment"
                 />
+              </div>
+
+              <div>
+                <label htmlFor="ra-lead-assessor" className="mb-1 block text-sm font-medium text-slate-700">Lead Assessor</label>
+                <select
+                  id="ra-lead-assessor"
+                  value={formData.lead_assessor_id}
+                  onChange={(e) => setFormData({ ...formData, lead_assessor_id: e.target.value })}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none"
+                >
+                  <option value="">Not assigned</option>
+                  {tenantUsers.map((u) => (
+                    <option key={u.id} value={String(u.id)}>{u.display_name}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-4">

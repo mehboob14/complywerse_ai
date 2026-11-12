@@ -2,8 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ermApi } from '@/lib/api';
+import { assetsApi, ermApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
+import StatementSection from './StatementSection';
+import BreachLog from './BreachLog';
+import LimitLinks, { type PickKRI, type PickUser } from './LimitLinks';
+import LimitChange from './LimitChange';
+import type { LimitChange as PendingLimitChange, LimitKRI, LimitsSource } from './appetiteModel';
 import { RiskCategory } from '@/types';
 import {
   AlertTriangle,
@@ -43,6 +48,12 @@ interface AppetiteConfigWithStats {
   risks_count: number;
   exceeding_count: number;
   tolerance_breaches: ToleranceBreachFromAPI[];
+  limit_kris: LimitKRI[];
+  open_breach_count: number;
+  concentration_limit: number | null;
+  limit_kri_ids?: number[];
+  limit_change: PendingLimitChange | null;   // once a statement is approved, a change waits for a second person
+  limits_source: LimitsSource | null;
 }
 
 interface ToleranceBreachFromAPI {
@@ -120,9 +131,21 @@ const getAppetiteLevelColor = (level: AppetiteLevel) => {
 
 export default function RiskAppetitePage() {
   const queryClient = useQueryClient();
-  const { hasPermission } = usePermissions();
-  const canCreate = hasPermission('risks:risk_appetite:create');
-  const canEdit = hasPermission('risks:risk_appetite:edit');
+  const { hasAnyPermission } = usePermissions();
+  // the server takes the appetite permission or the risk editor's own, so the page does too
+  const canCreate = hasAnyPermission(['risks:risk_appetite:create', 'erm:risks:create']);
+  const canEdit = hasAnyPermission(['risks:risk_appetite:edit', 'erm:risks:edit']);
+  const canDelete = hasAnyPermission(['risks:risk_appetite:delete', 'erm:risks:delete']);
+  const { data: tenantUsers = [] } = useQuery({
+    queryKey: ['tenant-users'],
+    queryFn: async () => (await assetsApi.getTenantUsers()).data as PickUser[],
+    enabled: canEdit,
+  });
+  const { data: kriOptions = [] } = useQuery({
+    queryKey: ['appetite-kri-options'],
+    queryFn: async () => (await ermApi.kris.getAll({ kind: 'kri' })).data as PickKRI[],
+    enabled: canEdit,
+  });
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<Record<string, unknown>>({});
   const [isSaving, setIsSaving] = useState(false);
@@ -172,6 +195,7 @@ export default function RiskAppetitePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['appetite-configs-with-stats'] });
       queryClient.invalidateQueries({ queryKey: ['appetite-breaches'] });
+      queryClient.invalidateQueries({ queryKey: ['appetite-breach-log'] });
     },
   });
 
@@ -182,18 +206,19 @@ export default function RiskAppetitePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['appetite-configs-with-stats'] });
       queryClient.invalidateQueries({ queryKey: ['appetite-breaches'] });
+      queryClient.invalidateQueries({ queryKey: ['appetite-breach-log'] });
     },
   });
 
   const createMutation = useMutation({
     mutationFn: async (data: typeof createForm) => {
-      const tenantId = appetiteConfigs?.[0]?.tenant_id || 1;
-      const response = await ermApi.appetite.create(tenantId, data);
+      const response = await ermApi.appetite.create(data);
       return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['appetite-configs-with-stats'] });
       queryClient.invalidateQueries({ queryKey: ['appetite-breaches'] });
+      queryClient.invalidateQueries({ queryKey: ['appetite-breach-log'] });
       setShowCreateModal(false);
       setCreateForm({ category: 'strategic', appetite_level: 'moderate', tolerance_threshold: 12, max_acceptable_score: 15, description: '', alert_enabled: true });
     },
@@ -201,12 +226,13 @@ export default function RiskAppetitePage() {
 
   const seedMutation = useMutation({
     mutationFn: async () => {
-      const response = await ermApi.appetite.seedDefaults(1);
+      const response = await ermApi.appetite.seedDefaults();
       return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['appetite-configs-with-stats'] });
       queryClient.invalidateQueries({ queryKey: ['appetite-breaches'] });
+      queryClient.invalidateQueries({ queryKey: ['appetite-breach-log'] });
     },
   });
 
@@ -347,6 +373,8 @@ export default function RiskAppetitePage() {
           <p className="text-sm text-slate-600">Configure risk appetite levels and monitor tolerance breaches</p>
         </div>
 
+        <StatementSection canEdit={canEdit} />
+
         <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100">
             <Database className="h-8 w-8 text-slate-600" />
@@ -357,7 +385,8 @@ export default function RiskAppetitePage() {
           </p>
           <button
             onClick={handleSeedDefaults}
-            disabled={seedMutation.isPending}
+            disabled={seedMutation.isPending || !canCreate}
+            title={canCreate ? undefined : 'You need permission to create risk appetite settings'}
             className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-3 font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50"
           >
             {seedMutation.isPending ? (
@@ -383,7 +412,7 @@ export default function RiskAppetitePage() {
         </div>
         <div className="flex items-center gap-3">
           {saveSuccess && (
-            <span className="text-sm text-emerald-600">Configuration saved successfully!</span>
+            <span className="text-sm text-emerald-600">Saved. Once a statement is approved, a limit change waits for someone else&apos;s approval.</span>
           )}
           {appetiteConfigs && canCreate && (
             <button
@@ -416,6 +445,9 @@ export default function RiskAppetitePage() {
         </div>
       </div>
 
+      <StatementSection canEdit={canEdit} />
+
+      <h3 className="text-base font-semibold text-slate-900">Limits</h3>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {appetiteConfigs.map(config => {
           const catStyle = getCategoryStyle(config.category);
@@ -431,6 +463,7 @@ export default function RiskAppetitePage() {
                 <div className="flex items-center justify-between">
                   <h3 className={`font-semibold ${catStyle.color}`}>{catStyle.label}</h3>
                   <div className="flex items-center gap-1">
+                    {canEdit && (
                     <button
                       onClick={() => handleAiSuggest(config)}
                       disabled={aiSuggestingFor === config.id}
@@ -443,6 +476,7 @@ export default function RiskAppetitePage() {
                         <Sparkles className="h-4 w-4 text-primary-500" />
                       )}
                     </button>
+                    )}
                     {isEditing ? (
                       <div className="flex items-center gap-1">
                         <button
@@ -463,6 +497,7 @@ export default function RiskAppetitePage() {
                       </div>
                     ) : (
                       <div className="flex items-center gap-1">
+                        {canEdit && (
                         <button
                           onClick={() => startEditing(config)}
                           className="p-1 rounded hover:bg-slate-50 text-slate-500 hover:text-slate-700 transition-colors"
@@ -470,6 +505,8 @@ export default function RiskAppetitePage() {
                         >
                           <Edit2 className="h-4 w-4" />
                         </button>
+                        )}
+                        {canDelete && (
                         <button
                           onClick={() => { if (confirm('Delete this risk appetite configuration?')) deleteMutation.mutate(config.id); }}
                           disabled={deleteMutation.isPending}
@@ -478,6 +515,7 @@ export default function RiskAppetitePage() {
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -577,6 +615,17 @@ export default function RiskAppetitePage() {
                     {config.description && (
                       <p className="text-xs text-slate-500 pt-1 border-t border-slate-200">{config.description}</p>
                     )}
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-600">Open breaches</span>
+                      <span className={`font-bold ${config.open_breach_count > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{config.open_breach_count ?? 0}</span>
+                    </div>
+                    <LimitLinks configId={config.id} category={config.category} concentrationLimit={config.concentration_limit ?? null}
+                      escalationOwnerId={config.escalation_owner_id}
+                      ownerName={config.escalation_owner?.full_name || config.escalation_owner?.email || null}
+                      limitKris={config.limit_kris || []} users={tenantUsers} kris={kriOptions} canEdit={canEdit} />
+                    <LimitChange configId={config.id} change={config.limit_change} source={config.limits_source} users={tenantUsers}
+                      canEdit={canEdit} inForce={{ ...config, limit_kri_ids: config.limit_kri_ids ?? config.limit_kris.map((k) => k.id) }} />
                   </>
                 )}
 
@@ -651,7 +700,7 @@ export default function RiskAppetitePage() {
                       </p>
                     </div>
                     <div className="text-center">
-                      <p className="text-slate-600">Days Over</p>
+                      <p className="text-slate-600">Days Since Update</p>
                       <p className="font-medium text-orange-600">{breach.days_over}</p>
                     </div>
                     <Link
@@ -681,6 +730,8 @@ export default function RiskAppetitePage() {
           </div>
         </div>
       )}
+
+      <BreachLog canDecide={canEdit} />
 
       <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-200">

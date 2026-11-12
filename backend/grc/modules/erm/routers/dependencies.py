@@ -6,15 +6,16 @@ from sqlalchemy import or_
 
 from ....models import (
     Risk, RiskDependency, RiskScoreHistory, RiskAppetiteConfig,
-    RiskControlLink, GRCUser, get_db
+    RiskControl, GRCUser, get_db
 )
+from ..services.risk_control_links import link_by_id
 from ....schemas import (
     RiskDependencyCreate, RiskDependencyResponse,
     RiskScoreHistoryResponse, RiskTrendData, RiskTrendsResponse,
     RiskAppetiteConfigUpdate, RiskAppetiteConfigResponse,
     ControlEffectivenessUpdate, MessageResponse
 )
-from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....routers.auth_router import require_auth, require_tenant_permission, get_user_tenants, get_user_primary_tenant
 
 router = APIRouter(prefix="/dependencies", tags=["ERM - Dependencies & Trends"])
 
@@ -66,7 +67,8 @@ def list_dependencies(
     return result
 
 
-@router.post("", response_model=RiskDependencyResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=RiskDependencyResponse, status_code=status.HTTP_201_CREATED,
+              dependencies=[Depends(require_tenant_permission("erm:risks:edit"))])    # links two existing risks
 def create_dependency(
     dependency: RiskDependencyCreate,
     db: Session = Depends(get_db),
@@ -138,7 +140,8 @@ def create_dependency(
     return dep_data
 
 
-@router.delete("/{dependency_id}", response_model=MessageResponse)
+@router.delete("/{dependency_id}", response_model=MessageResponse,
+                dependencies=[Depends(require_tenant_permission("erm:risks:delete"))])
 def delete_dependency(
     dependency_id: int,
     db: Session = Depends(get_db),
@@ -394,7 +397,8 @@ def get_appetite_config(
     return configs
 
 
-@router.put("/appetite/{category}", response_model=RiskAppetiteConfigResponse)
+@router.put("/appetite/{category}", response_model=RiskAppetiteConfigResponse,
+             dependencies=[Depends(require_tenant_permission("erm:risks:edit"))])
 def update_appetite(
     category: str,
     appetite_update: RiskAppetiteConfigUpdate,
@@ -472,7 +476,8 @@ def get_appetite_breaches(
 _EFFECTIVENESS_TO_PCT = {"high": 70.0, "medium": 40.0, "low": 15.0}
 
 
-@router.put("/controls/{link_id}/effectiveness", response_model=MessageResponse)
+@router.put("/controls/{link_id}/effectiveness", response_model=MessageResponse,
+             dependencies=[Depends(require_tenant_permission("erm:risks:edit"))])
 def update_control_effectiveness(
     link_id: int,
     effectiveness: ControlEffectivenessUpdate,
@@ -481,10 +486,7 @@ def update_control_effectiveness(
 ):
     user_tenants = get_user_tenants(current_user, db)
     
-    link = db.query(RiskControlLink).join(Risk).filter(
-        RiskControlLink.id == link_id,
-        Risk.tenant_id.in_(user_tenants)
-    ).first()
+    link = link_by_id(db, link_id, "normalized", RiskControl.tenant_id.in_(user_tenants))   # the one risk–control link
     
     if not link:
         raise HTTPException(
@@ -500,7 +502,7 @@ def update_control_effectiveness(
             detail="effectiveness_rating must be one of: high, medium, low",
         )
 
-    # RiskControlLink stores FAIR effect fields, not effectiveness_rating/notes.
+    # The link stores FAIR effect fields, not effectiveness_rating/notes.
     link.freq_reduction_ml_pct = pct
     link.mag_reduction_ml_pct = pct
     if effectiveness.notes is not None:

@@ -24,7 +24,7 @@ export const stageNumber = (key?: string | null): number => STAGES.findIndex((s)
 
 // ── the checks ───────────────────────────────────────────────────────────────
 
-export type Fix = 'edit_vendor' | 'tier' | 'questionnaire' | 'roster' | 'findings' | 'paperwork' | 'decision' | 'lifecycle';
+export type Fix = 'edit_vendor' | 'tier' | 'questionnaire' | 'roster' | 'findings' | 'paperwork' | 'decision' | 'lifecycle' | 'outsourcing';
 
 /** One condition on leaving a stage, as the server sends it. met: true, false, or null when it cannot be answered yet. */
 export interface Check { key: string; text: string; met: boolean | null; fix: Fix | null; detail?: string }
@@ -32,6 +32,7 @@ export interface Check { key: string; text: string; met: boolean | null; fix: Fi
 export const FIX_LABEL: Record<Fix, string> = {
   edit_vendor: 'Edit vendor', tier: 'Tier engagement', questionnaire: 'Open questionnaire', roster: 'Open roster',
   findings: 'Open findings', paperwork: 'Open paperwork', decision: 'Go to decision', lifecycle: 'Open lifecycle',
+  outsourcing: 'Open outsourcing',
 };
 
 /** Blocking first, then those not answerable yet, then those met; each group keeps the server's order. */
@@ -46,7 +47,8 @@ export const openChecks = (checks?: ReadonlyArray<Check> | null): number => (che
 export type FixAction =
   | { kind: 'href'; href: string }
   | { kind: 'stage'; stage: string }
-  | { kind: 'tier' };
+  | { kind: 'tier' }
+  | { kind: 'outsourcing' };
 
 export function fixAction(fix: Fix, where: { vendorId: number; engagementId: number | null; firstOpen?: string | null }): FixAction {
   const base = `/vendor-risk/vendors/${where.vendorId}`;
@@ -60,6 +62,7 @@ export function fixAction(fix: Fix, where: { vendorId: number; engagementId: num
     case 'findings': return tab('findings');
     case 'paperwork': return tab('paperwork');
     case 'roster': return { kind: 'href', href: '/vendor-risk/roster' };
+    case 'outsourcing': return { kind: 'outsourcing' };
   }
 }
 

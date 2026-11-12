@@ -7,9 +7,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from ....models import GRCUser, ParsedFrameworkControl, Risk, RiskFrameworkRequirementLink, get_db
+from ....models import GRCUser, ParsedFrameworkControl, Risk, RiskControl, get_db
 from ....routers.auth_router import get_user_tenants, require_auth, require_tenant_permission
 from ..services import risk_framework_requirements as svc
+from ..services.risk_control_links import link_by_id, unlink_control
 
 router = APIRouter(tags=["ERM - Risk framework controls"])
 _may_link = require_tenant_permission("erm:risks:edit", "erm:risks:create")
@@ -73,8 +74,7 @@ def link_framework_controls(
     done = svc.link_controls(db, risk, db.get(UploadedFramework, body.framework_id), controls,
                              body.mitigation_effectiveness, (body.notes or "").strip() or None, current_user.id)
     db.commit()
-    db.refresh(risk)
-    return {**done, "links": svc.serialize_links(risk)}
+    return {**done, "links": svc.serialize_links(db, risk)}
 
 
 @router.delete("/risks/{risk_id}/framework-requirements/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -86,10 +86,9 @@ def unlink_framework_control(
     current_user: GRCUser = Depends(require_auth),
 ):
     risk = _risk(db, current_user, risk_id)
-    link = db.query(RiskFrameworkRequirementLink).filter(RiskFrameworkRequirementLink.id == link_id,
-                                                         RiskFrameworkRequirementLink.risk_id == risk.id).first()
+    link = link_by_id(db, link_id, "framework", RiskControl.risk_id == risk.id)
     if link is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "That link is not on this risk")
-    db.delete(link)
+    unlink_control(db, link)
     db.commit()
     return None

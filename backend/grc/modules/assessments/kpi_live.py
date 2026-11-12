@@ -124,7 +124,7 @@ def compute_kpi_metrics(db, now=None, tenant_ids=None):
     # 6) Risks with a treatment plan — Risk management register
     try:
         from grc.models._11_enterprise_risk_management import Risk
-        risks = _scoped(db.query(Risk), Risk).all()
+        risks = _scoped(db.query(Risk), Risk).filter(Risk.status.is_distinct_from("draft")).all()   # a draft is not in the register yet
         if risks:
             treated = [r for r in risks if (getattr(r, "treatment_plan", None) or "").strip()]
             metrics["risk_treatment"] = {
@@ -137,16 +137,17 @@ def compute_kpi_metrics(db, now=None, tenant_ids=None):
     except Exception:
         pass
 
-    # 7) Incidents resolved or contained — Risk management incidents (business continuity)
+    # 7) Incidents resolved — Risk management incidents (business continuity), by the register's own done statuses
     try:
         from grc.models._11_enterprise_risk_management import RiskIncident
+        from grc.modules.erm.routers.incidents import _DONE_STATUSES
         incs = _scoped(db.query(RiskIncident), RiskIncident).all()
         if incs:
-            resolved = [i for i in incs if str(getattr(i, "status", "") or "").lower() in ("resolved", "closed", "contained")]
+            resolved = [i for i in incs if str(getattr(i, "status", "") or "").lower() in _DONE_STATUSES]
             metrics["incident_resolution"] = {
-                "label": "Incidents resolved or contained",
+                "label": "Incidents resolved",
                 "actual": _pct(len(resolved), len(incs)), "numerator": len(resolved), "denominator": len(incs),
-                "formula": "incidents resolved, closed or contained / total incidents",
+                "formula": "incidents resolved or closed / total incidents",
                 "target": 90, "direction": "higher",
                 "source": "Risk management - incidents", "href": "/erm",
             }

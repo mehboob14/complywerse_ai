@@ -100,7 +100,8 @@ def test_advance_through_intake_when_complete(db):
 # ── Tiering gate ─────────────────────────────────────────────────────────────
 
 def test_run_tiering_sets_tier_and_unblocks_gate(db):
-    v = _vendor(db, data_access_level="restricted", data_types_accessed=["PII", "financial"])
+    # critical_important: the tiering gate also waits for materiality (wave 4-M); this one answers "no"
+    v = _vendor(db, data_access_level="restricted", data_types_accessed=["PII", "financial"], critical_important=False)
     a = service.ensure_active_assessment(db, v, actor_id=1)
     a.current_stage = "tiering"
     db.commit()
@@ -362,7 +363,10 @@ def test_scoring_rolls_up_to_risk_register(db):
     ).first()
     assert risk is not None
     assert risk.category == "third_party"
-    assert risk.residual_score == a.residual_score
+    # On the register's 1–25 scale, in the band of the TPRA rating (test_vendor_risk_erm_fixes.py)
+    from grc.models._11_enterprise_risk_management import risk_priority_for_score
+    assert risk_priority_for_score(risk.residual_score) == a.residual_rating
+    assert risk.residual_score == risk.residual_likelihood * risk.residual_impact
     assert a.linked_risk_id == risk.id
     # Re-scoring updates the SAME register entry (no duplicate).
     service.run_scoring(db, v, a, actor_id=1)
@@ -585,7 +589,7 @@ def test_legacy_lifecycle_write_endpoints_require_permission(db):
 
 def test_low_tier_auto_skips_diligence_and_advance_steps_over(db):
     from grc.modules.vendor_risk.tpra.engine_tiering import FACTOR_KEYS
-    v = _vendor(db, tier="low")
+    v = _vendor(db, tier="low", critical_important=False)      # materiality decided: the tiering gate waits for it (wave 4-M)
     a = service.ensure_active_assessment(db, v, actor_id=1)
     a.current_stage = "tiering"
     db.commit()

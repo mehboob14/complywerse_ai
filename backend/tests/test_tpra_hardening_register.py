@@ -492,16 +492,15 @@ def test_the_register_payload_gains_the_next_action_engagements_and_active_asses
 
 # ── 5. the engagement hand-over ──────────────────────────────────────────────
 
-def test_a_hand_edit_of_a_split_suppliers_tier_and_scores_is_generals(db):
+def test_a_hand_edit_of_a_split_suppliers_tier_is_generals(db):
+    # The scores and rating are the scoring engine's: an edit cannot set them (test_vendor_risk_erm_fixes.py).
     v = _vendor(db, tier="medium")
     engagements.create_engagement(v.id, engagements.EngagementIn(name="Payroll"), db=db, user=_user(db, ADMIN))
-    vendor_routes.update_vendor(v.id, vendor_routes.VendorUpdate(tier="high", residual_risk_score=30.0,
-                                                                 risk_rating="medium"),
-                                db=db, current_user=_user(db, ADMIN))
+    vendor_routes.update_vendor(v.id, vendor_routes.VendorUpdate(tier="high"), db=db, current_user=_user(db, ADMIN))
     general = service.general_row(db, v)
-    assert (general.tier, general.residual_risk_score, general.risk_rating) == ("high", 30.0, "medium")
+    assert general.tier == "high"
     service.recache(db, v)                                             # the next lifecycle write keeps the edit
-    assert (v.tier, v.residual_risk_score, v.risk_rating) == ("high", 30.0, "medium")
+    assert v.tier == "high"
 
 
 def test_an_import_sets_generals_tier_and_can_offboard(db, api):

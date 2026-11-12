@@ -19,6 +19,7 @@ import Link from 'next/link';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
 import { PageLoader } from '@/components/ui';
+import { riskBandForScore } from '@/lib/riskBands';
 
 interface Assessment {
   id: number;
@@ -32,7 +33,7 @@ interface Assessment {
   business_unit_name: string | null;
   assessor_id: number | null;
   assessor_name: string | null;
-  status: 'not_started' | 'in_progress' | 'submitted' | 'under_review' | 'approved' | 'rejected';
+  status: 'not_started' | 'in_progress' | 'submitted' | 'under_review' | 'requires_changes' | 'approved' | 'rejected';
   overall_risk_score?: number | null;
   overall_control_score?: number | null;
   ai_quality_score?: number | null;
@@ -51,9 +52,12 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }>
   in_progress: { bg: 'bg-primary-50', text: 'text-primary-700', label: 'In Progress' },
   submitted: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Submitted' },
   under_review: { bg: 'bg-orange-50', text: 'text-orange-700', label: 'Under Review' },
+  requires_changes: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Returned' },
   approved: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Approved' },
   rejected: { bg: 'bg-rose-50', text: 'text-rose-700', label: 'Rejected' },
 };
+
+const SCORE_COLOR = { critical: 'text-rose-700', high: 'text-orange-600', medium: 'text-amber-600', low: 'text-emerald-600' } as const;
 
 function getStatusStyle(status: string) {
   return STATUS_STYLES[status] || STATUS_STYLES.not_started;
@@ -75,7 +79,7 @@ export default function RCSAAssessmentsPage() {
   const [businessUnitFilter, setBusinessUnitFilter] = useState<string>('');
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
-  const canEdit = hasPermission('risks:rcsa:edit');
+  const canEdit = hasPermission('erm:rcsa:edit') || hasPermission('erm:risks:edit');
 
   const { data: assessments, isLoading, error } = useQuery({
     queryKey: ['rcsa-assessments', statusFilter, campaignFilter, businessUnitFilter],
@@ -185,7 +189,8 @@ export default function RCSAAssessmentsPage() {
             Continue
           </Link>
         );
-      case 'rejected':
+      // Returned for changes: the assessor edits and resubmits (rejected is final, so it only gets View).
+      case 'requires_changes':
         return (
           <Link
             href={`/erm/rcsa/assessments/${assessment.id}`}
@@ -256,6 +261,7 @@ export default function RCSAAssessmentsPage() {
             { value: 'in_progress', label: 'In Progress' },
             { value: 'submitted', label: 'Submitted' },
             { value: 'under_review', label: 'Under Review' },
+            { value: 'requires_changes', label: 'Returned' },
             { value: 'approved', label: 'Approved' },
             { value: 'rejected', label: 'Rejected' },
           ]}
@@ -290,7 +296,7 @@ export default function RCSAAssessmentsPage() {
               <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Business Unit</th>
               <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Assessor</th>
               <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Status</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Score</th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Avg Risk Score</th>
               <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Due Date</th>
               <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Actions</th>
             </tr>
@@ -329,20 +335,13 @@ export default function RCSAAssessmentsPage() {
                   </td>
                   <td className="py-3 px-4">
                     {(() => {
-                      // Score column was reading `assessment.score`, which the
-                      // backend never sends. The relevant scores are stored on
-                      // overall_risk_score / overall_control_score; we surface
-                      // whichever exists and fall back to ai_quality_score for
-                      // submitted-but-unscored assessments.
-                      const score = assessment.overall_control_score ?? assessment.overall_risk_score ?? assessment.ai_quality_score;
-                      if (score == null) return <span className="text-slate-500">-</span>;
-                      const rounded = Math.round(score);
+                      // The average likelihood x impact of the answers (1-25), set on submit; not a percentage.
+                      const score = assessment.overall_risk_score;
+                      const band = riskBandForScore(score);
+                      if (score == null || !band) return <span className="text-slate-500">-</span>;
                       return (
-                        <span className={`font-medium ${
-                          rounded >= 80 ? 'text-emerald-600' :
-                          rounded >= 60 ? 'text-amber-600' : 'text-rose-600'
-                        }`}>
-                          {rounded}%
+                        <span className={`font-medium ${SCORE_COLOR[band]}`} title={`Average risk score: ${band}`}>
+                          {score.toFixed(1)}
                         </span>
                       );
                     })()}

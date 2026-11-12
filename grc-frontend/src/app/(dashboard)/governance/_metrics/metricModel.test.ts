@@ -210,7 +210,7 @@ test('a name is asked for; the limits are the database columns', () => {
   assert.equal(nameError({ ...blankForm('kpi'), name: '   ' }), 'Enter a name.');
   assert.equal(nameError({ ...blankForm('kpi'), name: 'x' }), undefined);
   assert.deepEqual(LIMITS, { name: 255, category: 100, unit: 50, period: 40 });
-  assert.deepEqual(FREQUENCIES, ['daily', 'weekly', 'monthly', 'quarterly', 'annual']);
+  assert.deepEqual(FREQUENCIES, ['daily', 'weekly', 'monthly', 'quarterly', 'annually'], 'the values the KRI page and the backend use');
 });
 
 test('a measurement: a number is asked for, and it is recorded as approved at once (a workflow question, kept as it is)', () => {

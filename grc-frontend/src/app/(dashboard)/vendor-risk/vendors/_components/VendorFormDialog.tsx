@@ -156,7 +156,9 @@ export default function VendorFormDialog({ open, mode, vendor, onClose, onSaved 
 
   const typeOptions = listOptions(settings, 'vendor_type', form.vendor_type);
   const industryOptions = listOptions(settings, 'industry', form.industry);
-  const statusItems = statusChoices(settings, STATUSES.map((s) => ({ value: s, label: words(s) })));
+  // The lifecycle moves the status (approval, reactivation): an edit keeps it, or takes the vendor out of use.
+  const statusItems = statusChoices(settings, STATUSES.map((s) => ({ value: s, label: words(s) })))
+    .filter((s) => s.value === was?.status || s.value === 'offboarded' || (s.value === 'suspended' && was?.status !== 'offboarded'));
   const tierChanged = !!was && form.tier !== was.tier;
 
   return (
@@ -307,9 +309,9 @@ export default function VendorFormDialog({ open, mode, vendor, onClose, onSaved 
                   <textarea id={fid('description')} rows={2} value={form.description} onChange={(e) => set('description', e.target.value)} className={AREA} />
                 </Field>
               )}
-              {show('tier') && (
+              {show('tier') && !add && (
                 <Field id={fid('tier')} label={builtinLabel(settings, 'tier', 'Tier')}
-                  tip={add ? 'A starting value. The tier is worked out when the engagement is tiered.' : 'Worked out when the engagement is tiered. Change it only to override: a tier that was worked out needs a reason.'}>
+                  tip="Worked out when the engagement is tiered. Change it only to override: a tier that was worked out needs a reason.">
                   <select id={fid('tier')} value={form.tier} onChange={(e) => set('tier', e.target.value)} className={FIELD}>
                     {TIERS.map((t) => <option key={t} value={t}>{words(t)}</option>)}
                   </select>

@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { enrichedDashboardApi } from '@/lib/api';
 import {
   AlertTriangle,
-  DollarSign,
+  Banknote,
   Clock,
   BookOpen,
   CheckCircle,
@@ -91,7 +91,7 @@ export default function IncidentDashTab() {
   }
 
   const totalIncidents = summaryData?.total_incidents ?? 0;
-  const financialImpact = summaryData?.financial_impact ?? 0;
+  const netLoss: { currency?: string | null; net_loss: number }[] = summaryData?.net_loss_by_currency ?? [];
   const bySeverity = summaryData?.by_severity ?? {};
   const byStatus = summaryData?.by_status ?? {};
   const last30d = summaryData?.last_30_days ?? summaryData?.incidents_last_30d ?? 0;
@@ -117,11 +117,10 @@ export default function IncidentDashTab() {
 
   const severityTotal = severityDonutData.reduce((s, d) => s + d.value, 0);
 
-  const formatCurrency = (val: number) => {
-    if (val >= 1_000_000) return `$${(val / 1_000_000).toFixed(1)}M`;
-    if (val >= 1_000) return `$${(val / 1_000).toFixed(0)}K`;
-    return `$${val.toFixed(0)}`;
-  };
+  // Loss Events rule: net loss per currency, never one money total across currencies.
+  const formatNetLoss = (rows: { currency?: string | null; net_loss: number }[]) =>
+    rows.length === 0 ? 'None recorded'
+      : rows.map(r => `${r.currency || '—'} ${Math.round(r.net_loss).toLocaleString()}`).join(' · ');
 
   const funnelSteps = funnelData.length > 0
     ? funnelData
@@ -150,11 +149,11 @@ export default function IncidentDashTab() {
         <div className="rounded-xl border border-slate-700 bg-slate-800 p-5">
           <div className="flex items-center gap-3 mb-3">
             <div className="rounded-lg bg-amber-500/20 p-2">
-              <DollarSign className="h-4 w-4 text-amber-400" />
+              <Banknote className="h-4 w-4 text-amber-400" />
             </div>
-            <span className="text-sm text-slate-400">Financial Impact</span>
+            <span className="text-sm text-slate-400">Net loss</span>
           </div>
-          <p className="text-2xl font-bold text-white">{formatCurrency(financialImpact)}</p>
+          <p className="text-lg font-bold text-white">{formatNetLoss(netLoss)}</p>
         </div>
 
         <div className="rounded-xl border border-slate-700 bg-slate-800 p-5">
@@ -195,13 +194,11 @@ export default function IncidentDashTab() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                 <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={{ stroke: '#334155' }} />
                 <YAxis yAxisId="left" tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={{ stroke: '#334155' }} />
-                <YAxis yAxisId="right" orientation="right" tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={{ stroke: '#334155' }} tickFormatter={(v: number) => formatCurrency(v)} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} />
                 <Legend wrapperStyle={{ color: '#94a3b8', fontSize: '12px' }} />
                 <Bar yAxisId="left" dataKey="total" fill="#6366f1" name="Total Incidents" radius={[4, 4, 0, 0]} />
                 <Bar yAxisId="left" dataKey="critical" fill="#dc2626" name="Critical" radius={[4, 4, 0, 0]} stackId="sev" />
                 <Bar yAxisId="left" dataKey="high" fill="#f97316" name="High" radius={[4, 4, 0, 0]} stackId="sev" />
-                <Line yAxisId="right" type="monotone" dataKey="financial" stroke="#eab308" strokeWidth={2} dot={{ fill: '#eab308', r: 3 }} name="Financial Impact" />
               </ComposedChart>
             </ResponsiveContainer>
           ) : (

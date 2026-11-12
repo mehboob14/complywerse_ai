@@ -65,3 +65,5 @@ from ._88_tpra_reviews import *  # noqa: F401,F403 - TPRM: who reviews which par
 from ._89_tpra_alert_rules import *  # noqa: F401,F403 - TPRM: what a monitoring signal sets off
 from ._90_tpra_roster import *  # noqa: F401,F403 - TPRM: who the workflow asks at each review stage
 from ._91_risk_framework_requirement_links import *  # noqa: F401,F403 - a risk linked to a control of an installed framework (Risk Library)
+from ._92_risk_library_proposals import *  # noqa: F401,F403 - a library risk proposed to a risk owner, drafted, then accepted (Risk Library)
+from ._93_risk_controls_and_bowtie import *  # noqa: F401,F403 - the one risk-control link, and the bow-tie's causes and consequences

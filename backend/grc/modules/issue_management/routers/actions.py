@@ -14,6 +14,7 @@ from datetime import datetime as _dt
 
 from ....models import Issue, IssueAction, IssueActivity, CriticalTask, GRCUser, get_db
 from ....routers.auth_router import require_auth, get_user_tenants, require_tenant_permission
+from ....services.segregation import ensure_independent
 
 router_issue = APIRouter(prefix="/issues", tags=["Issue Management - CAPA Actions"])
 router_actions = APIRouter(prefix="/actions", tags=["Issue Management - CAPA Actions"])
@@ -63,6 +64,12 @@ def _parse_optional_dt(raw) -> Optional[_dt]:
         return _dt.fromisoformat(text)
     except ValueError:
         return None
+
+
+def _ensure_verifier(action: IssueAction, current_user: GRCUser) -> None:
+    """Maker-checker: whoever completed the action, or is assigned to do it, does not verify it."""
+    ensure_independent(action.completed_by, current_user, "verify this action")
+    ensure_independent(action.assignee_id, current_user, "verify this action")
 
 
 def _get_issue(issue_id: int, current_user: GRCUser, db: Session) -> Issue:
@@ -175,15 +182,18 @@ def update_action(
 
         if new_status == "completed" and not action.completed_at:
             action.completed_at = datetime.utcnow()
+            action.completed_by = current_user.id
             db.add(IssueActivity(
                 issue_id=action.issue_id, user_id=current_user.id, type="action_completed",
                 payload={"action_id": action.id, "title": action.title},
             ))
         elif new_status == "verified":
             # Allow status→verified via PATCH (detail modal Save), and stamp verifier.
-            if prev_status not in {"completed", "verified"} and not action.completed_at:
-                action.completed_at = datetime.utcnow()
+            if prev_status not in {"completed", "verified"}:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                                    detail="Mark the action completed first; someone else then verifies it.")
             if not action.verified_at:
+                _ensure_verifier(action, current_user)
                 action.verified_by_id = current_user.id
                 action.verified_at = datetime.utcnow()
                 db.add(IssueActivity(
@@ -193,6 +203,7 @@ def update_action(
         elif new_status in {"planned", "in_progress", "blocked"} and prev_status in {"completed", "verified"}:
             # Re-opening work — clear completion / verification stamps.
             action.completed_at = None
+            action.completed_by = None
             action.verified_at = None
             action.verified_by_id = None
 
@@ -223,6 +234,7 @@ def verify_action(
     action = _get_action_with_issue(action_id, current_user, db)
     if action.status not in {"completed", "verified"}:
         raise HTTPException(status_code=400, detail="Action must be completed before verification")
+    _ensure_verifier(action, current_user)
     action.status = "verified"
     action.verified_by_id = current_user.id
     action.verified_at = datetime.utcnow()

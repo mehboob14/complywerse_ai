@@ -55,7 +55,9 @@ export default function VendorRiskOverviewPage() {
     return <ErrorState title="Couldn't load the overview" message={errText(error, 'Try again in a moment.')} onRetry={() => refetch()} />;
   }
 
-  if (data.kpis.active_vendors === 0) {
+  // Empty only with no supplier in any status: "active" leaves out the ones onboarding, suspended or being offboarded.
+  const onRecord = data.by_status ? Object.values(data.by_status).reduce((n, c) => n + c, 0) : data.kpis.active_vendors;
+  if (onRecord === 0) {
     return (
       <div className="space-y-4">
         {switcher}

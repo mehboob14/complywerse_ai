@@ -19,7 +19,6 @@ import {
   BarChart3,
   Building2,
   Shield,
-  Gauge,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -30,11 +29,6 @@ import {
   Bar,
   XAxis,
   YAxis,
-  RadarChart,
-  Radar,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
 } from 'recharts';
 
 const STATUS_LABELS: Record<string, string> = {
@@ -45,6 +39,7 @@ const STATUS_LABELS: Record<string, string> = {
   in_progress: 'In Progress',
   submitted: 'Submitted',
   under_review: 'Under Review',
+  requires_changes: 'Returned',
   approved: 'Approved',
   rejected: 'Rejected',
 };
@@ -61,6 +56,7 @@ const STATUS_BADGE: Record<string, { bg: string; text: string }> = {
   in_progress: { bg: 'bg-primary-50 border border-primary-200', text: 'text-primary-700' },
   submitted: { bg: 'bg-slate-100 border border-slate-200', text: 'text-slate-700' },
   under_review: { bg: 'bg-amber-50 border border-amber-200', text: 'text-amber-700' },
+  requires_changes: { bg: 'bg-amber-50 border border-amber-200', text: 'text-amber-700' },
   approved: { bg: 'bg-emerald-50 border border-emerald-200', text: 'text-emerald-700' },
   rejected: { bg: 'bg-rose-50 border border-rose-200', text: 'text-rose-700' },
 };
@@ -124,6 +120,7 @@ interface Assessment {
   business_unit_name: string;
   status: string;
   due_date: string;
+  submitted_at?: string | null;
   progress: number;
 }
 
@@ -198,7 +195,7 @@ export default function RCSADashboardPage() {
     queryKey: ['rcsa-pending-reviews'],
     queryFn: async () => {
       try {
-        const response = await rcsaApi.getAssessments({ status: 'submitted' });
+        const response = await rcsaApi.getPendingApprovals();
         return response.data as Assessment[];
       } catch {
         return [] as Assessment[];
@@ -210,7 +207,9 @@ export default function RCSADashboardPage() {
     queryKey: ['rcsa-all-assessments'],
     queryFn: async () => {
       try {
-        const response = await rcsaApi.getAssessments({});
+        // Tenant-wide, like the KPI tiles (the list defaults to "mine" for non-admins).
+        // shortcut: the pipeline counts at most 1000 assessments; move the counts to /dashboard/summary if a tenant outgrows it.
+        const response = await rcsaApi.getAssessments({ mine: false, limit: 1000 });
         return response.data as Assessment[];
       } catch {
         return [] as Assessment[];
@@ -228,6 +227,7 @@ export default function RCSADashboardPage() {
       { stage: 'In Progress', key: 'in_progress', color: '#1ed4b0', count: all.filter(a => a.status === 'in_progress').length },
       { stage: 'Submitted',   key: 'submitted',   color: '#64748b', count: all.filter(a => a.status === 'submitted').length },
       { stage: 'Under Review',key: 'under_review',color: '#f59e0b', count: all.filter(a => a.status === 'under_review').length },
+      { stage: 'Returned',    key: 'requires_changes', color: '#d97706', count: all.filter(a => a.status === 'requires_changes').length },
       { stage: 'Approved',    key: 'approved',    color: '#10b981', count: all.filter(a => a.status === 'approved').length },
       { stage: 'Rejected',    key: 'rejected',    color: '#e11d48', count: all.filter(a => a.status === 'rejected').length },
     ].filter(s => s.count > 0 || ['not_started','in_progress','submitted','approved'].includes(s.key));
@@ -244,24 +244,6 @@ export default function RCSADashboardPage() {
       color: colorMap[status] || '#64748b',
     }));
   }, [recentCampaigns]);
-
-  const rcsaMaturityData = useMemo(() => {
-    const completionRate = summary?.completion_rate || 0;
-    const activeCampaigns = summary?.active_campaigns || 0;
-    const openFindings = summary?.open_findings || 0;
-    const totalAss = (allAssessments || []).length;
-    const approvedAss = (allAssessments || []).filter(a => a.status === 'approved').length;
-    const qualityScore = totalAss > 0 ? Math.round((approvedAss / totalAss) * 100) : 0;
-    const coverageScore = Math.min(100, activeCampaigns * 20);
-    const findingsMgmt = openFindings === 0 ? 100 : Math.max(0, 100 - Math.round((openFindings / Math.max(totalAss, 1)) * 50));
-    return [
-      { subject: 'Completion', score: Math.round(completionRate) },
-      { subject: 'Quality', score: qualityScore },
-      { subject: 'Coverage', score: coverageScore },
-      { subject: 'Findings Mgmt', score: findingsMgmt },
-      { subject: 'Timeliness', score: (pendingReviews || []).length === 0 ? 100 : Math.max(0, 100 - (pendingReviews || []).length * 10) },
-    ];
-  }, [summary, allAssessments, pendingReviews]);
 
   if (isLoading) {
     return (
@@ -420,7 +402,7 @@ export default function RCSADashboardPage() {
         ))}
       </div>
 
-      {/* Mid Section: Pipeline (left, col-span-2) | Maturity Radar (right).
+      {/* Mid Section: Pipeline (left, col-span-2) | Campaigns by status + Health Snapshot (right).
           The "Findings by Severity" donut that used to live here was visually
           loud (4-colour pie with floating legend pills) and duplicated
           information already in the Open Findings KPI tile. Replaced with
@@ -545,42 +527,29 @@ export default function RCSADashboardPage() {
           </div>
         </div>
 
-        {/* Right column: RCSA Maturity Radar + Health Snapshot */}
+        {/* Right column: Campaigns by status + Health Snapshot */}
         <div className="space-y-3">
-          {/* RCSA Maturity Radar */}
+          {/* Campaigns by status (real counts; the old "maturity" radar was made-up arithmetic) */}
           <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm">
             <div className="mb-3 flex items-center gap-2">
               <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-50">
-                <Gauge className="h-4 w-4 text-primary-600" strokeWidth={1.75} />
+                <ClipboardList className="h-4 w-4 text-primary-600" strokeWidth={1.75} />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-slate-900">RCSA Program Maturity</h3>
-                <p className="text-[11px] text-slate-500">Multi-dimensional health</p>
+                <h3 className="text-sm font-semibold text-slate-900">Campaigns by Status</h3>
+                <p className="text-[11px] text-slate-500">Recent campaigns</p>
               </div>
             </div>
-            {rcsaMaturityData.some(d => d.score > 0) ? (
-              <div className="h-52">
-                <ResponsiveContainer width="100%" height="100%">
-                  <RadarChart data={rcsaMaturityData} margin={{ top: 4, right: 16, bottom: 4, left: 16 }}>
-                    <PolarGrid stroke="#e5e7eb" />
-                    <PolarAngleAxis dataKey="subject" tick={{ fill: '#6b7280', fontSize: 10 }} />
-                    <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} axisLine={false} />
-                    <Radar name="Score" dataKey="score" stroke="#1ed4b0" fill="#1ed4b0" fillOpacity={0.3} strokeWidth={2} dot={{ fill: '#1ed4b0', r: 3 }} />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => [`${v}%`, 'Score']} />
-                  </RadarChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
+            {campaignStatusDist.length === 0 && (
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <Activity className="mb-2 h-10 w-10 text-slate-400" />
-                <p className="text-sm font-semibold text-slate-900">No maturity data</p>
-                <p className="text-xs text-slate-500">Start campaigns to populate</p>
+                <p className="text-sm font-semibold text-slate-900">No campaigns yet</p>
+                <p className="text-xs text-slate-500">Start a campaign to populate</p>
               </div>
             )}
 
             {campaignStatusDist.length > 0 && (
-              <div className="mt-3 border-t border-slate-100 pt-3 space-y-1.5">
-                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Campaigns</p>
+              <div className="space-y-1.5">
                 {campaignStatusDist.map(item => (
                   <div key={item.name} className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5">
@@ -889,8 +858,8 @@ export default function RCSADashboardPage() {
                 <PlayCircle className="h-4 w-4 text-primary-600" strokeWidth={1.75} />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-slate-900">My Assessments</h3>
-                <p className="text-[11px] text-slate-500">Assessments assigned to you</p>
+                <h3 className="text-sm font-semibold text-slate-900">Assigned to you</h3>
+                <p className="text-[11px] text-slate-500">Only the assessments you are the assessor of; the figures above cover the whole organisation</p>
               </div>
             </div>
           </div>
@@ -909,7 +878,7 @@ export default function RCSADashboardPage() {
                 <tbody className="divide-y divide-slate-100">
                   {myAssessments.map((assessment) => {
                     const badge = STATUS_BADGE[assessment.status] || STATUS_BADGE.draft;
-                    const isActionable = assessment.status === 'in_progress' || assessment.status === 'not_started';
+                    const isActionable = ['not_started', 'in_progress', 'requires_changes'].includes(assessment.status);
                     return (
                       <tr key={assessment.id} className="transition-colors hover:bg-slate-50">
                         <td className="px-3 py-2 text-sm font-medium text-slate-900 truncate max-w-[180px]">{assessment.campaign_name}</td>
@@ -957,14 +926,14 @@ export default function RCSADashboardPage() {
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-slate-900 inline-flex items-center gap-2">
-                  Pending Reviews
+                  Awaiting Approval
                   {pendingReviews && pendingReviews.length > 0 && (
                     <span className="rounded-full bg-amber-600 border border-amber-700 px-2 py-0.5 text-[10px] font-semibold text-white">
                       {pendingReviews.length}
                     </span>
                   )}
                 </h3>
-                <p className="text-[11px] text-slate-500">Assessments awaiting your review</p>
+                <p className="text-[11px] text-slate-500">Submitted or under review, across the organisation</p>
               </div>
             </div>
           </div>
@@ -985,11 +954,11 @@ export default function RCSADashboardPage() {
                       <td className="px-3 py-2 text-sm font-medium text-slate-900 truncate max-w-[180px]">{assessment.campaign_name}</td>
                       <td className="px-3 py-2 text-sm text-slate-600 truncate max-w-[140px]">{assessment.business_unit_name}</td>
                       <td className="px-3 py-2 text-sm text-slate-600">
-                        {assessment.due_date ? new Date(assessment.due_date).toLocaleDateString() : '—'}
+                        {assessment.submitted_at ? new Date(assessment.submitted_at).toLocaleDateString() : '—'}
                       </td>
                       <td className="px-3 py-2">
                         <Link
-                          href={`/erm/rcsa/assessments/${assessment.id}?mode=review`}
+                          href={`/erm/rcsa/approvals/${assessment.id}`}
                           className="inline-flex items-center gap-1.5 rounded-md bg-primary-600 px-2.5 py-1 text-[11px] font-semibold text-[#0a0a0a] hover:bg-primary-700 transition-colors"
                         >
                           <Eye className="h-3.5 w-3.5" />
@@ -1004,8 +973,7 @@ export default function RCSADashboardPage() {
           ) : (
             <div className="flex flex-col items-center justify-center py-10 text-center">
               <CheckCircle className="mb-2 h-10 w-10 text-emerald-500" />
-              <p className="text-sm font-semibold text-slate-900">No pending reviews</p>
-              <p className="mt-0.5 text-xs text-slate-500">You&apos;re all caught up</p>
+              <p className="text-sm font-semibold text-slate-900">Nothing awaiting approval</p>
             </div>
           )}
         </div>

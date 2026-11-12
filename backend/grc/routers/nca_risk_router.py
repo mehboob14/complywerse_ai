@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..models import NcaRiskEntry, Risk, GRCUser, get_db
-from .auth_router import require_auth, get_user_primary_tenant
+from .auth_router import require_auth, require_tenant_permission, get_user_primary_tenant
 
 
 # ─── Bridge to general Risk ─────────────────────────────────────────────────
@@ -255,7 +255,7 @@ def list_entries(
     return {"entries": [_entry_to_dict(e) for e in entries], "summary": _summary(entries)}
 
 
-@router.post("")
+@router.post("", dependencies=[Depends(require_tenant_permission("risks:risk_register:create", "erm:risks:create"))])
 def create_entry(
     body: NcaRiskEntryIn,
     db: Session = Depends(get_db),
@@ -325,7 +325,7 @@ def get_entry(
     return _entry_to_dict(entry)
 
 
-@router.put("/{entry_id}")
+@router.put("/{entry_id}", dependencies=[Depends(require_tenant_permission("risks:risk_register:edit", "erm:risks:edit"))])
 def update_entry(
     entry_id: int,
     body: NcaRiskEntryIn,
@@ -352,7 +352,7 @@ def update_entry(
     return _entry_to_dict(entry)
 
 
-@router.post("/backfill-bridges")
+@router.post("/backfill-bridges", dependencies=[Depends(require_tenant_permission("erm:risks:create", "risks:risk_register:create"))])
 def backfill_all_bridges(
     db: Session = Depends(get_db),
     user: GRCUser = Depends(require_auth),
@@ -375,7 +375,7 @@ def backfill_all_bridges(
     return {"total": len(entries), "newly_bridged": bridged, "refreshed": refreshed}
 
 
-@router.post("/{entry_id}/bridge")
+@router.post("/{entry_id}/bridge", dependencies=[Depends(require_tenant_permission("erm:risks:create", "risks:risk_register:create"))])
 def force_rebridge(
     entry_id: int,
     db: Session = Depends(get_db),
@@ -394,7 +394,7 @@ def force_rebridge(
     return {"bridged_risk_id": bridged.id}
 
 
-@router.delete("/{entry_id}")
+@router.delete("/{entry_id}", dependencies=[Depends(require_tenant_permission("risks:risk_register:delete", "erm:risks:delete"))])
 def delete_entry(
     entry_id: int,
     db: Session = Depends(get_db),
@@ -420,7 +420,7 @@ def delete_entry(
     return {"deleted": True}
 
 
-@router.post("/{entry_id}/ai-recommendation")
+@router.post("/{entry_id}/ai-recommendation", dependencies=[Depends(require_tenant_permission("erm:risks:edit", "risks:risk_register:edit"))])
 def generate_ai_recommendation(
     entry_id: int,
     db: Session = Depends(get_db),

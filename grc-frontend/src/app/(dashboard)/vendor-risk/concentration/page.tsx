@@ -9,7 +9,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bug, EyeOff, Layers, Loader2, Plus, Radar, Trash2 } from 'lucide-react';
-import { tpraApi, vendorRiskApi } from '@/lib/api';
+import { ermApi, tpraApi, vendorRiskApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
 
@@ -22,6 +22,10 @@ interface SharedVuln {
   vendors: Array<{ id: number; name: string; tier: string | null; signal_id: number; acknowledged: boolean }>;
 }
 interface Alias { id: number; alias: string; platform: string | null; excluded: boolean }
+interface AgainstAppetite {
+  config_id: number | null; limit: number | null;
+  platforms: Array<{ platform: string; count: number; vendors: string[] }>; breaching: Array<{ platform: string; count: number }>;
+}
 interface Shadow { name: string; asset_count: number; products: string[]; sources: string[] }
 
 export default function ConcentrationPage() {
@@ -50,6 +54,19 @@ export default function ConcentrationPage() {
     queryKey: ['tprm-shadow-suppliers'],
     queryFn: async () => ((await tpraApi.shadowSuppliers(50)).data?.items || []) as Shadow[],
     ...TPRM_QUERY_OPTS,
+  });
+  // Critical or important vendors per fourth party against the third-party appetite's limit; over it is an appetite breach.
+  const { data: appetite } = useQuery({
+    queryKey: ['tprm-concentration-appetite'],
+    queryFn: async () => (await tpraApi.concentrationAppetite()).data as AgainstAppetite,
+    ...TPRM_QUERY_OPTS,
+  });
+  const canSetLimit = hasPermission('risks:risk_appetite:edit') || hasPermission('erm:risks:edit');
+  const [limit, setLimit] = useState('');
+  const saveLimit = useMutation({
+    mutationFn: async () => ermApi.appetite.update(appetite!.config_id!, { concentration_limit: Number(limit) }),
+    onSuccess: () => { setLimit(''); qc.invalidateQueries({ queryKey: ['tprm-concentration-appetite'] }); },
+    onError: (e: unknown) => onError(e),
   });
   const [added, setAdded] = useState<Record<string, number>>({});
   const refresh = () => {
@@ -81,10 +98,44 @@ export default function ConcentrationPage() {
         <h1 className="flex items-center gap-2 text-lg font-semibold text-slate-900"><Layers className="h-5 w-5 text-slate-500" /> Concentration</h1>
         <p className="max-w-3xl text-sm text-slate-500">
           Where several of our vendors depend on the same platform, one failure there is several failures for us. Built
-          from each vendor&apos;s fourth parties; add them on a vendor&apos;s Dependencies tab.
+          from each vendor&apos;s fourth parties; add them under Subprocessors on a vendor&apos;s Paperwork tab.
         </p>
       </div>
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+
+      <section className="rounded-xl border border-gray-200 bg-white p-4" aria-label="Against appetite">
+        <h2 className="mb-1 text-sm font-semibold text-slate-900">Against appetite</h2>
+        <p className="mb-2 text-xs text-gray-500">
+          Critical or important vendors relying on one fourth party, against the concentration limit on the third-party risk appetite.
+          Over the limit is a breach in the <Link href="/erm/appetite" className="text-primary-700 hover:underline">appetite breach log</Link>.
+        </p>
+        {!appetite ? null : (
+          <>
+            <p className="text-sm text-slate-900">
+              {appetite.limit == null ? 'No limit set.' : `Limit: ${appetite.limit} critical or important vendors on one fourth party.`}
+              {appetite.breaching.length > 0 && (
+                <span className="ml-2 text-red-700">Over the limit: {appetite.breaching.map((b) => `${b.platform} (${b.count})`).join(', ')}</span>
+              )}
+            </p>
+            {appetite.platforms.length > 0 && (
+              <ul className="mt-1 text-xs text-gray-600">
+                {appetite.platforms.slice(0, 10).map((p) => <li key={p.platform}>{p.platform}: {p.count} ({p.vendors.join(', ')})</li>)}
+              </ul>
+            )}
+            {canSetLimit && (appetite.config_id ? (
+              <form className="mt-2 flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (Number(limit) >= 1) saveLimit.mutate(); }}>
+                <label htmlFor="concentration-limit" className="text-xs text-gray-600">Concentration limit</label>
+                <input id="concentration-limit" type="number" min={1} max={1000} value={limit} onChange={(e) => setLimit(e.target.value)}
+                  placeholder={appetite.limit == null ? '' : String(appetite.limit)} className="w-24 rounded-md border border-gray-300 px-2 py-1 text-sm" />
+                <button type="submit" disabled={!(Number(limit) >= 1) || saveLimit.isPending}
+                  className="rounded-md bg-primary-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-50">Save</button>
+              </form>
+            ) : (
+              <p className="mt-2 text-xs text-gray-500">Add the Third party category in <Link href="/erm/appetite" className="text-primary-700 hover:underline">Risk Appetite</Link> to set a limit.</p>
+            ))}
+          </>
+        )}
+      </section>
 
       <section className="rounded-xl border border-gray-200 bg-white p-4">
         <h2 className="mb-2 text-sm font-semibold text-slate-900">Shared platforms</h2>
@@ -112,7 +163,7 @@ export default function ConcentrationPage() {
                     {p.vendors.map((v, i) => (
                       <span key={v.id}>
                         {i > 0 && ', '}
-                        <Link href={`/vendor-risk/vendors/${v.id}?tab=dependencies`} className={`hover:underline ${v.critical_dependency ? 'font-medium text-red-700' : ''}`}
+                        <Link href={`/vendor-risk/vendors/${v.id}?tab=paperwork`} className={`hover:underline ${v.critical_dependency ? 'font-medium text-red-700' : ''}`}
                           title={v.via.join('; ')}>{v.name}</Link>
                       </span>
                     ))}
@@ -125,7 +176,7 @@ export default function ConcentrationPage() {
 
       <section className="rounded-xl border border-gray-200 bg-white p-4">
         <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-900"><Bug className="h-4 w-4 text-red-600" /> Known-exploited vulnerabilities across vendors</h2>
-        <p className="mb-2 text-xs text-gray-500">From the products watched on each vendor&apos;s Dependencies tab, over the last 90 days.</p>
+        <p className="mb-2 text-xs text-gray-500">From the products watched on each vendor&apos;s Overview tab, over the last 90 days.</p>
         {(vulns || []).length === 0 ? <p className="text-sm text-gray-500">None in the last 90 days.</p> : (
           <ul className="divide-y divide-gray-100">
             {[...shared, ...single].map((v) => (

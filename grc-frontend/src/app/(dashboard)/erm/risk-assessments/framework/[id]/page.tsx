@@ -4,10 +4,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { ermApi, tenantApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import { ArrowLeft, Loader2, Plus, RefreshCw, Trash2, Upload, CheckCircle2, Sparkles, BookOpen, Wand2, Check, X } from 'lucide-react';
 import Link from 'next/link';
 import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
 import type { FrameworkMethodology } from '@/types';
+import { FrameworkReopen } from './FrameworkReopen';
 
 interface EvidenceItem {
   id: number;
@@ -80,9 +82,11 @@ const STATUS_OPTIONS = [
   { value: 'blocked', label: 'Blocked' },
 ];
 
+// Completed waits for a second person's approval; approving raises the unacceptable questions as register risks
 const ASSESSMENT_STATUS = [
   { value: 'in_progress', label: 'In Progress' },
-  { value: 'completed', label: 'Completed' },
+  { value: 'completed', label: 'Completed (awaiting approval)' },
+  { value: 'approved', label: 'Approved' },
   { value: 'archived', label: 'Archived' },
 ];
 
@@ -93,6 +97,9 @@ export default function FrameworkRiskAssessmentDetailPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const assessmentId = Number(params.id);
+  const { hasAnyPermission } = usePermissions();
+  const canEdit = hasAnyPermission(['risks:risk_assessment:edit', 'erm:risks:edit']);
+  const canDelete = hasAnyPermission(['risks:risk_assessment:delete', 'erm:risks:delete']);
 
   const [newQuestion, setNewQuestion] = useState('');
   const [generateCount, setGenerateCount] = useState('20');
@@ -166,7 +173,10 @@ export default function FrameworkRiskAssessmentDetailPage() {
   const updateAssessmentMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) =>
       ermApi.frameworkRiskAssessments.update(assessmentId, data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['framework-risk-assessment', assessmentId] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['framework-risk-assessment', assessmentId] });
+      queryClient.invalidateQueries({ queryKey: ['erm-risks'] });
+    },
   });
 
   const deleteAssessmentMutation = useMutation({
@@ -284,6 +294,12 @@ export default function FrameworkRiskAssessmentDetailPage() {
               onApply={(vals) => vals[0] && updateAssessmentMutation.mutate({ status: vals[0] })}
               items={ASSESSMENT_STATUS.map((s) => ({ value: s.value, label: s.label }))}
             />
+            {updateAssessmentMutation.isError && (
+              <p className="mt-1 max-w-xs text-xs text-rose-600">
+                {(updateAssessmentMutation.error as any)?.response?.data?.detail || 'Failed to change the status.'}
+              </p>
+            )}
+            {assessment.status === 'approved' && canEdit && <div className="mt-2"><FrameworkReopen assessmentId={assessmentId} /></div>}
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-[var(--color-muted)]">
@@ -349,7 +365,7 @@ export default function FrameworkRiskAssessmentDetailPage() {
               </button>
             </div>
           </div>
-          <div className="sm:ml-auto">
+          {canDelete && <div className="sm:ml-auto">
             <button
               className="cw-btn-danger inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm"
               disabled={deleteAssessmentMutation.isPending}
@@ -362,7 +378,7 @@ export default function FrameworkRiskAssessmentDetailPage() {
               {deleteAssessmentMutation.isPending ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
               Delete Assessment
             </button>
-          </div>
+          </div>}
         </div>
       </div>
 
@@ -405,12 +421,12 @@ export default function FrameworkRiskAssessmentDetailPage() {
                   <div className="text-xs text-[var(--color-muted)]">Assigned to {question.assigned_user_name}</div>
                 )}
               </div>
-              <button
+              {canEdit && <button
                 className="cw-btn-danger flex items-center gap-1 rounded-lg px-3 py-2 text-sm"
                 onClick={() => deleteQuestionMutation.mutate(question.id)}
               >
                 <Trash2 size={14} /> Delete
-              </button>
+              </button>}
             </div>
 
             <div className="grid gap-3 lg:grid-cols-3">
@@ -541,10 +557,10 @@ export default function FrameworkRiskAssessmentDetailPage() {
                       checked={!!question.is_risk_accepted}
                       onChange={(e) => updateQuestionRiskValues(question.id, { is_risk_accepted: e.target.checked })}
                     />
-                    Accept Risk
+                    Raise as a register risk (on approval)
                   </label>
                   <p className="mt-1 text-xs text-[var(--color-muted)]">
-                    Mark accepted risk before moving to Risk Register.
+                    Approving the assessment adds it to the Risk Register. Questions scored High or Critical are raised either way.
                   </p>
                 </div>
                 <div>
@@ -562,27 +578,25 @@ export default function FrameworkRiskAssessmentDetailPage() {
               <div className="flex flex-wrap items-center gap-2">
                 {question.linked_risk_id ? (
                   <div className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
-                    Moved to Risk Register: #{question.linked_risk_id}
+                    On the Risk Register: #{question.linked_risk_id}
                     <Link className="underline" href={`/erm/risks/${question.linked_risk_id}`}>Open Risk</Link>
                   </div>
-                ) : (
+                ) : assessment.status === 'approved' && question.is_risk_accepted && (
+                  // approval raised the marked questions; one marked after it is raised here
                   <button
                     className="cw-btn-primary rounded-lg px-3 py-2 text-sm disabled:opacity-50"
-                    disabled={!question.is_risk_accepted || moveToRiskRegisterMutation.isPending}
+                    disabled={moveToRiskRegisterMutation.isPending}
                     onClick={() => {
                       setMovingQuestionId(question.id);
                       moveToRiskRegisterMutation.mutate({ questionId: question.id });
                     }}
                   >
                     {movingQuestionId === question.id ? (
-                      <span className="inline-flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Moving...</span>
+                      <span className="inline-flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Raising...</span>
                     ) : (
-                      'Move to Risk Register'
+                      'Raise as a register risk'
                     )}
                   </button>
-                )}
-                {!question.is_risk_accepted && !question.linked_risk_id && (
-                  <span className="text-xs text-[var(--color-muted)]">Accept risk to enable move.</span>
                 )}
               </div>
               {movingQuestionId === question.id && moveToRiskRegisterMutation.isError && (

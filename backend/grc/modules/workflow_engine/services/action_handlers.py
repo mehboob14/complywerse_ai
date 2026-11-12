@@ -25,7 +25,6 @@ from ....models import (
     RiskDependency,
     RiskIncident,
     RiskKRI,
-    RiskKRIMeasurement,
     RiskMitigationAction,
     RiskReview,
     Role,
@@ -2382,16 +2381,17 @@ class WorkflowActionHandlers:
                     if rtype in ("internal_controls", "internalcontrol") or submodule_key == "internal_controls":
                         row = (
                             db.query(InternalControl)
-                            .filter(InternalControl.tenant_id == tenant_id, InternalControl.title == resource_name)
+                            .filter(InternalControl.tenant_id == tenant_id, InternalControl.name == resource_name)
                             .order_by(InternalControl.id.desc()).first()
                         )
                         if row:
                             return int(row.id)
                     if rtype in ("mitigation_actions", "mitigation_action") or submodule_key == "mitigation_actions":
+                        from ...issue_management.services.risk_actions import risk_actions_query
                         row = (
-                            db.query(RiskMitigationAction)
-                            .filter(RiskMitigationAction.tenant_id == tenant_id, RiskMitigationAction.title == resource_name)
-                            .order_by(RiskMitigationAction.id.desc()).first()
+                            risk_actions_query(db, [tenant_id])     # risk actions are CAPA actions on the risk's treatment issue
+                            .filter(IssueAction.title == resource_name)
+                            .order_by(IssueAction.id.desc()).first()
                         )
                         if row:
                             return int(row.id)
@@ -2477,18 +2477,19 @@ class WorkflowActionHandlers:
             if functionality in ("link_risk_to_control", "create.link_risk_to_control"):
                 if not risk_id:
                     return {"action": "link_risk_to_control", "result": "skipped", "reason": "no risk_id"}
+                from ....models import FrameworkControl
+                from ...erm.services.risk_control_links import link_control
+                r = db.query(Risk).filter(Risk.id == risk_id, Risk.tenant_id == tenant_id).first()
                 try:
-                    from ....models import FrameworkControl
-                    control = db.query(FrameworkControl).first()
-                except Exception:
-                    control = None
-                if not control:
-                    return {"action": "link_risk_to_control", "result": "noop", "reason": "no controls exist"}
-                exists = db.query(RiskControlLink).filter(RiskControlLink.risk_id == risk_id, RiskControlLink.framework_control_id == control.id).first()
-                if exists:
-                    return {"action": "link_risk_to_control", "result": "noop", "link_id": exists.id}
-                link = RiskControlLink(risk_id=risk_id, framework_control_id=control.id)
-                db.add(link); db.commit()
+                    named = int(payload["control_id"]) if payload.get("control_id") else None
+                except (TypeError, ValueError):
+                    named = None
+                control = (db.get(FrameworkControl, named) if named
+                           else db.query(FrameworkControl).order_by(FrameworkControl.id).first())
+                if not r or not control:
+                    return {"action": "link_risk_to_control", "result": "noop", "reason": "no such risk or control"}
+                link = link_control(db, r, "catalog", control.id, getattr(definition, "created_by_id", None))   # the one link table
+                db.commit()
                 return {"action": "link_risk_to_control", "result": "linked", "link_id": link.id, "control_id": control.id}
 
             if functionality in ("link_audit_finding_to_risk", "create.link_audit_finding_to_risk"):
@@ -2568,14 +2569,19 @@ class WorkflowActionHandlers:
             if functionality in ("link_control_to_risk", "create.link_control_to_risk"):
                 if not control_id:
                     return {"action": "link_control_to_risk", "result": "skipped", "reason": "no control_id"}
-                r = db.query(Risk).filter(Risk.tenant_id == tenant_id).order_by(Risk.id.desc()).first()
-                if not r:
-                    return {"action": "link_control_to_risk", "result": "noop", "reason": "no risks exist"}
-                exists = db.query(InternalControlRiskLink).filter(InternalControlRiskLink.internal_control_id == control_id, InternalControlRiskLink.risk_id == r.id).first()
-                if exists:
-                    return {"action": "link_control_to_risk", "result": "noop", "link_id": exists.id}
-                link = InternalControlRiskLink(internal_control_id=control_id, risk_id=r.id)
-                db.add(link); db.commit()
+                from ...erm.services.risk_control_links import link_control
+                try:
+                    named = int(payload["risk_id"]) if payload.get("risk_id") else None
+                except (TypeError, ValueError):
+                    named = None
+                risks = db.query(Risk).filter(Risk.tenant_id == tenant_id)
+                r = risks.filter(Risk.id == named).first() if named else risks.order_by(Risk.id.desc()).first()
+                own = db.query(InternalControl.id).filter(InternalControl.id == control_id,
+                                                          InternalControl.tenant_id == tenant_id).first()
+                if not r or not own:
+                    return {"action": "link_control_to_risk", "result": "noop", "reason": "no such risk or control"}
+                link = link_control(db, r, "internal", control_id, getattr(definition, "created_by_id", None))   # the one link table
+                db.commit()
                 return {"action": "link_control_to_risk", "result": "linked", "link_id": link.id, "risk_id": r.id}
 
             if functionality in ("submit_control_for_approval", "trigger.submit_control_for_approval"):
@@ -3441,68 +3447,46 @@ class WorkflowActionHandlers:
 
     @staticmethod
     def _update_kri_value(db, instance, definition, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Record a KRI value as the KRI page's Record value does (/erm/kris/{id}/measure), with the rights of the workflow's
+        owner: a KRI value waits for a checker before it is published; what that path refuses fails the step."""
+        from fastapi import HTTPException
+        from ....schemas import RiskKRIMeasurementCreate
+        from ...erm.routers.kris import record_kri_measurement
+
         kri_id = payload.get("kri_id")
         value = payload.get("value")
         if not kri_id or value is None:
             return {"action": "update_kri_value", "result": "missing_kri_id_or_value"}
+        owner = db.get(GRCUser, definition.created_by_id) if getattr(definition, "created_by_id", None) else None
+        if owner is None or not owner.is_active:
+            raise ActionRefused("A workflow records a KRI value with the rights of its owner, and this workflow has no active owner.")
         try:
-            kri = (
-                db.query(RiskKRI)
-                .join(Risk, RiskKRI.risk_id == Risk.id)
-                .filter(RiskKRI.id == int(kri_id), Risk.tenant_id == instance.tenant_id)
-                .first()
-            )
-            if not kri:
-                return {"action": "update_kri_value", "result": "kri_not_found_or_unauthorized"}
-            float_value = float(value)
-            kri.current_value = float_value
-            kri.last_measured_at = datetime.utcnow()
-            status = "green"
-            if kri.amber_threshold is not None and float_value > kri.amber_threshold:
-                status = "red"
-            elif kri.green_threshold is not None and float_value > kri.green_threshold:
-                status = "amber"
-            measurement = RiskKRIMeasurement(
-                kri_id=kri.id,
-                value=float_value,
-                status=status,
-                notes=payload.get("notes"),
-            )
-            db.add(measurement)
-            db.flush()
-            db.add(WorkflowAuditLog(
-                tenant_id=instance.tenant_id,
-                workflow_definition_id=definition.id,
-                workflow_instance_id=instance.id,
-                event_type="action.update_kri_value",
-                message=f"KRI #{kri_id} value logged: {float_value} (status={status})",
-                payload={"kri_id": kri_id, "value": float_value, "status": status},
-            ))
-            return {"action": "update_kri_value", "kri_id": kri_id, "value": float_value, "status": status}
-        except Exception as exc:
-            return {"action": "update_kri_value", "result": "error", "error": str(exc)}
+            kri_id, body = int(kri_id), RiskKRIMeasurementCreate(value=float(value), notes=payload.get("notes"))
+        except (TypeError, ValueError):
+            raise ActionRefused(f"The step's KRI or value is not a number: {kri_id}, {value}.")
+        if not db.query(RiskKRI.id).filter(RiskKRI.id == kri_id, RiskKRI.tenant_id == instance.tenant_id).first():
+            raise ActionRefused("The step names no KRI of this organisation.")
+        try:
+            measured = record_kri_measurement(kri_id, body, db=db, current_user=owner)
+        except HTTPException as exc:
+            raise ActionRefused(f"The KRI value was not recorded: {exc.detail}")
+        db.add(WorkflowAuditLog(
+            tenant_id=instance.tenant_id,
+            workflow_definition_id=definition.id,
+            workflow_instance_id=instance.id,
+            event_type="action.update_kri_value",
+            message=f"KRI #{kri_id} value {body.value} recorded ({measured.review_status})",
+            payload={"kri_id": kri_id, "value": body.value, "status": measured.status, "review_status": measured.review_status},
+        ))
+        return {"action": "update_kri_value", "kri_id": kri_id, "value": body.value, "status": measured.status,
+                "review_status": measured.review_status, "measurement_id": measured.id}
 
     @staticmethod
     def _resolve_kri_breach(db, instance, definition, payload: Dict[str, Any]) -> Dict[str, Any]:
+        # Records the decision only. A KRI goes back to green when a new value is submitted and approved by a checker
+        # (/erm/kris/{id}/measure); writing a "green" reading here would publish an unchecked, possibly false value.
         kri_id = payload.get("kri_id")
-        notes = payload.get("notes") or "KRI breach resolved by automated workflow."
-        if kri_id:
-            try:
-                kri = (
-                    db.query(RiskKRI)
-                    .join(Risk, RiskKRI.risk_id == Risk.id)
-                    .filter(RiskKRI.id == int(kri_id), Risk.tenant_id == instance.tenant_id)
-                    .first()
-                )
-                if kri:
-                    db.add(RiskKRIMeasurement(
-                        kri_id=kri.id,
-                        value=kri.current_value or 0,
-                        status="green",
-                        notes=notes,
-                    ))
-            except Exception:
-                pass
+        notes = payload.get("notes") or "KRI breach marked resolved by automated workflow."
         db.add(WorkflowAuditLog(
             tenant_id=instance.tenant_id,
             workflow_definition_id=definition.id,
@@ -3511,7 +3495,8 @@ class WorkflowActionHandlers:
             message=f"KRI breach resolved for KRI #{kri_id}: {notes[:100]}",
             payload={"kri_id": kri_id, "notes": notes},
         ))
-        return {"action": "resolve_kri_breach", "kri_id": kri_id, "result": "resolved"}
+        return {"action": "resolve_kri_breach", "kri_id": kri_id, "result": "noted",
+                "message": "Recorded. The KRI turns green when a new value is checked and approved."}
 
     # ── Incident management ───────────────────────────────────────────
 
@@ -3647,17 +3632,14 @@ class WorkflowActionHandlers:
             ).first()
             if not parent_risk:
                 return {"action": "create_mitigation_plan", "result": "risk_not_found_or_unauthorized"}
-            mitigation = RiskMitigationAction(
-                risk_id=int(risk_id),
-                title=title,
+            from ...issue_management.services.risk_actions import add_risk_action
+            mitigation = add_risk_action(      # a CAPA action on the risk's treatment issue
+                db, parent_risk, None, title=title,
                 description=payload.get("description"),
                 action_type=payload.get("action_type") or "mitigate",
-                status="open",
                 priority=payload.get("priority") or "medium",
-                owner_id=payload.get("owner_id") and int(payload["owner_id"]) or None,
+                assignee_id=payload.get("owner_id") and int(payload["owner_id"]) or None,
             )
-            db.add(mitigation)
-            db.flush()
             db.add(WorkflowAuditLog(
                 tenant_id=instance.tenant_id,
                 workflow_definition_id=definition.id,
@@ -3677,17 +3659,16 @@ class WorkflowActionHandlers:
         if not mitigation_id or not new_status:
             return {"action": "update_mitigation_status", "result": "missing_fields"}
         try:
-            mitigation = (
-                db.query(RiskMitigationAction)
-                .join(Risk, RiskMitigationAction.risk_id == Risk.id)
-                .filter(RiskMitigationAction.id == int(mitigation_id), Risk.tenant_id == instance.tenant_id)
-                .first()
-            )
+            from ...issue_management.services.risk_actions import LEGACY_STATUS, risk_actions_query
+            mitigation = risk_actions_query(db, [instance.tenant_id]).filter(IssueAction.id == int(mitigation_id)).first()
             if not mitigation:
                 return {"action": "update_mitigation_status", "result": "not_found_or_unauthorized"}
-            mitigation.status = new_status
-            if new_status == "completed":
+            new_status = LEGACY_STATUS.get(str(new_status).lower())
+            if new_status is None:       # a workflow cannot verify an action: that needs a second person
+                return {"action": "update_mitigation_status", "result": "invalid_status"}
+            if new_status == "completed" and not mitigation.completed_at:
                 mitigation.completed_at = datetime.utcnow()
+            mitigation.status = new_status
             db.add(WorkflowAuditLog(
                 tenant_id=instance.tenant_id,
                 workflow_definition_id=definition.id,
@@ -3713,14 +3694,11 @@ class WorkflowActionHandlers:
                 ).first()
                 if not target_risk:
                     return {"action": "link_risk_to_mitigation", "result": "risk_not_found_or_unauthorized"}
-                mitigation = (
-                    db.query(RiskMitigationAction)
-                    .join(Risk, RiskMitigationAction.risk_id == Risk.id)
-                    .filter(RiskMitigationAction.id == int(mitigation_id), Risk.tenant_id == instance.tenant_id)
-                    .first()
-                )
+                from ...issue_management.services.risk_actions import move_risk_action, risk_actions_query
+                mitigation = risk_actions_query(db, [instance.tenant_id]).filter(
+                    IssueAction.id == int(mitigation_id)).first()
                 if mitigation:
-                    mitigation.risk_id = int(risk_id)
+                    move_risk_action(db, mitigation, target_risk)
             except Exception:
                 pass
         db.add(WorkflowAuditLog(
@@ -4258,8 +4236,12 @@ class WorkflowActionHandlers:
 
         Payload: issue_id (required); to_state (required: new|triage|
         in_progress|resolution|closure_review|closed|cancelled); notes
-        (optional).
+        (optional; the closure notes when closing).
+        Closing goes through the issue's own close path with the rights of the workflow's owner, so its CAPA actions must be
+        done and the owner must not be the issue's owner or assignee. A closed issue is reopened by a person, with a reason.
         """
+        if (payload.get("to_state") or "").strip().lower() == "closed":
+            return WorkflowActionHandlers._close_issue_as_owner(db, instance, definition, payload)
         try:
             issue_id = payload.get("issue_id")
             to_state = (payload.get("to_state") or "").strip().lower()
@@ -4275,6 +4257,9 @@ class WorkflowActionHandlers:
             if not issue:
                 return {"action": "transition_issue_state", "result": "issue_not_found"}
             from_state = issue.workflow_state
+            if from_state == "closed":
+                raise ActionRefused("A closed issue is reopened by a person through Reopen, with a reason; a workflow "
+                                    "cannot reopen it.")
             issue.workflow_state = to_state
             # Mirror to legacy status column on terminal transitions so
             # the existing Issue dashboards / KPI rollups stay correct.
@@ -4290,8 +4275,49 @@ class WorkflowActionHandlers:
                 payload={"issue_id": issue.id, "from_state": from_state, "to_state": to_state, "notes": payload.get("notes")},
             ))
             return {"action": "transition_issue_state", "issue_id": issue.id, "from_state": from_state, "to_state": to_state}
+        except ActionRefused:
+            raise
         except Exception as exc:  # noqa: BLE001
             return {"action": "transition_issue_state", "result": "error", "error": str(exc)}
+
+    @staticmethod
+    def _close_issue_as_owner(db, instance, definition, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Close an issue as Approve Closure does, acting as the workflow's owner; what the close path refuses fails the step."""
+        from fastapi import HTTPException
+        from ....routers.auth_router import has_tenant_permission
+        from ...issue_management.routers.issues import close_issue_record
+
+        owner = db.get(GRCUser, definition.created_by_id) if getattr(definition, "created_by_id", None) else None
+        if owner is None or not owner.is_active:
+            raise ActionRefused("A workflow closes an issue with the rights of its owner, and this workflow has no active owner.")
+        if not has_tenant_permission(db, owner, "issue_management:issues:edit"):
+            raise ActionRefused("The workflow's owner may not edit issues, so the workflow cannot close one.")
+        notes = str(payload.get("notes") or payload.get("closure_notes") or "").strip()
+        if not notes:
+            raise ActionRefused("Closing an issue needs closure notes: set the step's notes.")
+        try:
+            issue_id = int(payload.get("issue_id"))
+        except (TypeError, ValueError):
+            raise ActionRefused("The step names no issue to close.")
+        issue = db.query(Issue).filter(Issue.id == issue_id, Issue.tenant_id == instance.tenant_id).first()
+        if issue is None:
+            raise ActionRefused("The step names no issue of this organisation.")
+        from_state = issue.workflow_state
+        if from_state == "closed":
+            return {"action": "transition_issue_state", "issue_id": issue.id, "result": "already_closed"}
+        try:
+            close_issue_record(db, issue, owner, notes, workflow_instance_id=instance.id)
+        except HTTPException as exc:
+            raise ActionRefused(f"The issue was not closed: {exc.detail}")
+        db.add(WorkflowAuditLog(
+            tenant_id=instance.tenant_id,
+            workflow_definition_id=definition.id,
+            workflow_instance_id=instance.id,
+            event_type="action.transition_issue_state",
+            message=f"Issue #{issue.id} closed by the workflow's owner (user {owner.id})",
+            payload={"issue_id": issue.id, "from_state": from_state, "to_state": "closed", "notes": notes},
+        ))
+        return {"action": "transition_issue_state", "issue_id": issue.id, "from_state": from_state, "to_state": "closed"}
 
     @staticmethod
     def _add_capa_action(db, instance, definition, payload: Dict[str, Any]) -> Dict[str, Any]:

@@ -44,15 +44,15 @@ test('the request leaves empty optional answers out and numbers the rest', () =>
   assert.deepEqual(body, {
     title: 'Too high residual risks', description: 'A relevant threat...', category: 'operational', owner_id: 9, business_owner_id: undefined,
     team_id: undefined, inherent_likelihood: 4, inherent_impact: 3, residual_likelihood: undefined, residual_impact: undefined,
-    treatment_plan: 'Reduce it', review_date: '2027-01-15T00:00:00', status: 'open', custom_values: undefined, control_codes: ['M2.3.1'],
+    treatment_plan: 'Reduce it', review_date: '2027-01-15T00:00:00', custom_values: undefined, control_codes: ['M2.3.1'],
     allow_duplicate: undefined,
   });
   assert.equal(requestBody(filled(), true).allow_duplicate, true);
 });
 
 test('the organisation own field values and the ticked controls go with the request', () => {
-  const body = requestBody(filled({ status: 'in_treatment', controls: [] }), false, { business_line: 'Treasury' });
-  assert.deepEqual([body.status, body.custom_values, body.control_codes], ['in_treatment', { business_line: 'Treasury' }, []]);
+  const body = requestBody(filled({ controls: [] }), false, { business_line: 'Treasury' });
+  assert.deepEqual([body.status, body.custom_values, body.control_codes], [undefined, { business_line: 'Treasury' }, []]);   // a library risk starts as a draft: no status is sent
 });
 
 test('every control the organisation holds is ticked at first, and the ones it lacks cannot be', () => {
@@ -60,7 +60,6 @@ test('every control the organisation holds is ticked at first, and the ones it l
     { control_id: 'M2.3.1', title: 'A', installed: true }, { control_id: 'M2.3.2', title: 'B', installed: false }, { control_id: 'M2.3.3', title: 'C' }] };
   assert.deepEqual(linkable(risk), ['M2.3.1', 'M2.3.3']);
   assert.deepEqual(startForm(risk).controls, ['M2.3.1', 'M2.3.3']);
-  assert.equal(startForm(risk).status, 'open');
   const all = risk.controls.map((c) => c.control_id);
   assert.deepEqual(toggleControl(all, ['M2.3.1', 'M2.3.3'], 'M2.3.1'), ['M2.3.3']);
   assert.deepEqual(toggleControl(all, ['M2.3.3'], 'M2.3.1'), ['M2.3.1', 'M2.3.3']);   // ticked again: back in the objective's order

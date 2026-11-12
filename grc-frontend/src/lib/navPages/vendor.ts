@@ -47,10 +47,10 @@ export const PAGES: PageSpec[] = [
 
   // ---- Insights and its tabs ----
   { path: `${V}/risk-360`, label: 'Risk 360°', area: AREA, parent: V, tab: { area: 'vendor-insights', id: 'risk-360', order: 1 }, keywords: ['Risk 360', 'Insights'] },
-  { path: `${V}/comply-analysis`, label: 'Comply analyses', area: AREA, parent: `${V}/risk-360`, tab: { area: 'vendor-insights', id: 'comply-analysis', order: 2 }, keywords: ['Comply analysis', 'FAIR'] },
+  { path: `${V}/comply-analysis`, label: 'Loss quantification', area: AREA, parent: `${V}/risk-360`, tab: { area: 'vendor-insights', id: 'comply-analysis', order: 2 }, keywords: ['Comply analysis', 'Comply analyses', 'FAIR'] },
   { path: `${V}/reports`, label: 'Reports', area: AREA, parent: `${V}/risk-360`, tab: { area: 'vendor-insights', id: 'reports', order: 3 }, keywords: ['Vendor reports'] },
-  { path: `${V}/exchange`, label: 'Vendor Exchange', shortLabel: 'Exchange', area: AREA, parent: `${V}/risk-360`, tab: { area: 'vendor-insights', id: 'exchange', order: 4 } },
-  { path: `${V}/comply-analysis/:id`, label: 'Comply analysis', area: AREA, parent: `${V}/comply-analysis`, hidden: 'opens from a row of Comply analyses' },
+  { path: `${V}/exchange`, label: 'Shared assessments', area: AREA, parent: `${V}/risk-360`, tab: { area: 'vendor-insights', id: 'exchange', order: 4 }, keywords: ['Vendor Exchange', 'Exchange'] },
+  { path: `${V}/comply-analysis/:id`, label: 'Loss quantification', area: AREA, parent: `${V}/comply-analysis`, hidden: 'opens from a row of Loss quantification' },
   { path: `${V}/reports/:id`, label: 'Vendor report', area: AREA, parent: `${V}/reports`, hidden: 'opens from a kept report in Reports, and straight after one is generated' },
 
   // ---- Setup and its tabs ----

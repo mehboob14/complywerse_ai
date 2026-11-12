@@ -36,7 +36,7 @@ from ....models import (
     TPRAVendorLink, TPRAVendorProduct, Vendor, get_db,
 )
 from ....routers.auth_router import get_user_tenants, require_auth
-from . import rbac
+from . import outsourcing, rbac
 from .service import write_audit
 
 # Common spellings of common platforms. A tenant's own aliases take precedence.
@@ -345,7 +345,8 @@ def s_fourth_party(fp: TPRAFourthParty) -> dict:
     return {"id": fp.id, "vendor_id": fp.vendor_id, "name": fp.name, "platform": fp.platform or None,
             "service": fp.service, "data_shared": fp.data_shared or [], "location": fp.location,
             "critical": bool(fp.critical), "source": fp.source, "also_vendor_id": fp.also_vendor_id,
-            "notes": fp.notes, "created_at": fp.created_at.isoformat() if fp.created_at else None}
+            "notes": fp.notes, "created_at": fp.created_at.isoformat() if fp.created_at else None,
+            "approval_status": fp.approval_status, "approval": fp.approval}
 
 
 def with_shared(groups: List[dict], vendor_id: int, rows) -> List[dict]:
@@ -387,10 +388,15 @@ def add_fourth_party(vendor_id: int, body: FourthPartyIn, db: Session = Depends(
     rbac.require_write(db, user, "vendors", "edit")
     fp = TPRAFourthParty(tenant_id=tenant_id, vendor_id=vendor.id, created_by=user.id)
     _fill(db, fp, body, tenant_id)
+    critical = outsourcing.is_critical_important(db, vendor)
+    if critical:                # sub-outsourcing of a critical or important service is approved one by one
+        fp.approval_status = "pending"
     db.add(fp)
     db.flush()
     write_audit(db, tenant_id, entity="fourth_party", action="create", vendor_id=vendor.id, entity_id=fp.id,
                 actor_id=user.id, to_value=fp.name)
+    if critical:
+        outsourcing.recheck_appetite(db, tenant_id)
     db.commit()
     return with_shared(concentration(db, tenant_id, 1), vendor.id, [fp])[0]
 
@@ -409,9 +415,14 @@ def update_fourth_party(fp_id: int, body: FourthPartyIn, db: Session = Depends(g
     tenant_id = _tenant(db, user)
     fp = _fourth_party(db, tenant_id, fp_id)
     rbac.require_write(db, user, "vendors", "edit")
+    named = fp.name
     _fill(db, fp, body, tenant_id)
+    if fp.approval_status and fp.name != named:     # another sub-outsourcer under the old one's approval: decide it again
+        fp.approval_status, fp.approval = "pending", None
     write_audit(db, tenant_id, entity="fourth_party", action="update", vendor_id=fp.vendor_id, entity_id=fp.id,
                 actor_id=user.id, to_value=fp.name)
+    if fp.approval_status:      # one of a critical or important vendor's: its platform, so concentration, may have moved
+        outsourcing.recheck_appetite(db, tenant_id)
     db.commit()
     return with_shared(concentration(db, tenant_id, 1), fp.vendor_id, [fp])[0]
 
@@ -426,6 +437,8 @@ def remove_fourth_party(fp_id: int, db: Session = Depends(get_db), user: GRCUser
     fp.deleted_at = datetime.utcnow()
     write_audit(db, tenant_id, entity="fourth_party", action="delete", vendor_id=fp.vendor_id, entity_id=fp.id,
                 actor_id=user.id, from_value=fp.name)
+    if fp.approval_status:      # one of a critical or important vendor's: concentration may have fallen
+        outsourcing.recheck_appetite(db, tenant_id)
     db.commit()
     return {"deleted": True, "id": fp.id}
 

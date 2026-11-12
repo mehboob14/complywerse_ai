@@ -40,6 +40,7 @@ test('a fix button goes to the tab, the page, the stage or the dialog its code n
   assert.deepEqual(fixAction('findings', { ...at, engagementId: 3 }), { kind: 'href', href: '/vendor-risk/vendors/7?tab=findings&engagement=3' });
   assert.deepEqual(fixAction('paperwork', at), { kind: 'href', href: '/vendor-risk/vendors/7?tab=paperwork' });
   assert.deepEqual(fixAction('roster', at), { kind: 'href', href: '/vendor-risk/roster' });
+  assert.deepEqual(fixAction('outsourcing', at), { kind: 'outsourcing' });
 });
 
 test('the chart has a segment per stage: done, the current one (amber while checks are open), skipped, upcoming', () => {

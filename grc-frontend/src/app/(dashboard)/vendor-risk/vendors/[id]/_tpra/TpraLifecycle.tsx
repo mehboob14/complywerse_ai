@@ -20,6 +20,7 @@ import {
   apiErrorText, lifecycleKey, useLifecycle, type LifecycleView, type TierResult,
 } from '../../../_lib/lifecycleApi';
 import { fixAction, openChecks, stageName, STAGES, type Check, type Fix } from '../../../_lib/lifecycleLogic';
+import { outsourcingRows, type RailKey } from '../../../_lib/outsourcingModel';
 import type { ChecklistItem, TpraAssessment } from './types';
 import { STAGE_META } from './constants';
 
@@ -42,6 +43,7 @@ import TieringDialog from './TieringDialog';
 import { LifecycleChart, TierHalf } from './LifecycleStrip';
 import { ReasonDialog, SendBackDialog } from './StageDialogs';
 import { EngagementFacts } from './EngagementsPanel';
+import OutsourcingPanel, { useOutsourcing } from './OutsourcingPanel';
 
 interface AuditEntry {
   id: number; entity: string; entity_id: number | null; action: string;
@@ -83,6 +85,8 @@ export default function TpraLifecycle({
   const [reassessOpen, setReassessOpen] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
   const [tiering, setTiering] = useState(false);
+  const [outsourcingOpen, setOutsourcingOpen] = useState<RailKey | null>(null);
+  const { data: outsourcing } = useOutsourcing(vendorId, engagementId);
 
   // Per-vendor audit timeline (TPRM-010) — loaded on demand.
   const { data: audit } = useQuery({
@@ -199,6 +203,7 @@ export default function TpraLifecycle({
   const onFix = (fix: Fix) => {
     const to = fixAction(fix, { vendorId, engagementId, firstOpen });
     if (to.kind === 'tier') setTiering(true);
+    else if (to.kind === 'outsourcing') setOutsourcingOpen(outsourcingRows(outsourcing).find((r) => r.open)?.key ?? 'materiality');
     else if (to.kind === 'stage') setSelected(to.stage);
     else router.push(to.href);
   };
@@ -274,6 +279,8 @@ export default function TpraLifecycle({
           blockedWhy={data?.retier_blocked} onTier={() => setTiering(true)} onOpenTiering={() => setSelected('tiering')} />
       </section>
 
+      <OutsourcingPanel vendorId={vendorId} engagementId={engagementId} open={outsourcingOpen} onOpen={setOutsourcingOpen} onChanged={onChanged} />
+
       <div className="grid items-start overflow-hidden rounded-xl border border-[#d5dbe1] bg-[#fff] lg:grid-cols-[15rem_minmax(0,1fr)]">
         <StageRail stages={stages} current={current} selected={selectedKey} openChecks={open} tier={assessment.inherent_tier}
           onSelect={setSelected} />
@@ -295,7 +302,7 @@ export default function TpraLifecycle({
               onTier={() => setTiering(true)} tierBlocked={data?.retier_blocked ?? null}
               onReassess={canReassess ? () => setReassessOpen(true) : undefined}
               onRunScoring={() => scoringMut.mutate()} scoringBusy={scoringMut.isPending}
-              initialFindingId={initialFindingId} />
+              initialFindingId={initialFindingId} criticalImportant={outsourcing?.critical_important ?? null} />
           </StageWorkspace>
         )}
       </div>
@@ -348,12 +355,12 @@ export default function TpraLifecycle({
 
 function StageBody({
   stageKey, vendorId, assessmentId, checklist, checks, stageStatus, assessment, engagement, canRunEngines, onChanged, onTier, tierBlocked,
-  onRunScoring, scoringBusy, initialFindingId, onReassess,
+  onRunScoring, scoringBusy, initialFindingId, onReassess, criticalImportant,
 }: {
   stageKey: string; vendorId: number; assessmentId: number; checklist?: ChecklistItem[]; checks?: Check[] | null; stageStatus?: string;
   assessment: TpraAssessment; engagement: Engagement | null; canRunEngines: boolean; onChanged?: () => void;
   onTier: () => void; tierBlocked: string | null; onRunScoring: () => void; scoringBusy: boolean;
-  initialFindingId?: number | null; onReassess?: () => void;
+  initialFindingId?: number | null; onReassess?: () => void; criticalImportant: boolean | null;
 }) {
   switch (stageKey) {
     case 'intake':
@@ -416,7 +423,7 @@ function StageBody({
     case 'contracting':
       return <ContractsPanel vendorId={vendorId} assessmentId={assessmentId} />;
     case 'approval':
-      return <ApprovalPanel assessmentId={assessmentId} checks={checks} stageStatus={stageStatus} />;
+      return <ApprovalPanel assessmentId={assessmentId} checks={checks} stageStatus={stageStatus} criticalImportant={criticalImportant} />;
     case 'onboarding':
       return (
         <StageChecklist assessmentId={assessmentId} stageKey="onboarding" activities={STAGE_META.onboarding.activities} initial={checklist} />

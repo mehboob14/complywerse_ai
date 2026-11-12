@@ -17,7 +17,7 @@ const NAV_ITEMS = [
   { label: 'Campaigns',         href: '/erm/rcsa/campaigns',        icon: Megaphone },
   { label: 'Assessments',       href: '/erm/rcsa/assessments',      icon: ClipboardList },
   { label: 'Templates',         href: '/erm/rcsa/templates',        icon: FileText },
-  { label: 'Custom Templates',  href: '/erm/rcsa/custom-templates', icon: Sheet },
+  { label: 'Imported matrices', href: '/erm/rcsa/custom-templates', icon: Sheet },
   { label: 'Findings',          href: '/erm/rcsa/findings',         icon: AlertTriangle },
   { label: 'Approvals',         href: '/erm/rcsa/approvals',        icon: CheckSquare },
 ];

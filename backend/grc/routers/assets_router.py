@@ -11,7 +11,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Request, Cookie, Body
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import text, func
+from sqlalchemy import and_, func, or_, text
 from pydantic import BaseModel
 
 from ..models import (
@@ -21,7 +21,7 @@ from ..models import (
     SoftwareIdentifier, AssetSavedView,
     # Trajectory-map endpoint pulls these in to traverse Asset → Vuln → Control → Risk
     VulnerabilityControlLink, ParsedFrameworkControl,
-    RiskAssetLink, RiskControlLink, RiskFrameworkControlLink,
+    RiskAssetLink, RiskControl,
     Framework,
     GRCUser, Tenant, TenantUser, get_db
 )
@@ -2464,17 +2464,16 @@ def get_asset_trajectory(
     Three-column flow for the asset detail page diagram:
 
        Asset ──(VulnerabilityAssetLink)──▶ Vulnerabilities
-       Vuln  ──(VulnerabilityControlLink × RiskFrameworkControlLink|RiskControlLink)──▶ Risk
+       Vuln  ──(VulnerabilityControlLink × RiskControl, the one risk–control link)──▶ Risk
        Asset ──(RiskAssetLink, direct)──▶ Risk
 
     Controls sit *between* a vuln and a risk in the data model (and we
     auto-CWE-map them), but the user-facing graph collapses that bridge into
     a single edge with the bridge-control list attached as edge metadata.
-    Two reasons: (a) auto-mapped vulns point at `parsed_framework_control_id`
-    rows while risks can only link to `framework_control_id` / `normalized_
-    control_id`, so middle-column control nodes would frequently dead-end
-    with no outgoing edge; (b) the user's mental model is "this vuln drives
-    this risk" — controls are the mechanism, not the destination.
+    Two reasons: (a) many mapped controls are linked to no risk, so
+    middle-column control nodes would frequently dead-end with no outgoing
+    edge; (b) the user's mental model is "this vuln drives this risk" —
+    controls are the mechanism, not the destination.
     """
     asset = _get_asset_for_user(asset_id, current_user, db)
 
@@ -2575,10 +2574,8 @@ def get_asset_trajectory(
             return ("auto_cwe", cwe)
         return ("manual", None)
 
-    # Map vuln_id → list of bridge-control descriptors (only those that can
-    # *actually* reach a risk: framework_control_id + normalized_control_id).
-    # Parsed/internal entries are captured for tooltip context but don't
-    # contribute to risk linkage in the current data model.
+    # Map vuln_id → list of bridge-control descriptors; a control of any kind
+    # reaches a risk through the one risk–control link (grc_risk_controls).
     BridgeCtrl = Dict[str, Any]  # {target_type, target_id, code, name, framework_short_code, source, auto_cwe}
     vuln_bridges: Dict[int, List[BridgeCtrl]] = {}
     vuln_total_ctrls: Dict[int, int] = {}  # total VCL links per vuln (all target types) for context chips
@@ -2627,31 +2624,20 @@ def get_asset_trajectory(
     ctrl_risk_map: Dict[Tuple[str, int], List[Tuple[int, Optional[str]]]] = {}
     risk_objects: Dict[int, Risk] = {}
 
-    if framework_ids:
-        rfcl = db.query(RiskFrameworkControlLink).options(
-            joinedload(RiskFrameworkControlLink.risk),
-        ).filter(RiskFrameworkControlLink.framework_control_id.in_(framework_ids)).all()
-        for link in rfcl:
-            r = link.risk
-            if r is None:
-                continue
-            risk_objects[r.id] = r
-            ctrl_risk_map.setdefault(("framework", link.framework_control_id), []).append(
-                (r.id, link.mitigation_effectiveness),
-            )
-
-    if normalized_ids:
-        rcl = db.query(RiskControlLink).options(
-            joinedload(RiskControlLink.risk),
-        ).filter(RiskControlLink.normalized_control_id.in_(normalized_ids)).all()
-        for link in rcl:
-            r = link.risk
-            if r is None:
-                continue
-            risk_objects[r.id] = r
-            ctrl_risk_map.setdefault(("normalized", link.normalized_control_id), []).append(
-                (r.id, None),
-            )
+    # The one risk–control link names a control by source; the bridge names it by target type.
+    target_of = {"catalog": "framework", "normalized": "normalized", "framework": "parsed", "internal": "internal"}
+    ids_of = {"catalog": framework_ids, "normalized": normalized_ids, "framework": parsed_ids, "internal": internal_ids}
+    wanted = [and_(RiskControl.control_source == src, RiskControl.control_id.in_(ids)) for src, ids in ids_of.items() if ids]
+    links = db.query(RiskControl).options(joinedload(RiskControl.risk)).filter(
+        RiskControl.tenant_id == asset.tenant_id, or_(*wanted)).order_by(RiskControl.id).all() if wanted else []
+    for link in links:
+        r = link.risk
+        if r is None:
+            continue
+        risk_objects[r.id] = r
+        ctrl_risk_map.setdefault((target_of[link.control_source], link.control_id), []).append(
+            (r.id, link.mitigation_effectiveness),
+        )
 
     # ── 4. Compose vuln → risk edges with bridge_controls metadata ───────
     # For each vuln, for each of its bridge controls, for each risk that

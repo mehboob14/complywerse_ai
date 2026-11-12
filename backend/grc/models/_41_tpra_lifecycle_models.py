@@ -343,6 +343,9 @@ class TPRAApproval(Base):
     rationale = Column(Text, nullable=True)
     approver_id = Column(Integer, nullable=True)
     residual_rating = Column(String(20), nullable=True)
+    # A critical or important outsourcing is decided by a committee: the meeting that took the decision, and its committee.
+    committee_id = Column(Integer, nullable=True)
+    meeting_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (

@@ -47,14 +47,14 @@ export default function ExposurePanel({ vendorId }: { vendorId: number }) {
         <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
           <h3 className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
             What this vendor could cost us in a year
-            <InfoTip label="About this range" text={`A range from ${data.iterations.toLocaleString('en-GB')} simulated years, not a forecast. The constants behind it are set in Settings. A Comply analysis takes one scenario apart factor by factor, starting from these same figures.`} />
+            <InfoTip label="About this range" text={`A range from ${data.iterations.toLocaleString('en-GB')} simulated years, not a forecast. The constants behind it are set in Settings. A loss quantification takes one scenario apart factor by factor, starting from these same figures.`} />
           </h3>
           <div className="flex flex-wrap items-center gap-2">
             <Link href="/vendor-risk/settings#exposure" className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50">
               Settings
             </Link>
             <Link href={`/vendor-risk/comply-analysis?vendor=${vendorId}`} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50">
-              Run a Comply analysis
+              Run a loss quantification
             </Link>
           </div>
         </div>

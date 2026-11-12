@@ -19,7 +19,7 @@ REC_REMEDIATE = "remediate_first"
 REC_ESCALATE = "escalate_or_reject"
 
 # Where a check is cleared; the UI turns each into a button (vendors/[id]/_lib/lifecycleLogic.ts).
-FIXES = ("edit_vendor", "tier", "questionnaire", "roster", "findings", "paperwork", "decision", "lifecycle")
+FIXES = ("edit_vendor", "tier", "questionnaire", "roster", "findings", "paperwork", "decision", "lifecycle", "outsourcing")
 
 
 def recommend_decision(residual_rating: str, open_critical_findings: int) -> str:
@@ -68,6 +68,42 @@ def _standing(ctx: dict, legacy: str, current: str) -> str:
     return current.format(n=n, detail=f" ({detail})" if detail else "") if detail else legacy.format(n=n)
 
 
+def _critical(ctx: dict) -> bool:
+    """A scope that supports a critical or important function (outsourcing.gate_facts): held to the outsourcing steps."""
+    return ctx.get("critical_important") is True
+
+
+def _clauses(ctx: dict) -> List[dict]:
+    missing = ctx.get("clauses_missing") or []
+    return [_check("clauses", "The contract gives audit and access rights, exit and data return, and says where data is held",
+                   not missing, "paperwork", f"Record on the contract or the vendor: {', '.join(missing)}.")]
+
+
+def _outsourcing_approval(ctx: dict) -> List[dict]:
+    if not _critical(ctx):
+        return []
+    waiting = ctx.get("sub_outsourcers_waiting") or []
+    return [
+        _check("exit_plan", "An exit plan is in place", bool(ctx.get("exit_plan_ready")), "outsourcing",
+               "Record an exit plan, approved or tested, with its summary or a link to it."),
+        *_clauses(ctx),
+        _check("sub_outsourcing", "Every sub-outsourcer is approved", not waiting, "outsourcing",
+               f"Sub-outsourcers waiting for a decision or rejected: {', '.join(waiting)}."),
+        _check("committee", "A committee decided it, at a meeting", bool(ctx.get("committee_decided")), "decision",
+               "A critical or important outsourcing is decided by a committee: record the decision with its meeting."),
+    ]
+
+
+def _regulator(ctx: dict) -> List[dict]:
+    if not _critical(ctx):
+        return []
+    required = ctx.get("regulator_required")
+    problem = ("Say whether the regulator must be notified of this outsourcing." if required is None
+               else "Record when the regulator was notified, and its reference.")
+    return [_check("regulator", "The regulator is notified, where required",
+                   required is False or (required is True and bool(ctx.get("regulator_notified"))), "outsourcing", problem)]
+
+
 def _checks(stage_key: str, ctx: Dict) -> List[dict]:
     if stage_key == "intake":
         return [
@@ -79,8 +115,13 @@ def _checks(stage_key: str, ctx: Dict) -> List[dict]:
         ]
 
     if stage_key == "tiering":
-        return [_check("tiered", "A tier has been set", bool(ctx.get("inherent_tier")), "tier",
-                       "Inherent risk tier has not been computed.")]
+        tiered = [_check("tiered", "A tier has been set", bool(ctx.get("inherent_tier")), "tier",
+                         "Inherent risk tier has not been computed.")]
+        if "critical_important" not in ctx:
+            return tiered
+        return [*tiered, _check("materiality", "Materiality is decided: does it support a critical or important function?",
+                                ctx["critical_important"] is not None, "outsourcing",
+                                "The second line has not said whether it supports a critical or important function.")]
 
     if stage_key == "dd_planning":
         unsent = ctx.get("tier_templates_unsent") or []
@@ -124,10 +165,11 @@ def _checks(stage_key: str, ctx: Dict) -> List[dict]:
 
     if stage_key == "contracting":
         tier = (ctx.get("tier") or "medium").lower()
-        if tier not in ("high", "critical"):
+        if tier not in ("high", "critical") and not _critical(ctx):
             return [_check("contract", f"No contract is required at {tier} tier", True)]
         return [_check("contract", "A contract is linked", _b(ctx, "contract_linked"), "paperwork",
-                       "A contract with the required control obligations must be linked.")]
+                       "A contract with the required control obligations must be linked."),
+                *(_clauses(ctx) if _critical(ctx) else [])]
 
     if stage_key == "approval":
         decision = (ctx.get("approval_decision") or "").lower()
@@ -140,12 +182,13 @@ def _checks(stage_key: str, ctx: Dict) -> List[dict]:
                    _standing(ctx, "{n} unmitigated critical finding(s) block approval.",
                              "{n} critical or blocking finding(s) block approval{detail}.")),
             *_reviewers(ctx),
+            *_outsourcing_approval(ctx),
         ]
 
     if stage_key == "onboarding":
         total, done = int(ctx.get("checklist_total", 0)), int(ctx.get("checklist_done", 0))
         return [_check("checklist", "The onboarding checklist is done", total > 0 and done >= total, None,
-                       f"Work through the onboarding checklist: {done} of {total} done.")]
+                       f"Work through the onboarding checklist: {done} of {total} done."), *_regulator(ctx)]
 
     if stage_key == "monitoring":
         return [_check("steady_state", "Under monitoring, the resting state", True)]
@@ -171,6 +214,9 @@ def evaluate_stage_exit(stage_key: str, ctx: Dict) -> dict:
                      open_gate_detail (where they are, when that is not just "critical, here")
       contracting:   contract_linked (bool), tier (str)
       approval:      approval_decision (str|None), open_critical_unmitigated, open_gate_detail, and the reviewer facts
+      outsourcing:   critical_important (tiering: None until decided), and for a critical or important scope
+                     clauses_missing (contracting, approval), exit_plan_ready, sub_outsourcers_waiting, committee_decided
+                     (approval), regulator_required, regulator_notified (onboarding): outsourcing.gate_facts
       onboarding:    checklist_total, checklist_done (the stage's checklist)
       monitoring:    (always passable: the resting state)
       reassessment:  cycle_settled (a new cycle has opened, or the exit is complete)

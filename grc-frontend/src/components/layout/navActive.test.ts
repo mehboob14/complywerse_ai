@@ -59,7 +59,7 @@ test('nothing lights for an unknown page, an empty path or a path that only shar
 
 test('a group holds the lit entry at any depth', () => {
   const risk = navigation.find((e) => isGroup(e) && e.name === 'Risk Management') as NavGroup;
-  assert.ok(groupHasActive(risk, '/erm/risks'), 'inside the Operational Risk sub-group');
+  assert.ok(groupHasActive(risk, '/erm/risks'), 'inside the Identify sub-group');
   assert.ok(groupHasActive(risk, '/erm'));
   assert.ok(!groupHasActive(risk, '/governance'));
   assert.ok(!groupHasActive(risk, undefined));
@@ -90,17 +90,18 @@ test('every Overview (and the dashboard) lights on its own page only, but Assess
 });
 
 // The pages of an area that have no entry of their own lit its Overview before the Overview became exact (Phase 1 changes nothing outside
-// Governance), so each is mapped to it by the narrowest prefix: path (dynamic ids as 1) -> the entry that lights
+// Governance), so each is mapped to it by the narrowest prefix: path (dynamic ids as 1) -> the entry that lights.
+// The Risk Management ones have a lifecycle entry now (ERM redesign, decision 3) or hang under one; the framework control is the Control Catalog's.
 const OVERVIEW_PAGES: Array<[string, string]> = [
-  ['/erm/ai-risk-assessment', '/erm'],
-  ['/erm/appetite', '/erm'],
-  ['/erm/dependencies', '/erm'],
-  ['/erm/framework-controls/1', '/erm'],
-  ['/erm/internal-controls', '/erm'],
-  ['/erm/internal-controls/1', '/erm'],
-  ['/erm/mitigation-actions', '/erm'],
-  ['/erm/reports', '/erm'],
-  ['/erm/reviews', '/erm'],
+  ['/erm/ai-risk-assessment', '/erm/assessments'],          // the Assessments entry (decision 1) holds the Risk Assessments and RCSA pages
+  ['/erm/appetite', '/erm/appetite'],
+  ['/erm/dependencies', '/erm/risks'],
+  ['/erm/framework-controls/1', '/compliance'],
+  ['/erm/internal-controls', '/erm/internal-controls'],
+  ['/erm/internal-controls/1', '/erm/internal-controls'],
+  ['/erm/mitigation-actions', '/erm/mitigation-actions'],
+  ['/erm/reports', '/erm/reports'],
+  ['/erm/reviews', '/erm/reviews'],
   ['/compliance/assessments', '/compliance'],
   ['/compliance/assessments/1', '/compliance'],
   ['/compliance/assessments/approvals', '/compliance'],
@@ -108,9 +109,16 @@ const OVERVIEW_PAGES: Array<[string, string]> = [
   ['/assessments/1', '/assessments'],
 ];
 
-test('the 14 pages with no entry of their own still light their area\'s Overview', () => {
+test('the 14 pages that had no entry of their own light their own entry, the one they hang under, or their area\'s Overview', () => {
   assert.equal(OVERVIEW_PAGES.length, 14);
   for (const [path, want] of OVERVIEW_PAGES) assert.equal(activeNavHref(path, navigation), want, path);
+  for (const [path] of OVERVIEW_PAGES) assert.notEqual(activeNavHref(path, navigation), '/erm', `${path}: the Risk Management Overview lights on its own page only`);
+});
+
+test('the one Assessments entry lights on the Risk Assessments, RCSA and AI register pages it replaced, at their old URLs', () => {
+  for (const path of ['/erm/assessments', '/erm/risk-assessments', '/erm/risk-assessments/framework/3', '/erm/rcsa', '/erm/rcsa/campaigns/4', '/erm/ai-risk-assessment']) {
+    assert.equal(activeNavHref(path, navigation), '/erm/assessments', path);
+  }
 });
 
 test('the mapping is the narrow one: a page that is not listed lights nothing, and an entry of its own still wins', () => {
@@ -176,7 +184,7 @@ test('the pages of an Overview\'s area light the entries beside it, never the Ov
   assert.notEqual(activeNavHref('/erm/risks/12', navigation), '/erm');
   assert.notEqual(activeNavHref('/compliance/access-reviews/4', navigation), '/compliance');
   assert.equal(activeNavHref('/compliance/access-reviews/4', navigation), '/compliance/access-reviews');
-  assert.equal(activeNavHref('/erm/analytics/scenario', navigation), '/erm/analytics/scenario', 'the deeper entry beats Advanced Analytics');
+  assert.equal(activeNavHref('/erm/analytics/scenario', navigation), '/erm/analytics/scenario', 'the deeper entry beats Analytics');
   assert.equal(activeNavHref('/erm/analytics/heatmap', navigation), '/erm/analytics');
 });
 

@@ -4,7 +4,7 @@
 import {
   Activity, AlertCircle, AlertTriangle, BarChart3, Bookmark, BookMarked, Bot, Bug, Building2, CalendarClock, ClipboardCheck, ClipboardList,
   Crosshair, FileSpreadsheet, FileText, FolderKanban, Gavel, GitPullRequest, Landmark, Layers, LayoutDashboard, LifeBuoy,
-  ListTodo, Radar, Rss, ScrollText, Server, ShieldAlert, ShieldCheck, Target, Users, Workflow, Zap,
+  ListTodo, Radar, Rss, ScrollText, Search, Server, ShieldAlert, ShieldCheck, Target, Users, Workflow, Zap,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -61,7 +61,6 @@ export const navigation: NavEntry[] = [
       { name: 'Documents', href: '/governance/documents', activeMatch: ['/governance/exceptions', '/governance/settings', '/governance/reviews', '/governance/mappings', '/governance/workflows', '/governance/attestations', '/documents'], icon: ScrollText, requiredPermissions: ['governance:policies:*'] },
       { name: 'My Approvals', href: '/governance/approvals', icon: ClipboardCheck, requiredPermissions: ['governance:policies:*'] },
       { name: 'Committees', href: '/governance/committees', icon: Users, requiredPermissions: ['governance:committees:*'] },
-      { name: 'KRIs', href: '/erm/kris', icon: Activity, requiredPermissions: ['erm:kris:*'] },
       { name: 'KPI Report', href: '/governance/kpi-report', icon: Target, requiredPermissions: ['erm:kris:*'] },
       { name: 'Projects', href: '/is-projects', icon: FolderKanban, requiredPermissions: ['is_projects:projects:*', 'is_projects:dashboard:view'] },
     ],
@@ -70,21 +69,54 @@ export const navigation: NavEntry[] = [
     name: 'Risk Management',
     icon: ShieldAlert,
     requiredModules: ['risks', 'erm'],
+    // by the risk lifecycle (ERM redesign, decision 3): every page of the area has an entry, or hangs under one (navPages/risk.ts)
     items: [
-      // the area's own pages that have no entry (its tab strip) light the Overview, as they always did
-      { name: 'Overview', href: '/erm', exact: true, activeMatch: ['/erm/ai-risk-assessment', '/erm/appetite', '/erm/dependencies', '/erm/framework-controls', '/erm/internal-controls', '/erm/mitigation-actions', '/erm/reports', '/erm/reviews'], icon: LayoutDashboard, requiredPermissions: ['erm:risks:*'] },
-      { name: 'Risk Library', href: '/erm/risk-library', icon: BookMarked, requiredPermissions: ['erm:risks:*'] },
+      { name: 'Overview', href: '/erm', exact: true, icon: LayoutDashboard, requiredPermissions: ['erm:risks:*'] },
       {
-        name: 'Operational Risk',
-        icon: Layers,
+        name: 'Identify',
+        icon: Search,
         items: [
-          { name: 'Risk Register', href: '/erm/risks', icon: AlertTriangle, requiredPermissions: ['erm:risks:*'] },
-          { name: 'Risk Assessments', href: '/erm/risk-assessments', icon: ClipboardList, requiredPermissions: ['risks:risk_assessment:*', 'erm:rcsa:*'] },
-          { name: 'RCSA', href: '/erm/rcsa', icon: ClipboardList, requiredPermissions: ['erm:rcsa:*'] },
-          // moved out of Advanced Analytics into the sidebar
+          // Dependencies has no entry: it opens from the Risk Register (it is to become the risk record's "Related risks" tab)
+          { name: 'Risk Register', href: '/erm/risks', activeMatch: '/erm/dependencies', icon: AlertTriangle, requiredPermissions: ['erm:risks:*'] },
+          { name: 'Risk Library', href: '/erm/risk-library', icon: BookMarked, requiredPermissions: ['erm:risks:*'] },
+        ],
+      },
+      {
+        name: 'Assess',
+        icon: ClipboardCheck,
+        items: [
+          // one Assessments entry (ERM redesign, decision 1): the risk workshop, RCSA and framework pages hang under it and keep their URLs;
+          // /erm/ai-risk-assessment is another address of the AI Systems Risk Register under Risk Assessments
+          { name: 'Assessments', href: '/erm/assessments', activeMatch: ['/erm/risk-assessments', '/erm/rcsa', '/erm/ai-risk-assessment'], icon: ClipboardList, requiredPermissions: ['risks:risk_assessment:*', 'erm:rcsa:*'] },
           { name: 'Scenario Analysis', href: '/erm/analytics/scenario', icon: Target, requiredPermissions: ['erm:risks:*'] },
           { name: 'Bow-Tie Analysis', href: '/erm/analytics/bowtie', icon: Workflow, requiredPermissions: ['erm:risks:*'] },
-          { name: 'Advanced Analytics', href: '/erm/analytics', icon: BarChart3, requiredPermissions: ['erm:risks:*'] },
+        ],
+      },
+      {
+        name: 'Treat',
+        icon: ShieldCheck,
+        items: [
+          { name: 'Actions & Acceptances', href: '/erm/mitigation-actions', icon: ListTodo, requiredPermissions: ['erm:risks:*'] },
+          // the page forwards to the Control Catalog's internal view (/controls?mode=internal), so it is offered to whoever is offered the Catalog
+          { name: 'Controls', href: '/erm/internal-controls', icon: Layers, requiredPermissions: ['compliance:frameworks:*', 'controls:control_library:*', 'evidence:evidence_library:*'] },
+        ],
+      },
+      {
+        name: 'Monitor',
+        icon: Activity,
+        items: [
+          { name: 'KRIs', href: '/erm/kris', icon: Activity, requiredPermissions: ['erm:kris:*'] },
+          { name: 'Risk Appetite', href: '/erm/appetite', icon: Target, requiredPermissions: ['risks:risk_appetite:*', 'erm:risks:*'] },
+          { name: 'Loss Events', href: '/erm/incidents', icon: AlertCircle, requiredPermissions: ['erm:incidents:*'] },
+          { name: 'Risk Reviews', href: '/erm/reviews', icon: CalendarClock, requiredPermissions: ['erm:risks:*'] },
+        ],
+      },
+      {
+        name: 'Report',
+        icon: FileText,
+        items: [
+          { name: 'Reports & Committee Packs', href: '/erm/reports', icon: ScrollText, requiredPermissions: ['erm:risks:*'] },
+          { name: 'Analytics', href: '/erm/analytics', icon: BarChart3, requiredPermissions: ['erm:risks:*'] },
         ],
       },
     ],
@@ -101,7 +133,8 @@ export const navigation: NavEntry[] = [
     icon: ShieldCheck,
     requiredModules: ['compliance', 'controls', 'evidence', 'frameworks'],
     items: [
-      { name: 'Overview', href: '/compliance', exact: true, activeMatch: ['/compliance/assessments', '/compliance/statements', '/controls', '/control-library'], icon: LayoutDashboard, requiredPermissions: ['compliance:frameworks:*', 'controls:control_library:*', 'evidence:evidence_library:*'] },
+      // /erm/framework-controls: a framework control's vulnerability evidence, a page of the Control Catalog's (navPages/controls.ts)
+      { name: 'Overview', href: '/compliance', exact: true, activeMatch: ['/compliance/assessments', '/compliance/statements', '/controls', '/control-library', '/erm/framework-controls'], icon: LayoutDashboard, requiredPermissions: ['compliance:frameworks:*', 'controls:control_library:*', 'evidence:evidence_library:*'] },
       { name: 'Frameworks', href: '/frameworks/manage', activeMatch: '/frameworks', icon: Layers, requiredPermissions: ['compliance:frameworks:*'] },
       { name: 'Evidence Management', href: '/evidence', activeMatch: '/evidence-requirements', icon: FileText, requiredPermissions: ['evidence:evidence_library:*', 'evidence:evidence_upload:*'] },
       { name: 'Access Reviews', href: '/compliance/access-reviews', icon: Users, requiredPermissions: ['compliance:frameworks:*'] },
@@ -147,11 +180,11 @@ export const navigation: NavEntry[] = [
     ],
   },
   {
-    name: 'Issue & Incident Management',
+    // Incidents moved to Risk Management > Monitor as Loss Events
+    name: 'Issue Management',
     icon: AlertCircle,
     items: [
       { name: 'Issues', href: '/issues', icon: ListTodo, requiredPermissions: ['issue_management:issues:*'] },
-      { name: 'Incidents', href: '/erm/incidents', icon: AlertCircle, requiredPermissions: ['erm:incidents:*'] },
     ],
   },
   {
@@ -199,7 +232,7 @@ export const navigation: NavEntry[] = [
       { name: 'Saved exports', href: '/reports/saved', icon: Bookmark, requiredPermissions: ['reports:reports:*'] },
     ],
   },
-  // Issues moved into "Issue & Incident Management" (top-bar quick action removed in Header.tsx).
+  // Issues moved into "Issue Management" (top-bar quick action removed in Header.tsx).
   // ComplyChat remains the global AI assistant in the top bar.
   // Administration stays as the pinned bottom popover.
 ];

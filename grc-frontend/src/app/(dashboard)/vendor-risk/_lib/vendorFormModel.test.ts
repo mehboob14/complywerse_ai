@@ -20,11 +20,12 @@ test('lists are split on commas, trimmed, and each name kept once', () => {
   assert.deepEqual(splitList(' , '), []);
 });
 
-test('a new vendor with only a name sends what the old add form always did, and nothing else', () => {
+test('a new vendor with only a name sends no tier or status: tiering and approval set those', () => {
   assert.deepEqual(createBody({ ...emptyForm(), name: '  Acme Analytics ' }), {
-    name: 'Acme Analytics', tier: 'medium', status: 'active', data_access_level: 'internal', holds_personal_data: false,
+    name: 'Acme Analytics', data_access_level: 'internal', holds_personal_data: false,
     services_provided: [], data_types_accessed: [], systems_in_scope: [], tags: [],
   });
+  assert.deepEqual(Object.keys(createBody({ ...emptyForm(), name: 'Acme', tier: 'low', status: 'active' })).filter((k) => k === 'tier' || k === 'status'), []);
 });
 
 test('a new vendor sends every field it was given, as the server takes it', () => {
@@ -36,7 +37,7 @@ test('a new vendor sends every field it was given, as the server takes it', () =
     contract_start_date: '2026-03-01', contract_value: '42000.5', notes: 'Renewal in the spring',
   });
   assert.deepEqual(body, {
-    name: 'Acme', tier: 'medium', status: 'active', data_access_level: 'internal', holds_personal_data: true,
+    name: 'Acme', data_access_level: 'internal', holds_personal_data: true,
     vendor_type: 'Vendor', industry: 'Marketing', website: 'https://acme.example', notes: 'Renewal in the spring', data_location: 'EU (Frankfurt)',
     data_classification: 'confidential', primary_contact_email: 'a@acme.example', contract_start_date: '2026-03-01',
     services_provided: ['Attribution', 'Reporting'], data_types_accessed: ['PII', 'Email'], systems_in_scope: ['Salesforce', 'AWS production'],

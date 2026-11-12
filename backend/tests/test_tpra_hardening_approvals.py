@@ -33,7 +33,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from grc.models import (
-    Base, CriticalTask, GRCUser, Issue, IssueActivity, Permission, Role, RolePermission, Tenant, TPRAApproval,
+    Base, CriticalTask, GRCUser, Issue, IssueAction, IssueActivity, Permission, Role, RolePermission, Tenant, TPRAApproval,
     TPRAAuditLog, TPRAEngagement, TPRAFinding, TPRAQuestion, TPRAQuestionResponse, TPRARiskAcceptance,
     TPRAStageInstance, TPRATieringConfig, UserRole, Vendor, VendorAssessment, VendorQuestionnaireResponse,
     VendorQuestionnaireTemplate, get_db,
@@ -369,17 +369,20 @@ def test_a_reopened_finding_reopens_the_issue_its_acceptance_closed(db):
                                                                expiry=datetime.utcnow() + timedelta(days=30)),
                                      db=db, user=_user(db, APPROVER))
     db.refresh(issue)
-    assert issue.workflow_state == "closed"
+    # The issue closes through its own close path (wave 5): its CAPA action is still open, so it waits in closure review.
+    assert (issue.workflow_state, issue.status) == ("closure_review", "open")
     api.revoke_acceptance(accepted["id"], db=db, user=_user(db, APPROVER))
     db.refresh(issue)
     assert (issue.workflow_state, issue.status, issue.closed_at) == ("in_progress", "open", None)
 
-    # Closed after its fix, then back in remediation: the issue follows it again.
+    # Closed after its fix (its CAPA action done), then back in remediation: the issue follows it again.
     admin = _user(db, APPROVER)
     api.create_remediation(f["id"], api.RemediationIn(title="MFA everywhere", status="completed"), db=db, user=admin)
+    db.query(IssueAction).filter_by(issue_id=issue.id).update({"status": "completed"})
+    db.commit()
     api.update_finding(f["id"], api.FindingUpdate(status="closed"), db=db, user=admin)
     db.refresh(issue)
-    assert issue.workflow_state == "closed"
+    assert (issue.workflow_state, issue.approved_by_id) == ("closed", APPROVER)
     api.update_finding(f["id"], api.FindingUpdate(status="in_remediation", reason="The fix was rolled back"), db=db, user=admin)
     db.refresh(issue)
     assert issue.workflow_state == "in_progress"

@@ -55,6 +55,9 @@ class TPRAEngagement(Base):
     # The exit of this engagement alone (tpra/engagements.py): {items: [{item, done, at, by}], reason, started_at,
     # started_by, notes, completed_at}; NULL until it starts. Finishing it ends the engagement; the supplier stays active.
     offboarding = Column(JSON, nullable=True)
+    # Outsourcing facts of this use, as on the supplier (Vendor.critical_important / Vendor.outsourcing).
+    critical_important = Column(Boolean, nullable=True)
+    outsourcing = Column(JSON, nullable=True)
     archived_at = Column(DateTime, nullable=True)
     created_by = Column(Integer, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)

@@ -3,25 +3,38 @@ from ....config import get_openai_api_key, get_openai_model
 import os
 import json
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 from pydantic import BaseModel
 
 from ....models import (
     Risk, RiskIncident, GRCUser, get_db, NormalizedControl, FrameworkControl,
-    ControlObjective, FrameworkDomain, Framework
+    ControlObjective, FrameworkDomain, Framework, UploadedFramework
 )
 from ....schemas import (
-    RiskIncidentCreate, RiskIncidentUpdate, RiskIncidentResponse,
+    RiskIncidentCreate, RiskIncidentUpdate, RiskIncidentResponse, RiskIncidentValidation, RiskIncidentLossFields,
     MessageResponse
 )
-from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant, refuse_imported_accounts
+from ....routers.auth_router import (
+    require_auth, get_user_tenants, get_user_primary_tenant, refuse_imported_accounts, require_tenant_permission,
+)
 from ....services.ai_gateway.field_policies import ai_view
+from ....services.segregation import ensure_independent
+from ..loss_taxonomy import BUSINESS_LINES, EVENT_TYPES, taxonomy, taxonomy_key
 from ..schema_migrations import ensure_incident_schema
 from .incident_links import apply_inline_links, serialize_links
 
 router = APIRouter(prefix="/incidents", tags=["ERM - Incidents"])
+
+# Writes need the incident right; the risk right keeps today's risk editors working.
+_may_create = require_tenant_permission("erm:incidents:create", "erm:risks:create")
+_may_edit = require_tenant_permission("erm:incidents:edit", "erm:risks:edit")
+_may_delete = require_tenant_permission("erm:incidents:delete", "erm:risks:delete")
+
+# Statuses that end an incident: reaching either stamps resolved_at.
+_DONE_STATUSES = ("resolved", "closed")
 
 
 class IncidentAIAnalyzeRequest(BaseModel):
@@ -65,6 +78,32 @@ def get_user_tenant_id(user: GRCUser, db: Session) -> int:
             detail="User is not assigned to any tenant"
         )
     return tenant_id
+
+
+def _loss_keys(data: dict) -> dict:
+    """event_type / business_line as taxonomy keys (a label is taken too); 400 for anything else."""
+    try:
+        for field, table, what in (("event_type", EVENT_TYPES, "event type"), ("business_line", BUSINESS_LINES, "business line")):
+            if field in data:
+                data[field] = taxonomy_key(data[field], table, what)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return data
+
+
+def _quarter_start(d: datetime) -> datetime:
+    return datetime(d.year, 3 * ((d.month - 1) // 3) + 1, 1)
+
+
+def _net_by_currency(events, *keys) -> list:
+    """Net loss summed per currency (and per any other key named): amounts in different currencies are never added."""
+    sums: dict = {}
+    for e in events:
+        if e.net_loss is not None:
+            group = tuple(getattr(e, k) for k in keys) + (e.currency,)
+            sums[group] = sums.get(group, 0.0) + float(e.net_loss)
+    rows = [{**dict(zip(keys, g[:-1])), "currency": g[-1], "net_loss": round(v, 2)} for g, v in sums.items()]
+    return sorted(rows, key=lambda r: tuple(str(r[k] or "") for k in (*keys, "currency")))
 
 
 def _normalize_tags(raw) -> Optional[list]:
@@ -118,8 +157,20 @@ def _fallback_incident_suggestion(title: str, description: Optional[str] = None,
         "root_cause": "Initial root cause assessment pending detailed investigation",
         "corrective_actions": "Contain impact, investigate underlying cause, implement remediation, and monitor recurrence",
         "operational_impact": "Moderate operational disruption",
+        "event_type": next((key for words, key in _EVENT_TYPE_HINTS if any(w in text for w in words)), None),
+        "business_line": None,
         "rationale": "Heuristic suggestion generated from incident title and description"
     }
+
+
+# Keyword guesses at the Basel event type when the AI is unavailable; first match wins.
+_EVENT_TYPE_HINTS = (
+    (("insider", "employee fraud", "staff fraud", "rogue"), "internal_fraud"),
+    (("fraud", "skimming", "phishing", "forgery", "theft"), "external_fraud"),
+    (("outage", "downtime", "system failure", "crash"), "business_disruption"),
+    (("fire", "flood", "earthquake", "vandalism"), "physical_assets"),
+    (("error", "mistake", "failed trade", "reconciliation"), "execution_delivery"),
+)
 
 
 def _risk_context(risk) -> str:
@@ -131,7 +182,7 @@ def _ai_suggest_incident_payload(title: str, description: Optional[str], severit
     client = get_openai_client()
     prompt = f"""You are a GRC incident response specialist.
 Suggest manual incident form values and return ONLY valid JSON with keys:
-suggested_severity, root_cause, corrective_actions, operational_impact, rationale
+suggested_severity, root_cause, corrective_actions, operational_impact, event_type, business_line, rationale
 
 Incident Title: {title}
 Incident Description: {description or 'Not provided'}
@@ -140,6 +191,8 @@ Risk Context: {risk_context or 'Not provided'}
 
 Constraints:
 - suggested_severity must be one of: low, medium, high, critical
+- event_type is the Basel level-1 event type, one of: {', '.join(EVENT_TYPES)}
+- business_line is the Basel business line, one of: {', '.join(BUSINESS_LINES)}, or null when unclear
 - Keep root_cause and corrective_actions concise and practical
 """
 
@@ -162,7 +215,9 @@ Constraints:
             content = content[:-3]
         parsed = json.loads(content.strip())
         fallback = _fallback_incident_suggestion(title, description, severity)
-        fallback.update({k: v for k, v in parsed.items() if v is not None})
+        fallback.update({k: v for k, v in parsed.items() if v is not None
+                         and not (k == "event_type" and v not in EVENT_TYPES)
+                         and not (k == "business_line" and v not in BUSINESS_LINES)})      # taxonomy keys only
         return fallback
     except Exception:
         return _fallback_incident_suggestion(title, description, severity)
@@ -175,6 +230,8 @@ def list_incidents(
     status_filter: Optional[str] = None,
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
+    event_type: Optional[str] = None,
+    validation_status: Optional[str] = None,
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
@@ -200,12 +257,19 @@ def list_incidents(
         query = query.filter(RiskIncident.incident_date >= start_date)
     if end_date:
         query = query.filter(RiskIncident.incident_date <= end_date)
-    
+    if event_type:
+        query = query.filter(RiskIncident.event_type == event_type)
+    if validation_status == "pending":       # never validated (rows from before loss events) is pending too
+        query = query.filter(or_(RiskIncident.validation_status == "pending", RiskIncident.validation_status.is_(None)))
+    elif validation_status:
+        query = query.filter(RiskIncident.validation_status == validation_status)
+
     incidents = query.order_by(RiskIncident.incident_date.desc()).offset(skip).limit(limit).all()
     return [_enrich_incident_response(incident, db) for incident in incidents]
 
 
-@router.post("", response_model=RiskIncidentResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=RiskIncidentResponse, status_code=status.HTTP_201_CREATED,
+             dependencies=[Depends(_may_create)])
 def create_incident(
     incident: RiskIncidentCreate,
     ai_assist: bool = False,
@@ -249,6 +313,8 @@ def create_incident(
     corrective_actions = incident.corrective_actions or (suggestion.get("corrective_actions") if suggestion else None)
     
     refuse_imported_accounts(db, [incident.assigned_to])
+    loss = _loss_keys(incident.model_dump(include=set(RiskIncidentLossFields.model_fields), exclude_none=True))
+    loss["discovered_date"] = incident.discovered_date or datetime.utcnow()
     db_incident = RiskIncident(
         tenant_id=tenant_id,
         risk_id=incident.risk_id,
@@ -263,6 +329,7 @@ def create_incident(
         reported_by=current_user.id,
         assigned_to=incident.assigned_to,
         tags=_normalize_tags(incident.tags),
+        **loss,
     )
     db.add(db_incident)
     db.flush()
@@ -290,7 +357,8 @@ def create_incident(
     return _enrich_incident_response(db_incident, db)
 
 
-@router.post("/ai-suggest")
+@router.post("/ai-suggest", dependencies=[Depends(require_tenant_permission(
+    "erm:incidents:create", "erm:risks:create", "erm:incidents:edit", "erm:risks:edit"))])  # AI budget: writers only
 def suggest_incident_with_ai(
     request: IncidentAISuggestRequest,
     db: Session = Depends(get_db),
@@ -319,6 +387,12 @@ def suggest_incident_with_ai(
     }
 
 
+@router.get("/taxonomy")
+def get_loss_taxonomy(current_user: GRCUser = Depends(require_auth)):
+    """Basel level-1 event types and business lines, as keys and labels."""
+    return taxonomy()
+
+
 @router.get("/dashboard")
 def get_incident_dashboard(
     db: Session = Depends(get_db),
@@ -332,8 +406,15 @@ def get_incident_dashboard(
             "by_status": {},
             "total_financial_impact": 0,
             "open_incidents": 0,
+            "investigating": 0,
+            "resolved_this_month": 0,
             "avg_resolution_time_days": 0,
-            "recent_incidents": []
+            "recent_incidents": [],
+            "net_loss_this_quarter": [],
+            "net_loss_last_quarter": [],
+            "net_loss_by_event_type": [],
+            "near_misses": 0,
+            "awaiting_validation": 0,
         }
     
     incidents = db.query(RiskIncident).filter(
@@ -344,8 +425,12 @@ def get_incident_dashboard(
     by_status = {}
     total_impact = 0
     resolution_times = []
+    month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    resolved_this_month = 0
     
     for inc in incidents:
+        if inc.status in _DONE_STATUSES and inc.resolved_at and inc.resolved_at >= month_start:
+            resolved_this_month += 1
         by_severity[inc.severity] = by_severity.get(inc.severity, 0) + 1
         by_status[inc.status] = by_status.get(inc.status, 0) + 1
         if inc.financial_impact:
@@ -357,18 +442,31 @@ def get_incident_dashboard(
     recent = db.query(RiskIncident).filter(
         RiskIncident.tenant_id.in_(user_tenants)
     ).order_by(RiskIncident.incident_date.desc()).limit(5).all()
-    
+
+    # A loss counts in the quarter it was booked (accounting date), else the quarter it occurred.
+    this_quarter = _quarter_start(datetime.utcnow())
+    last_quarter = _quarter_start(this_quarter - timedelta(days=1))
+    booked = lambda e: e.accounting_date or e.incident_date  # noqa: E731
+
     return {
         "total_incidents": len(incidents),
         "by_severity": by_severity,
         "by_status": by_status,
         "total_financial_impact": total_impact,
-        "open_incidents": by_status.get("open", 0) + by_status.get("investigating", 0),
+        # Anything not resolved or closed is still open (mitigating included).
+        "open_incidents": sum(n for st, n in by_status.items() if st not in _DONE_STATUSES),
+        "investigating": by_status.get("investigating", 0),
+        "resolved_this_month": resolved_this_month,
         "avg_resolution_time_days": round(sum(resolution_times) / len(resolution_times), 1) if resolution_times else 0,
         "recent_incidents": [
             {"id": i.id, "title": i.title, "severity": i.severity, "status": i.status}
             for i in recent
-        ]
+        ],
+        "net_loss_this_quarter": _net_by_currency(e for e in incidents if booked(e) >= this_quarter),
+        "net_loss_last_quarter": _net_by_currency(e for e in incidents if last_quarter <= booked(e) < this_quarter),
+        "net_loss_by_event_type": _net_by_currency(incidents, "event_type"),
+        "near_misses": sum(1 for e in incidents if e.is_near_miss),
+        "awaiting_validation": sum(1 for e in incidents if (e.validation_status or "pending") == "pending"),
     }
 
 
@@ -389,13 +487,20 @@ def analyze_incident_with_ai(
         for r in risk_views
     ])
     
+    # Only frameworks this tenant has published (or that are shared), not the whole library.
+    tenant_framework_ids = db.query(UploadedFramework.published_framework_id).filter(
+        UploadedFramework.upload_status == "published",
+        UploadedFramework.published_framework_id.isnot(None),
+        UploadedFramework.is_active == True,  # noqa: E712
+        or_(UploadedFramework.tenant_id.in_(user_tenants), UploadedFramework.is_shared == True),  # noqa: E712
+    )
     controls = db.query(FrameworkControl).join(
         ControlObjective, FrameworkControl.objective_id == ControlObjective.id
     ).join(
         FrameworkDomain, ControlObjective.domain_id == FrameworkDomain.id
     ).join(
         Framework, FrameworkDomain.framework_id == Framework.id
-    ).limit(50).all()
+    ).filter(Framework.id.in_(tenant_framework_ids)).limit(50).all()
     
     control_summary = "\n".join([
         f"- Control ID {c.id}: {c.name} (Code: {c.code})"
@@ -554,7 +659,7 @@ def get_incident(
     return _enrich_incident_response(incident, db)
 
 
-@router.put("/{incident_id}", response_model=RiskIncidentResponse)
+@router.put("/{incident_id}", response_model=RiskIncidentResponse, dependencies=[Depends(_may_edit)])
 def update_incident(
     incident_id: int,
     incident_update: RiskIncidentUpdate,
@@ -585,8 +690,12 @@ def update_incident(
 
     if "tags" in update_data:
         update_data["tags"] = _normalize_tags(update_data["tags"])
-    
-    if update_data.get("status") == "resolved" and not incident.resolved_at:
+    _loss_keys(update_data)
+    for required in ("incident_date", "discovered_date"):       # a date can be changed, not cleared
+        if required in update_data and update_data[required] is None:
+            update_data.pop(required)
+
+    if update_data.get("status") in _DONE_STATUSES and not incident.resolved_at:
         update_data["resolved_at"] = datetime.utcnow()
     
     for key, value in update_data.items():
@@ -606,7 +715,53 @@ def update_incident(
     return _enrich_incident_response(incident, db)
 
 
-@router.delete("/{incident_id}", response_model=MessageResponse)
+def _missing_for_validation(incident: RiskIncident) -> List[str]:
+    """What a loss event needs before a second person can validate it: a near miss has no amount to check."""
+    needed = [("event type", incident.event_type)]
+    if not incident.is_near_miss:
+        gross = incident.financial_impact if incident.gross_loss is None else incident.gross_loss   # a row from before loss events
+        needed += [("gross loss", gross), ("currency", incident.currency)]
+    return [name for name, value in needed if value is None or value == ""]
+
+
+def _decide_validation(incident_id: int, outcome: str, note: Optional[str], db: Session, user: GRCUser) -> RiskIncidentResponse:
+    """The template's gate "Validate classification and amounts": someone other than the reporter validates or returns."""
+    incident = db.query(RiskIncident).filter(
+        RiskIncident.id == incident_id, RiskIncident.tenant_id.in_(get_user_tenants(user, db))
+    ).first()
+    if not incident:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incident not found")
+    ensure_independent(incident.reported_by, user, f"{'validate' if outcome == 'validated' else 'return'} this loss event")
+    note = (note or "").strip() or None
+    if outcome == "validated":
+        missing = _missing_for_validation(incident)
+        if missing:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                                detail=f"Add the {', '.join(missing)} before validating this loss event.")
+    elif not note:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Say what needs fixing before returning it.")
+    incident.validation_status, incident.validation_note = outcome, note
+    incident.validated_by, incident.validated_at = user.id, datetime.utcnow()
+    db.commit()
+    incident = db.query(RiskIncident).options(
+        joinedload(RiskIncident.risk), joinedload(RiskIncident.assignee),
+    ).filter(RiskIncident.id == incident_id).first()
+    return _enrich_incident_response(incident, db)
+
+
+@router.post("/{incident_id}/validate", response_model=RiskIncidentResponse, dependencies=[Depends(_may_edit)])
+def validate_loss_event(incident_id: int, body: RiskIncidentValidation, db: Session = Depends(get_db),
+                        current_user: GRCUser = Depends(require_auth)):
+    return _decide_validation(incident_id, "validated", body.note, db, current_user)
+
+
+@router.post("/{incident_id}/return", response_model=RiskIncidentResponse, dependencies=[Depends(_may_edit)])
+def return_loss_event(incident_id: int, body: RiskIncidentValidation, db: Session = Depends(get_db),
+                      current_user: GRCUser = Depends(require_auth)):
+    return _decide_validation(incident_id, "returned", body.note, db, current_user)
+
+
+@router.delete("/{incident_id}", response_model=MessageResponse, dependencies=[Depends(_may_delete)])
 def delete_incident(
     incident_id: int,
     db: Session = Depends(get_db),

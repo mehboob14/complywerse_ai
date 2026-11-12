@@ -12,13 +12,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Check, ExternalLink, Gavel, Loader2, Plus, Sparkles, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { BTN, BTN_DANGER, BTN_PRIMARY, Dialog, StatusPill, TONE, fmt, tones } from '@/app/(dashboard)/vendor-risk/_ui';
-import { tpraApi } from '@/lib/api';
+import { committeeApi, tpraApi } from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
 import { apiErrorText, lifecycleApi } from '../../../_lib/lifecycleApi';
 import {
   DECISIONS, approvalNote, conditionState, decisionAvailable, decisionWord, firstDecision, type Check as StageCheck, type ConditionState,
 } from '../../../_lib/lifecycleLogic';
+import { needsMeeting } from '../../../_lib/outsourcingModel';
 import type { Approval, ApprovalCondition } from './types';
 import { RECOMMENDATION_LABEL } from './constants';
 import { ReasonDialog } from './StageDialogs';
@@ -36,11 +37,13 @@ const STATE_WORD: Record<ConditionState, string> = { open: 'Open', met: 'Met', o
 
 const asCondition = (c: string | Condition, i: number): Condition => (typeof c === 'string' ? { id: `c${i}`, text: c, status: 'open', due_date: null } : c);
 
-export default function ApprovalPanel({ assessmentId, checks, stageStatus }: {
+export default function ApprovalPanel({ assessmentId, checks, stageStatus, criticalImportant = null }: {
   assessmentId: number;
   /** the stage's checks: the ones other than the decision hold an approving decision back */
   checks?: StageCheck[] | null;
   stageStatus?: string;
+  /** a critical or important outsourcing is decided by a committee at a meeting */
+  criticalImportant?: boolean | null;
 }) {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -52,6 +55,19 @@ export default function ApprovalPanel({ assessmentId, checks, stageStatus }: {
   const [decision, setDecision] = useState('approve');
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [rationale, setRationale] = useState('');
+  const [committeeId, setCommitteeId] = useState('');
+  const [meetingId, setMeetingId] = useState('');
+  const committees = useQuery({
+    queryKey: ['committees-active'],
+    queryFn: async () => ((await committeeApi.getCommittees()).data as { items: Array<{ id: number; name: string }> }).items,
+    enabled: recording && criticalImportant === true,
+  });
+  const meetings = useQuery({
+    queryKey: ['committee-meetings', committeeId],
+    queryFn: async () => ((await committeeApi.getMeetings(Number(committeeId))).data as {
+      items: Array<{ id: number; title: string; scheduled_date: string; status: string }> }).items,
+    enabled: recording && !!committeeId,
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ['tpra-approvals', assessmentId],
@@ -68,7 +84,9 @@ export default function ApprovalPanel({ assessmentId, checks, stageStatus }: {
   const people = directory?.people || [];
   const nameOf = (id?: number | null) => (id ? people.find((p) => p.id === id)?.name || `User ${id}` : null);
 
-  const blocking = (checks ?? []).filter((c) => c.met === false && c.key !== 'decision').length;
+  // the decision and the committee's meeting are what the dialog records, so they never hold it back
+  const blocking = (checks ?? []).filter((c) => c.met === false && c.key !== 'decision' && c.key !== 'committee').length;
+  const meetingMissing = needsMeeting(criticalImportant, decision) && !meetingId;
   const me = who?.me;
   const excluded = !!me && !me.eligible;                    // may still defer or reject
   const approvers = who?.items || [];
@@ -83,6 +101,8 @@ export default function ApprovalPanel({ assessmentId, checks, stageStatus }: {
     setDecision(firstDecision(excluded, blocking));
     setDrafts([]);
     setRationale('');
+    setCommitteeId('');
+    setMeetingId('');
     setRecording(true);
   };
   const setDraft = (i: number, patch: Partial<Draft>) => setDrafts((ds) => ds.map((d, j) => (j === i ? { ...d, ...patch } : d)));
@@ -97,6 +117,7 @@ export default function ApprovalPanel({ assessmentId, checks, stageStatus }: {
       decision,
       conditions: made.map((d) => ({ text: d.text.trim(), owner_id: d.owner_id ? Number(d.owner_id) : null, due_date: d.due_date || null })),
       rationale: rationale.trim() || undefined,
+      meeting_id: meetingId ? Number(meetingId) : null,
     }),
     onSuccess: () => { refresh(); setRecording(false); toast({ type: 'success', title: 'Decision recorded' }); },
     onError: (e) => toast({ type: 'error', title: 'Not recorded', message: apiErrorText(e, 'Try again.') }),
@@ -148,7 +169,7 @@ export default function ApprovalPanel({ assessmentId, checks, stageStatus }: {
       {/* The decision the gate goes by */}
       <section className="rounded-xl border border-[#d5dbe1] bg-[#fff] p-4" aria-label="Decision">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h4 className="flex items-center gap-1.5 text-[15px] font-semibold text-[#1f2933]"><Gavel aria-hidden className="h-4 w-4" /> Decision</h4>
+          <h4 className="flex items-center gap-1.5 text-[15px] font-semibold text-[#1f2933]"><Gavel aria-hidden className="h-4 w-4" /> Approval pack</h4>
           {canApprove && (
             <button type="button" className={inForce ? BTN : BTN_PRIMARY} onClick={open}>{inForce ? 'Record a new decision' : 'Record decision'}</button>
           )}
@@ -166,6 +187,12 @@ export default function ApprovalPanel({ assessmentId, checks, stageStatus }: {
           </div>
         ) : (
           <p className="mt-1 text-[13px] leading-5 text-[#586472]">{approvalNote(stageStatus, blocking, canApprove)}</p>
+        )}
+        {criticalImportant === true && (
+          <p className="mt-2 text-[12px] leading-4 text-[#64707e]">
+            Critical or important outsourcing: a committee decides it at a meeting, with the exit plan, contract clauses, sub-outsourcers and
+            regulator notice above.{inForce?.meeting_id ? ' Decided at a committee meeting.' : ''}
+          </p>
         )}
         {rec && (
           <p className="mt-3 flex items-center gap-1.5 text-[12px] leading-4 text-[#64707e]">
@@ -197,7 +224,7 @@ export default function ApprovalPanel({ assessmentId, checks, stageStatus }: {
         footer={<>
           <button type="button" className={BTN} onClick={() => setRecording(false)}>Cancel</button>
           <button type="button" className={decision === 'reject' ? BTN_DANGER : BTN_PRIMARY}
-            disabled={createMut.isPending || !decisionAvailable(decision, excluded, blocking) || (decision === 'approve_with_conditions' && made.length === 0)}
+            disabled={createMut.isPending || !decisionAvailable(decision, excluded, blocking) || meetingMissing || (decision === 'approve_with_conditions' && made.length === 0)}
             onClick={() => createMut.mutate()}>
             {createMut.isPending ? 'Saving…' : DECISIONS.find((d) => d.value === decision)?.label}
           </button>
@@ -252,6 +279,32 @@ export default function ApprovalPanel({ assessmentId, checks, stageStatus }: {
               })}
             </div>
           </fieldset>
+
+          {criticalImportant === true && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-[13px] font-medium text-[#26323d]" htmlFor="decision-committee">Committee</label>
+                <select id="decision-committee" className={FIELD} value={committeeId} onChange={(e) => { setCommitteeId(e.target.value); setMeetingId(''); }}>
+                  <option value="">Choose a committee</option>
+                  {(committees.data ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-[13px] font-medium text-[#26323d]" htmlFor="decision-meeting">Meeting that decided it</label>
+                <select id="decision-meeting" className={FIELD} value={meetingId} disabled={!committeeId} onChange={(e) => setMeetingId(e.target.value)}>
+                  <option value="">{committeeId ? 'Choose a meeting' : 'Choose a committee first'}</option>
+                  {(meetings.data ?? []).filter((m) => m.status !== 'cancelled').map((m) => (
+                    <option key={m.id} value={m.id}>{m.title} · {fmt.date(m.scheduled_date)}</option>
+                  ))}
+                </select>
+              </div>
+              {meetingMissing && (
+                <p className="text-[12px] leading-4 sm:col-span-2" style={{ color: TONE.warning.text }}>
+                  Approving a critical or important outsourcing needs the committee meeting that decided it.
+                </p>
+              )}
+            </div>
+          )}
 
           <div>
             <label className="mb-1 block text-[13px] font-medium text-[#26323d]" htmlFor="decision-why">Rationale</label>

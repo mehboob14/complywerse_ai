@@ -4,13 +4,13 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { risksApi, controlsApi, assetsApi, evidenceApi, governanceApi, ermApi } from '@/lib/api';
-import { RiskCategory, RiskStatus, NormalizedControl, ITAsset, Evidence, GovernanceObjective } from '@/types';
+import { RiskCategory, RiskStatus, ITAsset, Evidence, GovernanceObjective } from '@/types';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   ArrowLeft, Loader2, AlertCircle, AlertTriangle, Shield,
   Target, Calendar, User, FileText,
   Trash2, Edit, Save, Building2, ClipboardCheck,
-  Activity, BarChart3, ExternalLink,
+  Activity, BarChart3, ExternalLink, History, GitBranch,
 } from 'lucide-react';
 import Link from 'next/link';
 import clsx from 'clsx';
@@ -19,9 +19,16 @@ import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 import { PageLoader } from '@/components/ui';
 import { CreateIssueButton } from '@/components/issue-management/CreateIssueButton';
 import { RelatedIssuesPanel } from '@/components/issue-management/RelatedIssuesPanel';
-import { ControlStatusPill, CustomBadge } from '@/components/soc2/ui';
 import QuantificationTab from './_components/QuantificationTab';
+import RiskControlsTab, { type RiskControlRow } from './_components/RiskControlsTab';
+import { registerTypeLabel } from '../_components/registerTypeLabel';
 import LinkFrameworkRequirementModal from './_components/LinkFrameworkRequirementModal';
+import RiskTrajectory from './_components/RiskTrajectory';
+import AcceptancePanel from './_components/AcceptancePanel';
+import HistoryTab from './_components/HistoryTab';
+import RelatedRisksTab from './_components/RelatedRisksTab';
+import type { RiskRecordFields } from '../_components/riskRecord';
+import { STATUS_LABELS, isActionOverdue } from '../../mitigation-actions/actionStatus';
 import type { ReactNode } from 'react';
 
 /** Normalized / SCF bridge row as returned on risk detail (Stage E fields optional). */
@@ -35,15 +42,7 @@ type LinkedNcControl = {
   scf_id?: string | null;
 };
 
-/** Picker row may include SCF/custom codes when the normalized-controls API returns them. */
-type PickerNormalizedControl = NormalizedControl & {
-  scf_id?: string | null;
-  code?: string | null;
-  source?: string | null;
-  custom?: boolean;
-};
-
-interface RiskDetailData {
+interface RiskDetailData extends RiskRecordFields {
   id: number;
   tenant_id: number;
   title: string;
@@ -52,6 +51,10 @@ interface RiskDetailData {
   risk_category: RiskCategory;
   owner_id?: number;
   owner_name?: string;
+  business_owner_id?: number | null;
+  business_owner_name?: string | null;
+  acceptance_requested_by_name?: string | null;
+  accepted_by_name?: string | null;
   inherent_likelihood?: number;
   inherent_impact?: number;
   inherent_score?: number;
@@ -89,8 +92,13 @@ const RISK_CATEGORIES: Record<string, { label: string; color: string }> = {
   operational: { label: 'Operational', color: 'bg-primary-50 text-primary-700 border-primary-200' },
   financial: { label: 'Financial', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   compliance: { label: 'Compliance', color: 'bg-amber-50 text-amber-700 border-amber-200' },
-  technology: { label: 'Technology', color: 'bg-primary-50 text-primary-700 border-primary-200' },
-  third_party: { label: 'Third-Party', color: 'bg-orange-50 text-orange-700 border-orange-200' },
+  technology: { label: 'IT / Cyber', color: 'bg-primary-50 text-primary-700 border-primary-200' },
+  third_party: { label: 'Third-party', color: 'bg-orange-50 text-orange-700 border-orange-200' },
+  credit: { label: 'Credit', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  market: { label: 'Market', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  liquidity: { label: 'Liquidity', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  project_change: { label: 'Project/Change', color: 'bg-slate-100 text-slate-700 border-slate-200' },
+  internal: { label: 'Internal', color: 'bg-slate-100 text-slate-700 border-slate-200' },
 };
 
 const RISK_STATUSES: Record<string, { label: string; color: string }> = {
@@ -115,7 +123,7 @@ const IMPACT_LEVELS = [
   { value: 'low', label: 'Low', color: 'text-emerald-700' },
 ];
 
-type TabType = 'details' | 'treatment' | 'controls' | 'assets' | 'evidence' | 'governance' | 'quantification';
+type TabType = 'details' | 'treatment' | 'controls' | 'assets' | 'evidence' | 'governance' | 'quantification' | 'related' | 'history';
 
 export default function RiskDetailPage() {
   const params = useParams();
@@ -123,9 +131,12 @@ export default function RiskDetailPage() {
   const riskId = Number(params.id);
   const queryClient = useQueryClient();
   
-  const { hasPermission } = usePermissions();
-  const canEdit = hasPermission('risks:risk_register:edit');
-  const canDelete = hasPermission('risks:risk_register:delete');
+  const { hasAnyPermission } = usePermissions();
+  // the register list checks erm:risks:*, the legacy API risks:risk_register:*; the backend takes either
+  const canEdit = hasAnyPermission(['erm:risks:edit', 'risks:risk_register:edit']);
+  const canDelete = hasAnyPermission(['erm:risks:delete', 'risks:risk_register:delete']);
+  // approving an acceptance: the treatment right or the register edit right (the server refuses whoever asked)
+  const canDecideAcceptance = hasAnyPermission(['risks:risk_treatment:edit', 'erm:risks:edit']);
 
   const [activeTab, setActiveTab] = useState<TabType>('details');
   const [isEditingTreatment, setIsEditingTreatment] = useState(false);
@@ -135,7 +146,6 @@ export default function RiskDetailPage() {
   const [showLinkFrameworkControlModal, setShowLinkFrameworkControlModal] = useState(false);
   const [showLinkRequirementModal, setShowLinkRequirementModal] = useState(false);
   const [showLinkGovernanceModal, setShowLinkGovernanceModal] = useState(false);
-  const [sessionLinkedInternalIds, setSessionLinkedInternalIds] = useState<number[]>([]);
 
   const { data: risk, isLoading, error } = useQuery<RiskDetailData>({
     queryKey: ['risk-detail', riskId],
@@ -151,12 +161,16 @@ export default function RiskDetailPage() {
     }
   }, [risk?.treatment_plan]);
 
-  // Drop optimistic session IDs once the detail API includes them.
-  useEffect(() => {
-    const apiIds = new Set((risk?.linked_internal_controls || []).map((c) => Number(c.id)));
-    if (apiIds.size === 0) return;
-    setSessionLinkedInternalIds((prev) => prev.filter((id) => !apiIds.has(id)));
-  }, [risk?.linked_internal_controls]);
+  // The risk's controls of every kind: the one risk–control link (wave 4).
+  const { data: riskControls, isLoading: riskControlsLoading } = useQuery<RiskControlRow[]>({
+    queryKey: ['risk-controls', riskId],
+    queryFn: async () => (await ermApi.internalControls.getRiskLinks(riskId)).data,
+    enabled: !!riskId,
+  });
+  const refreshControls = () => {
+    queryClient.invalidateQueries({ queryKey: ['risk-detail', riskId] });
+    queryClient.invalidateQueries({ queryKey: ['risk-controls', riskId] });
+  };
 
   const { data: allControls } = useQuery({
     queryKey: ['all-normalized-controls'],
@@ -250,66 +264,26 @@ export default function RiskDetailPage() {
 
   const linkControlMutation = useMutation({
     mutationFn: (data: { normalized_control_id: number }) => risksApi.linkControl(riskId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['risk-detail', riskId] });
-    },
+    onSuccess: refreshControls,
   });
 
   const linkInternalControlMutation = useMutation({
     mutationFn: (controlId: number) => ermApi.internalControls.linkRisk(controlId, { risk_id: riskId }),
-    onSuccess: (_data, controlId) => {
-      setSessionLinkedInternalIds((prev) => (prev.includes(controlId) ? prev : [...prev, controlId]));
-      queryClient.invalidateQueries({ queryKey: ['risk-detail', riskId] });
-      queryClient.invalidateQueries({ queryKey: ['all-internal-controls-for-risk-link'] });
-    },
+    onSuccess: refreshControls,
   });
 
-  const unlinkInternalControlMutation = useMutation({
-    mutationFn: ({ controlId, linkId }: { controlId: number; linkId: number }) =>
-      ermApi.internalControls.unlinkRisk(controlId, linkId),
-    onSuccess: (_data, { controlId }) => {
-      setSessionLinkedInternalIds((prev) => prev.filter((id) => id !== controlId));
-      queryClient.invalidateQueries({ queryKey: ['risk-detail', riskId] });
-      queryClient.invalidateQueries({ queryKey: ['all-internal-controls-for-risk-link'] });
-    },
-  });
-
-  const unlinkSessionInternalControl = (controlId: number) => {
-    const persisted = (risk?.linked_internal_controls || []).find((c) => Number(c.id) === controlId);
-    if (persisted?.link_id) {
-      unlinkInternalControlMutation.mutate({ controlId, linkId: persisted.link_id });
-      return;
-    }
-    setSessionLinkedInternalIds((prev) => prev.filter((id) => id !== controlId));
-  };
-
-  const unlinkControlMutation = useMutation({
-    mutationFn: (linkId: number) => risksApi.unlinkControl(riskId, linkId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['risk-detail', riskId] });
-    },
+  // Unlinking removes the one link and the older link rows behind it.
+  const unlinkRiskControlMutation = useMutation({
+    mutationFn: (linkId: number) => ermApi.internalControls.unlinkRiskControl(riskId, linkId),
+    onSuccess: refreshControls,
   });
 
   const linkFrameworkControlMutation = useMutation({
-    mutationFn: (data: { framework_control_id: number; mitigation_effectiveness: string; notes?: string }) => 
+    mutationFn: (data: { framework_control_id: number; mitigation_effectiveness: string; notes?: string }) =>
       risksApi.linkFrameworkControl(riskId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['risk-detail', riskId] });
+      refreshControls();
       setShowLinkFrameworkControlModal(false);
-    },
-  });
-
-  const unlinkFrameworkControlMutation = useMutation({
-    mutationFn: (linkId: number) => risksApi.unlinkFrameworkControl(riskId, linkId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['risk-detail', riskId] });
-    },
-  });
-
-  const unlinkRequirementMutation = useMutation({
-    mutationFn: (linkId: number) => risksApi.unlinkRequirement(riskId, linkId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['risk-detail', riskId] });
     },
   });
 
@@ -374,22 +348,6 @@ export default function RiskDetailPage() {
     },
   });
 
-  const getScoreColor = (score: number | null | undefined) => {
-    if (!score) return 'text-slate-600';
-    if (score >= 20) return 'text-rose-700';
-    if (score >= 12) return 'text-orange-700';
-    if (score >= 6) return 'text-amber-700';
-    return 'text-emerald-700';
-  };
-
-  const getScoreBgColor = (score: number | null | undefined) => {
-    if (!score) return 'bg-slate-100';
-    if (score >= 20) return 'bg-rose-500';
-    if (score >= 12) return 'bg-orange-500';
-    if (score >= 6) return 'bg-amber-500';
-    return 'bg-emerald-500';
-  };
-
   const formatDate = (dateString?: string) => {
     if (!dateString) return '-';
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -445,7 +403,7 @@ export default function RiskDetailPage() {
   const tabs: { id: TabType; label: string; icon: React.ElementType; count?: number }[] = [
     { id: 'details', label: 'Overview', icon: ClipboardCheck },
     { id: 'treatment', label: 'Treatment', icon: Activity },
-    { id: 'controls', label: 'Controls', icon: Shield, count: (risk.linked_controls?.length || 0) + (risk.linked_framework_controls?.length || 0) + (risk.linked_framework_requirements?.length || 0) },
+    { id: 'controls', label: 'Controls', icon: Shield, count: riskControls?.length || 0 },
     { id: 'assets', label: 'Assets', icon: Building2, count: risk.linked_assets?.length || 0 },
     { id: 'evidence', label: 'Evidence', icon: FileText, count: risk.linked_evidence?.length || 0 },
     { id: 'governance', label: 'Documents', icon: Target, count: (risk.linked_governance?.length || 0) + (linkedDocuments?.length || 0) },
@@ -453,6 +411,8 @@ export default function RiskDetailPage() {
     // material-flag gate keeps the register uncluttered (FAIR works on a
     // small set of well-formed scenarios).
     { id: 'quantification', label: 'Quantification', icon: BarChart3 },
+    { id: 'related', label: 'Related risks', icon: GitBranch },
+    { id: 'history', label: 'History', icon: History },
   ];
 
   const riskReduction = calculateRiskReduction();
@@ -482,7 +442,7 @@ export default function RiskDetailPage() {
                   RISK-{risk.id}
                 </span>
                 {risk.register_type && (
-                  <span className="text-[10px] text-slate-500">· {String(risk.register_type).replace(/_/g, ' ')}</span>
+                  <span className="text-[10px] text-slate-500">· {registerTypeLabel(String(risk.register_type))}</span>
                 )}
               </div>
               <h1 className="text-lg font-semibold leading-snug text-slate-800">{risk.title}</h1>
@@ -523,15 +483,14 @@ export default function RiskDetailPage() {
               statusStyle={statusStyle}
               treatmentStatus={treatmentStatus}
               riskReduction={riskReduction}
-              getScoreColor={getScoreColor}
-              getScoreBgColor={getScoreBgColor}
               formatDate={formatDate}
               canEdit={canEdit}
+              canDecideAcceptance={canDecideAcceptance}
               canDelete={canDelete}
               onEdit={() => router.push(`/erm/risks/list?edit=${risk.id}`)}
               onTreatment={() => { setActiveTab('treatment'); setIsEditingTreatment(true); }}
               onDelete={() => setShowDeleteConfirm(true)}
-              controlCount={(risk.linked_controls?.length || 0) + (risk.linked_framework_controls?.length || 0) + (risk.linked_framework_requirements?.length || 0)}
+              controlCount={riskControls?.length || 0}
               assetCount={risk.linked_assets?.length || 0}
               evidenceCount={risk.linked_evidence?.length || 0}
             />
@@ -602,27 +561,18 @@ export default function RiskDetailPage() {
               />
             )}
             {activeTab === 'controls' && (
-              <ControlsTab
-                risk={risk}
+              <RiskControlsTab
+                controls={riskControls}
+                isLoading={riskControlsLoading}
                 allControls={allControls || []}
                 allInternalControls={allInternalControls || []}
-                sessionLinkedInternalIds={sessionLinkedInternalIds}
                 onLinkControl={(controlId) => linkControlMutation.mutate({ normalized_control_id: controlId })}
                 onLinkInternalControl={(controlId) => linkInternalControlMutation.mutate(controlId)}
-                onLinkFrameworkControl={() => setShowLinkFrameworkControlModal(true)}
                 onLinkRequirement={() => setShowLinkRequirementModal(true)}
-                onUnlinkControl={(linkId) => unlinkControlMutation.mutate(linkId)}
-                onUnlinkFrameworkControl={(linkId) => unlinkFrameworkControlMutation.mutate(linkId)}
-                onUnlinkRequirement={(linkId) => unlinkRequirementMutation.mutate(linkId)}
-                onUnlinkSessionInternalControl={unlinkSessionInternalControl}
-                isUnlinking={
-                  unlinkControlMutation.isPending ||
-                  unlinkFrameworkControlMutation.isPending ||
-                  unlinkRequirementMutation.isPending ||
-                  unlinkInternalControlMutation.isPending
-                }
+                onUnlink={(linkId) => unlinkRiskControlMutation.mutate(linkId)}
+                unlinkingId={unlinkRiskControlMutation.isPending ? unlinkRiskControlMutation.variables ?? null : null}
                 canEdit={canEdit}
-                canDelete={canDelete}
+                canDelete={canEdit}
               />
             )}
             {activeTab === 'assets' && (
@@ -662,6 +612,10 @@ export default function RiskDetailPage() {
                 canDelete={canDelete}
               />
             )}
+            {activeTab === 'related' && (
+              <RelatedRisksTab riskId={riskId} canEdit={canEdit} canDelete={canDelete} />
+            )}
+            {activeTab === 'history' && <HistoryTab riskId={riskId} />}
           </div>
         </div>
       </div>
@@ -697,7 +651,7 @@ export default function RiskDetailPage() {
         preferredFrameworkId={risk.linked_framework_requirements?.[0]?.framework_id}
         onClose={() => setShowLinkRequirementModal(false)}
         onLinked={() => {
-          queryClient.invalidateQueries({ queryKey: ['risk-detail', riskId] });
+          refreshControls();
           setShowLinkRequirementModal(false);
         }}
       />
@@ -787,8 +741,8 @@ function EmptyLinkState({ icon: Icon, title, hint }: { icon: React.ElementType; 
 
 function RiskContextRail({
   risk, categoryStyle, statusStyle, treatmentStatus, riskReduction,
-  getScoreColor, getScoreBgColor, formatDate,
-  canEdit, canDelete, onEdit, onTreatment, onDelete,
+  formatDate,
+  canEdit, canDecideAcceptance, canDelete, onEdit, onTreatment, onDelete,
   controlCount, assetCount, evidenceCount,
 }: {
   risk: RiskDetailData;
@@ -796,10 +750,9 @@ function RiskContextRail({
   statusStyle: { label: string; color: string };
   treatmentStatus: { label: string; color: string };
   riskReduction: number | null;
-  getScoreColor: (s?: number | null) => string;
-  getScoreBgColor: (s?: number | null) => string;
   formatDate: (d?: string) => string;
   canEdit: boolean;
+  canDecideAcceptance: boolean;
   canDelete: boolean;
   onEdit: () => void;
   onTreatment: () => void;
@@ -857,50 +810,23 @@ function RiskContextRail({
         </div>
       </div>
 
-      <div className="cw-card rounded-xl p-4">
-        <div className="mb-3 flex items-center gap-1.5 text-xs font-medium text-slate-500">
-          <BarChart3 className="h-3.5 w-3.5" strokeWidth={1.75} /> Risk scores
+      <RiskTrajectory risk={risk} />
+      {riskReduction != null && (
+        <div className="flex items-center justify-between rounded-lg border border-emerald-100 bg-emerald-50/60 px-2.5 py-1.5">
+          <span className="text-xs text-emerald-800">Reduced by controls</span>
+          <span className="text-sm font-bold text-emerald-700">{riskReduction}%</span>
         </div>
-        <div className="space-y-3">
-          <div>
-            <div className="mb-1 flex items-center justify-between">
-              <span className="text-xs text-slate-500">Inherent</span>
-              <span className={`text-sm font-bold tabular-nums ${getScoreColor(risk.inherent_score)}`}>
-                {risk.inherent_score ?? '—'}<span className="font-normal text-slate-400"> / 25</span>
-              </span>
-            </div>
-            <div className="h-1.5 w-full rounded-full bg-slate-100">
-              <div className={`h-1.5 rounded-full transition-all ${getScoreBgColor(risk.inherent_score)}`} style={{ width: `${Math.min(100, ((risk.inherent_score || 0) / 25) * 100)}%` }} />
-            </div>
-            <p className="mt-1 text-[11px] text-slate-400">L {risk.inherent_likelihood ?? '—'} × I {risk.inherent_impact ?? '—'}</p>
-          </div>
-          <div>
-            <div className="mb-1 flex items-center justify-between">
-              <span className="text-xs text-slate-500">Residual</span>
-              <span className={`text-sm font-bold tabular-nums ${getScoreColor(risk.residual_score)}`}>
-                {risk.residual_score ?? '—'}<span className="font-normal text-slate-400"> / 25</span>
-              </span>
-            </div>
-            <div className="h-1.5 w-full rounded-full bg-slate-100">
-              <div className={`h-1.5 rounded-full transition-all ${getScoreBgColor(risk.residual_score)}`} style={{ width: `${Math.min(100, ((risk.residual_score || 0) / 25) * 100)}%` }} />
-            </div>
-            <p className="mt-1 text-[11px] text-slate-400">L {risk.residual_likelihood ?? '—'} × I {risk.residual_impact ?? '—'}</p>
-          </div>
-          {riskReduction != null && (
-            <div className="flex items-center justify-between rounded-lg border border-emerald-100 bg-emerald-50/60 px-2.5 py-1.5">
-              <span className="text-xs text-emerald-800">Risk reduction</span>
-              <span className="text-sm font-bold text-emerald-700">{riskReduction}%</span>
-            </div>
-          )}
-        </div>
-      </div>
+      )}
+
+      <AcceptancePanel risk={risk} canRequest={canEdit} canDecide={canDecideAcceptance} />
 
       <div className="cw-card rounded-xl p-4">
         <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-slate-500">
           <User className="h-3.5 w-3.5" strokeWidth={1.75} /> Ownership &amp; coverage
         </div>
         <div className="divide-y divide-slate-100">
-          <RailStatRow label="Owner">{risk.owner_name || <span className="font-normal text-slate-400">Unassigned</span>}</RailStatRow>
+          <RailStatRow label="Risk owner">{risk.owner_name || <span className="font-normal text-slate-400">Unassigned</span>}</RailStatRow>
+          <RailStatRow label="Accountable executive">{risk.business_owner_name || <span className="font-normal text-slate-400">Not set</span>}</RailStatRow>
           <RailStatRow label="Appetite">{risk.risk_appetite || <span className="font-normal text-slate-400">Not set</span>}</RailStatRow>
           <RailStatRow label="Controls"><span className="tabular-nums">{controlCount}</span></RailStatRow>
           <RailStatRow label="Assets"><span className="tabular-nums">{assetCount}</span></RailStatRow>
@@ -924,17 +850,17 @@ function RiskContextRail({
 }
 
 function DetailsTab({ risk, formatDate }: { risk: RiskDetailData; formatDate: (d?: string) => string }) {
-  const isNca = (risk.register_type || '').toLowerCase().includes('nca');
+  // the register template's own fields (NCA, 3×3 ...), kept verbatim on the risk
   const ncaFields = risk.template_fields && typeof risk.template_fields === 'object'
     ? Object.entries(risk.template_fields).filter(([, v]) => v !== null && v !== '' && v !== undefined)
     : [];
   return (
     <div className="space-y-4">
-      {isNca && ncaFields.length > 0 && (
+      {ncaFields.length > 0 && (
         <div className="rounded-xl border border-primary-200 bg-primary-50/40 p-4">
           <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
             <ClipboardCheck className="h-4 w-4 text-primary-600" strokeWidth={1.75} />
-            NCA template fields
+            {registerTypeLabel(risk.register_type) || 'Register template'} fields
           </h3>
           <div className="grid grid-cols-1 gap-3 text-xs md:grid-cols-2">
             {ncaFields.map(([k, v]) => (
@@ -994,6 +920,10 @@ function TreatmentTab({
   onSave: () => void;
   isSaving: boolean;
 }) {
+  const { data: actions, isLoading: actionsLoading } = useQuery({
+    queryKey: ['risk-mitigation-actions', risk.id],
+    queryFn: async () => (await ermApi.mitigationActions.getAll(risk.id)).data,
+  });
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -1049,248 +979,48 @@ function TreatmentTab({
           )}
         </div>
       )}
-    </div>
-  );
-}
 
-function ControlsTab({
-  risk,
-  allControls,
-  allInternalControls,
-  sessionLinkedInternalIds,
-  onLinkControl,
-  onLinkInternalControl,
-  onLinkFrameworkControl,
-  onLinkRequirement,
-  onUnlinkControl,
-  onUnlinkFrameworkControl,
-  onUnlinkRequirement,
-  onUnlinkSessionInternalControl,
-  isUnlinking,
-  canEdit,
-  canDelete,
-}: {
-  risk: RiskDetailData;
-  allControls: PickerNormalizedControl[];
-  allInternalControls: any[];
-  sessionLinkedInternalIds: number[];
-  onLinkControl: (controlId: number) => void;
-  onLinkInternalControl: (controlId: number) => void;
-  onLinkFrameworkControl: () => void;
-  onLinkRequirement: () => void;
-  onUnlinkControl: (linkId: number) => void;
-  onUnlinkFrameworkControl: (linkId: number) => void;
-  onUnlinkRequirement: (linkId: number) => void;
-  onUnlinkSessionInternalControl: (controlId: number) => void;
-  isUnlinking: boolean;
-  canEdit: boolean;
-  canDelete: boolean;
-}) {
-  const getMitigationColor = (effectiveness?: string) => {
-    const item = MITIGATION_EFFECTIVENESS.find(m => m.value === effectiveness);
-    return item?.color || 'text-slate-600';
-  };
-
-  const linkedControlIds = risk.linked_controls?.map(c => c.control_id) || [];
-  const apiLinkedInternal = risk.linked_internal_controls || [];
-  const apiLinkedInternalIds = apiLinkedInternal.map((c) => Number(c.id));
-  const linkedInternalIdSet = new Set([...apiLinkedInternalIds, ...sessionLinkedInternalIds]);
-  const normalizedItems = allControls
-    .filter(c => !linkedControlIds.includes(Number(c.id)))
-    .map(c => {
-      const scfOrCode = c.scf_id || c.code || c.internal_id || null;
-      const isCustom = !!(c.custom || c.source === 'custom');
-      const kind = isCustom ? 'Custom' : scfOrCode ? 'SCF' : 'Normalized';
-      return {
-        value: `n-${c.id}`,
-        label: c.name || `Control ${scfOrCode || c.id}`,
-        subLabel: scfOrCode ? `${kind} • ${scfOrCode}` : kind,
-      };
-    });
-  const internalItems = (allInternalControls || [])
-    .filter((c: any) => !linkedInternalIdSet.has(Number(c.id)))
-    .map((c: any) => ({
-      value: `i-${c.id}`,
-      label: c.name || c.title || `Control #${c.id}`,
-      subLabel: c.control_id ? `Internal • ${c.control_id}` : 'Internal',
-    }));
-  const combinedControlItems = [...internalItems, ...normalizedItems];
-
-  const sessionLinkedInternalControls = (allInternalControls || []).filter((c: any) =>
-    sessionLinkedInternalIds.includes(Number(c.id)) && !apiLinkedInternalIds.includes(Number(c.id))
-  );
-
-  const ncHref = (control: LinkedNcControl) =>
-    control.scf_id
-      ? `/automation/soc2-controls/${encodeURIComponent(control.scf_id)}`
-      : `/control-library/${control.control_id}`;
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-          <Shield className="h-4 w-4 text-primary-400" />
-          Internal Controls
+      <div>
+        <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-900">
+          <ClipboardCheck className="h-4 w-4 text-slate-400" strokeWidth={1.75} />
+          Actions
+          {!!actions?.length && <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">{actions.length}</span>}
+          <Link href="/erm/mitigation-actions" className="ml-auto text-xs font-medium text-primary-600 hover:underline">
+            Actions & Acceptances
+          </Link>
         </h3>
-        <div className="flex gap-2 flex-wrap">
-          {canEdit && (
-            <button
-              type="button"
-              onClick={onLinkRequirement}
-              className="flex items-center gap-2 rounded-lg border border-primary-600 px-3 py-1.5 text-sm text-primary-700 hover:bg-primary-50"
-            >
-              Link Framework Control
-            </button>
-          )}
-          {canEdit && (
-            <InlineLinkPicker
-              triggerLabel="Link Internal Control"
-              triggerClassName="flex items-center gap-2 rounded-lg bg-primary-600 px-3 py-1.5 text-sm text-white hover:bg-primary-700"
-              items={combinedControlItems}
-              onSelect={(value) => {
-                if (value.startsWith('i-')) {
-                  onLinkInternalControl(Number(value.slice(2)));
-                } else if (value.startsWith('n-')) {
-                  onLinkControl(Number(value.slice(2)));
-                }
-              }}
-              searchPlaceholder="Search internal controls..."
-              emptyText="No controls available"
-            />
-          )}
-        </div>
+        {actionsLoading ? (
+          <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+        ) : !actions?.length ? (
+          <p className="text-sm italic text-slate-400">No actions on this risk yet.</p>
+        ) : (
+          <ul className="divide-y divide-slate-100 rounded-lg border border-slate-100">
+            {actions.map((action) => {
+              const late = isActionOverdue(action);
+              return (
+                <li key={action.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-slate-800">{action.title}</p>
+                    <p className="text-xs text-slate-500">
+                      {action.owner_name || 'No owner'}
+                      {action.due_date && ` · due ${new Date(action.due_date).toLocaleDateString('en-GB')}`}
+                      {action.expected_residual_reduction != null && ` · expected −${action.expected_residual_reduction}%`}
+                      {action.status === 'verified' && ' · verified: re-assess the residual score'}
+                    </p>
+                  </div>
+                  <span className={clsx('rounded-full border px-2 py-0.5 text-[11px] font-medium',
+                    action.status === 'verified' ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                      : late ? 'border-rose-200 bg-rose-50 text-rose-700'
+                        : action.status === 'completed' ? 'border-blue-200 bg-blue-50 text-blue-700'
+                          : 'border-slate-200 bg-slate-50 text-slate-700')}>
+                    {late ? 'Overdue' : STATUS_LABELS[action.status] || action.status}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
-
-      {((risk.linked_controls && risk.linked_controls.length > 0) ||
-        apiLinkedInternal.length > 0 ||
-        sessionLinkedInternalControls.length > 0) && (
-        <div>
-          <h4 className="mb-2 text-xs font-medium text-slate-600">Internal Controls</h4>
-          <div className="space-y-2">
-            {apiLinkedInternal.map((control) => (
-              <LinkEntityRow
-                key={`api-i-${control.link_id}`}
-                href={`/erm/internal-controls/${control.id}`}
-                icon={Shield}
-                title={control.name || control.title || `Control #${control.id}`}
-                subtitle={
-                  <>
-                    <span>{control.control_id || `IC-${control.id}`}</span>
-                    {control.status && (
-                      <span className="ml-2 text-slate-500">· {control.status}</span>
-                    )}
-                  </>
-                }
-                onUnlink={() => onUnlinkSessionInternalControl(Number(control.id))}
-                canDelete={canDelete}
-                isUnlinking={isUnlinking}
-              />
-            ))}
-            {sessionLinkedInternalControls.map((control: any) => (
-              <LinkEntityRow
-                key={`session-i-${control.id}`}
-                href={`/erm/internal-controls/${control.id}`}
-                icon={Shield}
-                title={control.name || control.title || `Control #${control.id}`}
-                subtitle={control.control_id || `IC-${control.id}`}
-                onUnlink={() => onUnlinkSessionInternalControl(Number(control.id))}
-                canDelete={canDelete}
-                isUnlinking={isUnlinking}
-              />
-            ))}
-            {(risk.linked_controls || []).map((control) => (
-              <LinkEntityRow
-                key={control.id}
-                href={ncHref(control)}
-                icon={Shield}
-                title={control.name}
-                badge={(
-                  <>
-                    {control.custom && <CustomBadge />}
-                    {control.control_status && (
-                      <ControlStatusPill status={control.control_status} />
-                    )}
-                  </>
-                )}
-                subtitle={control.scf_id || control.code}
-                onUnlink={() => onUnlinkControl(control.id)}
-                canDelete={canDelete}
-                isUnlinking={isUnlinking}
-              />
-            ))}
-            {(risk.linked_controls || []).length > 0 && (
-              <p className="text-[11px] text-slate-400">
-                Control status is an indicator — residual score is unchanged.
-              </p>
-            )}
-          </div>
-        </div>
-      )}
-
-      {risk.linked_framework_controls && risk.linked_framework_controls.length > 0 && (
-        <div>
-          <h4 className="mb-2 text-xs font-medium text-slate-600">Framework Controls</h4>
-          <div className="space-y-2">
-            {risk.linked_framework_controls.map((control) => (
-              <LinkEntityRow
-                key={control.id}
-                icon={Shield}
-                title={control.name}
-                subtitle={
-                  <>
-                    <span>{control.code}</span>
-                    {control.mitigation_effectiveness && (
-                      <span className={`ml-2 ${getMitigationColor(control.mitigation_effectiveness)}`}>
-                        · {control.mitigation_effectiveness}
-                      </span>
-                    )}
-                  </>
-                }
-                onUnlink={() => onUnlinkFrameworkControl(control.id)}
-                canDelete={canDelete}
-                isUnlinking={isUnlinking}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {risk.linked_framework_requirements && risk.linked_framework_requirements.length > 0 && (
-        <div>
-          <h4 className="mb-2 text-xs font-medium text-slate-600">Framework Requirements</h4>
-          <div className="space-y-2">
-            {risk.linked_framework_requirements.map((control) => (
-              <LinkEntityRow
-                key={`fr-${control.id}`}
-                icon={Shield}
-                title={control.title || control.code}
-                subtitle={
-                  <>
-                    <span>{control.framework_name ? `${control.framework_name} · ` : ''}{control.code}</span>
-                    {control.mitigation_effectiveness && (
-                      <span className={`ml-2 ${getMitigationColor(control.mitigation_effectiveness)}`}>
-                        · {control.mitigation_effectiveness}
-                      </span>
-                    )}
-                    {control.notes && <span className="ml-2 text-slate-500">· {control.notes}</span>}
-                  </>
-                }
-                onUnlink={() => onUnlinkRequirement(control.id)}
-                canDelete={canEdit}
-                isUnlinking={isUnlinking}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {(!risk.linked_controls || risk.linked_controls.length === 0) &&
-       (!risk.linked_framework_controls || risk.linked_framework_controls.length === 0) &&
-       (!risk.linked_framework_requirements || risk.linked_framework_requirements.length === 0) &&
-       apiLinkedInternal.length === 0 &&
-       sessionLinkedInternalControls.length === 0 && (
-        <EmptyLinkState icon={Shield} title="No controls linked" hint="Link controls to track mitigation measures" />
-      )}
     </div>
   );
 }

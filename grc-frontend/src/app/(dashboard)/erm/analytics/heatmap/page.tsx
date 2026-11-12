@@ -18,33 +18,28 @@ import {
 } from 'lucide-react';
 import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
 import { PageLoader } from '@/components/ui';
+import { riskBandForScore, type RiskBand } from '@/lib/riskBands';
 
 const LIKELIHOOD_LABELS = ['Rare', 'Unlikely', 'Possible', 'Likely', 'Almost Certain'];
 const IMPACT_LABELS = ['Insignificant', 'Minor', 'Moderate', 'Major', 'Catastrophic'];
 
+// shortcut: a copy of the Risk Appetite page's category list (erm/appetite RISK_CATEGORIES); move both to one shared module when that page can be touched.
 const CATEGORIES = [
   { value: 'strategic', label: 'Strategic' },
   { value: 'operational', label: 'Operational' },
   { value: 'financial', label: 'Financial' },
   { value: 'compliance', label: 'Compliance' },
   { value: 'technology', label: 'Technology' },
-  { value: 'reputational', label: 'Reputational' },
   { value: 'third_party', label: 'Third Party' },
+  { value: 'project_change', label: 'Project/Change' },
 ];
 
-function getCellColor(score: number): string {
-  if (score >= 17) return 'bg-red-600 hover:bg-red-500';
-  if (score >= 10) return 'bg-orange-500 hover:bg-orange-400';
-  if (score >= 5) return 'bg-yellow-500 hover:bg-yellow-400';
-  return 'bg-green-600 hover:bg-green-500';
-}
-
-function getCellBorderColor(score: number): string {
-  if (score >= 17) return 'ring-red-400';
-  if (score >= 10) return 'ring-orange-400';
-  if (score >= 5) return 'ring-yellow-400';
-  return 'ring-green-400';
-}
+const BAND_CELL: Record<RiskBand, string> = {
+  critical: 'bg-red-600 hover:bg-red-500 ring-red-400',
+  high: 'bg-orange-500 hover:bg-orange-400 ring-orange-400',
+  medium: 'bg-yellow-500 hover:bg-yellow-400 ring-yellow-400',
+  low: 'bg-green-600 hover:bg-green-500 ring-green-400',
+};
 
 interface HeatmapRisk {
   id: number;
@@ -73,17 +68,15 @@ interface HeatmapResponse {
 }
 
 export default function InteractiveHeatMapPage() {
-  const [scoreType, setScoreType] = useState<string>('inherent');
+  const [scoreType, setScoreType] = useState<string>('residual');
   const [category, setCategory] = useState<string>('');
-  const [businessUnitId, setBusinessUnitId] = useState<number | undefined>(undefined);
   const [selectedCell, setSelectedCell] = useState<HeatmapCell | null>(null);
 
   const params = useMemo(() => {
     const p: Record<string, any> = { score_type: scoreType };
     if (category) p.category = category;
-    if (businessUnitId) p.business_unit_id = businessUnitId;
     return p;
-  }, [scoreType, category, businessUnitId]);
+  }, [scoreType, category]);
 
   const { data, isLoading } = useQuery({
     queryKey: ['erm-interactive-heatmap', params],
@@ -104,24 +97,20 @@ export default function InteractiveHeatMapPage() {
   }, [data]);
 
   const summary = useMemo(() => {
-    if (!data?.cells) return { total: 0, critical: 0, high: 0, medium: 0, low: 0 };
-    let critical = 0, high = 0, medium = 0, low = 0;
-    data.cells.forEach((cell) => {
-      if (cell.score > 16) critical += cell.count;
-      else if (cell.score >= 9 && cell.score <= 16) high += cell.count;
-      else if (cell.score >= 4 && cell.score <= 9) medium += cell.count;
-      else if (cell.score <= 4) low += cell.count;
+    const counts = { total: data?.total_risks || 0, critical: 0, high: 0, medium: 0, low: 0 };
+    data?.cells?.forEach((cell) => {
+      const band = riskBandForScore(cell.score);
+      if (band) counts[band] += cell.count;
     });
-    return { total: data.total_risks || 0, critical, high, medium, low };
+    return counts;
   }, [data]);
 
   const clearFilters = () => {
-    setScoreType('inherent');
+    setScoreType('residual');
     setCategory('');
-    setBusinessUnitId(undefined);
   };
 
-  const hasFilters = scoreType !== 'inherent' || category !== '' || businessUnitId !== undefined;
+  const hasFilters = scoreType !== 'residual' || category !== '';
 
   const likelihoodLabels = data?.likelihood_labels || LIKELIHOOD_LABELS;
   const impactLabels = data?.impact_labels || IMPACT_LABELS;
@@ -207,7 +196,7 @@ export default function InteractiveHeatMapPage() {
               <AlertOctagon className="h-5 w-5 text-red-400" />
             </div>
             <div>
-              <p className="text-sm text-slate-600">Critical (&gt;16)</p>
+              <p className="text-sm text-slate-600">Critical (20-25)</p>
               <p className="text-2xl font-bold text-red-400">{summary.critical}</p>
             </div>
           </div>
@@ -218,7 +207,7 @@ export default function InteractiveHeatMapPage() {
               <AlertTriangle className="h-5 w-5 text-orange-400" />
             </div>
             <div>
-              <p className="text-sm text-slate-600">High (9-16)</p>
+              <p className="text-sm text-slate-600">High (12-19)</p>
               <p className="text-2xl font-bold text-orange-400">{summary.high}</p>
             </div>
           </div>
@@ -229,7 +218,7 @@ export default function InteractiveHeatMapPage() {
               <Shield className="h-5 w-5 text-yellow-400" />
             </div>
             <div>
-              <p className="text-sm text-slate-600">Medium (4-9)</p>
+              <p className="text-sm text-slate-600">Medium (6-11)</p>
               <p className="text-2xl font-bold text-yellow-400">{summary.medium}</p>
             </div>
           </div>
@@ -240,7 +229,7 @@ export default function InteractiveHeatMapPage() {
               <CheckCircle className="h-5 w-5 text-green-400" />
             </div>
             <div>
-              <p className="text-sm text-slate-600">Low (≤4)</p>
+              <p className="text-sm text-slate-600">Low (1-5)</p>
               <p className="text-2xl font-bold text-green-400">{summary.low}</p>
             </div>
           </div>
@@ -259,19 +248,19 @@ export default function InteractiveHeatMapPage() {
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-1.5">
                 <div className="w-4 h-4 rounded bg-green-600" />
-                <span className="text-xs text-slate-600">Low (1-4)</span>
+                <span className="text-xs text-slate-600">Low (1-5)</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="w-4 h-4 rounded bg-yellow-500" />
-                <span className="text-xs text-slate-600">Medium (5-9)</span>
+                <span className="text-xs text-slate-600">Medium (6-11)</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="w-4 h-4 rounded bg-orange-500" />
-                <span className="text-xs text-slate-600">High (10-16)</span>
+                <span className="text-xs text-slate-600">High (12-19)</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="w-4 h-4 rounded bg-red-600" />
-                <span className="text-xs text-slate-600">Critical (17-25)</span>
+                <span className="text-xs text-slate-600">Critical (20-25)</span>
               </div>
             </div>
           </div>
@@ -308,8 +297,8 @@ export default function InteractiveHeatMapPage() {
                             setSelectedCell(cell);
                           }
                         }}
-                        className={`relative h-14 rounded-lg flex flex-col items-center justify-center cursor-pointer transition-all duration-200 ${getCellColor(score)} ${
-                          count > 0 ? `ring-1 ${getCellBorderColor(score)}` : ''
+                        className={`relative h-14 rounded-lg flex flex-col items-center justify-center cursor-pointer transition-all duration-200 ${BAND_CELL[riskBandForScore(score) as RiskBand]} ${
+                          count > 0 ? 'ring-1' : ''
                         }`}
                       >
                         <span className={`font-bold ${count > 0 ? 'text-white text-lg' : 'text-white/60 text-sm'}`}>
@@ -367,7 +356,9 @@ export default function InteractiveHeatMapPage() {
                     key={risk.id}
                     className="rounded-lg border border-slate-300 bg-slate-100/50 p-4"
                   >
-                    <h3 className="font-medium text-slate-900">{risk.title}</h3>
+                    <h3 className="font-medium text-slate-900">
+                      <Link href={`/erm/risks/${risk.id}`} className="hover:text-primary-700 hover:underline">{risk.title}</Link>
+                    </h3>
                     <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
                       {risk.category && (
                         <div>

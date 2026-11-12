@@ -43,9 +43,10 @@ class InternalControl(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    submitted_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)  # the maker: cannot approve it (maker-checker)
     approved_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
     approved_at = Column(DateTime, nullable=True)
-    
+
     source_document_id = Column(Integer, ForeignKey("grc_governance_documents.id"), nullable=True, index=True)
     source_statement_id = Column(Integer, ForeignKey("grc_policy_statements.id"), nullable=True, index=True)
     

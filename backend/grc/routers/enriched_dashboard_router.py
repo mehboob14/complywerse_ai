@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_, case, extract
 
+from ..modules.issue_management.services.risk_actions import legacy_shaped_actions
 from ..models import (
     Risk, RiskScoreHistory, RiskAppetiteConfig, RiskMitigationAction,
     RiskIncident, RiskKRI, RiskKRIMeasurement,
@@ -26,6 +27,12 @@ from .auth_router import require_auth, get_user_tenants
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/enriched-dashboard", tags=["Enriched Dashboard"])
+
+
+def _net_by_currency(events, *keys) -> list:
+    """Net loss per currency (the Loss Events rule): financial_impact is the old free-text-era figure, never one money total."""
+    from ..modules.erm.routers.incidents import _net_by_currency as net   # lazy: importing the ERM module here would be circular
+    return net(events, *keys)
 
 
 # ── Single source of truth + real trends (dashboard overhaul: DASH-001/002/009) ─
@@ -84,7 +91,7 @@ def get_risk_velocity(
         func.date(RiskScoreHistory.recorded_at)
     ).all()
 
-    risks = db.query(Risk).filter(Risk.tenant_id.in_(user_tenants)).all()
+    risks = db.query(Risk).filter(Risk.status.is_distinct_from("draft"), Risk.tenant_id.in_(user_tenants)).all()
     current_avg = sum(r.residual_score or 0 for r in risks) / max(len(risks), 1)
 
     old_history = db.query(
@@ -125,7 +132,7 @@ def get_risk_appetite_gauge(
         RiskAppetiteConfig.tenant_id.in_(user_tenants)
     ).all()
 
-    risks = db.query(Risk).filter(
+    risks = db.query(Risk).filter(Risk.status.is_distinct_from("draft"),
         Risk.tenant_id.in_(user_tenants),
         Risk.status != "closed"
     ).all()
@@ -175,7 +182,7 @@ def get_emerging_risks(
     user_tenants = get_user_tenants(current_user, db)
     cutoff = datetime.utcnow() - timedelta(days=90)
 
-    risks = db.query(Risk).filter(
+    risks = db.query(Risk).filter(Risk.status.is_distinct_from("draft"),
         Risk.tenant_id.in_(user_tenants),
         Risk.status != "closed"
     ).all()
@@ -219,7 +226,7 @@ def get_risk_concentration(
 ):
     user_tenants = get_user_tenants(current_user, db)
 
-    risks = db.query(Risk).filter(
+    risks = db.query(Risk).filter(Risk.status.is_distinct_from("draft"),
         Risk.tenant_id.in_(user_tenants),
         Risk.status != "closed"
     ).all()
@@ -263,7 +270,7 @@ def get_board_readiness(
 ):
     user_tenants = get_user_tenants(current_user, db)
 
-    risks = db.query(Risk).filter(
+    risks = db.query(Risk).filter(Risk.status.is_distinct_from("draft"),
         Risk.tenant_id.in_(user_tenants),
         Risk.status != "closed"
     ).all()
@@ -272,9 +279,7 @@ def get_board_readiness(
     with_treatment = sum(1 for r in risks if r.treatment_plan and r.treatment_plan.strip())
     with_owner = sum(1 for r in risks if r.owner_id)
 
-    actions = db.query(RiskMitigationAction).join(
-        Risk, RiskMitigationAction.risk_id == Risk.id
-    ).filter(Risk.tenant_id.in_(user_tenants)).all()
+    actions = legacy_shaped_actions(db, user_tenants)
 
     risks_with_actions = len(set(a.risk_id for a in actions))
     completed_actions = sum(1 for a in actions if a.status == "completed")
@@ -306,7 +311,7 @@ def get_executive_summary(
 ):
     user_tenants = get_user_tenants(current_user, db)
 
-    risks = db.query(Risk).filter(Risk.tenant_id.in_(user_tenants), Risk.status != "closed").all()
+    risks = db.query(Risk).filter(Risk.status.is_distinct_from("draft"), Risk.tenant_id.in_(user_tenants), Risk.status != "closed").all()
     incidents = db.query(RiskIncident).filter(RiskIncident.tenant_id.in_(user_tenants)).all()
     recent_incidents = [i for i in incidents if i.created_at and i.created_at >= datetime.utcnow() - timedelta(days=30)]
 
@@ -337,6 +342,7 @@ def get_executive_summary(
         "risk_reduction_pct": risk_reduction_pct,
         "recent_incidents_30d": len(recent_incidents),
         "total_financial_impact": total_financial_impact,
+        "net_loss_by_currency": _net_by_currency(incidents),
         "appetite_breaches": appetite_breaches,
         "total_appetite_categories": len(configs),
         "overall_risk_posture": "critical" if critical_risks > 5 or appetite_breaches > 2 else "elevated" if critical_risks > 2 or appetite_breaches > 0 else "moderate" if high_risks > 5 else "healthy"
@@ -636,11 +642,9 @@ def get_treatment_portfolio(
 ):
     user_tenants = get_user_tenants(current_user, db)
 
-    actions = db.query(RiskMitigationAction).join(
-        Risk, RiskMitigationAction.risk_id == Risk.id
-    ).filter(Risk.tenant_id.in_(user_tenants)).all()
+    actions = legacy_shaped_actions(db, user_tenants)
 
-    risks = db.query(Risk).filter(Risk.tenant_id.in_(user_tenants)).all()
+    risks = db.query(Risk).filter(Risk.status.is_distinct_from("draft"), Risk.tenant_id.in_(user_tenants)).all()
     risk_map = {r.id: r for r in risks}
 
     portfolio = []
@@ -674,9 +678,7 @@ def get_treatment_effectiveness(
 ):
     user_tenants = get_user_tenants(current_user, db)
 
-    actions = db.query(RiskMitigationAction).join(
-        Risk, RiskMitigationAction.risk_id == Risk.id
-    ).filter(Risk.tenant_id.in_(user_tenants)).all()
+    actions = legacy_shaped_actions(db, user_tenants)
 
     completed = [a for a in actions if a.status == "completed"]
     with_data = [a for a in completed if a.expected_residual_reduction and a.actual_residual_reduction]
@@ -693,7 +695,7 @@ def get_treatment_effectiveness(
 
     avg_effectiveness = round(sum(d["effectiveness_pct"] for d in scatter_data) / max(len(scatter_data), 1), 1) if scatter_data else 0
 
-    risks = db.query(Risk).filter(Risk.tenant_id.in_(user_tenants)).all()
+    risks = db.query(Risk).filter(Risk.status.is_distinct_from("draft"), Risk.tenant_id.in_(user_tenants)).all()
     total_inherent = sum(r.inherent_score or 0 for r in risks)
     total_residual = sum(r.residual_score or 0 for r in risks)
     overall_reduction = round(total_inherent - total_residual, 1)
@@ -714,7 +716,7 @@ def get_treatment_strategy_mix(
 ):
     user_tenants = get_user_tenants(current_user, db)
 
-    risks = db.query(Risk).filter(
+    risks = db.query(Risk).filter(Risk.status.is_distinct_from("draft"),
         Risk.tenant_id.in_(user_tenants),
         Risk.status != "closed"
     ).all()
@@ -724,9 +726,7 @@ def get_treatment_strategy_mix(
         tp = r.treatment_plan or "not_specified"
         strategy[tp] = strategy.get(tp, 0) + 1
 
-    actions = db.query(RiskMitigationAction).join(
-        Risk, RiskMitigationAction.risk_id == Risk.id
-    ).filter(Risk.tenant_id.in_(user_tenants)).all()
+    actions = legacy_shaped_actions(db, user_tenants)
 
     action_types = {}
     for a in actions:
@@ -749,9 +749,7 @@ def get_action_velocity(
 ):
     user_tenants = get_user_tenants(current_user, db)
 
-    actions = db.query(RiskMitigationAction).join(
-        Risk, RiskMitigationAction.risk_id == Risk.id
-    ).filter(Risk.tenant_id.in_(user_tenants)).all()
+    actions = legacy_shaped_actions(db, user_tenants)
 
     completed = [a for a in actions if a.status == "completed" and a.completed_at and a.created_at]
     durations = [(a.completed_at - a.created_at).days for a in completed]
@@ -784,9 +782,7 @@ def get_treatment_burndown(
 ):
     user_tenants = get_user_tenants(current_user, db)
 
-    actions = db.query(RiskMitigationAction).join(
-        Risk, RiskMitigationAction.risk_id == Risk.id
-    ).filter(Risk.tenant_id.in_(user_tenants)).all()
+    actions = legacy_shaped_actions(db, user_tenants)
 
     now = datetime.utcnow()
     burndown = []
@@ -836,6 +832,7 @@ def get_incident_summary(
         "by_severity": by_severity,
         "by_status": by_status,
         "total_financial_impact": total_financial,
+        "net_loss_by_currency": _net_by_currency(incidents),
         "incidents_last_30d": last_30d,
         "incidents_last_90d": last_90d,
         "avg_financial_impact": round(total_financial / total, 2) if total > 0 else 0
@@ -915,10 +912,11 @@ def get_incident_root_causes(
         rc = i.root_cause or "Unknown"
         rc_key = rc.strip()[:100] if rc else "Unknown"
         if rc_key not in causes:
-            causes[rc_key] = {"count": 0, "financial_impact": 0, "severities": []}
+            causes[rc_key] = {"count": 0, "financial_impact": 0, "severities": [], "events": []}
         causes[rc_key]["count"] += 1
         causes[rc_key]["financial_impact"] += i.financial_impact or 0
         causes[rc_key]["severities"].append(i.severity or "medium")
+        causes[rc_key]["events"].append(i)
 
     sorted_causes = sorted(causes.items(), key=lambda x: x[1]["count"], reverse=True)
     total = len(incidents)
@@ -931,7 +929,8 @@ def get_incident_root_causes(
             "count": data["count"],
             "percentage": round(data["count"] / total * 100, 1) if total > 0 else 0,
             "cumulative_pct": round(cumulative / total * 100, 1) if total > 0 else 0,
-            "financial_impact": data["financial_impact"]
+            "financial_impact": data["financial_impact"],
+            "net_loss_by_currency": _net_by_currency(data["events"]),
         })
 
     return {"root_causes": pareto[:20], "total_incidents": total}
@@ -968,7 +967,8 @@ def get_incident_trends(
             "high": high,
             "medium": sum(1 for inc in month_incidents if inc.severity == "medium"),
             "low": sum(1 for inc in month_incidents if inc.severity == "low"),
-            "financial_impact": financial
+            "financial_impact": financial,
+            "net_loss_by_currency": _net_by_currency(month_incidents),
         })
 
     return {"trends": trend_data, "total_incidents": len(incidents)}

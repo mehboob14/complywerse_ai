@@ -13,7 +13,7 @@ const pathLabels: Record<string, string> = {
   evidence: 'Evidence',
   erm: 'Risk Management',
   risks: 'Risk Register',
-  'mitigation-actions': 'Mitigation Actions',
+  'mitigation-actions': 'Actions & Acceptances',
   appetite: 'Risk Appetite',
   kris: 'Key Risk Indicators',
   incidents: 'Incidents',

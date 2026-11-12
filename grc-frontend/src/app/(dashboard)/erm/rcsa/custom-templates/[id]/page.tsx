@@ -8,7 +8,7 @@ import { useParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { rcsaApi } from '@/lib/api';
 import {
-  ArrowLeft, Plus, Save, X, Trash2, Link2, Download, RefreshCw,
+  ArrowLeft, X, Trash2, Link2, Download, RefreshCw,
   Sparkles, Paperclip, UserCheck, Upload, FileText, Loader2,
   Search, ChevronDown, Check, Library,
 } from 'lucide-react';
@@ -108,8 +108,6 @@ export default function RCSACustomTemplateDetailPage() {
   const qc = useQueryClient();
 
   const [selectedRow, setSelectedRow] = useState<Row | null>(null);
-  const [creatingRow, setCreatingRow] = useState(false);
-  const [draft, setDraft] = useState<Record<string, string>>({});
 
   const tplQ = useQuery<CustomTemplateDetail>({
     queryKey: ['rcsa.custom-template', templateId],
@@ -144,32 +142,7 @@ export default function RCSACustomTemplateDetailPage() {
     }
   }, [rowsQ.data]);
 
-  const createRowM = useMutation({
-    mutationFn: () => rcsaApi.customTemplates.createRow(templateId, { data: draft }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['rcsa.custom-template.rows', templateId] });
-      setCreatingRow(false);
-      setDraft({});
-    },
-  });
-
-  const updateRowM = useMutation({
-    mutationFn: ({ rowId, data }: { rowId: number; data: Record<string, unknown> }) =>
-      rcsaApi.customTemplates.updateRow(templateId, rowId, { data }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['rcsa.custom-template.rows', templateId] });
-      setSelectedRow(null);
-    },
-  });
-
-  const deleteRowM = useMutation({
-    mutationFn: (rowId: number) => rcsaApi.customTemplates.deleteRow(templateId, rowId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['rcsa.custom-template.rows', templateId] });
-      setSelectedRow(null);
-    },
-  });
-
+  // The matrix is read-only (the server refuses row changes): its items are opened, never edited here.
   const promoteM = useMutation({
     mutationFn: (rowId: number) => rcsaApi.customTemplates.promoteRowToRisk(templateId, rowId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['rcsa.custom-template.rows', templateId] }),
@@ -233,7 +206,7 @@ export default function RCSACustomTemplateDetailPage() {
     return (
       <div className="p-6">
         <Link href="/erm/rcsa/custom-templates" className="text-sm text-primary-700 hover:underline">
-          ← Back to Custom Templates
+          ← Back to Imported matrices
         </Link>
         <p className="mt-3 text-sm text-rose-600">Failed to load template.</p>
       </div>
@@ -251,7 +224,7 @@ export default function RCSACustomTemplateDetailPage() {
           className="inline-flex items-center gap-1.5 text-sm text-primary-700 hover:underline"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to Custom Templates
+          Back to Imported matrices
         </Link>
         <div className="flex items-center gap-2">
           <button
@@ -286,6 +259,7 @@ export default function RCSACustomTemplateDetailPage() {
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="min-w-0">
             <h1 className="text-lg font-semibold text-slate-900">{t.name}</h1>
+            <p className="text-xs text-slate-500 mt-0.5">Imported matrix: read-only, as in the uploaded file (upload a new file to change it).</p>
             {t.description && (
               <p className="text-sm text-slate-600 mt-1 max-w-3xl">{t.description}</p>
             )}
@@ -322,14 +296,7 @@ export default function RCSACustomTemplateDetailPage() {
       <section>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold text-slate-900">Assessment items</h2>
-          <button
-            type="button"
-            onClick={() => { setDraft({}); setCreatingRow(true); }}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#0a0a0a] bg-primary-600 rounded-md hover:bg-primary-700"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Add assessment item
-          </button>
+          <p className="text-xs text-slate-500">Read-only: upload a new file to change the matrix.</p>
         </div>
         <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
           <table className="min-w-full text-sm">
@@ -348,7 +315,7 @@ export default function RCSACustomTemplateDetailPage() {
               {rows.length === 0 ? (
                 <tr>
                   <td colSpan={primaryColumns.length + 1} className="px-3 py-6 text-center text-xs text-slate-500">
-                    No assessment items yet. Use “Add assessment item” above, or re-import from the original file.
+                    The uploaded file had no assessment items.
                   </td>
                 </tr>
               ) : (
@@ -399,7 +366,7 @@ export default function RCSACustomTemplateDetailPage() {
                         onClick={() => setSelectedRow(r)}
                         className="text-xs text-primary-700 hover:underline"
                       >
-                        Edit
+                        Open
                       </button>
                       {r.linked_risk_id ? (
                         <Link
@@ -431,39 +398,13 @@ export default function RCSACustomTemplateDetailPage() {
         </div>
       </section>
 
-      {/* Create row drawer */}
-      {creatingRow && (
-        <RowDrawer
-          title="Add assessment item"
-          schema={t.column_schema}
-          values={draft}
-          isPending={createRowM.isPending}
-          onClose={() => { setCreatingRow(false); setDraft({}); }}
-          onChange={(k, v) => setDraft((p) => ({ ...p, [k]: v }))}
-          onSave={() => createRowM.mutate()}
-        />
-      )}
-
-      {/* Edit drawer — gets the AI/evidence/assign tabs for existing items. */}
+      {/* Item drawer: its fields as imported, with the AI/evidence/assign tabs. */}
       {selectedRow && (
         <RowDrawer
-          title={`Edit assessment item #${selectedRow.id}`}
+          title={`Assessment item #${selectedRow.id}`}
           schema={t.column_schema}
-          values={Object.fromEntries(
-            Object.entries(selectedRow.data || {}).map(([k, v]) => [k, v == null ? '' : String(v)])
-          )}
-          isPending={updateRowM.isPending}
+          values={selectedRow.data || {}}
           onClose={() => setSelectedRow(null)}
-          onChange={(k, v) => {
-            const next = { ...(selectedRow.data || {}), [k]: v };
-            setSelectedRow({ ...selectedRow, data: next });
-          }}
-          onSave={() => updateRowM.mutate({ rowId: selectedRow.id, data: selectedRow.data })}
-          onDelete={() => {
-            if (confirm(`Delete assessment item #${selectedRow.id}? This cannot be undone.`)) {
-              deleteRowM.mutate(selectedRow.id);
-            }
-          }}
           extension={{
             templateId,
             row: selectedRow,
@@ -479,28 +420,20 @@ export default function RCSACustomTemplateDetailPage() {
   );
 }
 
-// ─── Row drawer: form built dynamically from the template's schema ──────────
+// ─── Row drawer: the item's fields as imported, laid out by the template's schema (read-only) ──────────
 
 function RowDrawer({
   title,
   schema,
   values,
-  isPending,
   onClose,
-  onChange,
-  onSave,
-  onDelete,
   extension,
 }: {
   title: string;
   schema: CustomTemplateDetail['column_schema'];
   values: Record<string, unknown>;
-  isPending: boolean;
   onClose: () => void;
-  onChange: (key: string, value: string) => void;
-  onSave: () => void;
-  onDelete?: () => void;
-  extension?: {
+  extension: {
     templateId: number;
     row: Row;
     tenantUsers: TenantUserOption[];
@@ -510,7 +443,6 @@ function RowDrawer({
   };
 }) {
   const [tab, setTab] = useState<DrawerTab>('fields');
-  const isExisting = !!extension;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl bg-white shadow-2xl">
@@ -521,9 +453,7 @@ function RowDrawer({
           </button>
         </div>
 
-        {/* Tabs only appear for an existing row — creation stays single-pane. */}
-        {isExisting && (
-          <div className="px-5 pt-3 border-b border-slate-100 bg-white">
+        <div className="px-5 pt-3 border-b border-slate-100 bg-white">
             <nav className="flex gap-1 -mb-px">
               {(
                 [
@@ -552,10 +482,9 @@ function RowDrawer({
               })}
             </nav>
           </div>
-        )}
 
         <div className="p-5 space-y-5">
-          {(!isExisting || tab === 'fields') && (
+          {tab === 'fields' && (
             <>
               {schema.groups.map((g) => (
                 <fieldset key={g.key} className="border border-slate-200 rounded-lg p-4">
@@ -565,43 +494,13 @@ function RowDrawer({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {g.columns.map((c) => (
                       <div key={c.key}>
-                        <label className="block text-xs font-medium text-slate-700 mb-1">
+                        <p className="text-xs font-medium text-slate-700 mb-1">
                           {c.label}
                           <span className="ml-1 text-[10px] uppercase text-slate-400 font-normal">{c.data_type}</span>
-                        </label>
-                        {c.data_type === 'yes_no' ? (
-                          <select
-                            value={String(values[c.key] ?? '')}
-                            onChange={(e) => onChange(c.key, e.target.value)}
-                            className="block w-full text-sm rounded-md border border-slate-300 px-3 py-1.5 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
-                          >
-                            <option value="">—</option>
-                            <option value="Yes">Yes</option>
-                            <option value="No">No</option>
-                          </select>
-                        ) : c.data_type === 'number' || c.data_type === 'score' ? (
-                          <input
-                            type="number"
-                            value={String(values[c.key] ?? '')}
-                            onChange={(e) => onChange(c.key, e.target.value)}
-                            className="block w-full text-sm rounded-md border border-slate-300 px-3 py-1.5 font-mono focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
-                          />
-                        ) : (c.label || '').toLowerCase().includes('description') || (c.label || '').toLowerCase().includes('action') ? (
-                          <textarea
-                            rows={3}
-                            value={String(values[c.key] ?? '')}
-                            onChange={(e) => onChange(c.key, e.target.value)}
-                            className="block w-full text-sm rounded-md border border-slate-300 px-3 py-1.5 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
-                          />
-                        ) : (
-                          <input
-                            type="text"
-                            value={String(values[c.key] ?? '')}
-                            onChange={(e) => onChange(c.key, e.target.value)}
-                            placeholder={c.sample_values?.[0] ? String(c.sample_values[0]).slice(0, 60) : ''}
-                            className="block w-full text-sm rounded-md border border-slate-300 px-3 py-1.5 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
-                          />
-                        )}
+                        </p>
+                        <p className={`text-sm text-slate-900 whitespace-pre-wrap ${c.data_type === 'number' || c.data_type === 'score' ? 'font-mono' : ''}`}>
+                          {values[c.key] == null || values[c.key] === '' ? <span className="text-slate-400">—</span> : String(values[c.key])}
+                        </p>
                       </div>
                     ))}
                   </div>
@@ -610,13 +509,13 @@ function RowDrawer({
             </>
           )}
 
-          {isExisting && tab === 'explain' && extension && (
+          {tab === 'explain' && (
             <ExplainPanel templateId={extension.templateId} row={extension.row} />
           )}
-          {isExisting && tab === 'evidence' && extension && (
+          {tab === 'evidence' && (
             <EvidencePanel templateId={extension.templateId} row={extension.row} />
           )}
-          {isExisting && tab === 'assign' && extension && (
+          {tab === 'assign' && (
             <AssignPanel
               row={extension.row}
               tenantUsers={extension.tenantUsers}
@@ -627,37 +526,14 @@ function RowDrawer({
           )}
         </div>
 
-        <div className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-slate-200 bg-white px-5 py-3">
-          {onDelete ? (
-            <button
-              type="button"
-              onClick={onDelete}
-              className="inline-flex items-center gap-1 text-xs text-rose-600 hover:underline"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              Delete item
-            </button>
-          ) : <span />}
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-3 py-1.5 text-sm border border-slate-300 rounded-md text-slate-700 hover:bg-slate-50"
-            >
-              Close
-            </button>
-            {(!isExisting || tab === 'fields') && (
-              <button
-                type="button"
-                onClick={onSave}
-                disabled={isPending}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-primary-600 text-[#0a0a0a] rounded-md hover:bg-primary-700 disabled:opacity-50"
-              >
-                <Save className="h-4 w-4" />
-                {isPending ? 'Saving…' : 'Save'}
-              </button>
-            )}
-          </div>
+        <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-slate-200 bg-white px-5 py-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-3 py-1.5 text-sm border border-slate-300 rounded-md text-slate-700 hover:bg-slate-50"
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>

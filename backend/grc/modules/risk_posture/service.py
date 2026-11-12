@@ -765,6 +765,7 @@ def _risk_score(db: Session, tenant_id: int, asset_id: int) -> Dict[str, Any]:
         .filter(
             RiskAssetLink.asset_id == asset_id,
             Risk.tenant_id == tenant_id,
+            Risk.status.is_distinct_from("draft"),      # a Risk Library draft is not in the register yet
         )
         .all()
     )

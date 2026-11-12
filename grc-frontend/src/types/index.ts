@@ -172,6 +172,9 @@ export type RiskCategory =
   | 'compliance'
   | 'technology'
   | 'third_party'
+  | 'credit'
+  | 'market'
+  | 'liquidity'
   | 'project_change'
   | 'internal'
   | 'isms'
@@ -996,44 +999,33 @@ export interface RiskReportCreate {
 }
 
 export interface ExecutiveDashboard {
-  summary: {
-    total_risks: number;
-    critical_risks: number;
-    high_risks: number;
-    risks_within_appetite: number;
-    risks_exceeding_appetite: number;
-    avg_risk_score: number;
-    risk_score_trend: number;
-  };
-  top_risks: Array<{id: number; title: string; score: number; trend: string}>;
-  kri_alerts: Array<{id: number; name: string; status: string; value: number}>;
+  total_risks: number;
+  risks_by_category: Record<string, number>;
+  risks_by_status: Record<string, number>;
+  risks_by_score_band: Record<string, number>;
+  appetite_breaches: Array<{risk_id: number; risk_title: string; category: string | null; score: number; threshold: number}>;
+  top_risks: Array<{id: number; title: string; category: string | null; score: number | null; status: string}>;
   recent_incidents: Array<{id: number; title: string; severity: string; date: string}>;
-  upcoming_reviews: Array<{id: number; risk_title: string; due_date: string}>;
+  kri_alerts: Array<{kri_id: number; name: string; value: number; status: string}>;
+  pending_reviews: number;
+  overdue_reviews: number;
+  trend_summary: {total_tracked: number; period: string};
 }
 
 export interface BoardReportData {
-  period: string;
-  risk_profile_summary: {
+  report_period: string;
+  executive_summary: string;
+  risk_overview: {
     total_risks: number;
     by_category: Record<string, number>;
     by_status: Record<string, number>;
-    new_risks: number;
-    closed_risks: number;
+    avg_inherent_score: number;
+    avg_residual_score: number;
   };
-  key_risk_changes: Array<{
-    risk_id: number;
-    title: string;
-    previous_score: number;
-    current_score: number;
-    change: number;
-    reason: string;
-  }>;
-  control_effectiveness: {
-    effective: number;
-    partially_effective: number;
-    ineffective: number;
-  };
-  emerging_risks: string[];
+  appetite_status: Array<{category: string | null; total_risks: number; breaching_appetite: number; appetite_level: string; max_score: number | null}>;
+  top_risks: Array<{id: number; title: string; category: string | null; score: number | null; status: string; treatment_plan?: string | null}>;
+  key_changes: Array<Record<string, unknown>>;
+  incidents_summary: {total_incidents: number; open_incidents: number; total_financial_impact: number};
   recommendations: string[];
 }
 
@@ -1060,23 +1052,29 @@ export interface RiskTrendData {
 }
 
 export interface AggregatedRiskView {
-  category: string;
-  total_count: number;
-  total_inherent_exposure: number;
-  total_residual_exposure: number;
+  group_by: string;
+  group_value: string;
+  total_risks: number;
+  critical_count: number;
+  high_count: number;
+  medium_count: number;
+  low_count: number;
   avg_inherent_score: number;
   avg_residual_score: number;
-  top_risk: {id: number; title: string; score: number} | null;
+  open_count: number;
+  in_treatment_count: number;
+  mitigated_count: number;
 }
 
 export interface AppetiteBreach {
   risk_id: number;
   risk_title: string;
-  category: string;
-  appetite_threshold: number;
+  category: string | null;
   current_score: number;
-  breach_percentage: number;
-  days_in_breach: number;
+  tolerance: number;
+  excess: number;
+  days_over: number;
+  owner_id?: number | null;
 }
 
 export interface IncidentDashboard {

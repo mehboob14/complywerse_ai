@@ -61,9 +61,14 @@ def _is_owner_scoped(current_user: GRCUser, tenant_id: int, db: Session) -> bool
 
 
 # The estate's risk posture is read on the Risk Posture page (sidebar: erm:risks) and on Cybersecurity Assurance → Performance
-# (any of its cyber rights): one of those view rights.
-@router.get("/dashboard", dependencies=[Depends(require_tenant_permission(
-    "erm:risks:view", "assets:asset_inventory:view", "vulnerabilities:vulnerability_register:view"))])
+# (any of its cyber rights): one of those view rights. Every read below uses the same check.
+_may_view = require_tenant_permission(
+    "erm:risks:view", "assets:asset_inventory:view", "vulnerabilities:vulnerability_register:view")
+# Tune weights: the right the Risk Posture workspace gates its button on. Administrators pass.
+_may_tune_weights = require_tenant_permission("compliance:scan:execute")
+
+
+@router.get("/dashboard", dependencies=[Depends(_may_view)])
 def get_dashboard(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
@@ -79,7 +84,7 @@ def get_dashboard(
     return compute_tenant_posture(db, tenant_id, owner_id=owner_id)
 
 
-@router.get("/asset/{asset_id}")
+@router.get("/asset/{asset_id}", dependencies=[Depends(_may_view)])
 def get_asset_posture(
     asset_id: int,
     db: Session = Depends(get_db),
@@ -119,7 +124,7 @@ class BusinessContextProposal(_PreviewBaseModel):
     operational_dependency: Optional[str] = None  # 'low' | 'medium' | 'high' | 'critical'
 
 
-@router.post("/asset/{asset_id}/preview")
+@router.post("/asset/{asset_id}/preview", dependencies=[Depends(_may_view)])
 def preview_asset_posture(
     asset_id: int,
     proposal: BusinessContextProposal,
@@ -278,7 +283,7 @@ PRESETS = {
 }
 
 
-@router.get("/weights")
+@router.get("/weights", dependencies=[Depends(_may_view)])
 def get_weights(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
@@ -317,7 +322,7 @@ def get_weights(
     }
 
 
-@router.put("/weights")
+@router.put("/weights", dependencies=[Depends(_may_tune_weights)])
 def update_weights(
     body: WeightsPayload,
     db: Session = Depends(get_db),
@@ -325,40 +330,18 @@ def update_weights(
 ):
     """Tenant Admin updates this tenant's risk-weight overrides.
 
-    Tune Weights changes the scoring formula for the entire tenant. Only the
-    Administrator role can change it — Scanning Admin / Auditor / Banking
-    User can read but not modify. Frontend hides the Tune Weights button for
-    non-admins; this server check is the defence-in-depth gate.
+    Tune Weights changes the scoring formula for the entire tenant. It needs
+    compliance:scan:execute (Administrator and Scanning Admin) — the same right
+    the workspace's Tune weights button checks; others can read but not modify.
 
     Total must equal 100% ±0.5 (extra tolerance for slider rounding).
     Audited via `updated_by` so we can show "Last changed by X at Y".
     """
-    # RBAC gate — Administrator role only.
-    # Tune Weights changes the scoring formula for the entire tenant. The
-    # frontend hides the button for non-admins; this server check is the
-    # defence-in-depth gate. We resolve the user's tenant-scoped roles by
-    # querying the tenant schema's `roles` + `user_roles` directly, since
-    # the public-schema GRCUser ORM doesn't carry them.
+    # The permission gate is on the route (the old raw-SQL check read tenant_<slug>.users,
+    # which doesn't exist in this DB-per-tenant setup, so every save failed).
     tenant_id = get_user_primary_tenant(current_user, db)
-    from sqlalchemy import text
-    tenant_row = db.execute(text("SELECT slug FROM grc_tenants WHERE id=:tid"),
-                            {"tid": tenant_id}).fetchone()
-    if not tenant_row:
+    if not tenant_id:
         raise HTTPException(403, "Tenant context not found")
-    schema = "tenant_" + tenant_row[0].replace("-", "")
-    # Match by email — grc_users.id and tenant_<slug>.users.id are
-    # independent sequences, so we join via email which is unique in both.
-    is_admin = db.execute(
-        text(
-            f"SELECT 1 FROM {schema}.users u "
-            f"JOIN {schema}.user_roles ur ON ur.user_id = u.id "
-            f"JOIN {schema}.roles r ON r.id = ur.role_id "
-            f"WHERE u.email = :email AND r.name = 'Administrator' LIMIT 1"
-        ),
-        {"email": current_user.email},
-    ).fetchone()
-    if not is_admin:
-        raise HTTPException(403, "Only Tenant Administrators can change risk weights.")
 
     total = (body.weight_cis + body.weight_vuln + body.weight_cia
              + body.weight_ctrl + body.weight_risk)

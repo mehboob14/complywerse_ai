@@ -1,7 +1,8 @@
 'use client';
 
 // Incidents at a vendor: what happened, how bad, and where it stands. Moved from its own tab to Monitoring. "Record incident" opens a
-// dialog; a critical incident opens an Issue on its own, linked from its row.
+// dialog; a critical incident opens an Issue on its own, linked from its row. "Loss event" records one as a Basel loss event in Risk
+// Management, once (backend tpra/outsourcing.record_loss_event); its row then links to it.
 import { useId, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -9,15 +10,17 @@ import { ArrowUpRight, Loader2, Plus } from 'lucide-react';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
 import { apiErrorText } from '@/lib/apiError';
-import { vendorRiskApi } from '@/lib/api';
+import { tpraApi, vendorRiskApi } from '@/lib/api';
+import { BUSINESS_LINES, EVENT_TYPES } from '@/app/(dashboard)/erm/incidents/lossEvents';
 import { BTN, BTN_PRIMARY, Dialog, EmptyState, ErrorState, Panel, SeverityChip, Skeleton, StatusPill, fmt, type Tone } from '../../../_ui';
 import { TPRM_QUERY_OPTS } from '../../../_lib/tprmQuery';
 import { localToServer } from '../../../_lib/vendorRecordModel';
+import { lossEventProblem, netLoss } from '../../../_lib/outsourcingModel';
 import { AREA, FIELD, HINT, LABEL } from '../../_components/formStyles';
 
 interface Incident {
   id: number; title: string; severity: string; status: string; description: string | null; occurred_at: string | null;
-  resolved_at: string | null; linked_issue_id?: number | null;
+  resolved_at: string | null; linked_issue_id?: number | null; loss_event_id?: number | null;
 }
 
 const SEVERITIES = ['critical', 'high', 'medium', 'low'];
@@ -30,7 +33,11 @@ export default function IncidentsPanel({ vendorId }: { vendorId: number }) {
   const { hasPermission } = usePermissions();
   // as the server holds it: recording an incident is a monitoring write
   const canCreate = hasPermission('vendor_risk:monitoring:create') || hasPermission('erm:risks:edit');
+  // writing a loss event is Risk Management's right, on top of the monitoring write
+  const canLoss = (hasPermission('vendor_risk:monitoring:edit') || hasPermission('erm:risks:edit'))
+    && (hasPermission('erm:incidents:create') || hasPermission('erm:risks:create'));
   const [adding, setAdding] = useState(false);
+  const [losing, setLosing] = useState<Incident | null>(null);
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: incidentsKey(vendorId),
     queryFn: async () => {
@@ -72,6 +79,15 @@ export default function IncidentsPanel({ vendorId }: { vendorId: number }) {
                         Issue #{inc.linked_issue_id} <ArrowUpRight aria-hidden className="h-3 w-3" strokeWidth={1.75} />
                       </Link>
                     )}
+                    {inc.loss_event_id ? (
+                      <Link href={`/erm/incidents/${inc.loss_event_id}`} className="ml-2 inline-flex items-center gap-0.5 text-[12px] font-medium text-[#0f766e] hover:underline">
+                        Loss event #{inc.loss_event_id} <ArrowUpRight aria-hidden className="h-3 w-3" strokeWidth={1.75} />
+                      </Link>
+                    ) : canLoss ? (
+                      <button type="button" onClick={() => setLosing(inc)} className="ml-2 text-[12px] font-medium text-[#0f766e] hover:underline">
+                        Record as loss event
+                      </button>
+                    ) : null}
                     {inc.description && <span className="line-clamp-2 block text-[12px] leading-4 text-[#64707e]">{inc.description}</span>}
                   </td>
                   <td className={TD}><SeverityChip severity={inc.severity} solid={false} /></td>
@@ -85,7 +101,86 @@ export default function IncidentsPanel({ vendorId }: { vendorId: number }) {
         </div>
       )}
       <RecordDialog vendorId={vendorId} open={adding} onClose={() => setAdding(false)} />
+      <LossEventDialog vendorId={vendorId} incident={losing} onClose={() => setLosing(null)} />
     </Panel>
+  );
+}
+
+function LossEventDialog({ vendorId, incident, onClose }: { vendorId: number; incident: Incident | null; onClose: () => void }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const form = useId();
+  const blank = { gross: '', recoveries: '', currency: '', event_type: 'execution_delivery', business_line: '' };
+  const [f, setF] = useState(blank);
+  const set = (patch: Partial<typeof blank>) => setF((prev) => ({ ...prev, ...patch }));
+  const problem = lossEventProblem(f.gross, f.recoveries, f.currency);
+  const net = netLoss(f.gross, f.recoveries);
+
+  const save = useMutation({
+    mutationFn: async () => (await tpraApi.recordLossEvent(incident!.id, {
+      event_type: f.event_type,
+      ...(f.business_line ? { business_line: f.business_line } : {}),
+      ...(f.gross.trim() ? { gross_loss: Number(f.gross) } : {}),
+      ...(f.recoveries.trim() ? { recoveries: Number(f.recoveries) } : {}),
+      ...(f.currency.trim() ? { currency: f.currency.trim().toUpperCase() } : {}),
+    })).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: incidentsKey(vendorId) });
+      setF(blank);
+      toast({ type: 'success', title: 'Loss event recorded', message: 'It waits for a second person to validate it in Loss Events.' });
+      onClose();
+    },
+    onError: (e) => toast({ type: 'error', title: 'Not recorded', message: apiErrorText(e, 'Try again.') }),
+  });
+
+  return (
+    <Dialog open={!!incident} onClose={onClose} size={600} title="Record as loss event"
+      description={incident ? `${incident.title}: a Basel loss event in Risk Management, linked to this incident.` : undefined}
+      footer={(
+        <>
+          <button type="button" onClick={onClose} className={BTN}>Cancel</button>
+          <button type="submit" form={form} disabled={!!problem || save.isPending} className={BTN_PRIMARY}>
+            {save.isPending && <Loader2 aria-hidden className="h-4 w-4 animate-spin" />}
+            Record
+          </button>
+        </>
+      )}
+    >
+      <form id={form} className="space-y-3.5" onSubmit={(e) => { e.preventDefault(); if (!problem && !save.isPending) save.mutate(); }}>
+        <div className="grid gap-3.5 sm:grid-cols-2">
+          <div>
+            <label htmlFor={`${form}-type`} className={LABEL}>Event type</label>
+            <select id={`${form}-type`} className={FIELD} value={f.event_type} onChange={(e) => set({ event_type: e.target.value })}>
+              {EVENT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label htmlFor={`${form}-line`} className={LABEL}>Business line <span className={HINT}>(optional)</span></label>
+            <select id={`${form}-line`} className={FIELD} value={f.business_line} onChange={(e) => set({ business_line: e.target.value })}>
+              <option value="">Not set</option>
+              {BUSINESS_LINES.map((b) => <option key={b.value} value={b.value}>{b.label}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="grid gap-3.5 sm:grid-cols-3">
+          <div>
+            <label htmlFor={`${form}-gross`} className={LABEL}>Gross loss</label>
+            <input id={`${form}-gross`} inputMode="decimal" className={FIELD} value={f.gross} onChange={(e) => set({ gross: e.target.value })} />
+          </div>
+          <div>
+            <label htmlFor={`${form}-rec`} className={LABEL}>Recoveries</label>
+            <input id={`${form}-rec`} inputMode="decimal" className={FIELD} value={f.recoveries} onChange={(e) => set({ recoveries: e.target.value })} />
+          </div>
+          <div>
+            <label htmlFor={`${form}-cur`} className={LABEL}>Currency</label>
+            <input id={`${form}-cur`} maxLength={3} placeholder="USD" className={FIELD} value={f.currency} onChange={(e) => set({ currency: e.target.value })} />
+          </div>
+        </div>
+        <p className="text-[13px] text-[#586472]">
+          {problem ?? (net === null ? 'No amount: recorded as an event without a loss figure.' : `Net loss ${net.toLocaleString('en-GB')} ${f.currency.trim().toUpperCase()}`)}
+        </p>
+      </form>
+    </Dialog>
   );
 }
 

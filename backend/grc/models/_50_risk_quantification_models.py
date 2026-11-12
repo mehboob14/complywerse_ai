@@ -162,3 +162,44 @@ class RiskSimulationRun(Base):
         Index("ix_sim_run_tenant_scope", "tenant_id", "scope"),
         Index("ix_sim_run_status", "status"),
     )
+
+
+class RiskScenario(Base):
+    """A saved scenario (Risk Management, Scenario Analysis): a severe-but-plausible event, estimated in a workshop as a
+    frequency and a per-event loss range in one currency, run on the FAIR engine above, and approved by a second person.
+
+    Status: draft -> estimated (run on the engine) -> reviewed (compared with appetite) -> approved (read-only; re-opened as
+    a new draft row with reopened_from_id). A change to the inputs after a run sends it back to draft. `result` is the last
+    run: {mean, median, one_in_20, one_in_100, p90, lec_points, iterations, seed, engine_version, currency, run_at, inputs}.
+    """
+    __tablename__ = "grc_risk_scenarios"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    risk_ids = Column(JSON, nullable=True)            # linked register risks, in the scenario's tenant
+    workshop_notes = Column(Text, nullable=True)      # the reasoning behind the estimates
+
+    currency = Column(String(3), nullable=False, default="USD")
+    frequency_per_year = Column(Float, nullable=True)  # loss events per year (1 in N years is stored as 1/N)
+    loss_low = Column(Float, nullable=True)            # per-event loss: least (default 0), typical, severe
+    loss_typical = Column(Float, nullable=True)
+    loss_severe = Column(Float, nullable=True)
+
+    status = Column(String(20), nullable=False, default="draft", index=True)
+    result = Column(JSON(none_as_null=True), nullable=True)
+    last_run_at = Column(DateTime, nullable=True)
+    previous_run_at = Column(DateTime, nullable=True)
+    action_ids = Column(JSON, nullable=True)           # agreed IssueActions on the linked risks' treatment issues
+
+    created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    estimated_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)   # who ran the current estimate
+    reviewed_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    approved_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    approved_at = Column(DateTime, nullable=True)
+    review_note = Column(Text, nullable=True)          # the reviewer's note, or why it was sent back
+    reopened_from_id = Column(Integer, ForeignKey("grc_risk_scenarios.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

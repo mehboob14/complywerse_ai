@@ -17,7 +17,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from grc.models import (Base, GRCUser, ParsedFrameworkControl, Risk, RiskFrameworkRequirementLink, Role, Tenant,
+from grc.models import (Base, GRCUser, ParsedFrameworkControl, Risk, RiskControl, Role, Tenant,
                         UploadedFramework, UserRole, get_db)
 from grc.modules.erm.routers import risk_framework_requirements as link_routes
 from grc.services import module_settings as ms
@@ -131,10 +131,14 @@ def test_adding_a_risk_makes_a_register_risk_that_remembers_its_source(db):
     risk = db.get(Risk, body["risk"]["id"])
     assert (risk.title, risk.category, risk.risk_sub_category, risk.register_type) == (
         "Too high residual risks", "operational", "Information Security Risk Treatment", "UAE IA")
-    assert (risk.source_type, risk.source_reference, risk.owner_id, risk.status) == ("risk_library", "uae_ia:M2.3:03", OWNER, "open")
+    # a library risk starts as a draft until the risk team accepts it (wave 4, test_erm_library_flow_build.py)
+    assert (risk.source_type, risk.source_reference, risk.owner_id, risk.status) == ("risk_library", "uae_ia:M2.3:03", OWNER, "draft")
     assert (risk.inherent_likelihood, risk.inherent_impact, risk.inherent_score) == (4, 3, 12) and risk.effective_priority == "high"
     assert "Related controls: M2.3.1, M2.3.2" in risk.description and risk.treatment_plan == "Reduce by adding controls"
-    assert body["risk"]["inherent_score"] == 12 and body["library_risk"]["in_register"]["risk_id"] == risk.id
+    assert body["risk"]["inherent_score"] == 12 and body["library_risk"]["in_register"] is None
+    assert body["library_risk"]["proposals"][0]["risk_id"] == risk.id      # a draft is proposed, not yet in the register
+    risk.status = "open"                                                    # as accepted by the risk team
+    db.commit()
     # and the library shows it, and the filter follows
     listed = http.get("/risk-library", params={"objective": "M2.3"}).json()
     assert {i["id"]: i["in_register"] is not None for i in listed["items"]}["uae_ia:M2.3:03"] is True and listed["in_register_total"] == 1
@@ -146,11 +150,11 @@ def test_what_the_person_edits_in_the_popup_wins(db):
     http = client(db)
     made = http.post("/risk-library/uae_ia:T6.2:01/add-to-register", json={
         **ADD, "title": "Supplier abuses the service we gave it", "description": "Our wording", "category": "compliance",
-        "residual_likelihood": 2, "residual_impact": 2, "status": "mitigating", "priority": "critical"})
+        "residual_likelihood": 2, "residual_impact": 2, "priority": "critical"})
     assert made.status_code == 201, made.text
     risk = db.get(Risk, made.json()["risk"]["id"])
     assert (risk.title, risk.description, risk.category, risk.residual_score, risk.status, risk.priority) == (
-        "Supplier abuses the service we gave it", "Our wording", "compliance", 4, "mitigating", "critical")
+        "Supplier abuses the service we gave it", "Our wording", "compliance", 4, "draft", "critical")
     assert risk.source_reference == "uae_ia:T6.2:01"                      # the source stays, whatever the words say
     assert db.get(Risk, made.json()["risk"]["id"]).category == "compliance"
     # no category given: the family's suggestion (T6 is third party)
@@ -167,7 +171,7 @@ def test_a_risk_already_in_the_register_is_not_added_twice_unless_asked(db):
     assert db.query(Risk).count() == 1
     forced = http.post(url, json={**ADD, "allow_duplicate": True})
     assert forced.status_code == 201 and db.query(Risk).count() == 2
-    assert forced.json()["library_risk"]["in_register"]["times"] == 2
+    assert len(forced.json()["library_risk"]["proposals"]) == 2              # both drafts wait for the risk team
 
 
 @pytest.mark.parametrize("change,expected", [
@@ -187,7 +191,8 @@ def test_only_someone_who_may_create_risks_can_add_one(db, monkeypatch):
     assert denied.status_code == 403 and db.query(Risk).count() == 0
     assert plain.get("/risk-library").status_code == 200                   # reading is the module's own permission (erm:risks:view)
     monkeypatch.setattr(auth_router, "has_tenant_permission", lambda db_, user, *names: "erm:risks:edit" in names)
-    assert plain.post("/risk-library/uae_ia:M1.1:01/add-to-register", json=ADD).status_code == 201
+    # adding straight to the register is for administrators now; anyone else proposes it to the owner (wave 4)
+    assert plain.post("/risk-library/uae_ia:M1.1:01/add-to-register", json=ADD).status_code == 403
 
 
 # ── the framework controls a risk is linked to, and the tenant's own fields ───
@@ -208,9 +213,14 @@ def install_uae_ia(db, only=None, tenant_id=None, name="UAE Information Assuranc
 M23 = ["M2.3.1", "M2.3.2", "M2.3.3", "M2.3.4"]            # the controls of objective M2.3
 
 
+def requirement_links(db, risk_id=None):
+    """The framework-library links, in the one risk–control link (wave 5)."""
+    q = db.query(RiskControl).filter_by(control_source="framework")
+    return q.filter_by(risk_id=risk_id).order_by(RiskControl.id).all() if risk_id else q.order_by(RiskControl.id).all()
+
+
 def links_of(db, risk_id):
-    return [l.control_code for l in db.query(RiskFrameworkRequirementLink).filter_by(risk_id=risk_id)
-            .order_by(RiskFrameworkRequirementLink.id)]
+    return [db.get(ParsedFrameworkControl, l.control_id).control_id for l in requirement_links(db, risk_id)]
 
 
 def test_adding_a_risk_links_the_controls_of_its_objective_that_the_tenant_has(db):
@@ -222,8 +232,9 @@ def test_adding_a_risk_links_the_controls_of_its_objective_that_the_tenant_has(d
     made = http.post("/risk-library/uae_ia:M2.3:03/add-to-register", json=ADD).json()
     assert made["linked_controls"] == M23 and made["controls_not_installed"] == []
     assert links_of(db, made["risk"]["id"]) == M23
-    link = db.query(RiskFrameworkRequirementLink).first()
-    assert (link.uploaded_framework_id, link.mitigation_effectiveness, link.created_by) == (fw.id, "partial", OFFICER)
+    link = requirement_links(db)[0]
+    assert (db.get(ParsedFrameworkControl, link.control_id).uploaded_framework_id, link.mitigation_effectiveness,
+            link.created_by) == (fw.id, "partial", OFFICER)
 
 
 def test_the_person_can_leave_controls_out_or_link_none(db):
@@ -259,7 +270,7 @@ def test_the_installed_copy_with_the_most_controls_is_the_one_linked(db):
     install_uae_ia(db, only={"M2.3.1"})
     full = install_uae_ia(db)
     made = client(db).post("/risk-library/uae_ia:M2.3:03/add-to-register", json=ADD).json()
-    assert {l.uploaded_framework_id for l in db.query(RiskFrameworkRequirementLink)} == {full.id}
+    assert {db.get(ParsedFrameworkControl, l.control_id).uploaded_framework_id for l in requirement_links(db)} == {full.id}
     assert made["linked_controls"] == M23
 
 
@@ -336,7 +347,7 @@ def test_a_wrong_link_request_is_refused(db, body, expected):
 def test_linking_needs_the_edit_right_and_stays_inside_the_tenant(db, monkeypatch):
     fw = install_uae_ia(db)
     rid = client(db).post("/risk-library/uae_ia:M2.3:03/add-to-register", json=ADD).json()["risk"]["id"]
-    link = db.query(RiskFrameworkRequirementLink).first()
+    link = requirement_links(db)[0]
     plain = client(db, "plain")
     one = db.query(ParsedFrameworkControl).filter_by(control_id="M5.1.1").first()
     body = {"framework_id": fw.id, "control_ids": [one.id]}
@@ -362,7 +373,7 @@ def test_deleting_a_risk_takes_its_links_with_it(db):
     assert len(links_of(db, rid)) == 4
     db.delete(db.get(Risk, rid))
     db.commit()
-    assert db.query(RiskFrameworkRequirementLink).count() == 0
+    assert requirement_links(db) == []
 
 
 @pytest.mark.parametrize("module", ["grc.modules.erm.routers.risks", "grc.routers.risks_router"])
@@ -395,4 +406,4 @@ def test_deleting_the_installed_framework_takes_the_risk_links_with_it(db):
     assert paths, "the framework upload router has no delete route"
     gone = TestClient(app).delete(paths[0].replace("{framework_id}", str(fw.id)))
     assert gone.status_code in (200, 204), gone.text
-    assert db.query(RiskFrameworkRequirementLink).count() == 0 and db.get(Risk, rid) is not None
+    assert requirement_links(db) == [] and db.get(Risk, rid) is not None

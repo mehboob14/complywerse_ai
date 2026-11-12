@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from ....models import (
     AuditLog,
     Risk,
-    RiskControlLink,
+    RiskControl,
     RiskLossModel,
     RiskSimulationRun,
     GRCUser,
@@ -25,6 +25,7 @@ from ....models import (
 from ....routers.auth_router import require_auth, get_user_tenants, require_tenant_permission
 from ..quantification import service as crqm
 from ..quantification.engine import DEFAULT_ITERATIONS, MAX_ITERATIONS
+from ..services.risk_control_links import link_by_id
 
 # Decision-bearing actions (material flag, model lifecycle, simulations,
 # control effects) feed board reporting — they require the same edit
@@ -504,10 +505,7 @@ def set_control_effect(
     _perm: bool = _edit_perm,
 ):
     tenants = get_user_tenants(current_user, db)
-    link = db.query(RiskControlLink).join(Risk, Risk.id == RiskControlLink.risk_id).filter(
-        RiskControlLink.id == link_id,
-        Risk.tenant_id.in_(tenants),
-    ).first()
+    link = link_by_id(db, link_id, "normalized", RiskControl.tenant_id.in_(tenants))   # an old library-link id still works
     if not link:
         raise HTTPException(status_code=404, detail="Risk-control link not found")
 

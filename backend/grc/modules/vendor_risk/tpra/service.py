@@ -26,7 +26,7 @@ from .stages import (
     TPRA_STAGES, STAGE_BY_KEY, STAGE_ORDER, STAGE_KEYS, STAGE_CONTENT, is_gate,
     stages_at_or_after, can_skip, cadence_days_for, stage_label, TIER_RANK,
 )
-from .engine_tiering import compute_inherent_tier, derive_factors_from_profile
+from .engine_tiering import compute_inherent_tier, derive_factors_from_profile, to_erm_scale
 from .engine_scoring import (
     score_assessment, build_responses_from_answers, normalize_answer, answer_score, finding_severity, is_answered,
 )
@@ -298,6 +298,12 @@ def _severity_to_impact_urgency(sev: str) -> tuple:
     return "medium", "medium"
 
 
+# A finding's domain (TPRA_RISK_DOMAINS) → the Issue category that fits it; a domain with no fitting category keeps
+# "security", as every vendor issue had before. The type stays vendor_breach: the one Issue type for a supplier's gap.
+_DOMAIN_CATEGORY = {"data_privacy": "privacy", "operational": "operations", "compliance": "regulatory",
+                    "legal": "contract"}
+
+
 def ensure_finding_issue(db: Session, finding, actor_id: Optional[int] = None) -> Optional[int]:
     """Create (once) a linked Issue for a finding via the shared issue-management
     auto-create service, and back-link it. Idempotent (from_event dedupes by
@@ -316,7 +322,8 @@ def ensure_finding_issue(db: Session, finding, actor_id: Optional[int] = None) -
             title=f"Vendor finding: {finding.title or 'Untitled'}",
             description=finding.description,
             impact=impact, urgency=urgency,
-            issue_type="vendor_breach", category="security", reporter_id=actor_id,
+            issue_type="vendor_breach", category=_DOMAIN_CATEGORY.get(finding.domain or "", "security"),
+            reporter_id=actor_id,
         )
         if issue is not None:
             finding.linked_issue_id = issue.id
@@ -328,39 +335,44 @@ def ensure_finding_issue(db: Session, finding, actor_id: Optional[int] = None) -
 
 def close_finding_issue(db: Session, finding, actor_id: Optional[int] = None,
                         reason: str = "Resolved via the TPRA finding.") -> None:
-    """Close the finding's linked Issue when the finding is closed/accepted."""
+    """The finding is closed/accepted: close its linked Issue through the issue's own close path, as the person who settled
+    the finding. What that path refuses (they own or work the issue, a CAPA action is open, or no one is named) leaves
+    the issue in closure review, saying why, for someone else to sign off."""
     iid = getattr(finding, "linked_issue_id", None)
     if not iid:
         return
     try:
-        from ....models import Issue
+        from fastapi import HTTPException
+        from ....models import Issue, IssueActivity
+        from ...issue_management.routers.issues import close_issue_record
         issue = db.query(Issue).filter(Issue.id == iid, Issue.tenant_id == finding.tenant_id).first()
         if not issue or issue.workflow_state in ("closed", "cancelled"):
             return
-        issue.workflow_state = "closed"
-        issue.status = "closed"
-        issue.closed_at = datetime.utcnow()
-        issue.closure_notes = reason
-        if actor_id:
-            issue.approved_by_id = actor_id
-            issue.approved_at = datetime.utcnow()
+        actor = db.get(GRCUser, actor_id) if actor_id else None
+        was = issue.workflow_state
+        if was not in ("in_progress", "resolution"):
+            issue.workflow_state = "closure_review"          # the finding is settled: its issue is up for closure
         try:
-            from ....models import IssueActivity
-            db.add(IssueActivity(issue_id=issue.id, user_id=actor_id, type="approved",
-                                 payload={"source": "tpra", "finding_id": finding.id}))
-        except Exception:  # noqa: BLE001 — activity log is optional
-            pass
+            if actor is None:
+                raise HTTPException(409, "no one is named to sign off its closure")
+            close_issue_record(db, issue, actor, reason, source="tpra", finding_id=finding.id)
+        except HTTPException as refused:
+            issue.workflow_state = "closure_review"
+            if was != "closure_review":
+                db.add(IssueActivity(issue_id=issue.id, user_id=actor_id, type="status_change", payload={
+                    "from": was, "to": "closure_review", "source": "tpra", "finding_id": finding.id,
+                    "notes": f"{reason} Closing it waits for an independent sign-off: {refused.detail}"}))
     except Exception:  # noqa: BLE001 — best-effort
         logger.warning("finding issue close skipped for finding %s", getattr(finding, "id", "?"), exc_info=True)
 
 
 def _reopen_finding_issue(db: Session, finding, actor_id: Optional[int] = None) -> None:
-    """Reopen the finding's linked Issue if it is closed, as the issue's own reopen
+    """Reopen the finding's linked Issue if it is closed, or waiting for its closure sign-off, as the issue's own reopen
     does (cancelled ones stay: someone deleted those). Best-effort."""
     try:
         from ....models import Issue, IssueActivity
         issue = db.query(Issue).filter(Issue.id == finding.linked_issue_id, Issue.tenant_id == finding.tenant_id).first()
-        if issue is None or issue.workflow_state != "closed":
+        if issue is None or issue.workflow_state not in ("closed", "closure_review"):
             return
         issue.workflow_state, issue.status = "in_progress", "open"
         issue.closed_at = issue.approved_at = issue.approved_by_id = None
@@ -474,7 +486,8 @@ def build_stage_context(db: Session, vendor: Vendor, assessment: VendorAssessmen
     engagement = engagement_of(db, assessment)
     scope = engagement or vendor
     tier = assessment.inherent_tier or scope.tier or "medium"
-    ctx: dict = {"tier": tier}
+    from . import outsourcing          # late: outsourcing reads this module
+    ctx: dict = {"tier": tier, **outsourcing.gate_facts(db, vendor, engagement, stage_key)}
 
     if stage_key == "intake":
         # The supplier's own classification (the Add / Edit dialog's Data box) counts as much as its data access level.
@@ -528,6 +541,7 @@ def build_stage_context(db: Session, vendor: Vendor, assessment: VendorAssessmen
     elif stage_key == "approval":
         decided = approval_in_force(db, assessment)
         ctx["approval_decision"] = decided.decision if decided else None
+        ctx["committee_decided"] = bool(decided and decided.meeting_id and decided.decision in ("approve", "approve_with_conditions"))
         held = gate_summary(db, vendor, assessment)
         ctx["open_critical_unmitigated"], ctx["open_gate_detail"] = held["count"], held["detail"]
         # The tier's reviewers are asked for again here: Medium skips planning, so planning never asks for its reviewer.
@@ -1119,7 +1133,7 @@ def raise_answer_findings(db: Session, vendor: Vendor, assessment: VendorAssessm
         if failed_critical and r.get("title") and r["title"][:255] in legacy:
             continue
         answered = r.get("label") or r.get("answer")
-        db.add(TPRAFinding(
+        finding = TPRAFinding(
             tenant_id=assessment.tenant_id, vendor_id=vendor.id, assessment_id=assessment.id,
             domain=r.get("domain") or "cybersecurity", severity=severity,
             title=(r.get("title") or "Weak questionnaire answer")[:255],
@@ -1128,7 +1142,10 @@ def raise_answer_findings(db: Session, vendor: Vendor, assessment: VendorAssessm
             template_version_id=r.get("template_version_id"), question_key=str(key)[:100],
             answer_value=None if answered is None else str(answered)[:255],
             status="open", created_by=actor_id, source="assessment", is_blocking=failed_critical,
-        ))
+        )
+        db.add(finding)
+        db.flush()
+        ensure_finding_issue(db, finding, actor_id)        # TPRM-003, as a finding raised any other way
         existing.add(str(key))
         created += 1
     return created
@@ -1203,6 +1220,7 @@ SOD = {
     "reviewer": ("Reviewer", "a reviewer cannot approve an assessment they review"),
     "business_owner": ("Business owner", "the business owner cannot approve their own supplier"),
     "moved_to_approval": ("Moved it to approval", "whoever moved the assessment to approval cannot also approve it"),
+    "classified": ("Classified its materiality", "whoever classified the outsourcing cannot also approve it"),
 }
 APPROVE_RIGHT = "vendor_risk:approvals:approve"
 
@@ -1234,6 +1252,7 @@ def conflicts(db: Session, assessment: VendorAssessment) -> Dict[int, str]:
         ("reviewer", reviewers),
         ("business_owner", [getattr(scope, "owner_id", None), roster.get("business_owner")]),
         ("moved_to_approval", [moved_to_approval_by(db, assessment)]),
+        ("classified", [(((getattr(scope, "outsourcing", None) or {}).get("materiality")) or {}).get("by")]),
     )
     out: Dict[int, str] = {}
     for reason, ids in named:
@@ -1461,6 +1480,42 @@ def on_condition_task_deleted(db: Session, ct: CriticalTask, user_id: Optional[i
                     extra={"task_id": ct.id})
 
 
+def _or_na(score) -> str:
+    return "n/a" if score is None else f"{score:g}"
+
+
+def erm_scores(inherent: Optional[Tuple[int, int, int]], residual: Optional[Tuple[int, int, int]]) -> dict:
+    """The register's six score fields from two to_erm_scale results (None leaves that pair unscored). Residual is
+    never published above inherent (TPRM-004)."""
+    if inherent and residual and residual[2] > inherent[2]:
+        residual = inherent
+    out = {}
+    for side, value in (("inherent", inherent), ("residual", residual)):
+        out[f"{side}_likelihood"], out[f"{side}_impact"], out[f"{side}_score"] = value or (None, None, None)
+    return out
+
+
+def close_register_risks(db: Session, vendor: Vendor, actor_id: Optional[int], note: str,
+                         engagement: Optional[TPRAEngagement] = None) -> List[int]:
+    """Close what this supplier put in the enterprise Risk Register once the relationship is over: every entry it
+    wrote (vendor:{id}/…, its own, its engagements' and its promoted findings'), or, for one engagement, that
+    engagement's entry. Closed as the register closes a risk, with the note. Returns the ids; the caller commits."""
+    from ....models import Risk
+    ref = f"vendor:{vendor.id}/"
+    q = db.query(Risk).filter(Risk.tenant_id == vendor.tenant_id, or_(Risk.status.is_(None), Risk.status != "closed"))
+    q = (q.filter(Risk.source_reference == f"{ref}engagement:{engagement.id}") if engagement is not None
+         else q.filter(Risk.source_reference.startswith(ref, autoescape=True)))
+    now, closed = datetime.utcnow(), []
+    for risk in q.order_by(Risk.id):
+        risk.status, risk.closure_status, risk.closed_at, risk.closed_by = "closed", "closed", now, actor_id
+        risk.closure_notes, risk.updated_at = note, now
+        closed.append(risk.id)
+    if closed:
+        write_audit(db, vendor.tenant_id, entity="vendor", action="close_register_risks", vendor_id=vendor.id,
+                    actor_id=actor_id, to_value=len(closed), reason=note, extra={"risk_ids": closed})
+    return closed
+
+
 def sync_risk_register(db: Session, vendor: Vendor, assessment: VendorAssessment) -> Optional[int]:
     """Upsert the vendor's residual third-party risk into the enterprise Risk
     Register (category='third_party') so TPRM rolls up to ERM and shows in Risk
@@ -1489,18 +1544,19 @@ def sync_risk_register(db: Session, vendor: Vendor, assessment: VendorAssessment
             f"Residual third-party risk from the TPRA lifecycle of vendor '{name}'. "
             f"Tier: {assessment.inherent_tier or tier or 'n/a'}, "
             f"residual rating: {assessment.residual_rating or 'n/a'}, "
-            f"grade: {getattr(assessment, 'rating_grade', None) or 'n/a'}."
+            f"grade: {getattr(assessment, 'rating_grade', None) or 'n/a'}. "
+            f"TPRA scores (0–100): inherent {_or_na(assessment.inherent_score)}, "
+            f"residual {_or_na(assessment.residual_score)}."
         )
-        # Invariant (TPRM-004): never publish residual > inherent to the register.
-        inh = assessment.inherent_score
-        res = assessment.residual_score
-        if inh is not None and res is not None:
-            res = min(res, inh)
+        # The register's 1–25 scale, in the band of each TPRA rating (to_erm_scale).
+        thresholds = config_for(db, assessment).get("thresholds")
+        scores = erm_scores(to_erm_scale(assessment.inherent_score, thresholds, assessment.inherent_tier),
+                            to_erm_scale(assessment.residual_score, thresholds, assessment.residual_rating))
         if risk:
             risk.title = f"Third-party risk: {name}"
             risk.description = desc
-            risk.inherent_score = inh
-            risk.residual_score = res
+            for field, value in scores.items():
+                setattr(risk, field, value)
             risk.risk_sub_category = tier
             risk.updated_at = datetime.utcnow()
         else:
@@ -1509,10 +1565,9 @@ def sync_risk_register(db: Session, vendor: Vendor, assessment: VendorAssessment
                 title=f"Third-party risk: {name}", description=desc,
                 category="third_party", risk_category="third_party",
                 register_type="Third-Party Risk", risk_sub_category=tier,
-                owner_id=owner.owner_id or vendor.owner_id, inherent_score=inh,
-                residual_score=res, status="open",
+                owner_id=owner.owner_id or vendor.owner_id, status="open",
                 source_type="assessment",
-                source_reference=key,
+                source_reference=key, **scores,
             )
             db.add(risk)
             db.flush()
@@ -1523,7 +1578,8 @@ def sync_risk_register(db: Session, vendor: Vendor, assessment: VendorAssessment
         return None
 
 
-# Severity → a residual score for a promoted single finding (no full re-score).
+# Severity → a TPRA score (0–100) for a promoted single finding (no full re-score); the severity is its band on the
+# register's 1–25 scale (to_erm_scale), the score only its step within the band.
 _SEVERITY_SCORE = {"critical": 85.0, "high": 65.0, "medium": 45.0, "low": 25.0}
 
 
@@ -1546,7 +1602,10 @@ def promote_finding_to_register(db: Session, finding: TPRAFinding, actor_id: Opt
             risk = db.query(Risk).filter(
                 Risk.tenant_id == finding.tenant_id, Risk.source_reference == ref
             ).first()
-        score = _SEVERITY_SCORE.get((finding.severity or "medium").lower(), 45.0)
+        severity = (finding.severity or "medium").lower()
+        pair = to_erm_scale(_SEVERITY_SCORE.get(severity, 45.0),
+                            get_tiering_config(db, finding.tenant_id).get("thresholds"), severity)
+        scores = erm_scores(pair, pair)         # re-promoting re-reads the finding as it stands
         title = f"{vname}: {finding.title or 'Third-party finding'}"
         desc = (
             f"Promoted from the TPRA lifecycle of vendor '{vname}' (vendor #{finding.vendor_id}). "
@@ -1556,7 +1615,8 @@ def promote_finding_to_register(db: Session, finding: TPRAFinding, actor_id: Opt
         if risk:
             risk.title = title
             risk.description = desc
-            risk.residual_score = score
+            for field, value in scores.items():
+                setattr(risk, field, value)
             if vendor:
                 risk.risk_sub_category = vendor.tier
             risk.updated_at = datetime.utcnow()
@@ -1569,9 +1629,9 @@ def promote_finding_to_register(db: Session, finding: TPRAFinding, actor_id: Opt
                 register_type="Third-Party Risk",
                 risk_sub_category=(vendor.tier if vendor else None),
                 owner_id=(vendor.owner_id if vendor else None),
-                inherent_score=score, residual_score=score, status="open",
+                status="open",
                 source_type="vendor",
-                source_reference=ref,
+                source_reference=ref, **scores,
             )
             db.add(risk)
             db.flush()

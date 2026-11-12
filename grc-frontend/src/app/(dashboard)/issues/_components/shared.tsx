@@ -49,6 +49,7 @@ export const ISSUE_TYPES = [
   { value: 'vendor_breach', label: 'Vendor Breach' },
   { value: 'process_gap', label: 'Process Gap' },
   { value: 'capa', label: 'CAPA' },
+  { value: 'risk_treatment', label: 'Risk treatment' },
   { value: 'other', label: 'Other' },
 ];
 

@@ -150,10 +150,11 @@ _RESPONSE_TO_ACTION = {
 
 
 def import_onelink_register(db: Session, tenant_id: int, file_bytes: bytes) -> Dict[str, Any]:
-    """Parse an uploaded 1LINK register and create Risk rows (+ a mitigation action
-    where a plan is given). Idempotent per (tenant, source_reference)."""
+    """Parse an uploaded 1LINK register and create Risk rows (+ a risk action on the
+    CAPA tracker where a plan is given). Idempotent per (tenant, source_reference)."""
     import openpyxl
-    from ...models import Risk, RiskMitigationAction
+    from ...models import Risk
+    from ..issue_management.services.risk_actions import add_risk_action
 
     try:
         wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
@@ -194,9 +195,8 @@ def import_onelink_register(db: Session, tenant_id: int, file_bytes: bytes) -> D
             plan = row.get("mitigation_plan")
             if plan and plan.upper() != "N/A":
                 action_type = _RESPONSE_TO_ACTION.get((row.get("risk_response") or "").lower(), "mitigate")
-                db.add(RiskMitigationAction(
-                    risk_id=risk.id, title=plan[:255], description=plan, action_type=action_type,
-                    status="open", priority="medium", owner_id=owner_id))
+                add_risk_action(db, risk, None, title=plan[:255], description=plan, action_type=action_type,
+                                priority="medium", assignee_id=owner_id)
         except Exception as exc:  # noqa: BLE001 — one bad row shouldn't abort the import
             errors.append(f"{row.get('risk_id')}: {exc}")
 

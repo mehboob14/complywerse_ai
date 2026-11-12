@@ -564,9 +564,13 @@ def _plan_row(db: Session, tenant_id: int, row: dict, by_host: dict, by_name: di
         elif target is None or target.inherent_risk_score is None:
             changes["tier"] = text["tier"].lower()
     if text["status"]:
-        if text["status"].lower() not in _VENDOR_STATUSES:
+        wanted = text["status"].lower()
+        if wanted not in _VENDOR_STATUSES:
             errors.append(f"status must be one of {', '.join(_VENDOR_STATUSES)}")
-        changes["status"] = text["status"].lower()
+        elif target is None or wanted not in ("offboarded", (target.status or "").lower()):
+            # The lifecycle moves a status (a new vendor starts in onboarding, approval makes it active), as on PUT.
+            errors.append("status is set by the lifecycle: leave it empty, or set offboarded to offboard a vendor on record")
+        changes["status"] = wanted
     if text["owner_email"]:
         owner = users.get(text["owner_email"].lower())
         if owner is None:
@@ -638,7 +642,9 @@ async def import_vendors(
     for p in plan:
         values = p["_values"]
         if p["action"] == "create":
-            v = Vendor(tenant_id=tenant_id, **{"status": "active", "tier": "medium", "data_access_level": "none", **values})
+            from ..routers.vendors import NEW_SUPPLIER     # late: that router imports this package
+            # On the intake path as one added by hand is; the sheet's tier is only a starting value, as before.
+            v = Vendor(tenant_id=tenant_id, **{**NEW_SUPPLIER, "data_access_level": "none", **values})
             db.add(v)
             db.flush()
         elif values:

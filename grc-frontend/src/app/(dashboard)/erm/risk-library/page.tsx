@@ -1,19 +1,30 @@
 'use client';
 
-// Risk Library: the risks a standard lists under its control objectives. Pick a framework, narrow by family, control objective or
-// words, and move any risk into the risk register through the "Add to register" pop-up.
+// Risk Library: the risks a standard lists under its control objectives, as the first step of identifying a risk. The risk team
+// browses the library (or what it suggests for a unit) and proposes a risk to its owner; the owner drafts the score before
+// controls; someone else in the risk team accepts it into the register or returns it (the Proposals tab). An administrator may
+// still add a risk straight from the library, as a draft that waits for the same acceptance.
 
 import { Fragment, Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, ChevronDown, ChevronRight, Plus } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Plus, Send } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useToast } from '@/components/ui/ToastProvider';
 import { PageLoader } from '@/components/ui';
+import { TabPanel, Tabs } from '@/components/ui/ds/Tabs';
+import { useTabParam } from '@/components/ui/ds/useTabParam';
 import AddToRegisterDialog from './_components/AddToRegisterDialog';
+import ProposalDialog from './_components/ProposalDialog';
+import Proposals from './_components/Proposals';
+import ProposeDialog from './_components/ProposeDialog';
+import Suggestions from './_components/Suggestions';
 import { riskLibraryApi, type AddedRisk } from './_lib/api';
-import { PAGE_SIZE, addedText, addressOf, apiParams, filtersFrom, rangeText, type Filters, type LibraryRisk, type View } from './_lib/model';
+import {
+  PAGE_SIZE, TABS, addedText, addressOf, apiParams, filtersFrom, openedFrom, proposeLabel, proposedText, rangeText, whereUsed,
+  type Filters, type LibraryRisk, type Proposal, type View,
+} from './_lib/model';
 
 const SELECT = 'mt-1 h-9 w-full rounded-lg border border-[#c9d1d9] bg-[#ffffff] px-2.5 text-[13px] text-[#1f2933] focus:border-[#0f766e] focus:outline-none focus:ring-2 focus:ring-[#0f766e]/30';
 const LABEL = 'block text-[12px] font-medium text-[#586472]';
@@ -34,17 +45,29 @@ function Library() {
   const params = useSearchParams();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { hasAnyPermission } = usePermissions();
-  const mayAdd = hasAnyPermission(['erm:risks:create', 'erm:risks:edit']);
+  const { hasAnyPermission, isAdmin } = usePermissions();
+  const mayPropose = hasAnyPermission(['erm:risks:create', 'erm:risks:edit']);
 
   const filters = filtersFrom((k) => params.get(k));
+  const opened = openedFrom((k) => params.get(k));
+  const [tab, setTab] = useTabParam('tab', TABS, { fallback: 'library' });
   const [typed, setTyped] = useState(filters.q);                       // the words box answers at once; the list follows a moment later
   const [open, setOpen] = useState<string | null>(null);
   const [adding, setAdding] = useState<LibraryRisk | null>(null);
+  const [proposing, setProposing] = useState<LibraryRisk | null>(null);
+  const [proposalId, setProposalId] = useState<number | null>(opened.proposal);    // a notification's link opens its proposal
+  useEffect(() => { if (opened.proposal) setProposalId(opened.proposal); }, [opened.proposal]);
 
+  // the address holds the filters, the tab, the unit picked for suggestions and an opened proposal: change one, keep the rest
+  const setParams = (next: Record<string, string>) => {
+    const q = new URLSearchParams(params.toString());
+    Object.entries(next).forEach(([k, v]) => (v ? q.set(k, v) : q.delete(k)));
+    const text = q.toString();
+    router.replace(text ? `${pathname}?${text}` : pathname, { scroll: false });
+  };
   const change = (next: Partial<Filters>) => {
-    const merged = { ...filters, ...next, page: next.page ?? 1 };
-    router.replace(`${pathname}${addressOf(merged)}`, { scroll: false });
+    const merged = new URLSearchParams(addressOf({ ...filters, ...next, page: next.page ?? 1 }));
+    setParams(Object.fromEntries(['framework', 'family', 'objective', 'q', 'view', 'page'].map((k) => [k, merged.get(k) || ''])));
   };
   useEffect(() => {
     if (typed.trim() === filters.q) return;
@@ -67,7 +90,19 @@ function Library() {
   const added = (a: AddedRisk) => {
     setAdding(null);
     queryClient.invalidateQueries({ queryKey: ['risk-library'] });
-    toast({ type: 'success', title: 'Added to the risk register', message: addedText(a) });
+    toast({ type: 'success', title: 'Added as a draft', message: `${addedText(a)}. It joins the register when someone else in the risk team accepts it.` });
+  };
+  const proposed = (p: Proposal) => {
+    setProposing(null);
+    queryClient.invalidateQueries({ queryKey: ['risk-library'] });
+    toast({ type: 'success', title: 'Proposed to the owner', message: `${p.title} · ${p.unit_name || 'no unit'} · ${p.owner_name || 'the owner'} has been told.` });
+  };
+  const closeProposal = () => { setProposalId(null); if (opened.proposal) setParams({ proposal: '' }); };
+  const answered = (p: Proposal, what: string) => {
+    closeProposal();
+    queryClient.invalidateQueries({ queryKey: ['risk-library'] });
+    queryClient.invalidateQueries({ queryKey: ['risk-library-proposal', p.id] });
+    toast({ type: 'success', title: what, message: p.risk?.title || p.title || '' });
   };
 
   if (library.isLoading) return <PageLoader />;
@@ -84,8 +119,11 @@ function Library() {
         </Link>
       </header>
 
+      <Tabs tabs={[{ key: 'library', label: 'Library' }, { key: 'suggestions', label: 'Suggested for a unit' }, { key: 'proposals', label: 'Proposals' }]}
+        value={tab} onChange={setTab} ariaLabel="Risk Library">
+      <TabPanel tabKey="library" className="space-y-4 pt-4">
       {!framework ? (
-        <p className="rounded-xl border border-[#d8dee4] bg-[#ffffff] px-4 py-8 text-center text-[14px] text-[#586472]">No risk library is installed yet.</p>
+        <p className="rounded-xl border border-[#d8dee4] bg-[#ffffff] px-4 py-8 text-center text-[14px] text-[#586472]">No library loaded. Choose a standard.</p>
       ) : (
         <>
           <section aria-label="Totals" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -175,14 +213,24 @@ function Library() {
                             <td className="px-3 py-3 text-right">
                               <div className="flex flex-wrap items-center justify-end gap-2">
                                 {r.in_register && (
-                                  <Link href={`/erm/risks/${r.in_register.risk_id}`} className="inline-flex h-7 items-center gap-1 whitespace-nowrap rounded-full bg-[#dcfce7] px-2.5 text-[12px] font-medium text-[#166534] hover:bg-[#bbf7d0] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]">
+                                  <Link href={`/erm/risks/${r.in_register.risk_id}`} title={r.in_register.units?.join(', ') || undefined}
+                                    className="inline-flex h-7 items-center gap-1 whitespace-nowrap rounded-full bg-[#dcfce7] px-2.5 text-[12px] font-medium text-[#166534] hover:bg-[#bbf7d0] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]">
                                     <Check aria-hidden className="h-3.5 w-3.5" /> In register
                                   </Link>
                                 )}
-                                {mayAdd && (
-                                  <button type="button" onClick={() => setAdding(r)}
-                                    className={`inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-lg px-3 text-[13px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e] ${r.in_register ? 'border border-[#c9d1d9] bg-[#ffffff] text-[#26323d] hover:bg-[#f4f6f8]' : 'bg-[#0f766e] text-[#ffffff] hover:bg-[#115e59]'}`}>
-                                    <Plus aria-hidden className="h-3.5 w-3.5" /> {r.in_register ? 'Add again' : 'Add to register'}
+                                {proposedText(r) && (
+                                  <span className="inline-flex h-7 items-center whitespace-nowrap rounded-full bg-[#fef3c7] px-2.5 text-[12px] font-medium text-[#92400e]">{proposedText(r)}</span>
+                                )}
+                                {mayPropose && (
+                                  <button type="button" onClick={() => setProposing(r)}
+                                    className={`inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-lg px-3 text-[13px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e] ${r.in_register || r.proposals?.length ? 'border border-[#c9d1d9] bg-[#ffffff] text-[#26323d] hover:bg-[#f4f6f8]' : 'bg-[#0f766e] text-[#ffffff] hover:bg-[#115e59]'}`}>
+                                    <Send aria-hidden className="h-3.5 w-3.5" /> {proposeLabel(r)}
+                                  </button>
+                                )}
+                                {isAdmin && (
+                                  <button type="button" onClick={() => setAdding(r)} title="An administrator's shortcut: a draft that someone else in the risk team accepts"
+                                    className="inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-lg border border-[#c9d1d9] bg-[#ffffff] px-3 text-[13px] font-medium text-[#26323d] hover:bg-[#f4f6f8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]">
+                                    <Plus aria-hidden className="h-3.5 w-3.5" /> Add as draft
                                   </button>
                                 )}
                               </div>
@@ -200,6 +248,9 @@ function Library() {
                                     </li>
                                   ))}
                                 </ul>
+                                <p className="mt-2 text-[12px] leading-4 text-[#586472]">
+                                  <span className="font-medium text-[#26323d]">Already used:</span> {whereUsed(r).join(', ') || 'not yet'}
+                                </p>
                               </td>
                             </tr>
                           )}
@@ -223,8 +274,18 @@ function Library() {
           </section>
         </>
       )}
+      </TabPanel>
+      <TabPanel tabKey="suggestions" lazy className="pt-4">
+        <Suggestions unit={opened.unit} framework={framework?.key} onUnit={(u) => setParams({ unit: u })} mayPropose={mayPropose} onPropose={setProposing} />
+      </TabPanel>
+      <TabPanel tabKey="proposals" lazy className="pt-4">
+        <Proposals onOpen={setProposalId} />
+      </TabPanel>
+      </Tabs>
 
       <AddToRegisterDialog risk={adding} framework={data.installed_framework} onClose={() => setAdding(null)} onAdded={added} />
+      <ProposeDialog risk={proposing} unitId={tab === 'suggestions' ? opened.unit : ''} onClose={() => setProposing(null)} onProposed={proposed} />
+      <ProposalDialog id={proposalId} onClose={closeProposal} onDone={answered} />
     </div>
   );
 }

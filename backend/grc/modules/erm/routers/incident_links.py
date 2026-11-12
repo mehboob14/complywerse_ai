@@ -15,10 +15,13 @@ from ....models import (
     RiskIncident, IncidentAssetLink, IncidentVulnerabilityLink, IncidentRiskLink,
     EvidenceIncidentLink, Risk, ITAsset, Vulnerability, Evidence, GRCUser, get_db,
 )
-from ....routers.auth_router import require_auth, get_user_tenants
+from ....routers.auth_router import require_auth, get_user_tenants, require_tenant_permission
 from ..schema_migrations import ensure_incident_schema
 
 router = APIRouter(prefix="/incidents", tags=["ERM - Incident Links"])
+
+# Adding or removing a link edits the incident.
+_may_link = require_tenant_permission("erm:incidents:edit", "erm:risks:edit")
 
 
 def _get_incident(incident_id: int, current_user: GRCUser, db: Session) -> RiskIncident:
@@ -207,7 +210,7 @@ def get_links(
     return serialize_links(db, incident_id)
 
 
-@router.post("/{incident_id}/links/assets", status_code=status.HTTP_201_CREATED)
+@router.post("/{incident_id}/links/assets", status_code=status.HTTP_201_CREATED, dependencies=[Depends(_may_link)])
 def add_asset_link(
     incident_id: int,
     body: Dict[str, Any],
@@ -240,7 +243,7 @@ def add_asset_link(
     return {"id": row.id, "asset_id": asset.id, "already_linked": False}
 
 
-@router.delete("/{incident_id}/links/assets/{asset_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{incident_id}/links/assets/{asset_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(_may_link)])
 def remove_asset_link(
     incident_id: int,
     asset_id: int,
@@ -259,7 +262,7 @@ def remove_asset_link(
     return
 
 
-@router.post("/{incident_id}/links/vulnerabilities", status_code=status.HTTP_201_CREATED)
+@router.post("/{incident_id}/links/vulnerabilities", status_code=status.HTTP_201_CREATED, dependencies=[Depends(_may_link)])
 def add_vuln_link(
     incident_id: int,
     body: Dict[str, Any],
@@ -293,7 +296,7 @@ def add_vuln_link(
     return {"id": row.id, "vulnerability_id": vuln.id, "already_linked": False}
 
 
-@router.delete("/{incident_id}/links/vulnerabilities/{vulnerability_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{incident_id}/links/vulnerabilities/{vulnerability_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(_may_link)])
 def remove_vuln_link(
     incident_id: int,
     vulnerability_id: int,
@@ -312,7 +315,7 @@ def remove_vuln_link(
     return
 
 
-@router.post("/{incident_id}/links/risks", status_code=status.HTTP_201_CREATED)
+@router.post("/{incident_id}/links/risks", status_code=status.HTTP_201_CREATED, dependencies=[Depends(_may_link)])
 def add_risk_link(
     incident_id: int,
     body: Dict[str, Any],
@@ -345,7 +348,7 @@ def add_risk_link(
     return {"id": row.id, "risk_id": risk.id, "already_linked": False}
 
 
-@router.delete("/{incident_id}/links/risks/{risk_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{incident_id}/links/risks/{risk_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(_may_link)])
 def remove_risk_link(
     incident_id: int,
     risk_id: int,
@@ -364,7 +367,7 @@ def remove_risk_link(
     return
 
 
-@router.post("/{incident_id}/links/evidence", status_code=status.HTTP_201_CREATED)
+@router.post("/{incident_id}/links/evidence", status_code=status.HTTP_201_CREATED, dependencies=[Depends(_may_link)])
 def add_evidence_link(
     incident_id: int,
     body: Dict[str, Any],
@@ -397,7 +400,7 @@ def add_evidence_link(
     return {"id": row.id, "evidence_id": evidence.id, "already_linked": False}
 
 
-@router.delete("/{incident_id}/links/evidence/{evidence_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{incident_id}/links/evidence/{evidence_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(_may_link)])
 def remove_evidence_link(
     incident_id: int,
     evidence_id: int,

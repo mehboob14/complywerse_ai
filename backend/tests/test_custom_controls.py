@@ -144,7 +144,7 @@ def test_seeded_frameworks_resolve_to_their_crosswalk_slug_and_join_field():
 # ── links ────────────────────────────────────────────────────────────────────
 def test_every_link_type_writes_into_a_real_table_with_a_real_column():
     for key, spec in rl.SPECS.items():
-        assert hasattr(spec.link_model, "normalized_control_id"), key
+        assert rl._control_col(spec) is not None, key       # risks: the one risk–control link's control_id (wave 5)
         assert hasattr(spec.link_model, spec.link_record_col), key
         assert hasattr(spec.model, spec.title_attr), key
         assert hasattr(spec.model, "tenant_id"), key

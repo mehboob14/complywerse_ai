@@ -36,6 +36,7 @@ from .tpra.engagements import router as tpra_engagements_router
 from .tpra.supplier_requests import router as tpra_supplier_requests_router
 from .tpra.reviews import router as tpra_reviews_router
 from .tpra.alert_rules import router as tpra_alert_rules_router
+from .tpra.outsourcing import router as tpra_outsourcing_router
 
 router = APIRouter(prefix="/vendor-risk", tags=["Vendor Risk Management"])
 
@@ -75,6 +76,8 @@ router.include_router(tpra_engagements_router)
 router.include_router(tpra_supplier_requests_router)
 router.include_router(tpra_reviews_router)
 router.include_router(tpra_alert_rules_router)
+# Outsourcing where it meets ERM: materiality, exit plan, regulator notice, sub-outsourcing, loss events, concentration.
+router.include_router(tpra_outsourcing_router)
 router.include_router(vendors_router)
 router.include_router(assessments_router)
 router.include_router(questionnaires_router)

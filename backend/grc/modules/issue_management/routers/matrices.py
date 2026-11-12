@@ -35,7 +35,7 @@ VALID_URGENCIES = {"high", "medium", "low"}
 VALID_SEVERITIES = {"critical", "high", "medium", "low", "informational"}
 VALID_TYPES = {
     "incident", "audit_finding", "non_conformance",
-    "vendor_breach", "process_gap", "capa", "other",
+    "vendor_breach", "process_gap", "capa", "risk_treatment", "other",
 }
 
 

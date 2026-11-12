@@ -312,7 +312,7 @@ GRC DATABASE SCHEMA - DOMAIN-ORGANIZED (100+ TABLES)
 6. [YES] **WHERE after all JOINs** - Never put WHERE between LEFT JOIN statements
 7. [YES] **Framework joins**: 4-table path (controls[>]objectives[>]domains[>]frameworks)
 8. [YES] **Prefix ambiguous columns** - Use `v.severity` not just `severity`
-9. [YES] **Risk links**: Use `grc_risk_control_links`, NOT `grc_vulnerability_control_links`
+9. [YES] **Risk links**: Use `grc_risk_controls` (the only live risk-control link table), NOT `grc_vulnerability_control_links` or the old risk link tables
 10. [YES] **Limit columns to 3-5 max** - Select only essential fields (id/code/name + 1-2 data fields)
 11. [YES] **NULL-safe WHERE clauses** - Use `COALESCE(column, default) = value` or `column IS NULL OR column = value`
 12. [YES] **Left joins for optional data** - Use LEFT JOIN when data might not exist
@@ -647,7 +647,7 @@ ORDER BY due_date ASC LIMIT 100
 - grc_risk_incidents: Risk-related incidents
 - grc_risk_reviews: Periodic risk reviews
 
-**LINK TABLES**: grc_risk_control_links, grc_risk_framework_control_links
+**LINK TABLES**: grc_risk_controls (every risk-control link; control_source says which control table control_id points at)
 
 **USE CASES**:
 - "High-severity risks" [>] WHERE inherent_score >= 15 OR residual_score >= 15
@@ -1790,12 +1790,10 @@ ORDER BY created_at DESC LIMIT 10
 grc_evidence_control_mappings: evidence_id, normalized_control_id, framework_control_id
 grc_vulnerability_control_links: vulnerability_id, framework_control_id, normalized_control_id
 grc_vulnerability_asset_links: vulnerability_id, asset_id, impact_on_asset, notes
-grc_risk_control_links: risk_id, normalized_control_id
-grc_risk_framework_control_links: risk_id, framework_control_id
+grc_risk_controls: risk_id, control_source ('internal' -> grc_internal_controls, 'normalized' -> grc_normalized_controls, 'framework' -> grc_parsed_framework_controls, 'catalog' -> grc_framework_controls), control_id, link_type, effectiveness_rating (the only live risk-control link table; grc_risk_control_links, grc_risk_framework_control_links and grc_internal_control_risk_links are old copies, no longer written)
 grc_asset_control_links: asset_id, normalized_control_id
 grc_document_control_links: document_id, framework_control_id
 grc_risk_audit_finding_links: risk_id, finding_id (links audit findings to risks)
-grc_internal_control_risk_links: internal_control_id, risk_id
 grc_internal_control_framework_links: internal_control_id, framework_control_id
 grc_document_risk_links: document_id, risk_id
 grc_document_asset_links: document_id, asset_id

@@ -14,7 +14,8 @@ from ....models import (
     RiskIncident, IncidentAssetLink, IncidentVulnerabilityLink, IncidentRiskLink,
     Risk, ITAsset, Vulnerability, GRCUser, get_db,
 )
-from ....routers.auth_router import require_auth, get_user_primary_tenant
+from ....routers.auth_router import require_auth, get_user_primary_tenant, require_tenant_permission
+from ..loss_taxonomy import BUSINESS_LINES, EVENT_TYPES, taxonomy_key
 from ..schema_migrations import ensure_incident_schema
 
 router = APIRouter(prefix="/incidents", tags=["ERM - Incidents Import"])
@@ -25,7 +26,17 @@ TEMPLATE_COLUMNS = [
     ("incident_date", "Required YYYY-MM-DD", "2026-07-01"),
     ("severity", "low|medium|high|critical", "high"),
     ("status", "open|investigating|mitigating|resolved|closed", "open"),
-    ("financial_impact", "Optional number", "25000"),
+    ("financial_impact", "Optional number; older templates. Prefer gross_loss", ""),
+    ("discovered_date", "Optional YYYY-MM-DD; today when blank", "2026-07-01"),
+    ("accounting_date", "Optional YYYY-MM-DD the loss was booked", "2026-07-15"),
+    ("event_type", "Basel event type: key or label", "Business disruption and system failures"),
+    ("event_type_l2", "Optional level-2 type, free text", "Systems"),
+    ("business_line", "Basel business line: key or label", "Payment and settlement"),
+    ("gross_loss", "Optional number", "25000"),
+    ("recoveries", "Optional number", "5000"),
+    ("currency", "3-letter ISO code", "USD"),
+    ("is_near_miss", "yes|no", "no"),
+    ("boundary_type", "none|credit|market", "none"),
     ("operational_impact", "Optional text", "Checkout unavailable"),
     ("root_cause", "Optional", "Misconfigured load balancer"),
     ("corrective_actions", "Optional", "Rollback + add health checks"),
@@ -38,7 +49,8 @@ TEMPLATE_COLUMNS = [
 
 
 VALID_SEVERITY = {"low", "medium", "high", "critical"}
-VALID_STATUS = {"open", "investigating", "mitigating", "contained", "resolved", "closed"}
+VALID_STATUS = {"open", "investigating", "mitigating", "resolved", "closed"}     # the incident page's list
+STATUS_ALIASES = {"contained": "mitigating"}
 
 
 def _norm(h: Any) -> str:
@@ -70,6 +82,38 @@ def _parse_date(raw: str) -> Optional[datetime]:
         return None
 
 
+def _amount(raw: str, what: str) -> Optional[float]:
+    if not raw:
+        return None
+    value = float(raw.replace(",", ""))
+    if value < 0:
+        raise ValueError(f"{what} cannot be negative")
+    return value
+
+
+def _loss_fields(row: Dict[str, Any]) -> Dict[str, Any]:
+    """The Basel loss-event columns of one row; the model settles gross / financial_impact / net on save."""
+    currency = _cell(row, "currency").upper() or None
+    if currency and not (len(currency) == 3 and currency.isalpha()):
+        raise ValueError(f"currency '{currency}' is not a 3-letter ISO code")
+    boundary = _cell(row, "boundary_type").lower() or "none"
+    if boundary not in ("none", "credit", "market"):
+        raise ValueError(f"invalid boundary_type '{boundary}'")
+    fields = {
+        "event_type": taxonomy_key(_cell(row, "event_type"), EVENT_TYPES, "event type"),
+        "event_type_l2": _cell(row, "event_type_l2")[:255] or None,
+        "business_line": taxonomy_key(_cell(row, "business_line"), BUSINESS_LINES, "business line"),
+        "gross_loss": _amount(_cell(row, "gross_loss"), "gross_loss"),
+        "recoveries": _amount(_cell(row, "recoveries"), "recoveries"),
+        "currency": currency,
+        "accounting_date": _parse_date(_cell(row, "accounting_date")),
+        "discovered_date": _parse_date(_cell(row, "discovered_date")) or datetime.utcnow(),
+        "is_near_miss": _cell(row, "is_near_miss").lower() in ("yes", "y", "true", "1"),
+        "boundary_type": boundary,
+    }
+    return {k: v for k, v in fields.items() if v is not None}
+
+
 def _split_list(raw: str) -> List[str]:
     if not raw:
         return []
@@ -91,7 +135,8 @@ def download_incident_template(current_user: GRCUser = Depends(require_auth)):
     )
 
 
-@router.post("/import/upload")
+@router.post("/import/upload",
+             dependencies=[Depends(require_tenant_permission("erm:incidents:create", "erm:risks:create"))])
 async def upload_incidents_file(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -181,11 +226,12 @@ async def upload_incidents_file(
                 if severity not in VALID_SEVERITY:
                     raise ValueError(f"invalid severity '{severity}'")
                 status = (_cell(row, "status") or "open").lower()
+                status = STATUS_ALIASES.get(status, status)
                 if status not in VALID_STATUS:
                     status = "open"
 
-                fin_raw = _cell(row, "financial_impact")
-                financial_impact = float(fin_raw) if fin_raw else None
+                financial_impact = _amount(_cell(row, "financial_impact"), "financial_impact")
+                loss = _loss_fields(row)
 
                 assignee_email = _cell(row, "assignee_email").lower()
                 assigned_to = email_to_id.get(assignee_email) if assignee_email else None
@@ -210,6 +256,7 @@ async def upload_incidents_file(
                     reported_by=current_user.id,
                     assigned_to=assigned_to,
                     tags=tags or None,
+                    **loss,
                 )
                 db.add(incident)
                 db.flush()

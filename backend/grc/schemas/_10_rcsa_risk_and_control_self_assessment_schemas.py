@@ -1,4 +1,5 @@
 from ._09_notification_schemas import *  # noqa: F401,F403
+from pydantic import model_validator
 
 # =============================================================================
 # RCSA (Risk and Control Self-Assessment) Schemas
@@ -15,6 +16,8 @@ class RCSAQuestionCreate(BaseModel):
     control_objective: Optional[str] = None
     guidance_text: Optional[str] = None
     ai_suggestion_enabled: bool = True
+    risk_id: Optional[int] = None              # the register risk the question assesses
+    internal_control_id: Optional[int] = None  # the internal control it rates
 
 
 class RCSAQuestionUpdate(BaseModel):
@@ -43,6 +46,10 @@ class RCSAQuestionResponse(BaseModel):
     control_objective: Optional[str]
     guidance_text: Optional[str]
     ai_suggestion_enabled: bool
+    risk_id: Optional[int] = None              # the register risk the question assesses
+    internal_control_id: Optional[int] = None  # the internal control it rates
+    risk_title: Optional[str] = None
+    control_name: Optional[str] = None
     created_at: datetime
 
     class Config:
@@ -77,6 +84,8 @@ class RCSAQuestionUpsert(BaseModel):
     guidance_text: Optional[str] = None
     guidance: Optional[str] = None          # frontend alias for guidance_text
     ai_suggestion_enabled: bool = True
+    risk_id: Optional[int] = None              # the register risk the question assesses
+    internal_control_id: Optional[int] = None  # the internal control it rates
 
 
 class RCSATemplateUpdate(BaseModel):
@@ -106,6 +115,7 @@ class RCSATemplateResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     question_count: int = 0
+    previous_version_id: Optional[int] = None   # the version this one replaced
 
     class Config:
         from_attributes = True
@@ -147,6 +157,7 @@ class RCSACampaignResponse(BaseModel):
     tenant_id: int
     template_id: int
     template_name: Optional[str] = None
+    template_version: Optional[str] = None   # the version it launched with (its template row never changes once launched)
     name: str
     description: Optional[str] = None
     period_type: str = "quarterly"
@@ -210,6 +221,10 @@ class RCSAQuestionWithResponse(BaseModel):
     ai_suggestion_enabled: bool = False
     risk_category: Optional[str] = None
     control_objective: Optional[str] = None
+    risk_id: Optional[int] = None              # the register risk the question assesses
+    internal_control_id: Optional[int] = None  # the internal control it rates
+    risk_title: Optional[str] = None
+    control_name: Optional[str] = None
 
 
 class RCSAEvidenceFile(BaseModel):
@@ -232,20 +247,50 @@ class RCSAResponseDetail(BaseModel):
     evidence: List[RCSAEvidenceFile] = []
 
 
+class RCSAApprovalHistoryResponse(BaseModel):
+    id: int
+    assessment_id: int
+    tier_id: Optional[int]
+    action: str
+    tier_number: int
+    performed_by: int
+    performer_name: Optional[str] = None
+    delegated_to: Optional[int]
+    delegate_name: Optional[str] = None
+    comments: Optional[str]
+    performed_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class RCSAAssessmentDetailResponse(BaseModel):
     id: int
     campaign_id: int
     campaign_name: Optional[str] = None
     business_unit: Optional[str] = None
+    business_unit_name: Optional[str] = None
     assessor_name: Optional[str] = None
     status: str
     due_date: Optional[datetime] = None
     progress: float = 0
+    submitted_at: Optional[datetime] = None
+    current_approval_tier: int = 0
+    total_tiers: int = 1
+    overall_risk_score: Optional[float] = None
+    overall_control_score: Optional[float] = None
+    ai_quality_score: Optional[int] = None
     questions: List[RCSAQuestionWithResponse] = []
     responses: List[RCSAResponseDetail] = []
+    approval_history: List[RCSAApprovalHistoryResponse] = []
+    can_answer: bool = False   # this user may start, answer and submit it (its assessor, or holds the RCSA edit grant)
 
     class Config:
         from_attributes = True
+
+
+class RCSAPendingApprovalResponse(RCSAAssessmentResponse):
+    total_tiers: int = 1
 
 
 class RCSAResponseCreate(BaseModel):
@@ -256,6 +301,25 @@ class RCSAResponseCreate(BaseModel):
     control_effectiveness: Optional[str] = None
     control_description: Optional[str] = None
     last_tested_date: Optional[datetime] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_the_read_shape(cls, data: Any) -> Any:
+        """The assessment page sends answers in the shape it reads them (RCSAResponseDetail):
+        likelihood / impact / effectiveness / yes_no_value / text_value. Without this they were dropped."""
+        if not isinstance(data, dict):
+            return data
+        data = dict(data)
+        for read_name, saved_name in (("likelihood", "likelihood_rating"), ("impact", "impact_rating"),
+                                      ("effectiveness", "control_effectiveness")):
+            if data.get(saved_name) is None and data.get(read_name) is not None:
+                data[saved_name] = data[read_name]
+        if data.get("response_value") is None:
+            if isinstance(data.get("yes_no_value"), bool):
+                data["response_value"] = "yes" if data["yes_no_value"] else "no"
+            elif data.get("text_value") is not None:
+                data["response_value"] = data["text_value"]
+        return data
 
 
 class RCSAResponseUpdate(BaseModel):
@@ -338,12 +402,21 @@ class RCSAFindingResponse(BaseModel):
     remediation_due_date: Optional[datetime]
     remediation_owner_id: Optional[int]
     remediation_owner_name: Optional[str] = None
+    business_unit_name: Optional[str] = None
+    assessment_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     closed_at: Optional[datetime]
 
     class Config:
         from_attributes = True
+
+
+class RCSAFindingDetailResponse(RCSAFindingResponse):
+    linked_risk: Optional[Dict[str, Any]] = None             # {id, title}
+    linked_control: Optional[Dict[str, Any]] = None          # {id, name}
+    mitigation_actions: List[Dict[str, Any]] = []            # [{id, title, status, due_date}]
+    linked_issue: Optional[Dict[str, Any]] = None            # {id, code, title, severity, workflow_state}: raised from it
 
 
 class RCSAApprovalTierCreate(BaseModel):
@@ -402,23 +475,6 @@ class RCSAApprovalWorkflowResponse(BaseModel):
         from_attributes = True
 
 
-class RCSAApprovalHistoryResponse(BaseModel):
-    id: int
-    assessment_id: int
-    tier_id: Optional[int]
-    action: str
-    tier_number: int
-    performed_by: int
-    performer_name: Optional[str] = None
-    delegated_to: Optional[int]
-    delegate_name: Optional[str] = None
-    comments: Optional[str]
-    performed_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
 class RCSAApprovalAction(BaseModel):
     comments: Optional[str] = None
 
@@ -443,6 +499,8 @@ class RCSADashboardSummary(BaseModel):
     completion_rate: float
     avg_risk_score: Optional[float]
     avg_control_score: Optional[float]
+    pending_assessments: int = 0    # the router always computed these; the model dropped them, so the hub showed 0
+    open_findings: int = 0
 
 
 class RCSAFindingsBySeverity(BaseModel):

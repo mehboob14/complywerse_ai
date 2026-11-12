@@ -33,6 +33,10 @@ class RiskMitigationActionUpdate(BaseModel):
     notes: Optional[str] = None
 
 
+class RiskMitigationActionComplete(BaseModel):
+    actual_residual_reduction: Optional[float] = None
+
+
 class RiskMitigationActionResponse(BaseModel):
     id: int
     risk_id: int

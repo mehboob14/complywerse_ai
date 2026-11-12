@@ -119,4 +119,6 @@ test('Compliverse\'s own headline numbers stay: the queue, the size, coverage, r
   assert.equal(calm[1].caption, 'No new onboards · 30d');
   assert.equal(calm[2].tone, 'success');
   assert.equal(calm[4].caption, '6 new signals');
+  const none = kpis({ ...KPIS, critical_coverage: null, critical_count: 0, critical_covered: 0 });     // nothing to cover is not 100%
+  assert.deepEqual([none[2].value, none[2].tone, none[2].caption], ['—', 'neutral', 'No critical vendors']);
 });

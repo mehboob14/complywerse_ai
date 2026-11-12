@@ -27,8 +27,12 @@ class VendorCreate(BaseModel):
     tenant_id: Optional[int] = None
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
-    tier: Optional[str] = "medium"
-    status: Optional[str] = "active"
+    # Only a starting value (the import's tier column is too): the tiering gate sets the tier before any stage is
+    # right-sized by it. Unset, the supplier is untiered (NEW_SUPPLIER's placeholder).
+    tier: Optional[str] = None
+    # Deprecated & IGNORED: a new supplier starts on the intake path (NEW_SUPPLIER) and approval makes it active.
+    # Kept so older clients that still send it don't 422.
+    status: Optional[str] = None
     vendor_type: Optional[str] = None
     industry: Optional[str] = None
     website: Optional[str] = None
@@ -199,6 +203,15 @@ NEXT_ACTIONS = {
 }
 DUE_SOON_DAYS = 30
 _OUT_OF_USE = ("retired", "inactive", "terminated", "requested", "rejected")
+# Where a supplier added directly starts: on the intake path as a request a reviewer has picked up (tpra/intake.py:
+# in review = onboarding), so it is tiered and approved like any other and the approval decision makes it active.
+# The tier is the placeholder a request gets ("Not tiered" until tiering gives it an inherent score).
+NEW_SUPPLIER = {"status": "onboarding", "intake_status": "in_review", "tier": "medium"}
+# Set by the lifecycle and the scoring engine, never by an edit: reactivation (TPRM-002), approval, tiering and
+# scoring each write their own audit trail. An edit may only take a supplier out of use: offboard it (through the
+# lifecycle's offboarding) or suspend it (on the audit trail); putting one back to work is the lifecycle's.
+_ENGINE_OWNED = ("status", "inherent_risk_score", "residual_risk_score", "risk_rating")
+_EDIT_MAY_SET_STATUS = ("offboarded", "suspended")
 
 
 def _day(value):
@@ -531,10 +544,9 @@ def create_vendor(
         tenant_id=tenant_id,
         custom_values=custom_values,
         **register,
+        **{**NEW_SUPPLIER, "tier": payload.tier or NEW_SUPPLIER["tier"]},
         name=payload.name,
         description=payload.description,
-        tier=payload.tier,
-        status=payload.status,
         vendor_type=payload.vendor_type,
         industry=payload.industry,
         website=payload.website,
@@ -746,6 +758,15 @@ def update_vendor(
     vendor = get_vendor_or_404(vendor_id, tenant_ids, db)
 
     update_data = payload.model_dump(exclude_unset=True)
+    # A field sent back as it stands is no change; offboarding runs the lifecycle's own offboarding (below).
+    locked = [k for k in _ENGINE_OWNED if k in update_data and update_data[k] != getattr(vendor, k)
+              and not (k == "status" and update_data[k] in _EDIT_MAY_SET_STATUS
+                       and (vendor.status or "").lower() != "offboarded")]          # an exit is not undone by an edit
+    if locked:
+        raise HTTPException(status_code=400, detail=(
+            f"{', '.join(k.replace('_', ' ') for k in locked)} cannot be edited: the lifecycle sets "
+            f"{'them' if len(locked) > 1 else 'it'} (tiering, scoring, approval, reactivation). "
+            "An edit can only suspend or offboard a supplier."))
     refuse_imported_accounts(db, [update_data.get("owner_id")], kept=[vendor.owner_id])
     update_data.update(clean_register_fields(db, update_data, vendor))
     if "custom_values" in update_data:
@@ -773,6 +794,10 @@ def update_vendor(
     if update_data.get("status") == "offboarded" and (vendor.status or "").lower() != "offboarded":
         from .lifecycle import start_offboarding       # offboarding closes the supplier's side, however it starts
         start_offboarding(db, vendor, current_user.id, "Status set to offboarded")
+    if update_data.get("status") == "suspended" and (vendor.status or "").lower() != "suspended":
+        tpra_service.write_audit(db, vendor.tenant_id, entity="vendor", action="suspend", vendor_id=vendor.id,
+                                 entity_id=vendor.id, actor_id=current_user.id, from_value=vendor.status,
+                                 to_value="suspended", reason="Suspended by an edit")
     for key, value in update_data.items():
         setattr(vendor, key, value)
     # A supplier split into engagements keeps General's tier and scores on its General

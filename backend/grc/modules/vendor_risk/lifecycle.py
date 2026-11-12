@@ -12,6 +12,8 @@ monitoring continuously feeding back into the assessment work.
 from datetime import datetime
 from typing import Optional
 
+from .tpra.stages import DEFAULT_CADENCE_DAYS
+
 
 LIFECYCLE_STAGES = [
     {"key": "intake", "order": 1, "label": "Intake & request",
@@ -45,8 +47,8 @@ STAGE_KEYS = [s["key"] for s in LIFECYCLE_STAGES]
 STAGE_ORDER = {s["key"]: s["order"] for s in LIFECYCLE_STAGES}
 STAGE_LABEL = {s["key"]: s["label"] for s in LIFECYCLE_STAGES}
 
-# Suggested reassessment cadence (days) by tier — used to seed scheduling.
-TIER_CADENCE_DAYS = {"critical": 365, "high": 365, "medium": 730, "low": 1095}
+# Suggested reassessment cadence (days) by tier: the TPRA default (a tenant's Settings override it there).
+TIER_CADENCE_DAYS = dict(DEFAULT_CADENCE_DAYS)
 
 DEFAULT_OFFBOARDING_CHECKLIST = [
     "Revoke all vendor access and credentials",

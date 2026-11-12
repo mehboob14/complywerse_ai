@@ -52,6 +52,7 @@ def from_event(
     assignee_id: Optional[int] = None,
     reporter_id: Optional[int] = None,
     feature_flag: Optional[str] = None,
+    risk_id: Optional[int] = None,
 ) -> Optional[Issue]:
     """Spawn an Issue from an event in another module.
 
@@ -96,6 +97,9 @@ def from_event(
     db.add(issue)
     db.flush()
     issue.code = next_issue_code(tenant_id, db)
+    if risk_id:      # e.g. the KRI's risk, so the breach issue shows on the risk
+        from ....models import IssueRiskLink
+        db.add(IssueRiskLink(issue_id=issue.id, risk_id=risk_id, created_by=reporter_id))
 
     db.add(IssueActivity(
         issue_id=issue.id,

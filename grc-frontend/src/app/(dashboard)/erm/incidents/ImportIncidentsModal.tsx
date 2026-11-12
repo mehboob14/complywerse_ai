@@ -55,8 +55,8 @@ export function ImportIncidentsModal({
       <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <div>
-            <h2 className="text-sm font-semibold text-slate-900">Import Incidents</h2>
-            <p className="text-[11px] text-slate-500">CSV or Excel (.xlsx / .xls)</p>
+            <h2 className="text-sm font-semibold text-slate-900">Import loss events</h2>
+            <p className="text-[11px] text-slate-500">CSV or Excel (.xlsx / .xls). Event type and business line by key or label; older templates still import.</p>
           </div>
           <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-700">
             <X className="h-4 w-4" />

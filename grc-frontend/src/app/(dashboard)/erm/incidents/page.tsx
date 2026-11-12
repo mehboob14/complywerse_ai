@@ -17,10 +17,11 @@ import {
   Plus,
   Edit2,
   Trash2,
-  DollarSign,
+  Banknote,
   AlertCircle,
   CheckCircle,
   Clock,
+  ShieldCheck,
   Sparkles,
   Brain,
   ChevronRight,
@@ -35,6 +36,33 @@ import {
 import { MultiSelectDropdown, RightSlidePanel, PageLoader } from '@/components/ui';
 import AiRecommendationSaver from '@/components/ai/AiRecommendationSaver';
 import { ImportIncidentsModal } from './ImportIncidentsModal';
+import {
+  BOUNDARY_TYPES, BUSINESS_LINES, EVENT_TYPES, VALIDATION_STATUSES, formatMoney, labelOf, lossPayload, netLoss,
+  type BoundaryType, type CurrencyAmount, type LossDashboard, type LossEvent, type LossFields,
+} from './lossEvents';
+
+const FIELD = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500';
+
+function FormSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-3 border-t border-slate-200 pt-4">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+/** One line per currency: amounts in different currencies are never added together. */
+function PerCurrency({ amounts }: { amounts?: CurrencyAmount[] }) {
+  if (!amounts?.length) return <p className="text-2xl font-bold text-slate-900">0</p>;
+  return (
+    <div className="space-y-0.5">
+      {amounts.map((a) => (
+        <p key={a.currency ?? '-'} className="text-lg font-bold leading-tight text-slate-900">{formatMoney(a.net_loss, a.currency)}</p>
+      ))}
+    </div>
+  );
+}
 
 const SEVERITIES: { value: IncidentSeverity; label: string; color: string }[] = [
   { value: 'low', label: 'Low', color: 'bg-emerald-50 text-emerald-700' },
@@ -86,27 +114,34 @@ type AIAnalysisResult = {
 };
 
 export default function IncidentsPage() {
-  const { hasPermission } = usePermissions();
-  const canCreate = hasPermission('erm:incidents:create');
-  const canDelete = hasPermission('erm:incidents:delete');
+  const { hasAnyPermission } = usePermissions();
+  // Same names the API accepts: the incident right, or the risk right as a fallback.
+  const canCreate = hasAnyPermission(['erm:incidents:create', 'erm:risks:create']);
+  const canEdit = hasAnyPermission(['erm:incidents:edit', 'erm:risks:edit']);
+  const canDelete = hasAnyPermission(['erm:incidents:delete', 'erm:risks:delete']);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showImport, setShowImport] = useState(false);
-  const [editingIncident, setEditingIncident] = useState<RiskIncident | null>(null);
+  const [editingIncident, setEditingIncident] = useState<LossEvent | null>(null);
+  const [reviewing, setReviewing] = useState<LossEvent | null>(null);
   const [severityFilter, setSeverityFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [eventTypeFilter, setEventTypeFilter] = useState<string>('all');
+  const [validationFilter, setValidationFilter] = useState<string>('all');
   const [analyzingIncident, setAnalyzingIncident] = useState<RiskIncident | null>(null);
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysisResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: incidents, isLoading } = useQuery({
-    queryKey: ['erm-incidents', severityFilter, statusFilter],
+    queryKey: ['erm-incidents', severityFilter, statusFilter, eventTypeFilter, validationFilter],
     queryFn: async () => {
       const params: Record<string, string> = {};
       if (severityFilter !== 'all') params.severity = severityFilter;
       if (statusFilter !== 'all') params.status_filter = statusFilter;
+      if (eventTypeFilter !== 'all') params.event_type = eventTypeFilter;
+      if (validationFilter !== 'all') params.validation_status = validationFilter;
       const response = await ermApi.incidents.getAll(params);
-      return response.data;
+      return response.data as LossEvent[];
     },
     placeholderData: keepPreviousData,
   });
@@ -115,9 +150,14 @@ export default function IncidentsPage() {
     queryKey: ['erm-incident-dashboard'],
     queryFn: async () => {
       const response = await ermApi.incidents.getDashboard();
-      return response.data;
+      return response.data as LossDashboard;
     },
   });
+
+  const refreshLists = () => {
+    queryClient.invalidateQueries({ queryKey: ['erm-incidents'] });
+    queryClient.invalidateQueries({ queryKey: ['erm-incident-dashboard'] });
+  };
 
   const { data: risks } = useQuery({
     queryKey: ['erm-risks-list'],
@@ -164,7 +204,22 @@ export default function IncidentsPage() {
 
   return (
     <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
+      <div>
+        <h1 className="text-lg font-semibold text-slate-900">Loss Events</h1>
+        <p className="text-sm text-slate-600">Operational loss events and near misses, classified by Basel event type and validated by a second person.</p>
+      </div>
       <div className="grid gap-4 sm:grid-cols-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="flex items-start gap-3">
+            <div className="rounded-lg bg-orange-50 p-2">
+              <Banknote className="h-5 w-5 text-orange-600" />
+            </div>
+            <div>
+              <PerCurrency amounts={incidentDashboard?.net_loss_this_quarter} />
+              <p className="text-sm text-slate-600">Net loss this quarter</p>
+            </div>
+          </div>
+        </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-rose-50 p-2">
@@ -172,7 +227,7 @@ export default function IncidentsPage() {
             </div>
             <div>
               <p className="text-2xl font-bold text-slate-900">{incidentDashboard?.open_incidents || 0}</p>
-              <p className="text-sm text-slate-600">Open Incidents</p>
+              <p className="text-sm text-slate-600">Open events</p>
             </div>
           </div>
         </div>
@@ -182,8 +237,8 @@ export default function IncidentsPage() {
               <Clock className="h-5 w-5 text-amber-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-900">{incidentDashboard?.investigating || 0}</p>
-              <p className="text-sm text-slate-600">Investigating</p>
+              <p className="text-2xl font-bold text-slate-900">{incidentDashboard?.awaiting_validation || 0}</p>
+              <p className="text-sm text-slate-600">Awaiting validation</p>
             </div>
           </div>
         </div>
@@ -193,21 +248,8 @@ export default function IncidentsPage() {
               <CheckCircle className="h-5 w-5 text-emerald-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-900">{incidentDashboard?.resolved_this_month || 0}</p>
-              <p className="text-sm text-slate-600">Resolved (Month)</p>
-            </div>
-          </div>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-orange-50 p-2">
-              <DollarSign className="h-5 w-5 text-orange-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-slate-900">
-                ${((incidentDashboard?.total_financial_impact || 0) / 1000).toFixed(0)}K
-              </p>
-              <p className="text-sm text-slate-600">Total Impact</p>
+              <p className="text-2xl font-bold text-slate-900">{incidentDashboard?.near_misses || 0}</p>
+              <p className="text-sm text-slate-600">Near misses</p>
             </div>
           </div>
         </div>
@@ -231,6 +273,22 @@ export default function IncidentsPage() {
             multiSelect={false}
             placeholder="All Statuses"
           />
+          <MultiSelectDropdown
+            title="Event type"
+            items={EVENT_TYPES}
+            selectedValues={eventTypeFilter !== 'all' ? [eventTypeFilter] : []}
+            onApply={(values) => setEventTypeFilter(values[0] || 'all')}
+            multiSelect={false}
+            placeholder="All event types"
+          />
+          <MultiSelectDropdown
+            title="Validation"
+            items={VALIDATION_STATUSES.map((s) => ({ value: s.value, label: s.label }))}
+            selectedValues={validationFilter !== 'all' ? [validationFilter] : []}
+            onApply={(values) => setValidationFilter(values[0] || 'all')}
+            multiSelect={false}
+            placeholder="Any validation"
+          />
         </div>
         {canCreate && (
           <div className="flex flex-wrap items-center gap-2">
@@ -248,7 +306,7 @@ export default function IncidentsPage() {
               className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-[#0a0a0a] hover:bg-primary-700"
             >
               <Plus className="h-4 w-4" />
-              Report Incident
+              Report event
             </button>
           </div>
         )}
@@ -259,7 +317,9 @@ export default function IncidentsPage() {
           {incidents.map((incident) => {
             const severityStyle = SEVERITIES.find((s) => s.value === incident.severity);
             const statusStyle = INCIDENT_STATUSES.find((s) => s.value === incident.status);
-            
+            const validation = VALIDATION_STATUSES.find((s) => s.value === (incident.validation_status || 'pending'));
+            const net = incident.net_loss ?? incident.financial_impact;
+
             return (
               <div
                 key={incident.id}
@@ -270,6 +330,15 @@ export default function IncidentsPage() {
                     <h3 className="font-medium text-slate-900">{incident.title}</h3>
                     <p className="mt-1 text-sm text-slate-600 line-clamp-2">{incident.description}</p>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">
+                        {incident.event_type ? labelOf(EVENT_TYPES, incident.event_type) : 'Not classified'}
+                      </span>
+                      {incident.is_near_miss && (
+                        <span className="rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-medium text-sky-700">Near miss</span>
+                      )}
+                      <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${validation?.color || ''}`}>
+                        {validation?.label}
+                      </span>
                       <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${severityStyle?.color || ''}`}>
                         {incident.severity}
                       </span>
@@ -285,10 +354,10 @@ export default function IncidentsPage() {
                           {incident.assignee_name}
                         </span>
                       )}
-                      {incident.financial_impact && (
-                        <span className="flex items-center gap-1 text-xs text-orange-600">
-                          <DollarSign className="h-3 w-3" />
-                          {incident.financial_impact.toLocaleString()}
+                      {net != null && (
+                        <span className="flex items-center gap-1 text-xs text-orange-600" title="Net loss">
+                          <Banknote className="h-3 w-3" />
+                          Net {formatMoney(net, incident.currency)}
                         </span>
                       )}
                       {(incident.link_counts?.assets ||
@@ -327,22 +396,37 @@ export default function IncidentsPage() {
                     >
                       <Sparkles className="h-4 w-4" />
                     </button>
-                    <button
-                      onClick={() => setEditingIncident(incident)}
-                      className="rounded p-1.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (confirm('Are you sure you want to delete this incident?')) {
-                          deleteMutation.mutate(incident.id);
-                        }
-                      }}
-                      className="rounded p-1.5 text-slate-600 hover:bg-rose-50 hover:text-rose-600"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    {canEdit && incident.validation_status !== 'validated' && (
+                      <button
+                        onClick={() => setReviewing(incident)}
+                        className="rounded p-1.5 text-slate-600 hover:bg-emerald-50 hover:text-emerald-600"
+                        title="Validate or return"
+                      >
+                        <ShieldCheck className="h-4 w-4" />
+                      </button>
+                    )}
+                    {canEdit && (
+                      <button
+                        onClick={() => setEditingIncident(incident)}
+                        className="rounded p-1.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                        title="Edit"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </button>
+                    )}
+                    {canDelete && (
+                      <button
+                        onClick={() => {
+                          if (confirm('Are you sure you want to delete this loss event?')) {
+                            deleteMutation.mutate(incident.id);
+                          }
+                        }}
+                        className="rounded p-1.5 text-slate-600 hover:bg-rose-50 hover:text-rose-600"
+                        title="Delete"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -352,8 +436,8 @@ export default function IncidentsPage() {
       ) : (
         <div className="flex flex-col items-center justify-center py-12 text-center rounded-xl border border-slate-200 bg-white">
           <AlertCircle className="h-12 w-12 text-slate-500" />
-          <h3 className="mt-4 text-lg font-medium text-slate-900">No incidents found</h3>
-          <p className="mt-1 text-slate-600">Report incidents as they occur to track and resolve them</p>
+          <h3 className="mt-4 text-lg font-medium text-slate-900">No loss events recorded.</h3>
+          <p className="mt-1 text-slate-600">Report loss events and near misses as they are found.</p>
         </div>
       )}
 
@@ -370,8 +454,18 @@ export default function IncidentsPage() {
           onSuccess={() => {
             setShowCreateModal(false);
             setEditingIncident(null);
-            queryClient.invalidateQueries({ queryKey: ['erm-incidents'] });
-            queryClient.invalidateQueries({ queryKey: ['erm-incident-dashboard'] });
+            refreshLists();
+          }}
+        />
+      )}
+
+      {reviewing && (
+        <ReviewPanel
+          event={reviewing}
+          onClose={() => setReviewing(null)}
+          onDone={() => {
+            setReviewing(null);
+            refreshLists();
           }}
         />
       )}
@@ -397,18 +491,29 @@ function IncidentModal({
   onClose,
   onSuccess,
 }: {
-  incident: RiskIncident | null;
+  incident: LossEvent | null;
   risks: Risk[];
   onClose: () => void;
   onSuccess: () => void;
 }) {
-  const [formData, setFormData] = useState<Partial<RiskIncidentCreate>>({
+  const [formData, setFormData] = useState<Partial<RiskIncidentCreate> & LossFields>({
     risk_id: incident?.risk_id || undefined,
     title: incident?.title || '',
     description: incident?.description || '',
     incident_date: incident?.incident_date?.split('T')[0] || new Date().toISOString().split('T')[0],
+    discovered_date: incident?.discovered_date?.split('T')[0] || '',
+    accounting_date: incident?.accounting_date?.split('T')[0] || '',
     severity: incident?.severity || 'medium',
-    financial_impact: incident?.financial_impact,
+    event_type: incident?.event_type || '',
+    event_type_l2: incident?.event_type_l2 || '',
+    business_line: incident?.business_line || '',
+    is_near_miss: !!incident?.is_near_miss,
+    boundary_type: incident?.boundary_type || 'none',
+    // a record from before loss events has only financial_impact: it is the gross loss
+    gross_loss: incident?.gross_loss ?? incident?.financial_impact ?? null,
+    recoveries: incident?.recoveries ?? null,
+    currency: incident?.currency || '',
+    operational_impact: incident?.operational_impact || '',
     root_cause: incident?.root_cause || '',
     corrective_actions: incident?.corrective_actions || '',
     assigned_to: incident?.assigned_to,
@@ -508,6 +613,8 @@ function IncidentModal({
         root_cause: prev.root_cause || suggestion.root_cause || '',
         corrective_actions: prev.corrective_actions || suggestion.corrective_actions || '',
         operational_impact: prev.operational_impact || suggestion.operational_impact || '',
+        event_type: prev.event_type || suggestion.event_type || '',
+        business_line: prev.business_line || suggestion.business_line || '',
       }));
       setAiSuggestionNote(suggestion.rationale || 'AI suggestions applied');
     },
@@ -527,6 +634,7 @@ function IncidentModal({
       : (formData.risk_id ? [formData.risk_id] : []);
     const payload = {
       ...formData,
+      ...lossPayload(formData),
       tags,
       linked_risk_ids: linkedRiskIds,
       risk_id: formData.risk_id || linkedRiskIds[0] || undefined,
@@ -544,12 +652,12 @@ function IncidentModal({
     <RightSlidePanel
       isOpen
       onClose={onClose}
-      title={incident ? 'Edit Incident' : 'Report Incident'}
+      title={incident ? 'Edit loss event' : 'Report loss event'}
     >
       <form id="incident-form" onSubmit={handleSubmit} className="space-y-4">
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-xs text-slate-600">Use AI to prefill incident assessment fields</p>
+            <p className="text-xs text-slate-600">Use AI to suggest the event type, business line and assessment fields</p>
             <button
               type="button"
               onClick={() => aiSuggestMutation.mutate()}
@@ -563,149 +671,309 @@ function IncidentModal({
           {aiSuggestionNote && <p className="mt-2 text-xs text-slate-600">{aiSuggestionNote}</p>}
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Title *</label>
-          <input
-            type="text"
-            value={formData.title}
-            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-            required
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
+        <FormSection title="What happened">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Primary Risk</label>
-            <MultiSelectDropdown
-              title="Risk"
-              items={risks.map((risk) => ({
-                value: String(risk.id),
-                label: risk.title,
-                subLabel: risk.risk_category,
-              }))}
-              selectedValues={formData.risk_id ? [String(formData.risk_id)] : []}
-              onApply={(values) => {
-                const rid = values[0] ? Number(values[0]) : undefined;
-                setFormData({
-                  ...formData,
-                  risk_id: rid,
-                  linked_risk_ids: rid
-                    ? Array.from(new Set([...(formData.linked_risk_ids || []), rid]))
-                    : formData.linked_risk_ids,
-                });
-              }}
-              multiSelect={false}
-              triggerVariant="input"
-              triggerClassName="w-full"
-              forceSearch
-              searchPlaceholder="Search risk by title..."
-              placeholder="Select Risk"
-              size="md"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Incident Date *</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Title *</label>
             <input
-              type="date"
-              value={formData.incident_date}
-              onChange={(e) => setFormData({ ...formData, incident_date: e.target.value })}
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              type="text"
+              value={formData.title}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              className={FIELD}
               required
             />
           </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Severity</label>
-            <MultiSelectDropdown
-              title="Severity"
-              items={SEVERITIES.map((s) => ({ value: s.value, label: s.label }))}
-              selectedValues={formData.severity ? [formData.severity] : []}
-              onApply={(values) => setFormData({ ...formData, severity: (values[0] as IncidentSeverity) || 'medium' })}
-              multiSelect={false}
-              triggerVariant="input"
-              triggerClassName="w-full"
-              placeholder="Select Severity"
-              size="md"
+            <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+            <textarea
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              className={FIELD}
+              rows={2}
             />
           </div>
-          {incident && (
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Primary risk</label>
               <MultiSelectDropdown
-                title="Status"
-                items={INCIDENT_STATUSES.map((s) => ({ value: s.value, label: s.label }))}
-                selectedValues={status ? [status] : []}
-                onApply={(values) => setStatus((values[0] as IncidentStatus) || 'open')}
+                title="Risk"
+                items={risks.map((risk) => ({
+                  value: String(risk.id),
+                  label: risk.title,
+                  subLabel: risk.risk_category,
+                }))}
+                selectedValues={formData.risk_id ? [String(formData.risk_id)] : []}
+                onApply={(values) => {
+                  const rid = values[0] ? Number(values[0]) : undefined;
+                  setFormData({
+                    ...formData,
+                    risk_id: rid,
+                    linked_risk_ids: rid
+                      ? Array.from(new Set([...(formData.linked_risk_ids || []), rid]))
+                      : formData.linked_risk_ids,
+                  });
+                }}
                 multiSelect={false}
                 triggerVariant="input"
                 triggerClassName="w-full"
-                placeholder="Select Status"
+                forceSearch
+                searchPlaceholder="Search risk by title..."
+                placeholder="Select Risk"
                 size="md"
               />
             </div>
-          )}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Financial Impact ($)</label>
-            <input
-              type="number"
-              value={formData.financial_impact || ''}
-              onChange={(e) => setFormData({ ...formData, financial_impact: e.target.value ? Number(e.target.value) : undefined })}
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-            />
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Severity</label>
+              <MultiSelectDropdown
+                title="Severity"
+                items={SEVERITIES.map((s) => ({ value: s.value, label: s.label }))}
+                selectedValues={formData.severity ? [formData.severity] : []}
+                onApply={(values) => setFormData({ ...formData, severity: (values[0] as IncidentSeverity) || 'medium' })}
+                multiSelect={false}
+                triggerVariant="input"
+                triggerClassName="w-full"
+                placeholder="Select Severity"
+                size="md"
+              />
+            </div>
+            {incident && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                <MultiSelectDropdown
+                  title="Status"
+                  items={INCIDENT_STATUSES.map((s) => ({ value: s.value, label: s.label }))}
+                  selectedValues={status ? [status] : []}
+                  onApply={(values) => setStatus((values[0] as IncidentStatus) || 'open')}
+                  multiSelect={false}
+                  triggerVariant="input"
+                  triggerClassName="w-full"
+                  placeholder="Select Status"
+                  size="md"
+                />
+              </div>
+            )}
           </div>
-        </div>
+        </FormSection>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Assign to</label>
-            <MultiSelectDropdown
-              title="Assignee"
-              items={(tenantUsers || []).map((u) => ({
-                value: String(u.id),
-                label: u.display_name || u.email,
-                subLabel: u.email,
-              }))}
-              selectedValues={formData.assigned_to ? [String(formData.assigned_to)] : []}
-              onApply={(values) =>
-                setFormData({
-                  ...formData,
-                  assigned_to: values[0] ? Number(values[0]) : undefined,
-                })
-              }
-              multiSelect={false}
-              triggerVariant="input"
-              triggerClassName="w-full"
-              forceSearch
-              searchPlaceholder="Search user..."
-              placeholder="Unassigned"
-              size="md"
-            />
+        <FormSection title="Classification">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Event type</label>
+              <MultiSelectDropdown
+                title="Event type"
+                items={EVENT_TYPES}
+                selectedValues={formData.event_type ? [formData.event_type] : []}
+                onApply={(values) => setFormData({ ...formData, event_type: values[0] || '' })}
+                multiSelect={false}
+                triggerVariant="input"
+                triggerClassName="w-full"
+                placeholder="Basel level 1"
+                size="md"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Business line</label>
+              <MultiSelectDropdown
+                title="Business line"
+                items={BUSINESS_LINES}
+                selectedValues={formData.business_line ? [formData.business_line] : []}
+                onApply={(values) => setFormData({ ...formData, business_line: values[0] || '' })}
+                multiSelect={false}
+                triggerVariant="input"
+                triggerClassName="w-full"
+                placeholder="Select business line"
+                size="md"
+              />
+            </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Tags</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Level 2 type</label>
             <input
               type="text"
-              value={tagsInput}
-              onChange={(e) => setTagsInput(e.target.value)}
-              placeholder="e.g. availability, p1, payments"
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              value={formData.event_type_l2 || ''}
+              onChange={(e) => setFormData({ ...formData, event_type_l2: e.target.value })}
+              placeholder="e.g. Theft and fraud, Systems, Transaction capture"
+              className={FIELD}
             />
-            <p className="mt-1 text-[11px] text-slate-500">Comma-separated labels</p>
           </div>
-        </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Boundary</label>
+              <MultiSelectDropdown
+                title="Boundary"
+                items={BOUNDARY_TYPES}
+                selectedValues={[formData.boundary_type || 'none']}
+                onApply={(values) => setFormData({ ...formData, boundary_type: (values[0] as BoundaryType) || 'none' })}
+                multiSelect={false}
+                triggerVariant="input"
+                triggerClassName="w-full"
+                placeholder="Operational only"
+                size="md"
+              />
+            </div>
+            <label className="flex items-center gap-2 self-end pb-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={!!formData.is_near_miss}
+                onChange={(e) => setFormData({ ...formData, is_near_miss: e.target.checked })}
+                className="h-4 w-4 rounded border-slate-300"
+              />
+              Near miss (no loss)
+            </label>
+          </div>
+        </FormSection>
 
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
-          <textarea
-            value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-            rows={2}
-          />
-        </div>
+        <FormSection title="Amounts">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Gross loss</label>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                value={formData.gross_loss ?? ''}
+                onChange={(e) => setFormData({ ...formData, gross_loss: e.target.value === '' ? null : Number(e.target.value) })}
+                className={FIELD}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Recoveries</label>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                value={formData.recoveries ?? ''}
+                onChange={(e) => setFormData({ ...formData, recoveries: e.target.value === '' ? null : Number(e.target.value) })}
+                className={FIELD}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Net loss <span className="ml-1 text-[10px] font-normal text-slate-400">(gross less recoveries)</span>
+              </label>
+              <input
+                type="text"
+                readOnly
+                value={(() => {
+                  const net = netLoss(formData.gross_loss, formData.recoveries);
+                  return net === null ? '' : formatMoney(net, formData.currency?.toUpperCase());
+                })()}
+                className={`${FIELD} bg-slate-50 text-slate-600`}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Currency</label>
+              <input
+                type="text"
+                maxLength={3}
+                value={formData.currency || ''}
+                onChange={(e) => setFormData({ ...formData, currency: e.target.value.toUpperCase() })}
+                placeholder="USD"
+                className={`${FIELD} uppercase`}
+              />
+            </div>
+          </div>
+        </FormSection>
+
+        <FormSection title="Dates">
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Occurrence *</label>
+              <input
+                type="date"
+                value={formData.incident_date}
+                onChange={(e) => setFormData({ ...formData, incident_date: e.target.value })}
+                className={FIELD}
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Discovery</label>
+              <input
+                type="date"
+                value={formData.discovered_date || ''}
+                onChange={(e) => setFormData({ ...formData, discovered_date: e.target.value })}
+                className={FIELD}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Accounting</label>
+              <input
+                type="date"
+                value={formData.accounting_date || ''}
+                onChange={(e) => setFormData({ ...formData, accounting_date: e.target.value })}
+                className={FIELD}
+              />
+            </div>
+          </div>
+        </FormSection>
+
+        <FormSection title="Cause and actions">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Root Cause</label>
+            <textarea
+              value={formData.root_cause}
+              onChange={(e) => setFormData({ ...formData, root_cause: e.target.value })}
+              className={FIELD}
+              rows={2}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Corrective Actions</label>
+            <textarea
+              value={formData.corrective_actions}
+              onChange={(e) => setFormData({ ...formData, corrective_actions: e.target.value })}
+              className={FIELD}
+              rows={2}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Operational Impact</label>
+            <textarea
+              value={formData.operational_impact || ''}
+              onChange={(e) => setFormData({ ...formData, operational_impact: e.target.value })}
+              className={FIELD}
+              rows={2}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Assign to</label>
+              <MultiSelectDropdown
+                title="Assignee"
+                items={(tenantUsers || []).map((u) => ({
+                  value: String(u.id),
+                  label: u.display_name || u.email,
+                  subLabel: u.email,
+                }))}
+                selectedValues={formData.assigned_to ? [String(formData.assigned_to)] : []}
+                onApply={(values) =>
+                  setFormData({
+                    ...formData,
+                    assigned_to: values[0] ? Number(values[0]) : undefined,
+                  })
+                }
+                multiSelect={false}
+                triggerVariant="input"
+                triggerClassName="w-full"
+                forceSearch
+                searchPlaceholder="Search user..."
+                placeholder="Unassigned"
+                size="md"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Tags</label>
+              <input
+                type="text"
+                value={tagsInput}
+                onChange={(e) => setTagsInput(e.target.value)}
+                placeholder="e.g. availability, p1, payments"
+                className={FIELD}
+              />
+              <p className="mt-1 text-[11px] text-slate-500">Comma-separated labels</p>
+            </div>
+          </div>
+        </FormSection>
 
         <div className="rounded-lg border border-slate-200 p-3 space-y-3">
           <div className="flex items-center gap-2">
@@ -807,36 +1075,6 @@ function IncidentModal({
           </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Root Cause</label>
-          <textarea
-            value={formData.root_cause}
-            onChange={(e) => setFormData({ ...formData, root_cause: e.target.value })}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-            rows={2}
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Corrective Actions</label>
-          <textarea
-            value={formData.corrective_actions}
-            onChange={(e) => setFormData({ ...formData, corrective_actions: e.target.value })}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-            rows={2}
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Operational Impact</label>
-          <textarea
-            value={formData.operational_impact || ''}
-            onChange={(e) => setFormData({ ...formData, operational_impact: e.target.value })}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-            rows={2}
-          />
-        </div>
-
         <div className="flex justify-end gap-2 pt-2">
           <button
             type="button"
@@ -857,11 +1095,91 @@ function IncidentModal({
                 Saving...
               </>
             ) : (
-              incident ? 'Update' : 'Create'
+              incident ? 'Update' : 'Report'
             )}
           </button>
         </div>
       </form>
+    </RightSlidePanel>
+  );
+}
+
+/** The template's Review screen: a second person validates the classification and amounts, or returns them with a note. */
+function ReviewPanel({ event, onClose, onDone }: { event: LossEvent; onClose: () => void; onDone: () => void }) {
+  const [note, setNote] = useState('');
+  const decide = useMutation({
+    mutationFn: (outcome: 'validate' | 'return') =>
+      outcome === 'validate' ? ermApi.incidents.validate(event.id, note) : ermApi.incidents.returnForFix(event.id, note),
+    onSuccess: onDone,
+  });
+  // The server says why: the reporter cannot validate their own event (409), or what is missing (400).
+  const refusal = (decide.error as { response?: { data?: { detail?: string } } } | null)?.response?.data?.detail
+    || (decide.error ? 'Could not save the decision.' : null);
+  const net = event.net_loss ?? netLoss(event.gross_loss ?? event.financial_impact, event.recoveries);
+  const day = (d?: string | null) => (d ? new Date(d).toLocaleDateString() : '—');
+  const rows: [string, string][] = [
+    ['Event type', event.event_type ? labelOf(EVENT_TYPES, event.event_type) : 'Not classified'],
+    ['Level 2 type', event.event_type_l2 || '—'],
+    ['Business line', event.business_line ? labelOf(BUSINESS_LINES, event.business_line) : '—'],
+    ['Near miss', event.is_near_miss ? 'Yes' : 'No'],
+    ['Boundary', labelOf(BOUNDARY_TYPES, event.boundary_type || 'none')],
+    ['Occurrence / discovery / accounting', `${day(event.incident_date)} / ${day(event.discovered_date)} / ${day(event.accounting_date)}`],
+  ];
+  const money = (n: number | null | undefined) => (n == null ? '—' : formatMoney(n, event.currency));
+
+  return (
+    <RightSlidePanel isOpen onClose={onClose} title="Validate loss event" subtitle={event.title}>
+      <div className="space-y-5">
+        <FormSection title="Classification">
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+            {rows.map(([k, v]) => (
+              <div key={k}>
+                <dt className="text-xs text-slate-500">{k}</dt>
+                <dd className="text-slate-900">{v}</dd>
+              </div>
+            ))}
+          </dl>
+        </FormSection>
+        <FormSection title="Amounts">
+          <div className="grid grid-cols-3 gap-3 text-sm">
+            <div className="rounded-lg border border-slate-200 p-3"><p className="text-xs text-slate-500">Gross loss</p><p className="font-semibold text-slate-900">{money(event.gross_loss ?? event.financial_impact)}</p></div>
+            <div className="rounded-lg border border-slate-200 p-3"><p className="text-xs text-slate-500">Recoveries</p><p className="font-semibold text-slate-900">{money(event.recoveries)}</p></div>
+            <div className="rounded-lg border border-orange-200 bg-orange-50/40 p-3"><p className="text-xs text-slate-500">Net loss</p><p className="font-semibold text-slate-900">{money(net)}</p></div>
+          </div>
+        </FormSection>
+        <FormSection title="Decision">
+          {event.validation_note && (
+            <p className="text-xs text-slate-600">Last note: {event.validation_note}</p>
+          )}
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={3}
+            placeholder="Note (needed to return: say what to fix)"
+            className={FIELD}
+          />
+          {refusal && <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">{refusal}</div>}
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => decide.mutate('return')}
+              disabled={decide.isPending}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              Return
+            </button>
+            <button
+              type="button"
+              onClick={() => decide.mutate('validate')}
+              disabled={decide.isPending}
+              className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
+            >
+              {decide.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+              Validate
+            </button>
+          </div>
+        </FormSection>
+      </div>
     </RightSlidePanel>
   );
 }

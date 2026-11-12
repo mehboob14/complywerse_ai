@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List, Dict, Any, Union
 from datetime import datetime
 
@@ -445,6 +445,9 @@ class EvidenceReview(BaseModel):
     notes: Optional[str] = None
 
 
+RISK_RESPONSE_PATTERN = "^(mitigate|accept|transfer|avoid)$"
+
+
 class RiskBase(BaseModel):
     title: str
     description: Optional[str] = None
@@ -476,10 +479,16 @@ class RiskBase(BaseModel):
 class RiskCreate(RiskBase):
     inherent_likelihood: Optional[int] = None
     inherent_impact: Optional[int] = None
-    inherent_score: Optional[float] = None
+    inherent_score: Optional[float] = Field(None, ge=0, le=25)
     residual_likelihood: Optional[int] = None
     residual_impact: Optional[int] = None
-    residual_score: Optional[float] = None
+    residual_score: Optional[float] = Field(None, ge=0, le=25)
+    target_likelihood: Optional[int] = Field(None, ge=1, le=5)
+    target_impact: Optional[int] = Field(None, ge=1, le=5)
+    target_score: Optional[float] = Field(None, ge=0, le=25)
+    response: Optional[str] = Field(None, pattern=RISK_RESPONSE_PATTERN)
+    due_date: Optional[datetime] = None
+    review_date: Optional[datetime] = None
     risk_appetite: Optional[str] = None
     status: Optional[str] = "open"
     priority: Optional[str] = None  # critical / high / medium / low; empty = from the score
@@ -507,6 +516,21 @@ class RiskUpdate(BaseModel):
     # team_id and the handler will auto-mirror to a BusinessUnit row.
     team_id: Optional[int] = None
     business_unit_id: Optional[int] = None
+    # Scores: a score left out is re-derived from likelihood × impact, as on create.
+    inherent_likelihood: Optional[int] = Field(None, ge=1, le=5)
+    inherent_impact: Optional[int] = Field(None, ge=1, le=5)
+    inherent_score: Optional[float] = Field(None, ge=0, le=25)
+    residual_likelihood: Optional[int] = Field(None, ge=1, le=5)
+    residual_impact: Optional[int] = Field(None, ge=1, le=5)
+    residual_score: Optional[float] = Field(None, ge=0, le=25)
+    target_likelihood: Optional[int] = Field(None, ge=1, le=5)
+    target_impact: Optional[int] = Field(None, ge=1, le=5)
+    target_score: Optional[float] = Field(None, ge=0, le=25)
+    response: Optional[str] = Field(None, pattern=RISK_RESPONSE_PATTERN)
+    reason: Optional[str] = None  # why the scores, owner, status, response or category changed (kept in the history)
+    risk_appetite: Optional[str] = None
+    due_date: Optional[datetime] = None
+    review_date: Optional[datetime] = None
     status: Optional[str] = None
     priority: Optional[str] = None  # critical / high / medium / low; empty = from the score
     treatment_plan: Optional[str] = None
@@ -542,8 +566,24 @@ class RiskResponse(BaseModel):
     residual_likelihood: Optional[int]
     residual_impact: Optional[int]
     residual_score: Optional[float]
+    target_likelihood: Optional[int] = None
+    target_impact: Optional[int] = None
+    target_score: Optional[float] = None
+    response: Optional[str] = None
+    acceptance_status: Optional[str] = None
+    acceptance_state: Optional[str] = None  # none | requested | accepted | expiring | expired (derived)
+    acceptance_reason: Optional[str] = None
+    acceptance_requested_by: Optional[int] = None
+    acceptance_requested_at: Optional[datetime] = None
+    accepted_by: Optional[int] = None
+    accepted_at: Optional[datetime] = None
+    acceptance_expires_at: Optional[datetime] = None
     risk_appetite: Optional[str]
+    due_date: Optional[datetime] = None
+    review_date: Optional[datetime] = None
     status: str
+    # How many mitigation actions the risk has (the list endpoint only; None elsewhere).
+    mitigation_action_count: Optional[int] = None
     # What a person set (empty = from the score), what the SLA follows, and where the risk stands against it.
     priority: Optional[str] = None
     effective_priority: Optional[str] = None
@@ -575,11 +615,24 @@ class RiskAssessment(BaseModel):
     inherent_impact: int
     residual_likelihood: Optional[int] = None
     residual_impact: Optional[int] = None
+    target_likelihood: Optional[int] = Field(None, ge=1, le=5)
+    target_impact: Optional[int] = Field(None, ge=1, le=5)
     risk_appetite: Optional[str] = None
+    reason: Optional[str] = None
 
 
 class RiskTreatment(BaseModel):
     treatment_plan: str
+    reason: Optional[str] = None
+
+
+class RiskAcceptanceRequest(BaseModel):
+    reason: str = Field(..., min_length=1)
+    expires_at: datetime  # in the future, at most 12 months away
+
+
+class RiskAcceptanceDecision(BaseModel):
+    note: Optional[str] = None  # required to refuse
 
 
 class RiskControlLinkCreate(BaseModel):

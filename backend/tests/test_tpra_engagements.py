@@ -315,9 +315,11 @@ def test_each_scope_has_its_own_register_entry_and_nothing_is_counted_twice(db):
     assert [(r.source_reference, r.title) for r in ours] == [
         (f"vendor:{v.id}/vendor_assessment:{g.id}", "Third-party risk: Acme Cloud"),
         (f"vendor:{v.id}/engagement:{payroll.id}", "Third-party risk: Acme Cloud — Payroll")]
-    assert (ours[0].residual_score, ours[0].risk_sub_category) == (min(g.residual_score, g.inherent_score), "medium")
-    assert (ours[1].residual_score, ours[1].risk_sub_category, ours[1].owner_id) == (
-        min(p.residual_score, p.inherent_score), "high", HR)
+    # each on the register's 1–25 scale, in the band of its own TPRA rating (test_vendor_risk_erm_fixes.py)
+    from grc.models._11_enterprise_risk_management import risk_priority_for_score
+    assert (risk_priority_for_score(ours[0].residual_score), ours[0].risk_sub_category) == (g.residual_rating, "medium")
+    assert (risk_priority_for_score(ours[1].residual_score), ours[1].risk_sub_category, ours[1].owner_id) == (
+        p.residual_rating, "high", HR)
     db.refresh(lookalike)
     assert (lookalike.title, lookalike.residual_score) == ("Someone else's", 1.0)
 

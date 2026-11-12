@@ -25,6 +25,7 @@ from pydantic import BaseModel
 
 from ....config import get_openai_base_url, get_openai_model
 from ....services.licence_guard import is_restricted_control
+from ....services.segregation import ensure_independent
 from ....models import (
     get_db, GRCUser, Tenant,
     ControlWorkItem, ControlWorkTest, ControlWorkTestProcedure, ControlWorkEvidence, ControlWorkSample,
@@ -32,11 +33,14 @@ from ....models import (
     ControlAssuranceSnapshot, CONTROL_WORKBENCH_MODELS,
     NormalizedControl, NormalizedControlLink, NormalizationRun,
     InternalControl, InternalControlTest, InternalControlEscalation,
-    InternalControlRiskLink, InternalControlEvidence,
+    InternalControlEvidence,
     ParsedFrameworkControl, UploadedFramework, Evidence, EvidenceControlMapping,
-    Risk, RiskControlLink,
+    Risk, RiskControlLink, RiskControl,
 )
-from ....routers.auth_router import require_auth, get_user_tenants, is_tenant_admin
+from ...erm.services.risk_control_links import (
+    find_link, link_control, propose_residual_reviews, unlink_control,
+)
+from ....routers.auth_router import require_auth, get_user_tenants, is_tenant_admin, require_tenant_permission
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/workbench", tags=["Control Library - Workbench"])
@@ -438,12 +442,6 @@ def _migrate_internal_children(db, wi: ControlWorkItem, ic: InternalControl, ten
                 escalation_timeframe_hours=e.escalation_timeframe_hours,
                 notification_required=e.notification_required, is_active=e.is_active,
                 created_at=e.created_at))
-        for rl in db.query(InternalControlRiskLink).filter(
-                InternalControlRiskLink.control_id == ic.id).all():
-            db.add(ControlWorkRiskLink(
-                work_item_id=wi.id, tenant_id=tenant_id, risk_id=rl.risk_id,
-                link_type=rl.link_type, effectiveness_rating=rl.effectiveness_rating,
-                notes=rl.notes, created_at=rl.created_at, created_by=rl.created_by))
         for ev in db.query(InternalControlEvidence).filter(
                 InternalControlEvidence.internal_control_id == ic.id).all():
             db.add(ControlWorkEvidence(
@@ -1042,7 +1040,8 @@ def _full_detail(db, wi: ControlWorkItem) -> dict:
         ControlWorkTest.work_item_id == wi.id).order_by(ControlWorkTest.test_date.desc()).all()
     evid = db.query(ControlWorkEvidence).filter(ControlWorkEvidence.work_item_id == wi.id).all()
     escs = db.query(ControlWorkEscalation).filter(ControlWorkEscalation.work_item_id == wi.id).all()
-    risks = db.query(ControlWorkRiskLink).filter(ControlWorkRiskLink.work_item_id == wi.id).all()
+    risks = db.query(RiskControl).filter(RiskControl.tenant_id == wi.tenant_id, RiskControl.control_source == wi.source_type,
+                                         RiskControl.control_id == wi.source_id).order_by(RiskControl.id).all()
     umap = _user_map(db, [t.tester_id for t in tests] + [t.reviewer_id for t in tests] + [e.uploaded_by for e in evid])
     base["test_procedures"] = [{
         "id": p.id, "seq": p.seq, "procedure_type": p.procedure_type, "description": p.description,
@@ -1072,7 +1071,7 @@ def _full_detail(db, wi: ControlWorkItem) -> dict:
             risk_meta[rk.id] = {"title": rk.title, "category": rk.category,
                                 "residual_score": rk.residual_score, "status": rk.status}
     base["risk_links"] = [{
-        "id": r.id, "risk_id": r.risk_id, "link_type": r.link_type,
+        "id": f"rc-{r.id}", "link_id": r.id, "risk_id": r.risk_id, "link_type": r.link_type,
         "effectiveness_rating": r.effectiveness_rating, "notes": r.notes,
         "risk_title": risk_meta.get(r.risk_id, {}).get("title"),
         "risk_category": risk_meta.get(r.risk_id, {}).get("category"),
@@ -1312,7 +1311,7 @@ def add_test(work_item_id: int, body: TestCreate, db: Session = Depends(get_db),
             "next_test_date": wi.next_test_date.isoformat() if wi.next_test_date else None}
 
 
-@router.post("/tests/{test_id}/review")
+@router.post("/tests/{test_id}/review", dependencies=[Depends(require_tenant_permission("controls:control_library:edit", "erm:internal_controls:edit"))])
 def review_test(test_id: int, body: dict = Body(default={}), db: Session = Depends(get_db),
                 current_user: GRCUser = Depends(require_auth)):
     """Reviewer sign-off on a completed test (maker-checker). action = reviewed |
@@ -1329,11 +1328,26 @@ def review_test(test_id: int, body: dict = Body(default={}), db: Session = Depen
         t.reviewer_id = None
         t.reviewed_at = None
     else:
+        ensure_independent(t.tester_id, current_user, "review this test")
         t.status = "reviewed"
         t.reviewer_id = getattr(current_user, "id", None)
         t.reviewed_at = datetime.utcnow()
     db.commit()
+    if t.status == "reviewed":
+        _propose_residuals(db, t, tid, current_user)
     return {"ok": True, "id": t.id, "status": t.status}
+
+
+def _propose_residuals(db, t: ControlWorkTest, tid: int, current_user) -> None:
+    """A reviewed test proposes, never writes, the residual of the risks its control is linked to (a Risk Review a
+    second person approves). The sign-off stands if the proposal fails."""
+    wi = db.query(ControlWorkItem).filter(ControlWorkItem.id == t.work_item_id).first()
+    try:
+        if wi and propose_residual_reviews(db, wi.source_type, wi.source_id, tid, current_user):
+            db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+        logger.warning("residual proposal after test %s failed", t.id, exc_info=True)
 
 
 def _refuse_locked(t: ControlWorkTest) -> None:
@@ -1728,7 +1742,7 @@ async def add_evidence(work_item_id: int, evidence_id: Optional[int] = Form(None
             "review_status": "pending"}
 
 
-@router.post("/evidence/{ev_id}/review")
+@router.post("/evidence/{ev_id}/review", dependencies=[Depends(require_tenant_permission("controls:control_library:edit", "erm:internal_controls:edit"))])
 def review_evidence(ev_id: int, body: dict = Body(...), db: Session = Depends(get_db),
                     current_user: GRCUser = Depends(require_auth)):
     tid = _tenant(current_user, db)
@@ -1782,39 +1796,57 @@ def _wf(db, wi, action, frm, to, comments, uid):
 def submit_item(work_item_id: int, body: dict = Body(default={}), db: Session = Depends(get_db),
                 current_user: GRCUser = Depends(require_auth)):
     return _transition(db, current_user, work_item_id, "submit",
-                       {"pending_approval"}, "pending_approval", "pending_review", body)
+                       {None, "draft", "inactive", "rejected"}, "pending_approval", "pending_review", body)
 
 
-@router.post("/items/{work_item_id}/approve")
+@router.post("/items/{work_item_id}/approve", dependencies=[Depends(require_tenant_permission("controls:control_library:edit", "erm:internal_controls:edit"))])
 def approve_item(work_item_id: int, body: dict = Body(default={}), db: Session = Depends(get_db),
                  current_user: GRCUser = Depends(require_auth)):
-    return _transition(db, current_user, work_item_id, "approve", {"active"}, "active", "approved", body)
+    return _transition(db, current_user, work_item_id, "approve", {"pending_approval"}, "active", "approved", body)
 
 
-@router.post("/items/{work_item_id}/reject")
+@router.post("/items/{work_item_id}/reject", dependencies=[Depends(require_tenant_permission("controls:control_library:edit", "erm:internal_controls:edit"))])
 def reject_item(work_item_id: int, body: dict = Body(default={}), db: Session = Depends(get_db),
                 current_user: GRCUser = Depends(require_auth)):
-    return _transition(db, current_user, work_item_id, "reject", {"draft"}, "draft", "rejected", body)
+    return _transition(db, current_user, work_item_id, "reject", {"pending_approval"}, "draft", "rejected", body)
 
 
-def _transition(db, current_user, work_item_id, action, _to_set, new_status, wf_status, body):
+def _submitter(db, wi: ControlWorkItem, ic) -> Optional[int]:
+    """Who sent the item for approval: the internal control's submitter (both submit paths keep it), else the last
+    submit in the item's log, else whoever created the item."""
+    if ic is not None and ic.submitted_by:
+        return ic.submitted_by
+    last = (db.query(ControlWorkWorkflowAction.action_by)
+            .filter(ControlWorkWorkflowAction.work_item_id == wi.id, ControlWorkWorkflowAction.action == "submit")
+            .order_by(ControlWorkWorkflowAction.id.desc()).first())
+    return last[0] if last else wi.created_by
+
+
+def _transition(db, current_user, work_item_id, action, from_statuses, new_status, wf_status, body):
     tid = _tenant(current_user, db)
     wi = db.query(ControlWorkItem).filter(ControlWorkItem.id == work_item_id,
                                           ControlWorkItem.tenant_id == tid).first()
     if not wi:
         raise HTTPException(404, "Work item not found")
     frm = wi.status
+    if frm not in from_statuses:
+        raise HTTPException(400, f"Cannot {action} a control that is {(frm or 'draft').replace('_', ' ')}.")
+    ic = (db.query(InternalControl).filter(InternalControl.id == wi.source_id).first()
+          if wi.source_type == "internal" else None)
+    uid = getattr(current_user, "id", None)
+    if action != "submit":
+        ensure_independent(_submitter(db, wi, ic), current_user, f"{action} this control")
     wi.status = new_status
     wi.workflow_status = wf_status
     if action == "approve":
-        wi.approved_by = getattr(current_user, "id", None)
+        wi.approved_by = uid
         wi.approved_at = datetime.utcnow()
-    _wf(db, wi, action, frm, new_status, (body or {}).get("comments"), getattr(current_user, "id", None))
-    if wi.source_type == "internal":
-        ic = db.query(InternalControl).filter(InternalControl.id == wi.source_id).first()
-        if ic:
-            ic.status = new_status
-            ic.workflow_status = wf_status
+    _wf(db, wi, action, frm, new_status, (body or {}).get("comments"), uid)
+    if ic:
+        ic.status = new_status
+        ic.workflow_status = wf_status
+        if action == "submit":
+            ic.submitted_by = uid
     db.commit()
     return {"ok": True, "status": wi.status, "workflow_status": wi.workflow_status}
 
@@ -1858,12 +1890,7 @@ def del_escalation(esc_id: int, db: Session = Depends(get_db),
 @router.post("/items/{work_item_id}/risks")
 def add_risk(work_item_id: int, body: dict = Body(...), db: Session = Depends(get_db),
              current_user: GRCUser = Depends(require_auth)):
-    """Link a risk to a work item.
-
-    When the work item resolves to a NormalizedControl, write only the canonical
-    ``RiskControlLink`` (Control Library's separate copy is no longer written).
-    Legacy internal-only work items without an NC keep ``ControlWorkRiskLink``.
-    """
+    """Link a risk to a work item's control: the one risk–control link (grc_risk_controls)."""
     tid = _tenant(current_user, db)
     wi = db.query(ControlWorkItem).filter(ControlWorkItem.id == work_item_id,
                                           ControlWorkItem.tenant_id == tid).first()
@@ -1875,62 +1902,35 @@ def add_risk(work_item_id: int, body: dict = Body(...), db: Session = Depends(ge
     risk = db.query(Risk).filter(Risk.id == rid, Risk.tenant_id == tid).first()
     if not risk:
         raise HTTPException(404, "Risk not found")
-
-    nc_id = wi.source_id if wi.source_type == "normalized" else None
-    if nc_id:
-        existing = db.query(RiskControlLink).filter(
-            RiskControlLink.risk_id == rid,
-            RiskControlLink.normalized_control_id == nc_id,
-        ).first()
-        if existing:
-            return {"ok": True, "id": existing.id, "canonical": True}
-        link = RiskControlLink(risk_id=rid, normalized_control_id=nc_id)
-        db.add(link)
-        db.commit()
-        return {"ok": True, "id": link.id, "canonical": True}
-
-    exists = db.query(ControlWorkRiskLink).filter(
-        ControlWorkRiskLink.work_item_id == wi.id, ControlWorkRiskLink.risk_id == rid).first()
-    if exists:
-        return {"ok": True, "id": exists.id, "canonical": False}
-    r = ControlWorkRiskLink(
-        work_item_id=wi.id, tenant_id=tid, risk_id=rid,
-        link_type=body.get("link_type", "mitigates"),
-        effectiveness_rating=body.get("effectiveness_rating"), notes=body.get("notes"),
-        created_by=getattr(current_user, "id", None))
-    db.add(r)
+    link = link_control(db, risk, wi.source_type, wi.source_id, getattr(current_user, "id", None),
+                        link_type=body.get("link_type"), notes=body.get("notes"),
+                        effectiveness_rating=body.get("effectiveness_rating"))
     db.commit()
-    return {"ok": True, "id": r.id, "canonical": False}
+    return {"ok": True, "id": link.id, "link_id": link.id, "canonical": True}
 
 
 @router.delete("/risks/{link_id}")
-def del_risk(link_id: int, db: Session = Depends(get_db),
+def del_risk(link_id: str, db: Session = Depends(get_db),
              current_user: GRCUser = Depends(require_auth)):
+    """Unlink. ``rc-<id>`` is a grc_risk_controls id (what the detail's risk_links carry); a bare number is an old
+    ControlWorkRiskLink id, else an old RiskControlLink id, and removes the link it was copied to."""
     tid = _tenant(current_user, db)
-    cwl = db.query(ControlWorkRiskLink).filter(
-        ControlWorkRiskLink.id == link_id,
-        ControlWorkRiskLink.tenant_id == tid,
-    ).first()
-    if cwl:
-        wi = db.query(ControlWorkItem).filter(ControlWorkItem.id == cwl.work_item_id).first()
-        nc_id = wi.source_id if wi and wi.source_type == "normalized" else None
-        if nc_id:
-            db.query(RiskControlLink).filter(
-                RiskControlLink.risk_id == cwl.risk_id,
-                RiskControlLink.normalized_control_id == nc_id,
-            ).delete(synchronize_session=False)
-        db.delete(cwl)
-        db.commit()
-        return {"ok": True}
-
-    rcl = (
-        db.query(RiskControlLink)
-        .join(Risk, Risk.id == RiskControlLink.risk_id)
-        .filter(RiskControlLink.id == link_id, Risk.tenant_id == tid)
-        .first()
-    )
-    if rcl:
-        db.delete(rcl)
-        db.commit()
-        return {"ok": True}
-    raise HTTPException(404, "Risk link not found")
+    link = None
+    if link_id.startswith("rc-") and link_id[3:].isdigit():
+        link = db.query(RiskControl).filter(RiskControl.id == int(link_id[3:]), RiskControl.tenant_id == tid).first()
+    elif link_id.isdigit():
+        old_id = int(link_id)
+        cwl = db.query(ControlWorkRiskLink).filter(ControlWorkRiskLink.id == old_id,
+                                                   ControlWorkRiskLink.tenant_id == tid).first()
+        wi = cwl and db.query(ControlWorkItem).filter(ControlWorkItem.id == cwl.work_item_id).first()
+        rcl = None if cwl else (db.query(RiskControlLink).join(Risk, Risk.id == RiskControlLink.risk_id)
+                                .filter(RiskControlLink.id == old_id, Risk.tenant_id == tid).first())
+        if wi:
+            link = find_link(db, cwl.risk_id, wi.source_type, wi.source_id)
+        elif rcl:
+            link = find_link(db, rcl.risk_id, "normalized", rcl.normalized_control_id)
+    if not link:
+        raise HTTPException(404, "Risk link not found")
+    unlink_control(db, link)
+    db.commit()
+    return {"ok": True}

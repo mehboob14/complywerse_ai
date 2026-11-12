@@ -33,7 +33,7 @@ from grc.models import (
     NormalizedControl,
     PolicyStatement,
     Risk,
-    RiskControlLink,
+    RiskControl,
     StatementControlMapping,
     Vendor,
     Vulnerability,
@@ -109,7 +109,8 @@ SPECS: Dict[str, LinkSpec] = {
         title_attr="title", code_attr=None,
         subtitle_attrs=("risk_category", "category"), status_attr="status",
         search_attrs=("title", "description"), url="/erm/risks/{id}",
-        link_model=RiskControlLink, link_record_col="risk_id",
+        # the one risk–control link: written through erm.services.risk_control_links (see link_record)
+        link_model=RiskControl, link_record_col="risk_id",
         write_perms=("erm:risks:edit",),
     ),
     "asset": LinkSpec(
@@ -294,8 +295,15 @@ def search_targets(
     return [_row_out(spec, r) for r in rows]
 
 
+def _control_col(spec: LinkSpec):
+    """The link table's NormalizedControl id column (the risk link names its control by source and id)."""
+    return RiskControl.control_id if spec.link_model is RiskControl else spec.link_model.normalized_control_id
+
+
 def _link_filter(spec: LinkSpec, nc_id: int, record_id: Optional[int] = None):
-    clauses = [spec.link_model.normalized_control_id == nc_id]
+    clauses = [_control_col(spec) == nc_id]
+    if spec.link_model is RiskControl:
+        clauses.append(RiskControl.control_source == "normalized")
     if spec.link_model is ControlRecordLink:
         clauses.append(ControlRecordLink.record_type == spec.key)
     if record_id is not None:
@@ -378,9 +386,14 @@ def link_record(
                 break
     if hasattr(spec.link_model, "created_by"):
         values["created_by"] = actor_id
-    link = spec.link_model(**values)
-    db.add(link)
-    db.flush()
+    if spec.link_model is RiskControl:
+        from grc.modules.erm.services.risk_control_links import link_control
+
+        link = link_control(db, record, "normalized", nc.id, actor_id, notes=note)
+    else:
+        link = spec.link_model(**values)
+        db.add(link)
+        db.flush()
 
     write_rich_audit_log(
         db=db, tenant_id=tenant_id, user_id=actor_id, action="control_link",
@@ -405,8 +418,13 @@ def unlink_record(
     links = db.query(spec.link_model).filter(*_link_filter(spec, nc.id, int(record_id))).all()
     if not links:
         return False
+    from grc.modules.erm.services.risk_control_links import unlink_control
+
     for link in links:
-        db.delete(link)
+        if spec.link_model is RiskControl:
+            unlink_control(db, link)
+        else:
+            db.delete(link)
     db.flush()
     write_rich_audit_log(
         db=db, tenant_id=tenant_id, user_id=actor_id, action="control_unlink",
@@ -475,11 +493,9 @@ def links_for_record(
     clauses = [getattr(spec.link_model, spec.link_record_col) == int(record_id)]
     if spec.link_model is ControlRecordLink:
         clauses.append(ControlRecordLink.record_type == spec.key)
-    nc_ids = sorted({
-        ln.normalized_control_id
-        for ln in db.query(spec.link_model).filter(*clauses).all()
-        if ln.normalized_control_id
-    })
+    if spec.link_model is RiskControl:
+        clauses.append(RiskControl.control_source == "normalized")
+    nc_ids = sorted({nc for (nc,) in db.query(_control_col(spec)).filter(*clauses).all() if nc})
     if not nc_ids:
         return []
     rows = db.query(NormalizedControl).filter(NormalizedControl.id.in_(nc_ids)).all()

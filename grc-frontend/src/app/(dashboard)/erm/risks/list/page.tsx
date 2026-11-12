@@ -52,6 +52,12 @@ import NcaRiskRegisterTab from '@/components/risks/NcaRiskRegisterTab';
 import NcaRiskQuickAddModal from '@/components/risks/NcaRiskQuickAddModal';
 import RiskViewSwitcher from '@/components/risks/RiskViewSwitcher';
 import { useRouter as useNextRouter, useSearchParams } from 'next/navigation';
+import { registerTypeLabel } from '../_components/registerTypeLabel';
+import { ATTENTION_FILTER_LABEL, attentionFilterOf, matchesAttentionFilter, type AttentionFilter } from '../_components/attentionFilter';
+import {
+  RISK_RESPONSES, recordLabel, scoresChanged, withRiskTypes, type RiskRecordFields, type RiskResponseChoice,
+} from '../_components/riskRecord';
+import { riskBandForScore, type RiskBand } from '@/lib/riskBands';
 import OneLinkRegisterFields, { initOneLinkValue, deriveCore, oneLinkHeatBand, type OneLinkValue } from '../_components/OneLinkRegisterFields';
 
 type ScoreFilter = 'all' | 'critical' | 'high' | 'medium' | 'low';
@@ -84,7 +90,7 @@ const SOURCE_LABELS: Record<string, string> = {
   incident: 'Incident',
   rcsa: 'RCSA',
   framework_gap: 'Framework gap',
-  ubl_import: 'UBL register',
+  ubl_import: 'Template register',
   nca_import: 'NCA register',
 };
 const SOURCE_STYLES: Record<string, SourceStyle> = {
@@ -94,7 +100,7 @@ const SOURCE_STYLES: Record<string, SourceStyle> = {
   incident:        { label: 'Incident',        iconKey: 'alert',       badgeBg: 'bg-rose-100',   badgeText: 'text-rose-700',   badgeRing: 'ring-rose-200' },
   rcsa:            { label: 'RCSA',            iconKey: 'check',       badgeBg: 'bg-amber-100',  badgeText: 'text-amber-800',  badgeRing: 'ring-amber-200' },
   framework_gap:   { label: 'Framework gap',   iconKey: 'shield',      badgeBg: 'bg-slate-100',  badgeText: 'text-slate-700',  badgeRing: 'ring-slate-200' },
-  ubl_import:      { label: 'UBL register',    iconKey: 'spreadsheet', badgeBg: 'bg-primary-100', badgeText: 'text-primary-700', badgeRing: 'ring-primary-200' },
+  ubl_import:      { label: 'Template register', iconKey: 'spreadsheet', badgeBg: 'bg-primary-100', badgeText: 'text-primary-700', badgeRing: 'ring-primary-200' },
   nca_import:      { label: 'NCA register',    iconKey: 'building',    badgeBg: 'bg-teal-100',   badgeText: 'text-teal-700',   badgeRing: 'ring-teal-200' },
 };
 const formatSourceLabel = (raw?: string | null): string => {
@@ -157,13 +163,18 @@ function SourceBadge({
   );
 }
 
+// Risk types are categories on one register (decision 5): the types first, then the register's own categories.
 const STANDARD_RISK_CATEGORIES: { value: RiskCategory; label: string; color: string; bgColor: string }[] = [
-  { value: 'strategic', label: 'Strategic', color: 'text-primary-700', bgColor: 'bg-primary-50' },
   { value: 'operational', label: 'Operational', color: 'text-primary-700', bgColor: 'bg-primary-50' },
-  { value: 'financial', label: 'Financial', color: 'text-emerald-700', bgColor: 'bg-emerald-50' },
   { value: 'compliance', label: 'Compliance', color: 'text-amber-700', bgColor: 'bg-amber-50' },
-  { value: 'technology', label: 'Technology', color: 'text-primary-700', bgColor: 'bg-primary-50' },
-  { value: 'third_party', label: 'Third Party', color: 'text-orange-700', bgColor: 'bg-orange-50' },
+  { value: 'technology', label: 'IT / Cyber', color: 'text-primary-700', bgColor: 'bg-primary-50' },
+  { value: 'third_party', label: 'Third-party', color: 'text-orange-700', bgColor: 'bg-orange-50' },
+  { value: 'strategic', label: 'Strategic', color: 'text-primary-700', bgColor: 'bg-primary-50' },
+  { value: 'financial', label: 'Financial', color: 'text-emerald-700', bgColor: 'bg-emerald-50' },
+  // credit, market and liquidity are not in the shared RiskCategory union yet (types/index.ts)
+  { value: 'credit' as RiskCategory, label: 'Credit', color: 'text-emerald-700', bgColor: 'bg-emerald-50' },
+  { value: 'market' as RiskCategory, label: 'Market', color: 'text-emerald-700', bgColor: 'bg-emerald-50' },
+  { value: 'liquidity' as RiskCategory, label: 'Liquidity', color: 'text-emerald-700', bgColor: 'bg-emerald-50' },
   { value: 'project_change', label: 'Project/Change', color: 'text-slate-700', bgColor: 'bg-slate-100' },
   { value: 'internal', label: 'Internal', color: 'text-slate-700', bgColor: 'bg-slate-100' },
 ];
@@ -285,6 +296,9 @@ const UBL_SUB_CATEGORY_SUGGESTIONS: Record<RiskCategory, string[]> = {
   compliance: ['General'],
   project_change: ['General'],
   internal: ['General'],
+  credit: ['General'],
+  market: ['General'],
+  liquidity: ['General'],
 };
 
 const UBL_FIELD_SECTIONS_BY_CATEGORY: Record<RiskCategory, UBLFieldSection[]> = {
@@ -446,6 +460,9 @@ const UBL_FIELD_SECTIONS_BY_CATEGORY: Record<RiskCategory, UBLFieldSection[]> = 
   compliance: [],
   project_change: [],
   internal: [],
+  credit: [],
+  market: [],
+  liquidity: [],
 };
 
 const UBL_DEFAULT_FIELD_SECTIONS: UBLFieldSection[] = [
@@ -486,7 +503,7 @@ const ONELINK_REGISTER_TYPE = '1LINK';
 const REGISTER_TYPES = [
   { value: UBL_TEMPLATE_REGISTER_TYPE, label: 'Template' },
   { value: NCA_TEMPLATE_REGISTER_TYPE, label: 'NCA Template' },
-  { value: ONELINK_REGISTER_TYPE, label: '1LINK' },
+  { value: ONELINK_REGISTER_TYPE, label: registerTypeLabel(ONELINK_REGISTER_TYPE) },
   { value: 'RCSA', label: 'RCSA' },
   { value: 'PCI-DSS', label: 'PCI-DSS' },
   { value: 'ISO 27001', label: 'ISO 27001' },
@@ -618,6 +635,9 @@ const inferEffectiveRiskCategory = (risk: Risk): RiskCategory => {
     technology: 'technology',
     thirdparty: 'third_party',
     projectchange: 'project_change',
+    credit: 'credit' as RiskCategory,
+    market: 'market' as RiskCategory,
+    liquidity: 'liquidity' as RiskCategory,
     internal: 'internal',
     isms: 'isms',
     process: 'process',
@@ -657,6 +677,9 @@ const SUB_CATEGORIES_BY_CATEGORY: Record<RiskCategory, string[]> = {
   third_party: ['Vendor', 'Outsourcing', 'Partnership', 'Contractor', 'Other'],
   project_change: ['Project Delivery', 'Change Management', 'Integration', 'Scope', 'Other'],
   internal: ['Fraud', 'Governance', 'Culture', 'Process Integrity', 'Other'],
+  credit: ['Counterparty', 'Concentration', 'Collateral', 'Settlement', 'Other'],
+  market: ['Interest Rate', 'Foreign Exchange', 'Equity', 'Commodity', 'Other'],
+  liquidity: ['Funding', 'Market Liquidity', 'Intraday', 'Other'],
   isms: ['Governance', 'ISO 27001', 'Policy', 'Compliance', 'Information Security', 'Other'],
   process: ['Process Design', 'Control Weakness', 'Manual Error', 'Service Delivery', 'Operations', 'Other'],
   other: ['General', 'Unclassified', 'Other'],
@@ -718,15 +741,14 @@ const getScoreColor = (score: number | undefined) => {
 const priorityForScore = (score: number) =>
   (score >= 20 ? 'critical' : score >= 12 ? 'high' : score >= 6 ? 'medium' : score > 0 ? 'low' : '');
 
-const getHeatmapCellColor = (likelihood: number, impact: number) => {
-  const score = likelihood * impact;
-  if (score >= 20) return 'bg-rose-500 hover:bg-rose-600';
-  if (score >= 15) return 'bg-rose-400 hover:bg-rose-500';
-  if (score >= 12) return 'bg-orange-400 hover:bg-orange-500';
-  if (score >= 8) return 'bg-amber-400 hover:bg-amber-500';
-  if (score >= 4) return 'bg-emerald-400 hover:bg-emerald-500';
-  return 'bg-emerald-500 hover:bg-emerald-600';
+const HEATMAP_CELL_COLOR: Record<RiskBand, string> = {
+  critical: 'bg-rose-500 hover:bg-rose-600',
+  high: 'bg-orange-400 hover:bg-orange-500',
+  medium: 'bg-amber-400 hover:bg-amber-500',
+  low: 'bg-emerald-500 hover:bg-emerald-600',
 };
+const getHeatmapCellColor = (likelihood: number, impact: number) =>
+  HEATMAP_CELL_COLOR[riskBandForScore(likelihood * impact) ?? 'low'];
 
 // 1LINK ERM Framework uses a 3×3 grid banded Low (1–2), Medium (3–4), High (6–9).
 const getOneLinkHeatmapCellColor = (likelihood: number, impact: number) => {
@@ -750,6 +772,8 @@ export default function ERMRisksPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [registerTypeFilter, setRegisterTypeFilter] = useState<string>('all');
   const [scoreFilter, setScoreFilter] = useState<ScoreFilter>('all');
+  // ?filter= from the Overview's attention tiles: the risks the tile counts
+  const [attentionFilter, setAttentionFilter] = useState<AttentionFilter | null>(null);
   const [heatmapType, setHeatmapType] = useState<'inherent' | 'residual'>('inherent');
   const [selectedHeatmapCell, setSelectedHeatmapCell] = useState<{l: number, i: number} | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -820,18 +844,24 @@ export default function ERMRisksPage() {
   const searchParams = useSearchParams();
   const editIdParam = searchParams?.get('edit');
   useEffect(() => {
-    if (!editIdParam || !risks || isModalOpen) return;
+    if (!editIdParam || !risks || isModalOpen || isNcaAddOpen) return;
     const targetId = Number(editIdParam);
     if (!targetId) return;
     const target = (risks as Risk[]).find((r) => r.id === targetId);
     if (target) {
-      setEditingRisk(target);
-      setIsModalOpen(true);
+      if (isNcaRegisterTypeValue(target.register_type)) {
+        // an NCA risk is edited in the NCA form, as from its row (the NCA entry is the record the bridge copies)
+        setNcaEditBridgedId(target.id);
+        setIsNcaAddOpen(true);
+      } else {
+        setEditingRisk(target);
+        setIsModalOpen(true);
+      }
       // Clean the URL so re-renders don't re-open the modal after the user closes it
       const newUrl = window.location.pathname;
       window.history.replaceState({}, '', newUrl);
     }
-  }, [editIdParam, risks, isModalOpen]);
+  }, [editIdParam, risks, isModalOpen, isNcaAddOpen]);
 
   // Other deep-link params used by the register dashboard and sibling modules:
   //   ?new=1            → open the Add Risk slide-over
@@ -840,9 +870,11 @@ export default function ERMRisksPage() {
   const newParam = searchParams?.get('new');
   const uploadParam = searchParams?.get('upload');
   const registerTypeParam = searchParams?.get('register_type');
+  const attentionParam = attentionFilterOf(searchParams?.get('filter'));
   useEffect(() => {
-    if (!newParam && !uploadParam && !registerTypeParam) return;
+    if (!newParam && !uploadParam && !registerTypeParam && !attentionParam) return;
     if (registerTypeParam) setRegisterTypeFilter(registerTypeParam);
+    if (attentionParam) setAttentionFilter(attentionParam);
     if (newParam) {
       setEditingRisk(null);
       setIsModalOpen(true);
@@ -852,7 +884,7 @@ export default function ERMRisksPage() {
     // Strip the params so closing the modal doesn't re-open it on re-render.
     window.history.replaceState({}, '', window.location.pathname);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [newParam, uploadParam, registerTypeParam]);
+  }, [newParam, uploadParam, registerTypeParam, attentionParam]);
 
   const { data: dashboard } = useQuery({
     queryKey: ['erm-risks-dashboard'],
@@ -917,7 +949,7 @@ export default function ERMRisksPage() {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
         setUploadResult({
-          message: `1LINK register: imported ${data.created} risk${data.created === 1 ? '' : 's'}${data.skipped ? `, skipped ${data.skipped} already present` : ''}`,
+          message: `Register: imported ${data.created} risk${data.created === 1 ? '' : 's'}${data.skipped ? `, skipped ${data.skipped} already present` : ''}`,
           created: data.created ?? 0,
           skipped: data.skipped ?? 0,
           errors: data.errors ?? [],
@@ -929,7 +961,7 @@ export default function ERMRisksPage() {
         setSelectedRegisterType('');
       } catch (err: any) {
         setUploadResult({
-          message: err?.response?.data?.detail || err?.message || '1LINK register upload failed',
+          message: err?.response?.data?.detail || err?.message || 'Register upload failed',
           created: 0,
           skipped: 0,
           errors: [err?.message || 'Upload failed'],
@@ -1239,10 +1271,7 @@ export default function ERMRisksPage() {
         else if (scoreFilter === 'medium') matchesScore = score >= 3 && score < 6;
         else if (scoreFilter === 'low') matchesScore = score > 0 && score < 3;
       } else {
-        if (scoreFilter === 'critical') matchesScore = score >= 20;
-        else if (scoreFilter === 'high') matchesScore = score >= 12 && score < 20;
-        else if (scoreFilter === 'medium') matchesScore = score >= 6 && score < 12;
-        else if (scoreFilter === 'low') matchesScore = score < 6;
+        if (scoreFilter !== 'all') matchesScore = riskBandForScore(score) === scoreFilter;
       }
       
       let matchesHeatmap = true;
@@ -1256,9 +1285,10 @@ export default function ERMRisksPage() {
         matchesHeatmap = likelihood === selectedHeatmapCell.l && impact === selectedHeatmapCell.i;
       }
       
-      return matchesSearch && matchesStatus && matchesCategory && matchesRegisterType && matchesScore && matchesHeatmap;
+      return matchesSearch && matchesStatus && matchesCategory && matchesRegisterType && matchesScore && matchesHeatmap
+        && matchesAttentionFilter(risk, attentionFilter);
     });
-  }, [risks, searchTerm, statusFilter, categoryFilter, registerTypeFilter, scoreFilter, selectedHeatmapCell, heatmapType]);
+  }, [risks, searchTerm, statusFilter, categoryFilter, registerTypeFilter, scoreFilter, selectedHeatmapCell, heatmapType, attentionFilter]);
 
   const availableCategoryOptions = useMemo(() => {
     const valuesByCanonical = new Map<string, string>();
@@ -1288,13 +1318,16 @@ export default function ERMRisksPage() {
       }
     });
 
-    return Array.from(valuesByCanonical.values()).map((value) => ({
-      value,
-      label: value
-        .replace(/_/g, ' ')
-        .replace(/\b\w/g, (match) => match.toUpperCase()),
-    }));
+    return Array.from(valuesByCanonical.values()).map((value) => ({ value, label: getCategoryStyle(value).label }));
   }, [risks, isUBLFilterSelected]);
+
+  // The category chip row: the categories that hold risks, with their counts (the same match the filter uses).
+  const categoryChips = useMemo(() => availableCategoryOptions
+    .map((option) => ({
+      ...option,
+      count: (risks || []).filter((risk) => filterValuesMatch(inferEffectiveRiskCategory(risk), option.value)).length,
+    }))
+    .filter((option) => option.count > 0), [availableCategoryOptions, risks]);
 
   const availableRegisterTypeOptions = useMemo(() => {
     const valuesByCanonical = new Map<string, string>();
@@ -1316,7 +1349,7 @@ export default function ERMRisksPage() {
 
     return Array.from(valuesByCanonical.values()).map((value) => ({
       value,
-      label: isUBLRegisterTypeValue(value) ? 'Template' : value,
+      label: registerTypeLabel(value),
     }));
   }, [risks]);
 
@@ -1406,7 +1439,7 @@ export default function ERMRisksPage() {
               <h2 className="text-lg sm:text-xl font-semibold text-slate-900">Risk Heatmap</h2>
               {isOneLinkFilterSelected && (
                 <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-                  1LINK 3×3 · Low / Medium / High
+                  3×3 · Low / Medium / High
                 </span>
               )}
             </div>
@@ -1541,13 +1574,25 @@ export default function ERMRisksPage() {
                     { value: 'critical', label: 'Critical (>=20)' },
                     { value: 'high', label: 'High (12-19)' },
                     { value: 'medium', label: 'Medium (6-11)' },
-                    { value: 'low', label: 'Low (<6)' },
+                    { value: 'low', label: 'Low (1-5)' },
                   ]
             }
             selectedValues={scoreFilter === 'all' ? [] : [scoreFilter]}
             onApply={(values) => setScoreFilter((values[0] as ScoreFilter) || 'all')}
             multiSelect={false}
           />
+
+          {attentionFilter && (
+            <button
+              type="button"
+              onClick={() => setAttentionFilter(null)}
+              aria-label={`Clear filter: ${ATTENTION_FILTER_LABEL[attentionFilter]}`}
+              className="inline-flex items-center gap-1.5 rounded-full bg-primary-50 px-3 py-1.5 text-xs font-medium text-primary-700 ring-1 ring-primary-200 hover:bg-primary-100"
+            >
+              {ATTENTION_FILTER_LABEL[attentionFilter]}
+              <X size={12} aria-hidden="true" />
+            </button>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -1601,6 +1646,28 @@ export default function ERMRisksPage() {
           )}
         </div>
       </div>
+
+      {categoryChips.length > 1 && (
+        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter by risk type">
+          {[{ value: 'all', label: 'All', count: (risks || []).length }, ...categoryChips].map((chip) => {
+            const on = categoryFilter === chip.value;
+            return (
+              <button
+                key={chip.value}
+                type="button"
+                aria-pressed={on}
+                onClick={() => setCategoryFilter(on && chip.value !== 'all' ? 'all' : chip.value)}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ring-1 transition-colors ${
+                  on ? 'bg-primary-50 text-primary-700 ring-primary-200' : 'bg-white text-slate-600 ring-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                {chip.label}
+                <span className="tabular-nums text-slate-400">{chip.count}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* NCA Template view — compact table with chevron-expandable detail rows.
           Shows all NCA risk template columns; data sourced from `template_fields`
@@ -1862,23 +1929,23 @@ export default function ERMRisksPage() {
                               sourceLabel={risk.source_label || null}
                             />
                           )}
-                          {(risk.mitigation_actions?.length || 0) > 0 && (
+                          {(risk.mitigation_action_count || 0) > 0 && (
                             <span className="flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium bg-primary-50 text-primary-700">
                               <ListTodo size={10} />
-                              {risk.mitigation_actions?.length} Actions
+                              {risk.mitigation_action_count} Action{risk.mitigation_action_count === 1 ? '' : 's'}
                             </span>
                           )}
                         </div>
                         {isExpanded && (
                           <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
                             <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-                              <p className="text-[11px] font-medium text-slate-500">Inherent (L / I / S)</p>
+                              <p className="text-[11px] font-medium text-slate-500">Before controls (L / I / S)</p>
                               <p className="text-sm font-semibold text-slate-800">
                                 {(risk.inherent_likelihood || '-')} / {(risk.inherent_impact || '-')} / {(risk.inherent_score || '-')}
                               </p>
                             </div>
                             <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-                              <p className="text-[11px] font-medium text-slate-500">Residual (L / I / S)</p>
+                              <p className="text-[11px] font-medium text-slate-500">After controls (L / I / S)</p>
                               <p className="text-sm font-semibold text-slate-800">
                                 {(risk.residual_likelihood || '-')} / {(risk.residual_impact || '-')} / {(risk.residual_score || '-')}
                               </p>
@@ -2187,7 +2254,7 @@ interface AISuggestion {
 }
 
 interface RiskModalSubmitPayload {
-  riskData: Partial<Risk>;
+  riskData: Partial<Risk & RiskRecordFields>;
   linkedAssetIds?: number[];
   aiSuggestions?: AISuggestion | null;
 }
@@ -2211,13 +2278,21 @@ function RiskModal({
   /** Next sequence number for system-generated 1LINK S.No. / RISK ID. */
   nextOneLinkSeq?: number;
 }) {
+  const record = risk as (Risk & RiskRecordFields) | null;
   const [formData, setFormData] = useState({
     title: risk?.title || '',
     description: risk?.description || '',
     register_type: risk?.register_type || initialRegisterType || '',
     risk_category: risk?.risk_category || 'operational' as RiskCategory,
     risk_sub_category: risk?.risk_sub_category || toInputString((risk?.ubl_fields as Record<string, unknown> | undefined)?.sub_source_activity || ''),
+    owner_id: risk?.owner_id || undefined as number | undefined,
     business_owner_id: risk?.business_owner_id || undefined as number | undefined,
+    response: (record?.response || '') as RiskResponseChoice | '',
+    review_date: risk?.review_date?.slice(0, 10) || '',
+    due_date: risk?.due_date?.slice(0, 10) || '',
+    target_likelihood: record?.target_likelihood ?? undefined as number | undefined,
+    target_impact: record?.target_impact ?? undefined as number | undefined,
+    reason: '',
     affected_department_ids: risk?.affected_department_ids || [] as number[],
     // Owning team (admin/teams). Backend resolves this to a real
     // BusinessUnit row (auto-mirrored by name) and stores it on the
@@ -2236,6 +2311,8 @@ function RiskModal({
     consequences: (risk as unknown as { consequences?: string } | null)?.consequences || '',
     recommendations: (risk as unknown as { recommendations?: string } | null)?.recommendations || '',
   });
+  // the scores as the form opened, so an edit that moves one asks for the reason
+  const [initialScores] = useState(() => pickScores(formData));
   const [tab, setTab] = useState<'details' | 'custom'>('details');
   const [customValues, setCustomValues] = useState<CustomValues>(() => risk?.custom_values || {});
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -2460,7 +2537,23 @@ function RiskModal({
 
   const categoryOptions: Array<{ value: string; label: string }> = isUBLTemplateSelected
     ? RISK_CATEGORIES.filter((category) => UBL_ONLY_RISK_CATEGORIES.includes(category.value))
-    : listOptions(fieldSettings, 'category', formData.risk_category, STANDARD_RISK_CATEGORIES);
+    : withRiskTypes(listOptions(fieldSettings, 'category', formData.risk_category, STANDARD_RISK_CATEGORIES),
+      fieldSettings?.lists?.category?.options);
+  // Accepted is reached through the acceptance request on the risk page, never picked here (the API refuses it).
+  const statusItems = statusChoices(fieldSettings, RISK_STATUSES).filter((s) => s.value !== 'accepted' || risk?.status === 'accepted');
+  function pickScores(d: typeof formData) {
+    return {
+      inherent_likelihood: d.inherent_likelihood, inherent_impact: d.inherent_impact,
+      residual_likelihood: d.residual_likelihood, residual_impact: d.residual_impact,
+      target_likelihood: d.target_likelihood ?? null, target_impact: d.target_impact ?? null,
+    };
+  }
+  const needsReason = scoresChanged(risk ? initialScores : null, pickScores(formData));
+  const userItems = (users || []).map((user) => ({
+    value: String(user.id),
+    label: user.full_name || user.email,
+    subLabel: user.full_name ? user.email : undefined,
+  }));
   const registerTypeItems = [
     ...REGISTER_TYPES.filter((t) => isTemplateRegisterTypeValue(t.value)),
     ...listOptions(fieldSettings, 'register_type',
@@ -2668,6 +2761,14 @@ function RiskModal({
           risk_sub_category: derivedSubCategory,
           inherent_score: formData.inherent_likelihood * formData.inherent_impact,
           residual_score: formData.residual_likelihood * formData.residual_impact,
+          target_likelihood: formData.target_likelihood ?? null,
+          target_impact: formData.target_impact ?? null,
+          target_score: formData.target_likelihood && formData.target_impact ? formData.target_likelihood * formData.target_impact : null,
+          response: formData.response || null,
+          // an emptied date is sent as null so the edit clears it
+          review_date: (formData.review_date || null) as string | undefined,
+          due_date: (formData.due_date || null) as string | undefined,
+          reason: formData.reason.trim() || undefined,
           ubl_fields: isUBLTemplateSelected ? cleanedUblFields : undefined,
           ...(isOneLinkSelected ? deriveCore(templateFields) : {}),
           template_fields: isOneLinkSelected ? templateFields : undefined,
@@ -3216,7 +3317,7 @@ function RiskModal({
               <label className="block text-sm font-medium text-slate-800 mb-1">{builtinLabel(fieldSettings, 'status', 'Status')}</label>
               <MultiSelectDropdown
                 title="Status"
-                items={statusChoices(fieldSettings, RISK_STATUSES)}
+                items={statusItems}
                 selectedValues={formData.status ? [formData.status] : []}
                 onApply={(vals) => setFormData({ ...formData, status: (vals[0] || 'open') as RiskStatus })}
                 multiSelect={false}
@@ -3225,24 +3326,78 @@ function RiskModal({
                 size="md"
               />
             </div>}
-            {showBuiltin(fieldSettings, 'owner') && <div>
-              <label className="block text-sm font-medium text-slate-800 mb-1">{builtinLabel(fieldSettings, 'owner', 'Business Owner')}</label>
+            <div>
+              <label className="block text-sm font-medium text-slate-800 mb-1">Response</label>
               <MultiSelectDropdown
-                title="Business Owner"
-                items={(users || []).map((user) => ({
-                  value: String(user.id),
-                  label: user.full_name || user.email,
-                  subLabel: user.full_name ? user.email : undefined,
-                }))}
+                title="Response"
+                items={RISK_RESPONSES.map((r) => ({ value: r.value, label: r.label, subLabel: r.hint }))}
+                selectedValues={formData.response ? [formData.response] : []}
+                onApply={(vals) => setFormData({ ...formData, response: (vals[0] || '') as RiskResponseChoice | '' })}
+                multiSelect={false}
+                triggerVariant="input"
+                placeholder="Not chosen yet"
+                size="md"
+              />
+            </div>
+          </div>
+          {formData.response === 'accept' && record?.acceptance_state !== 'accepted' && (
+            <p className="-mt-1 text-xs text-slate-500">To accept the risk, request acceptance on the risk page: a second person approves it with an expiry.</p>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-slate-800 mb-1">Risk owner</label>
+              <MultiSelectDropdown
+                title="Risk owner"
+                items={userItems}
+                selectedValues={formData.owner_id ? [String(formData.owner_id)] : []}
+                onApply={(vals) => setFormData({ ...formData, owner_id: vals[0] ? Number(vals[0]) : undefined })}
+                multiSelect={false}
+                triggerVariant="input"
+                placeholder="Who keeps this risk current"
+                size="md"
+                forceSearch
+              />
+            </div>
+            {showBuiltin(fieldSettings, 'owner') && <div>
+              <label className="block text-sm font-medium text-slate-800 mb-1">
+                {recordLabel(builtinLabel(fieldSettings, 'owner', ''), 'Business owner', 'Accountable executive')}
+              </label>
+              <MultiSelectDropdown
+                title="Accountable executive"
+                items={userItems}
                 selectedValues={formData.business_owner_id ? [String(formData.business_owner_id)] : []}
                 onApply={(vals) => setFormData({ ...formData, business_owner_id: vals[0] ? Number(vals[0]) : undefined })}
                 multiSelect={false}
                 triggerVariant="input"
-                placeholder="Select Owner"
+                placeholder="Who answers for it"
                 size="md"
                 forceSearch
               />
             </div>}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="risk-review-date" className="block text-sm font-medium text-slate-800 mb-1">Review date</label>
+              <input
+                id="risk-review-date"
+                type="date"
+                value={formData.review_date}
+                onChange={(e) => setFormData({ ...formData, review_date: e.target.value })}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              />
+            </div>
+            <div>
+              <label htmlFor="risk-due-date" className="block text-sm font-medium text-slate-800 mb-1">Due date</label>
+              <input
+                id="risk-due-date"
+                type="date"
+                value={formData.due_date}
+                onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              />
+            </div>
           </div>
 
           {/* Assigned team / department picker — backed by admin/teams.
@@ -3314,55 +3469,61 @@ function RiskModal({
             </div>
           </div>}
 
-          <div className="grid grid-cols-2 gap-3">
-            {showBuiltin(fieldSettings, 'inherent_likelihood') && <div>
-              <label className="block text-sm font-medium text-slate-800 mb-1">{builtinLabel(fieldSettings, 'inherent_likelihood', 'Inherent Likelihood (1-5)')}</label>
-              <input
-                type="number"
-                min="1"
-                max="5"
-                value={formData.inherent_likelihood}
-                onChange={(e) => setFormData({ ...formData, inherent_likelihood: Number(e.target.value) })}
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              />
-            </div>}
-            {showBuiltin(fieldSettings, 'inherent_impact') && <div>
-              <label className="block text-sm font-medium text-slate-800 mb-1">{builtinLabel(fieldSettings, 'inherent_impact', 'Inherent Impact (1-5)')}</label>
-              <input
-                type="number"
-                min="1"
-                max="5"
-                value={formData.inherent_impact}
-                onChange={(e) => setFormData({ ...formData, inherent_impact: Number(e.target.value) })}
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              />
-            </div>}
+          {/* Scores on the 1-5 scales: before controls (inherent), after controls (residual), target. Score = L × I. */}
+          <div className="rounded-lg border border-slate-200 p-3">
+            <div className="grid grid-cols-[minmax(0,1.4fr)_1fr_1fr_auto] items-center gap-2 text-xs font-medium text-slate-500">
+              <span />
+              <span>Likelihood (1-5)</span>
+              <span>Impact (1-5)</span>
+              <span className="w-12 text-right">Score</span>
+            </div>
+            {([
+              { key: 'inherent', label: 'Before controls', optional: false },
+              { key: 'residual', label: 'After controls', optional: false },
+              { key: 'target', label: 'Target', optional: true },
+            ] as const).map((row) => {
+              const lKey = `${row.key}_likelihood` as const;
+              const iKey = `${row.key}_impact` as const;
+              const shown = row.optional || showBuiltin(fieldSettings, lKey) || showBuiltin(fieldSettings, iKey);
+              if (!shown) return null;
+              const l = formData[lKey];
+              const i = formData[iKey];
+              const cell = (key: typeof lKey | typeof iKey, value: number | undefined, fallback: string) => (
+                <input
+                  type="number"
+                  min="1"
+                  max="5"
+                  aria-label={row.optional ? `${row.label} ${key.endsWith('likelihood') ? 'likelihood' : 'impact'}` : builtinLabel(fieldSettings, key, fallback)}
+                  value={value ?? ''}
+                  onChange={(e) => setFormData({ ...formData, [key]: e.target.value ? Number(e.target.value) : (row.optional ? undefined : 1) })}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                />
+              );
+              return (
+                <div key={row.key} className="mt-2 grid grid-cols-[minmax(0,1.4fr)_1fr_1fr_auto] items-center gap-2">
+                  <span className="text-sm font-medium text-slate-800">{row.label}{row.optional && <span className="ml-1 text-xs font-normal text-slate-500">(optional)</span>}</span>
+                  {cell(lKey, l, `${row.label} likelihood`)}
+                  {cell(iKey, i, `${row.label} impact`)}
+                  <span className="w-12 text-right text-sm font-semibold tabular-nums text-slate-800">{l && i ? l * i : '—'}</span>
+                </div>
+              );
+            })}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            {showBuiltin(fieldSettings, 'residual_likelihood') && <div>
-              <label className="block text-sm font-medium text-slate-800 mb-1">{builtinLabel(fieldSettings, 'residual_likelihood', 'Residual Likelihood (1-5)')}</label>
-              <input
-                type="number"
-                min="1"
-                max="5"
-                value={formData.residual_likelihood}
-                onChange={(e) => setFormData({ ...formData, residual_likelihood: Number(e.target.value) })}
+          {needsReason && (
+            <div>
+              <label htmlFor="risk-change-reason" className="block text-sm font-medium text-slate-800 mb-1">Reason for change</label>
+              <textarea
+                id="risk-change-reason"
+                required
+                value={formData.reason}
+                onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
+                rows={2}
+                placeholder="Why the scores moved: new loss data, a control tested, a workshop… (kept in the risk's history)"
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
-            </div>}
-            {showBuiltin(fieldSettings, 'residual_impact') && <div>
-              <label className="block text-sm font-medium text-slate-800 mb-1">{builtinLabel(fieldSettings, 'residual_impact', 'Residual Impact (1-5)')}</label>
-              <input
-                type="number"
-                min="1"
-                max="5"
-                value={formData.residual_impact}
-                onChange={(e) => setFormData({ ...formData, residual_impact: Number(e.target.value) })}
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              />
-            </div>}
-          </div>
+            </div>
+          )}
 
           {/* Field sequence: Root Cause → Consequences → Recommendations → Treatment Plan */}
           {showBuiltin(fieldSettings, 'root_cause') && <div>

@@ -51,6 +51,38 @@ def score_to_tier(score: float, thresholds: Dict[str, float]) -> str:
     return "low"
 
 
+# The enterprise Risk Register scores 1–25 (likelihood × impact, each 1–5) and bands it critical ≥ 20, high ≥ 12,
+# medium ≥ 6 (models.risk_priority_for_score). A TPRA score (0–100) lands in the register band named like its own
+# TPRA band on the tenant's thresholds, and climbs that band's steps as it climbs its own band; each step is an
+# L × I pair whose product is the register score, so the heat map cell and the band always agree.
+_ERM_STEPS = {
+    "low": ((1, 1), (1, 2), (2, 2)),          # 1, 2, 4
+    "medium": ((2, 3), (2, 4), (3, 3)),       # 6, 8, 9
+    "high": ((3, 4), (4, 4)),                 # 12, 16
+    "critical": ((4, 5), (5, 5)),             # 20, 25
+}
+
+
+def to_erm_scale(score, thresholds: Optional[Dict[str, float]] = None,
+                 rating: Optional[str] = None) -> Optional[Tuple[int, int, int]]:
+    """(likelihood, impact, likelihood × impact) on the register's 1–25 scale for a 0–100 TPRA score; None when
+    unscored. A `rating` the score alone may not reach (a failed critical control floors it at high, a tier set by
+    hand) decides the band; the score then only places it within that band."""
+    if score is None:
+        return None
+    t = thresholds or DEFAULT_TIERING_CONFIG["thresholds"]
+    band = (rating or "").lower()
+    band = band if band in _ERM_STEPS else score_to_tier(float(score), t)
+    starts = {"low": 0.0, "medium": float(t.get("medium", 25)), "high": float(t.get("high", 50)),
+              "critical": float(t.get("critical", 75))}
+    ends = {"low": starts["medium"], "medium": starts["high"], "high": starts["critical"], "critical": 100.0}
+    span = ends[band] - starts[band]
+    at = (float(score) - starts[band]) / span if span > 0 else 0.0
+    steps = _ERM_STEPS[band]
+    likelihood, impact = steps[min(len(steps) - 1, max(0, int(at * len(steps))))]
+    return likelihood, impact, likelihood * impact
+
+
 def minimum_tier(answers: Optional[dict], custom: Optional[dict] = None) -> Tuple[Optional[str], Optional[str]]:
     """The worst minimum tier the answers hold the supplier at, and the wording of
     the (first) question that set it: (None, None) when no answer sets one. Only

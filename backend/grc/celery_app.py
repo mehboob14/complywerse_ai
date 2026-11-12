@@ -73,6 +73,10 @@ celery_app = Celery(
         "grc.tasks.scf",
         # Audit issue register — due / past-due reminders and escalation.
         "grc.tasks.audit_register",
+        # Key Risk Indicators — providers reminded of overdue values.
+        "grc.tasks.kri_reminders",
+        # RCSA — assessors of overdue self-assessments reminded; the approver told after the grace period.
+        "grc.tasks.rcsa_reminders",
         "grc.tasks.document_lifecycle",
         # Connected evidence collectors, collected daily (hourly sweep, 20h due window).
         "grc.tasks.evidence_collectors",
@@ -229,6 +233,18 @@ celery_app.conf.update(
         # Audit issue register — owners reminded of findings coming due / past due.
         "audit-register-daily-reminders": {
             "task": "grc.tasks.audit_register.daily_reminder_sweep",
+            "schedule": 24 * 60 * 60,
+            "options": {"queue": "parsing"},
+        },
+        # Key Risk Indicators — the provider of every overdue value is reminded.
+        "kri-values-due-daily-reminders": {
+            "task": "grc.tasks.kri_reminders.daily_reminder_sweep",
+            "schedule": 24 * 60 * 60,
+            "options": {"queue": "parsing"},
+        },
+        # RCSA — overdue self-assessments: the assessor reminded, the approver told after the campaign's grace period.
+        "rcsa-overdue-daily-reminders": {
+            "task": "grc.tasks.rcsa_reminders.daily_reminder_sweep",
             "schedule": 24 * 60 * 60,
             "options": {"queue": "parsing"},
         },

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
 from openai import OpenAI
 
+from ..modules.issue_management.services.risk_actions import legacy_shaped_actions
 from ..models import (
     Framework, FrameworkDomain, ControlObjective, FrameworkControl,
     NormalizedControl, ControlMapping, Evidence, EvidenceControlMapping,
@@ -18,7 +19,7 @@ from ..models import (
     DocumentApprovalStep, AttestationCampaign, RegulatoryChange,
     PolicyStatement, PolicyStatementCompliance, RCSAAssessment,
     UploadedFramework, ParsedFrameworkControl, RiskIncident, RiskMitigationAction,
-    RiskKRI, EvidenceAIAssessment, RiskControlLink
+    RiskKRI, EvidenceAIAssessment, RiskControl
 )
 from .auth_router import require_auth, get_user_tenants, require_tenant_permission
 
@@ -144,7 +145,7 @@ def get_dashboard_stats(
             Evidence.tenant_id.in_(tenant_filter)
         ).scalar()
         
-        open_risks = db.query(func.count(Risk.id)).filter(
+        open_risks = db.query(func.count(Risk.id)).filter(Risk.status.is_distinct_from("draft"),
             Risk.status.in_(["identified", "under_review", "mitigating"]),
             Risk.tenant_id.in_(tenant_filter)
         ).scalar()
@@ -207,7 +208,7 @@ def get_dashboard_stats(
                 "status": ev.status
             })
         
-        recent_risks = db.query(Risk).filter(
+        recent_risks = db.query(Risk).filter(Risk.status.is_distinct_from("draft"),
             Risk.tenant_id.in_(user_tenants)
         ).order_by(Risk.created_at.desc()).limit(3).all()
         
@@ -487,7 +488,7 @@ def get_unified_dashboard(
     overall_compliance = round(sum(framework_scores) / len(framework_scores)) if framework_scores else 0
     
     # Risk metrics
-    risks = db.query(Risk).filter(Risk.tenant_id.in_(tenant_filter)).all()
+    risks = db.query(Risk).filter(Risk.status.is_distinct_from("draft"), Risk.tenant_id.in_(tenant_filter)).all()
     open_risks = [r for r in risks if r.status in ['identified', 'under_review', 'mitigating', 'open']]
     
     risk_scores = [r.residual_score or r.inherent_score or 0 for r in risks if (r.residual_score or r.inherent_score)]
@@ -529,13 +530,10 @@ def get_unified_dashboard(
     ).scalar() or 0
     
     # Overdue mitigations (join through Risk for tenant filtering)
-    mitigations_overdue = db.query(func.count(RiskMitigationAction.id)).join(
-        Risk, RiskMitigationAction.risk_id == Risk.id
-    ).filter(
-        Risk.tenant_id.in_(tenant_filter),
-        RiskMitigationAction.due_date < now,
-        RiskMitigationAction.status.notin_(['completed', 'cancelled'])
-    ).scalar() or 0
+    _risk_actions = legacy_shaped_actions(db, tenant_filter)
+    _open_overdue = sorted((a for a in _risk_actions if a.due_date and a.due_date < now
+                            and a.status not in ('completed', 'cancelled')), key=lambda a: a.due_date)
+    mitigations_overdue = len(_open_overdue)
     
     # ===== GOVERNANCE =====
     gov_documents = db.query(GovernanceDocument).filter(
@@ -628,13 +626,7 @@ def get_unified_dashboard(
         })
     
     # Overdue mitigations (top 5) - join through Risk for tenant filtering
-    overdue_actions = db.query(RiskMitigationAction).join(
-        Risk, RiskMitigationAction.risk_id == Risk.id
-    ).filter(
-        Risk.tenant_id.in_(tenant_filter),
-        RiskMitigationAction.due_date < now,
-        RiskMitigationAction.status.notin_(['completed', 'cancelled'])
-    ).order_by(RiskMitigationAction.due_date.asc()).limit(5).all()
+    overdue_actions = _open_overdue[:5]
     
     for action in overdue_actions:
         days_overdue = (now - action.due_date).days
@@ -644,7 +636,7 @@ def get_unified_dashboard(
             "due_date": action.due_date.isoformat(),
             "days_remaining": -days_overdue,
             "urgency": "critical",
-            "link": f"/erm/risks"
+            "link": "/erm/mitigation-actions?filter=overdue"
         })
     
     # Sort deadlines by urgency/date
@@ -669,7 +661,7 @@ def get_unified_dashboard(
         })
     
     # Recent risks
-    recent_risks = db.query(Risk).filter(
+    recent_risks = db.query(Risk).filter(Risk.status.is_distinct_from("draft"),
         Risk.tenant_id.in_(tenant_filter)
     ).order_by(Risk.created_at.desc()).limit(3).all()
     
@@ -728,7 +720,7 @@ def get_unified_dashboard(
         month_start = (now - timedelta(days=i * 30)).replace(day=1, hour=0, minute=0, second=0)
         month_label = month_start.strftime("%b")
         
-        open_in_month = db.query(func.count(Risk.id)).filter(
+        open_in_month = db.query(func.count(Risk.id)).filter(Risk.status.is_distinct_from("draft"),
             Risk.tenant_id.in_(tenant_filter),
             Risk.created_at <= month_start + timedelta(days=30),
             or_(Risk.closed_at == None, Risk.closed_at > month_start + timedelta(days=30))
@@ -992,19 +984,21 @@ def get_ai_insights(
         })
     
     risks_without_controls = []
-    all_risks = db.query(Risk).filter(
+    all_risks = db.query(Risk).filter(Risk.status.is_distinct_from("draft"),
         Risk.tenant_id.in_(tenant_filter),
         Risk.status.in_(["identified", "under_review", "mitigating", "open"])
     ).all()
     
+    _acts = legacy_shaped_actions(db, tenant_filter)
+    _live_counts = {}
+    for _a in _acts:
+        if _a.status != 'cancelled':
+            _live_counts[_a.risk_id] = _live_counts.get(_a.risk_id, 0) + 1
     for risk in all_risks:
-        mitigation_count = db.query(func.count(RiskMitigationAction.id)).filter(
-            RiskMitigationAction.risk_id == risk.id,
-            RiskMitigationAction.status.notin_(['cancelled'])
-        ).scalar() or 0
+        mitigation_count = _live_counts.get(risk.id, 0)
         
-        control_link_count = db.query(func.count(RiskControlLink.id)).filter(
-            RiskControlLink.risk_id == risk.id
+        control_link_count = db.query(func.count(RiskControl.id)).filter(
+            RiskControl.risk_id == risk.id                  # a control of any kind
         ).scalar() or 0
         
         if mitigation_count == 0 and control_link_count == 0:
@@ -1016,13 +1010,8 @@ def get_ai_insights(
             })
     
     overdue_mitigations = []
-    overdue_actions = db.query(RiskMitigationAction).join(
-        Risk, RiskMitigationAction.risk_id == Risk.id
-    ).filter(
-        Risk.tenant_id.in_(tenant_filter),
-        RiskMitigationAction.due_date < now,
-        RiskMitigationAction.status.notin_(['completed', 'cancelled'])
-    ).order_by(RiskMitigationAction.due_date.asc()).limit(10).all()
+    overdue_actions = sorted((a for a in _acts if a.due_date and a.due_date < now
+                              and a.status not in ('completed', 'cancelled')), key=lambda a: a.due_date)[:10]
     
     for action in overdue_actions:
         days_overdue = (now - action.due_date).days
@@ -1167,7 +1156,7 @@ def get_enhanced_stats(
     if tenant_id and tenant_id in user_tenants:
         user_tenants = [tenant_id]
 
-    risks = db.query(Risk).filter(Risk.tenant_id.in_(user_tenants)).all()
+    risks = db.query(Risk).filter(Risk.status.is_distinct_from("draft"), Risk.tenant_id.in_(user_tenants)).all()
 
     top_risks = sorted(risks, key=lambda r: (r.inherent_score or 0), reverse=True)[:10]
     top_risks_data = [
@@ -1202,11 +1191,7 @@ def get_enhanced_stats(
         else:
             worsened += 1
 
-    actions = db.query(RiskMitigationAction).join(
-        Risk, RiskMitigationAction.risk_id == Risk.id
-    ).filter(
-        Risk.tenant_id.in_(user_tenants)
-    ).all()
+    actions = legacy_shaped_actions(db, user_tenants)
     now = datetime.utcnow()
     mitigation_summary = {"completed": 0, "in_progress": 0, "overdue": 0, "not_started": 0}
     for a in actions:
@@ -1217,7 +1202,7 @@ def get_enhanced_stats(
                 mitigation_summary["overdue"] += 1
             else:
                 mitigation_summary["in_progress"] += 1
-        elif a.status == "not_started":
+        elif a.status in ("not_started", "planned", "blocked"):     # CAPA statuses of a risk action not yet started
             if a.due_date and a.due_date < now:
                 mitigation_summary["overdue"] += 1
             else:

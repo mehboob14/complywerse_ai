@@ -481,6 +481,12 @@ def _init_tenant_schema(engine: Engine, slug: str) -> None:
             _ensure_identity_for_engine(engine)
         except Exception:
             logger.exception("identity schema self-heal failed for slug=%s", slug)
+        try:
+            from .modules.erm.schema_migrations import _ensure_for_engine as _ensure_erm_for_engine
+
+            _ensure_erm_for_engine(engine)
+        except Exception:
+            logger.exception("risk management schema self-heal failed for slug=%s", slug)
 
 
 def get_tenant_engine(slug: str) -> Engine:

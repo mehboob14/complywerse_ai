@@ -157,7 +157,7 @@ function forwardTarget(source: string): { to?: string; renders?: string } {
 
 test('every forward is real: its page replaces itself with, re-exports or is rendered by the entry the registry names as its target, and has the same name', () => {
   const aliases = routes.filter((e) => e.aliasOf);
-  assert.ok(aliases.length >= 17, 'the forwards of the app');
+  assert.ok(aliases.length >= 16, 'the forwards of the app (the Internal Controls list page is a sidebar leaf since the lifecycle menu)');
   const pageOf = (file: string) => file.replace(/\.tsx$/, '');
   for (const a of aliases) {
     const target = entry(a.aliasOf as string);
@@ -264,11 +264,16 @@ test('breadcrumbFor gives a sane trail for an example URL of every module', () =
   assert.deepEqual(labels('/dashboard'), ['Performance Overview']);
   assert.deepEqual(labels('/tasks/9'), ['Task Management', 'Task']);
   assert.deepEqual(labels('/governance/committees/3'), ['Governance', 'Committees', 'Committee']);
-  assert.deepEqual(labels('/erm/risks/12'), ['Risk Management', 'Operational Risk', 'Risk Register', 'Risk']);
-  assert.deepEqual(labels('/erm/rcsa/campaigns/4'), ['Risk Management', 'Operational Risk', 'RCSA', 'RCSA Campaigns', 'RCSA campaign']);
-  assert.deepEqual(labels('/erm/analytics/heatmap'), ['Risk Management', 'Operational Risk', 'Advanced Analytics', 'Interactive Risk Heat Map']);
-  assert.deepEqual(labels('/erm/appetite'), ['Risk Management', 'Overview', 'Risk Appetite Management']);
-  assert.deepEqual(labels('/erm/kris'), ['Governance', 'KRIs']);
+  assert.deepEqual(labels('/erm/risks/12'), ['Risk Management', 'Identify', 'Risk Register', 'Risk']);
+  assert.deepEqual(labels('/erm/dependencies'), ['Risk Management', 'Identify', 'Risk Register', 'Risk Dependencies']);
+  assert.deepEqual(labels('/erm/rcsa/campaigns/4'), ['Risk Management', 'Assess', 'Assessments', 'RCSA', 'RCSA Campaigns', 'RCSA campaign']);
+  assert.deepEqual(labels('/erm/risk-assessments/framework/2'), ['Risk Management', 'Assess', 'Assessments', 'Risk Assessments', 'Framework Risk Assessments', 'Framework risk assessment']);
+  assert.deepEqual(labels('/erm/mitigation-actions'), ['Risk Management', 'Treat', 'Actions & Acceptances']);
+  assert.deepEqual(labels('/erm/analytics/heatmap'), ['Risk Management', 'Report', 'Analytics', 'Interactive Risk Heat Map']);
+  assert.deepEqual(labels('/erm/appetite'), ['Risk Management', 'Monitor', 'Risk Appetite']);
+  assert.deepEqual(labels('/erm/kris'), ['Risk Management', 'Monitor', 'KRIs']);
+  assert.deepEqual(labels('/erm/incidents'), ['Risk Management', 'Monitor', 'Loss Events']);
+  assert.deepEqual(labels('/erm/framework-controls/3'), ['Compliance Management', 'Overview', 'Control Catalog', 'Framework control']);
   assert.deepEqual(labels('/vendor-risk/assessments/5'), ['Third-Party Vendor Risk', 'Vendors', 'Vendor Assessments', 'Vendor assessment']);
   assert.deepEqual(labels('/vendor-risk/policy'), ['Third-Party Vendor Risk', 'Roster', 'Policy']);
   assert.deepEqual(labels('/compliance/assessments/8'), ['Compliance Management', 'Overview', 'Assessment Control Center', 'Assessment']);
@@ -280,7 +285,7 @@ test('breadcrumbFor gives a sane trail for an example URL of every module', () =
   assert.deepEqual(labels('/compliance/access-reviews/9'), ['Compliance Management', 'Access Reviews', 'Access review']);
   assert.deepEqual(labels('/control-library/5'), ['Compliance Management', 'Overview', 'Unified Control Library', 'Normalized control']);
   assert.deepEqual(labels('/automation/soc2-controls/coverage'), ['Controls Automation', 'Common Controls', 'Requirement coverage']);
-  assert.deepEqual(labels('/issues/3'), ['Issue & Incident Management', 'Issues', 'Issue']);
+  assert.deepEqual(labels('/issues/3'), ['Issue Management', 'Issues', 'Issue']);
   assert.deepEqual(labels('/auditor-portal/statutory-audit/6'), ['Auditor Portal', 'Statutory Audit', 'Audit observation']);
   assert.deepEqual(labels('/reports/trends'), ['Reports', 'Quick export', 'Trends']);
   assert.deepEqual(labels('/admin/roles'), ['Administration', 'Role Management']);
@@ -300,7 +305,8 @@ test('breadcrumbFor gives a sane trail for an example URL of every module', () =
   assert.deepEqual(labels('/admin/agents'), ['Administration', 'Compliance Agents']);
   assert.deepEqual(labels('/documents'), ['Governance', 'Documents', 'Document Library']);
   // a forward shows its target's trail
-  assert.deepEqual(labels('/erm/internal-controls'), ['Compliance Management', 'Overview', 'Control Catalog']);
-  assert.deepEqual(labels('/erm/internal-controls'), labels('/controls'));
+  assert.deepEqual(labels('/erm/internal-controls/5'), ['Compliance Management', 'Overview', 'Control Catalog']);
+  assert.deepEqual(labels('/erm/internal-controls/5'), labels('/controls'));
+  assert.deepEqual(labels('/erm/internal-controls'), ['Risk Management', 'Treat', 'Controls'], 'the list page is the Treat leaf; it forwards to the Catalog');
   assert.deepEqual(labels('/vendor-risk/shadow-saas'), ['Third-Party Vendor Risk']);
 });

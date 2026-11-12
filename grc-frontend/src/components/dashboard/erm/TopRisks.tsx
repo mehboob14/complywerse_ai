@@ -43,8 +43,8 @@ export default function TopRisks({ risks }: { risks: TopRisk[] }) {
           return (
             <Link
               key={risk.id}
-              href="/erm/risks/list"
-              title={`${risk.title} — inherent ${risk.inherent} → residual ${risk.residual} (−${delta} on the 25-pt scale) · open the risk register`}
+              href={`/erm/risks/${risk.id}`}
+              title={`${risk.title} — inherent ${risk.inherent} → residual ${risk.residual} (−${delta} on the 25-pt scale) · open the risk`}
               className="grid grid-cols-[72px_1fr_44px] items-center gap-2.5 border-t border-slate-100 py-2.5 transition-colors first:border-t-0 hover:bg-slate-50/70"
             >
               <span className={`rounded-full py-[3px] text-center text-[9.5px] font-bold uppercase tracking-wide ${sev.pill}`}>

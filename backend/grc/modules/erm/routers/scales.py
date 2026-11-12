@@ -11,7 +11,7 @@ from ....schemas import (
     LikelihoodImpactScaleCreate, LikelihoodImpactScaleUpdate, LikelihoodImpactScaleResponse,
     MessageResponse
 )
-from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant, require_tenant_permission
 
 router = APIRouter(prefix="/scales", tags=["ERM - Scales"])
 
@@ -57,7 +57,7 @@ def list_scales(
     return scales
 
 
-@router.post("", response_model=LikelihoodImpactScaleResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=LikelihoodImpactScaleResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_tenant_permission("erm:risks:create", "risks:risk_register:create"))])
 def create_scale(
     scale: LikelihoodImpactScaleCreate,
     tenant_id: Optional[int] = Query(None),
@@ -102,7 +102,7 @@ def create_scale(
     return db_scale
 
 
-@router.put("/{scale_id}", response_model=LikelihoodImpactScaleResponse)
+@router.put("/{scale_id}", response_model=LikelihoodImpactScaleResponse, dependencies=[Depends(require_tenant_permission("erm:risks:edit", "risks:risk_register:edit"))])
 def update_scale(
     scale_id: int,
     scale_update: LikelihoodImpactScaleUpdate,
@@ -136,7 +136,7 @@ def update_scale(
     return scale
 
 
-@router.delete("/{scale_id}", response_model=MessageResponse)
+@router.delete("/{scale_id}", response_model=MessageResponse, dependencies=[Depends(require_tenant_permission("erm:risks:delete", "risks:risk_register:delete"))])
 def delete_scale(
     scale_id: int,
     db: Session = Depends(get_db),
@@ -165,7 +165,7 @@ def delete_scale(
     return {"message": "Scale deleted successfully", "id": scale_id}
 
 
-@router.post("/seed-defaults", response_model=MessageResponse)
+@router.post("/seed-defaults", response_model=MessageResponse, dependencies=[Depends(require_tenant_permission("erm:risks:create", "risks:risk_register:create"))])
 def seed_default_scales(
     tenant_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),

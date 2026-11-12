@@ -5,7 +5,6 @@ import {
   BarChart3,
   Layers,
   Activity,
-  AlertTriangle,
   ArrowRight,
   TrendingUp,
 } from 'lucide-react';
@@ -13,7 +12,7 @@ import {
 const analyticsModules = [
   {
     title: 'Interactive Heat Maps',
-    description: 'Visualize risk distribution across likelihood and impact dimensions with drill-down capability. Filter by category, business unit, and treatment plan.',
+    description: 'Visualize risk distribution across likelihood and impact dimensions with drill-down capability. Filter by category.',
     href: '/erm/analytics/heatmap',
     icon: BarChart3,
     color: 'from-red-500/15 to-orange-500/15',
@@ -24,7 +23,7 @@ const analyticsModules = [
   // and onto the ERM Overview cards — no longer surfaced here.
   {
     title: 'Risk Aggregation',
-    description: 'Enterprise-wide risk aggregation across categories, business units, and status. Track total risk exposure and reduction effectiveness.',
+    description: 'Enterprise-wide risk aggregation across categories, business units, and status: average scores and counts by severity band.',
     href: '/erm/analytics/aggregation',
     icon: Layers,
     color: 'from-emerald-500/15 to-teal-500/15',
@@ -91,25 +90,6 @@ export default function AnalyticsPage() {
             </div>
           </Link>
         ))}
-      </div>
-
-      <div className="bg-white/50 border border-slate-200 rounded-xl p-6">
-        <div className="flex items-center gap-3 mb-3">
-          <AlertTriangle className="h-5 w-5 text-amber-400" />
-          <h3 className="text-lg font-semibold text-slate-900">Quick Access</h3>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          {analyticsModules.map((module) => (
-            <Link
-              key={module.href}
-              href={module.href}
-              className="flex items-center gap-2 px-3 py-2 bg-slate-100/30 rounded-lg hover:bg-slate-100/60 transition-colors text-sm text-slate-700 hover:text-slate-900"
-            >
-              <module.icon className="h-4 w-4" />
-              {module.title.split(' ').slice(0, 2).join(' ')}
-            </Link>
-          ))}
-        </div>
       </div>
     </div>
   );

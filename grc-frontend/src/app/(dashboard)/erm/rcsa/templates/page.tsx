@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'next/navigation';
 import { rcsaApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
@@ -53,11 +54,12 @@ const CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
 
 export default function RCSATemplatesPage() {
   const { hasPermission } = usePermissions();
-  const canCreate = hasPermission('risks:rcsa:create');
-  const canDelete = hasPermission('risks:rcsa:delete');
+  const canCreate = hasPermission('erm:rcsa:create') || hasPermission('erm:risks:create');
+  const canDelete = hasPermission('erm:rcsa:delete') || hasPermission('erm:risks:delete');
+  const searchParams = useSearchParams();
   const [searchTerm, setSearchTerm] = useState('');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(searchParams.get('action') === 'new');   // the hub's "New Template" links here
   const [isCloneModalOpen, setIsCloneModalOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [uploadName, setUploadName] = useState('');
@@ -277,6 +279,7 @@ export default function RCSATemplatesPage() {
                 <Eye className="h-4 w-4" />
                 View
               </Link>
+              {canCreate && (
               <button
                 onClick={() => {
                   setSelectedTemplate(template);
@@ -287,6 +290,7 @@ export default function RCSATemplatesPage() {
                 <Copy className="h-4 w-4" />
                 Clone
               </button>
+              )}
               {template.source === 'custom' && canDelete && (
                 <>
                   <Link

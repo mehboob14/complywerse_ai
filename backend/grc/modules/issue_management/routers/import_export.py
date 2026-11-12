@@ -50,7 +50,7 @@ VALID_URGENCY = {"high", "medium", "low"}
 VALID_SEVERITY = {"critical", "high", "medium", "low", "informational"}
 VALID_ISSUE_TYPE = {
     "incident", "audit_finding", "non_conformance", "vendor_breach",
-    "process_gap", "capa", "other",
+    "process_gap", "capa", "risk_treatment", "other",
 }
 VALID_CATEGORY = {
     "security", "privacy", "operations", "contract", "data", "regulatory", "safety",

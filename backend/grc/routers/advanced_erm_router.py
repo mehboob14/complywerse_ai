@@ -7,8 +7,10 @@ from sqlalchemy import func, and_, or_
 from ..models import (
     Risk, RiskKRI, RiskKRIMeasurement, RiskIncident, RiskReview,
     RiskScoreHistory, RiskDependency, RiskAppetiteConfig, RiskReport,
-    RiskControlLink, GRCUser, Tenant, BusinessUnit, get_db
+    RiskControl, GRCUser, Tenant, BusinessUnit, get_db
 )
+from ..modules.erm.services.risk_control_links import link_by_id
+from ..modules.erm.routers import kris as _kris
 from ..schemas import (
     RiskKRICreate, RiskKRIUpdate, RiskKRIResponse,
     RiskKRIMeasurementCreate, RiskKRIMeasurementResponse,
@@ -132,42 +134,15 @@ def list_kris(
     return result
 
 
-@router.post("/kris", response_model=RiskKRIResponse, status_code=status.HTTP_201_CREATED)
+# The KRI writes below delegate to /erm/kris, so a new KRI starts as a draft, a threshold change on an active KRI is only
+# proposed, a value waits for a checker, and the same permissions apply. This router keeps only its old URLs.
+@router.post("/kris", response_model=RiskKRIResponse, status_code=status.HTTP_201_CREATED, dependencies=_kris.CAN_CREATE)
 def create_kri(
     kri: RiskKRICreate,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    user_tenants = get_user_tenants(current_user, db)
-    risk = db.query(Risk).filter(
-        Risk.id == kri.risk_id,
-        Risk.tenant_id.in_(user_tenants)
-    ).first()
-    
-    if not risk:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Risk not found"
-        )
-    
-    refuse_imported_accounts(db, [kri.owner_id, kri.reviewer_id, kri.data_provider_id])
-    db_kri = RiskKRI(
-        risk_id=kri.risk_id,
-        name=kri.name,
-        description=kri.description,
-        metric_type=kri.metric_type,
-        unit=kri.unit,
-        green_threshold=kri.green_threshold,
-        amber_threshold=kri.amber_threshold,
-        threshold_direction=kri.threshold_direction,
-        frequency=kri.frequency,
-        data_source=kri.data_source,
-        owner_id=kri.owner_id
-    )
-    db.add(db_kri)
-    db.commit()
-    db.refresh(db_kri)
-    return db_kri
+    return _kris.create_kri(kri, ai_assist=False, db=db, current_user=current_user)
 
 
 @router.get("/kris/alerts", response_model=List[RiskKRIResponse])
@@ -223,63 +198,23 @@ def get_kri(
     return kri_data
 
 
-@router.put("/kris/{kri_id}", response_model=RiskKRIResponse)
+@router.put("/kris/{kri_id}", response_model=RiskKRIResponse, dependencies=_kris.CAN_EDIT)
 def update_kri(
     kri_id: int,
     kri_update: RiskKRIUpdate,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    user_tenants = get_user_tenants(current_user, db)
-    
-    kri = db.query(RiskKRI).join(Risk).filter(
-        RiskKRI.id == kri_id,
-        Risk.tenant_id.in_(user_tenants)
-    ).first()
-    
-    if not kri:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="KRI not found"
-        )
-    
-    update_data = kri_update.model_dump(exclude_unset=True)
-    refuse_imported_accounts(db, [update_data.get(k) for k in ("owner_id", "reviewer_id", "data_provider_id")],
-                             kept=[kri.owner_id, kri.reviewer_id, kri.data_provider_id])
-    for key, value in update_data.items():
-        setattr(kri, key, value)
-    
-    db.commit()
-    db.refresh(kri)
-    
-    kri_data = RiskKRIResponse.model_validate(kri)
-    if kri.current_value is not None:
-        kri_data.current_status = calculate_kri_status(kri.current_value, kri)
-    return kri_data
+    return _kris.update_kri(kri_id, kri_update, db=db, current_user=current_user)
 
 
-@router.delete("/kris/{kri_id}", response_model=MessageResponse)
+@router.delete("/kris/{kri_id}", response_model=MessageResponse, dependencies=_kris.CAN_DELETE)
 def delete_kri(
     kri_id: int,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    user_tenants = get_user_tenants(current_user, db)
-    
-    kri = db.query(RiskKRI).join(Risk).filter(
-        RiskKRI.id == kri_id,
-        Risk.tenant_id.in_(user_tenants)
-    ).first()
-    
-    if not kri:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="KRI not found"
-        )
-    
-    db.delete(kri)
-    db.commit()
-    return {"message": "KRI deleted successfully", "id": kri_id}
+    return _kris.delete_kri(kri_id, db=db, current_user=current_user)
 
 
 @router.post("/kris/{kri_id}/measure", response_model=RiskKRIMeasurementResponse)
@@ -289,36 +224,7 @@ def record_kri_measurement(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    user_tenants = get_user_tenants(current_user, db)
-    
-    kri = db.query(RiskKRI).join(Risk).filter(
-        RiskKRI.id == kri_id,
-        Risk.tenant_id.in_(user_tenants)
-    ).first()
-    
-    if not kri:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="KRI not found"
-        )
-    
-    status_val = calculate_kri_status(measurement.value, kri)
-    
-    db_measurement = RiskKRIMeasurement(
-        kri_id=kri_id,
-        value=measurement.value,
-        status=status_val,
-        measured_by=current_user.id,
-        notes=measurement.notes
-    )
-    db.add(db_measurement)
-    
-    kri.current_value = measurement.value
-    kri.last_measured_at = datetime.utcnow()
-    
-    db.commit()
-    db.refresh(db_measurement)
-    return db_measurement
+    return _kris.record_kri_measurement(kri_id, measurement, db=db, current_user=current_user)
 
 
 @router.get("/kris/{kri_id}/trend", response_model=List[RiskKRIMeasurementResponse])
@@ -1285,10 +1191,7 @@ def update_control_effectiveness(
 ):
     user_tenants = get_user_tenants(current_user, db)
     
-    link = db.query(RiskControlLink).join(Risk).filter(
-        RiskControlLink.id == link_id,
-        Risk.tenant_id.in_(user_tenants)
-    ).first()
+    link = link_by_id(db, link_id, "normalized", RiskControl.tenant_id.in_(user_tenants))   # the one risk–control link
     
     if not link:
         raise HTTPException(
@@ -1304,7 +1207,7 @@ def update_control_effectiveness(
             detail="effectiveness_rating must be one of: high, medium, low",
         )
 
-    # RiskControlLink stores FAIR effect fields, not effectiveness_rating/notes.
+    # The link stores FAIR effect fields, not effectiveness_rating/notes.
     link.freq_reduction_ml_pct = pct
     link.mag_reduction_ml_pct = pct
     if effectiveness.notes is not None:
