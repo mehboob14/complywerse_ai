@@ -1,8 +1,9 @@
 'use client';
 
-// The Directory's toolbar: what can be done with the unit you are in (New <next level>, Edit details, Move to…, Deactivate or Activate, and Access and Approvals where
-// those tabs exist), then Refresh and the Icons | Details switch. Which actions there are, and why one is off, is directoryModel.unitActions: a person who may not change the
-// unit gets none of them (the page says it is view only); one that cannot be done now stays, disabled, with its reason as its tooltip. From 640px the actions are buttons; below
+// The Directory's toolbar: what can be done with the folder selected (else the one you are in): New <next level> (always in the folder you are in), Properties (the popup), Edit
+// details, Move to…, Deactivate or Activate, and Access and Approvals where those tabs exist), then Refresh and the Icons | Details switch. Which actions there are, and why one is
+// off, is directoryModel.unitActions: a person who may not change the unit gets only Properties and what they may read (the page says it is view only); one that cannot be done now
+// stays, disabled, with its reason as its tooltip. From 640px the actions are buttons; below
 // that they are one "Actions" menu (the same list as a row's "⋯" and the right-click menu) beside the primary New button, so the bar is one line on a phone.
 import { Landmark, RefreshCw } from 'lucide-react';
 import { Button, Menu, SegmentedControl } from '@/components/ui/ds';

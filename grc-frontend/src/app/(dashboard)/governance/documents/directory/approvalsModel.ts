@@ -1,5 +1,5 @@
 // What the Directory's Approvals and Exceptions tabs decide, apart from React so `node --test` can pin it (approvalsModel.test.ts): which defaults a unit defines (the
-// badges of the Details table), and what each default's card shows and offers (set here, inherited, locked above, not in force) for a person who may or may not change it.
+// badges of the Details table), and what each default's card shows and offers (set here, inherited, locked above, not active) for a person who may or may not change it.
 // The shapes, the words and the forms' rules are lib/approvalDefaults.ts's; which default applies is the server's answer (`effective`, `source`), never worked out here.
 import { peopleLine, routeLine, sourceName, type DefaultRow, type Source, type SubjectState } from '../../../../../lib/approvalDefaults.ts';
 import type { DefaultSubject, DirectoryNode } from './directoryModel.ts';
@@ -44,7 +44,7 @@ export function cardView(state: SubjectState, o: { canEdit: boolean; org: boolea
   const inForce = !!own && !!effective && effective.id === own.id;
   const row = own ?? effective;
   const pills: Pill[] = [];
-  if (own) pills.push(inForce ? { label: o.org ? 'Set for the organisation' : 'Set here', tone: 'success' } : { label: own.is_active ? 'Not in force' : 'Switched off', tone: 'neutral' });
+  if (own) pills.push(inForce ? { label: o.org ? 'Set for the organisation' : 'Set here', tone: 'success' } : { label: own.is_active ? 'Not active' : 'Switched off', tone: 'neutral' });
   else if (effective && source) pills.push({ label: `Inherited from ${sourceName(source)}`, tone: 'progress' });
   else pills.push({ label: 'Not set', tone: 'neutral' });
   if (row?.locked) pills.push({ label: 'Locked', tone: 'warning' });

@@ -113,7 +113,7 @@ export function UnitForm({ mode, department, tree, levels, canTop, start = null,
             {places.map((p) => <option key={p.value} value={p.value}>{p.label}{p.subLabel ? ` · ${p.subLabel}` : ''}</option>)}
           </Select>
         </FormField>
-        <FormField label="Owner" info="Sees the Documents overview for this unit and everything under it.">
+        <FormField label="Owner" info="Sees the Governance Overview for this unit and everything under it.">
           <Combobox label="Owner" options={owners} value={form.leadId === null ? null : String(form.leadId)} onChange={(v) => set({ leadId: v === null ? null : Number(v) })}
             clearable placeholder={users.isLoading ? 'Loading people' : 'No owner'} searchPlaceholder="Search people" disabled={users.isLoading} />
         </FormField>

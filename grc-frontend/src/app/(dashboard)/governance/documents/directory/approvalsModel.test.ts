@@ -75,7 +75,7 @@ test('under a lock: the card says who locked it and offers nothing that would be
   const left = cardView({ ...s, own: mine }, { canEdit: true, org: false });
   assert.equal(left.idle, true, 'its own is not in force: the lock stands over it');
   assert.equal(left.instead?.source.name, 'Finance');
-  assert.deepEqual(left.pills.map((p) => p.label), ['Not in force']);
+  assert.deepEqual(left.pills.map((p) => p.label), ['Not active']);
   assert.deepEqual(left.can, { set: false, edit: false, override: false, revert: true }, 'removing it is allowed, changing it is refused (409)');
   assert.equal(cardView(state({ effective: row({ locked: false }), source: src(null, 'The organisation', true) }), { canEdit: true, org: false }).lockedBy, null, 'an unlocked default above is not a lock');
 });

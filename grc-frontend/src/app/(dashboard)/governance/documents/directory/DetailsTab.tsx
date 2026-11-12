@@ -3,7 +3,7 @@
 // The Details tab of a unit's popup: what the unit is (level, code, how many documents, people and units) as facts, then its fields to change in place (name, where it sits,
 // owner, description: UnitForm) and whether it is switched on. A person who may not manage the unit reads the same facts as text. The unit's full record (its description, its
 // roles) is read when the tab opens; every unit has loading, failed and saved states, and a refusal keeps what was typed and says why in the server's words.
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { departmentsApi } from '@/lib/api';
@@ -17,7 +17,14 @@ import { useToggleActive } from './useToggleActive';
 import { libraryHref } from './directoryModel';
 import type { DirectoryTabProps } from './directoryTabs';
 
-export function DetailsTab({ node, tree, levels, canManage, canTop, setDirty }: DirectoryTabProps) {
+/** Puts the cursor in the first field of the form drawn beside it (the unit's name), once, when "Edit details" opened the popup. */
+function FocusFirstField() {
+  const mark = useRef<HTMLSpanElement>(null);
+  useEffect(() => { mark.current?.parentElement?.querySelector<HTMLElement>('input:not([type="hidden"]), textarea')?.focus({ preventScroll: true }); }, []);
+  return <span ref={mark} hidden />;
+}
+
+export function DetailsTab({ node, tree, levels, canManage, canTop, setDirty, focusName }: DirectoryTabProps) {
   const detail = useQuery({ queryKey: ['admin-department', node.id], queryFn: () => departmentsApi.get(node.id).then((r) => r.data) });
   const toggle = useToggleActive();
   // switching a unit off re-reads it, which would throw typed input away: it waits until the fields are saved or discarded
@@ -45,7 +52,10 @@ export function DetailsTab({ node, tree, levels, canManage, canTop, setDirty }: 
       ) : detail.isError || !detail.data ? (
         <ErrorState title="Couldn't load the details" message={errorMessage(detail.error)} onRetry={canRetry(detail.error) ? () => { void detail.refetch(); } : undefined} />
       ) : (
-        <UnitForm key={`${detail.data.id}:${detail.data.updated_at}`} mode="edit" department={detail.data} tree={tree} levels={levels} canTop={canTop} readOnly={!canManage} onSaved={() => undefined} onDirty={onDirty} />
+        <>
+          <UnitForm key={`${detail.data.id}:${detail.data.updated_at}`} mode="edit" department={detail.data} tree={tree} levels={levels} canTop={canTop} readOnly={!canManage} onSaved={() => undefined} onDirty={onDirty} />
+          {focusName && canManage && <FocusFirstField />}
+        </>
       )}
 
       <section aria-label="Status" className="flex flex-wrap items-center gap-[8px] border-t border-ds-border pt-[16px]">

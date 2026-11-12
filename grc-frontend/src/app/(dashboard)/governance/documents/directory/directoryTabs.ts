@@ -36,6 +36,8 @@ export interface DirectoryTabProps {
   setDirty: (dirty: boolean) => void;
   /** the popup is open on the whole organisation (its defaults), not on a unit: `node` is its stand-in (see the note at the top) */
   organisation: boolean;
+  /** the popup was opened by "Edit details" (F2): the Details tab puts the cursor in the first field */
+  focusName?: boolean;
   /** go to another unit in the popup (a child, the parent), optionally on a tab */
   openUnit: (id: number, tab?: TabId) => void;
   /** close the popup */

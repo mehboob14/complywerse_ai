@@ -202,7 +202,7 @@ export function selectionAfterClose(tree: DirectoryTree, selected: number | null
 export type TreeKey = { focus: number | null } | { expand: number } | { collapse: number } | { open: number } | null;
 
 /** What a key does in the tree when the line of `at` (null: the organisation) has focus: the arrows move (Right opens a closed unit, then goes to its first unit; Left closes an
- *  open one, then goes to the unit above), Home and End go to the first and last line, Enter opens the unit's popup, a letter goes to the next unit that starts with it. */
+ *  open one, then goes to the unit above), Home and End go to the first and last line, Enter opens the folder (goes into it, and into its contents), a letter goes to the next unit that starts with it. */
 export function treeKey(rows: readonly TreeRow[], names: (id: number) => string, parentOf: (id: number) => number | null, at: number | null, key: string): TreeKey {
   const i = rows.findIndex((r) => r.id === at);
   if (i < 0) return null;
@@ -233,7 +233,7 @@ export function treeKey(rows: readonly TreeRow[], names: (id: number) => string,
 
 // ── what the toolbar and the menus may do ───────────────────────────────────────────────────────────────────────────────────────────────
 
-export type ActionKey = 'new' | 'edit' | 'move' | 'toggle' | 'access' | 'approvals';
+export type ActionKey = 'new' | 'properties' | 'edit' | 'move' | 'toggle' | 'access' | 'approvals';
 export interface ActionState {
   key: ActionKey;
   label: string;
@@ -259,11 +259,11 @@ export function unitActions(tree: DirectoryTree, id: number | null, ctx: ActionC
   if (id === null) {
     return [
       { key: 'new', label: `New ${levelLabel(1, ctx.levels)}`, hidden: !ctx.canTop, disabled: false },
-      gone('edit', 'Details'), gone('move', 'Move to…'), gone('toggle', 'Deactivate'), gone('access', 'Access'), gone('approvals', 'Approvals'),
+      gone('properties', 'Properties'), gone('edit', 'Edit details'), gone('move', 'Move to…'), gone('toggle', 'Deactivate'), gone('access', 'Access'), gone('approvals', 'Approvals'),
     ];
   }
   const n = tree.node(id);
-  if (!n) return (['new', 'edit', 'move', 'toggle', 'access', 'approvals'] as const).map((k) => gone(k, k));
+  if (!n) return (['new', 'properties', 'edit', 'move', 'toggle', 'access', 'approvals'] as const).map((k) => gone(k, k));
   const parent = tree.parentOf(id);
   const manage = n.can_manage;
   const nextLevel = levelLabel(Math.min(n.level + 1, MAX_DEPTH), ctx.levels);
@@ -271,7 +271,8 @@ export function unitActions(tree: DirectoryTree, id: number | null, ctx: ActionC
   const moves = moveChoices(tree, id, ctx).filter((c) => c.value !== String(parent ?? ''));
   return [
     { key: 'new', label: `New ${nextLevel}`, hidden: !manage, disabled: !!newReason, reason: newReason },
-    { key: 'edit', label: manage ? 'Edit details' : 'Details', hidden: false, disabled: false },
+    { key: 'properties', label: 'Properties', hidden: false, disabled: false },
+    { key: 'edit', label: 'Edit details', hidden: !manage, disabled: false },
     { key: 'move', label: 'Move to…', hidden: !manage, disabled: moves.length === 0, reason: moves.length === 0 ? 'Nowhere else it can go' : undefined },
     { key: 'toggle', label: n.is_active ? 'Deactivate' : 'Activate', hidden: !manage, disabled: false },
     { key: 'access', label: 'Access', hidden: !ctx.tabs.includes('access'), disabled: false },

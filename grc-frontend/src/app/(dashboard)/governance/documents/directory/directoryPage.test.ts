@@ -1,8 +1,9 @@
 // node --test "src/app/(dashboard)/governance/documents/directory/directoryPage.test.ts"
 // What the Directory promises, read from its sources (the repo's habit for pages, like overviewPage.test.ts): it stays on the design-system kit and holds its token rules, no
 // screen names a model or a vendor or prints an id, a unit is never deleted (only deactivated, after a question), the Directory API is asked for once and a backend without it is
-// not an error, the tree is a real keyboard tree, a unit opens as a popup with a double-click or Enter, the tabs come from ONE registry whose placeholders are not shown, every read has
-// its states, a person who may not change a unit gets none of its buttons, and the page is a tab of the Documents area.
+// not an error, the tree is a real keyboard tree, a double-click or Enter on a folder goes INTO it (like Explorer; Back, Forward and Up work, the documents filed in the folder are files after
+// its folders, the folders are yellow), the popup is Properties (toolbar, menus, Alt+Enter, a link), the tabs come from ONE registry whose placeholders are not shown, every read has its
+// states, a person who may not change a unit gets none of its buttons, and the page is a tab of the Documents area.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -85,12 +86,12 @@ test('the page is a tab of the Documents area with the registry\'s name, its sta
 
 test('what a person may do comes from the model: the toolbar and every menu are built from unitActions, a hidden action is not drawn, a disabled one says why', () => {
   const page = code(read('page.tsx'));
-  assert.ok(page.includes('unitActions(tree, current, ctx)') && page.includes('unitActions(tree, id, ctx)') && page.includes('menuItems('));
+  assert.ok(page.includes('unitActions(tree, target, ctx)') && page.includes('unitActions(tree, current, ctx)') && page.includes('unitActions(tree, id, ctx)') && page.includes('menuItems('));
   const toolbar = code(read('Toolbar.tsx'));
   assert.ok(toolbar.includes('actions.filter((a) => !a.hidden)') && toolbar.includes('title={a.reason}') && toolbar.includes('title={primary.reason}'));
   assert.ok(toolbar.includes('role="toolbar"') && toolbar.includes('<SegmentedControl label="View" name="directory-view"') && toolbar.includes('Refresh'));
   const menu = code(read('unitMenu.ts'));
-  assert.ok(menu.includes('actions.filter((a) => !a.hidden)') && menu.includes('reason: a.reason') && menu.includes("a.key === 'toggle' && a.label === 'Deactivate'"));
+  assert.ok(menu.includes('.filter((a) => !a.hidden)') && menu.includes('reason: a.reason') && menu.includes("a.key === 'toggle' && a.label === 'Deactivate'"));
   const ctxMenu = code(read('ContextMenu.tsx'));
   assert.ok(ctxMenu.includes('role="menu"') && ctxMenu.includes('role="menuitem"') && ctxMenu.includes("e.key === 'Escape'") && ctxMenu.includes('placeMenu('), 'a menu at the pointer, kept on screen, with its keys');
   assert.ok(page.includes('onContextMenu') === false && code(read('UnitTree.tsx')).includes('onContextMenu') && code(read('Contents.tsx')).includes('onContextMenu'), 'right-click on a tree line, a tile and a row');
@@ -106,15 +107,81 @@ test('the tree is a keyboard tree: role=tree, lines with level, place in set, op
   for (const k of ['ArrowDown', 'ArrowUp', 'ArrowRight', 'ArrowLeft', 'Home', 'End', 'Enter']) assert.ok(model.includes(`case '${k}'`), k);
 });
 
-test('a unit opens as a popup with a double-click or Enter, in the tree and in the contents; a single click only marks; on a phone a tap goes in', () => {
+test('a double-click or Enter on a folder GOES INTO it (tree and contents), pushing the address; a single click only selects; a double-click on a file opens the document; on a phone a tap opens', () => {
   const contents = code(read('Contents.tsx'));
-  assert.ok(contents.includes('onDoubleClick') && contents.includes("e.key === 'Enter'") && contents.includes('e.preventDefault(); onOpen(node.id)'));
-  assert.ok(contents.includes('useCompact') && contents.includes('(max-width: 767px)') && contents.includes('if (kids > 0) onGo(node.id); else onOpen(node.id);'), 'drill-down below 768px');
-  assert.ok(contents.includes('Open ${node.name}: ${countText(kids') && contents.includes('onGo(node.id)'), 'the way in is a labelled button');
-  assert.ok(contents.includes('<TableFrame') && contents.includes('<RowHeaderCell>') && contents.includes('Th priority={3}'), 'Details is the kit\'s table, its minor columns give way as the window narrows');
-  assert.ok(contents.includes('view === \'icons\' || compact'), 'a phone gets the list of cards, not the table');
+  assert.ok(contents.includes('onDoubleClick={() => { if (!tap) onOpen(item); }}') && contents.includes("if (e.key === 'Enter')") && contents.includes('if (item) onOpen(item);'), 'Enter and a double-click open');
+  assert.ok(contents.includes('onClick={() => (tap ? onOpen(item) : onSelect(itemKey))}'), 'a single click selects; with a finger it opens');
+  assert.ok(contents.includes('const tap = compact || coarse') && contents.includes('(max-width: 767px)') && contents.includes('(pointer: coarse)'), 'drill-down below 768px, and for a finger');
+  assert.ok(contents.includes('<TableFrame') && contents.includes('<RowHeaderCell>') && contents.includes('Th priority={3}'), "Details is the kit's table, its minor columns give way as the window narrows");
+  assert.ok(contents.includes("view === 'icons' || compact"), 'a phone gets the Icons list, not the table');
   const page = code(read('page.tsx'));
-  assert.ok(page.includes('const openPopup = (id: number, tab: TabId = \'details\')') && page.includes('setAddress({ open: String(id), tab })'), 'the popup is in the address');
+  assert.ok(page.includes('const openFolder = (id: number) => { wantPane(); goInto(id); }') && page.includes('nav.navigate(id)'), "opening a folder is a push (the browser's Back comes back)");
+  assert.ok(page.includes('onOpen={openItem}') && page.includes('onOpen={(id) => goInto(id)}'), 'the contents and the tree both go into a folder');
+  assert.ok(!/onOpen=\{\([^)]*\) => openPopup/.test(page) && !contents.includes('openPopup'), 'a double-click no longer opens the popup');
+  assert.ok(page.includes('router.push(docHref(f.id, here))') && page.includes('openFile(f)'), "a file opens the document's own page, with this folder as its way back");
+  assert.ok(page.includes("setAddress({ unit: to === null ? '' : String(to) }, { push })"), 'the folder is in the address (?unit=)');
+});
+
+test("Back, Forward and Up are in the address bar, off where there is nowhere to go; the first Back from the first folder visited does not leave the Directory; the browser's history is used", () => {
+  const bar = code(read('AddressBar.tsx'));
+  for (const piece of ['aria-label="Back"', 'aria-label="Forward"', 'aria-label="Up one level"', 'disabled={!canBack}', 'disabled={!canForward}', 'disabled={current === null}', 'Alt+Left', 'Alt+Right', 'Alt+Up']) assert.ok(bar.includes(piece), piece);
+  const nav = code(read('useDirectoryNav.ts'));
+  assert.ok(nav.includes('window.history.back()') && nav.includes('window.history.forward()'), "Back and Forward are the browser's history, so the address, the tree, the selection and the scroll come back");
+  assert.ok(nav.includes('canBack: !!t && canBack(t)') && nav.includes('follow(t, current, asked.current)'), "the page's own mirror says whether there is anywhere to go");
+  const page = code(read('page.tsx'));
+  assert.ok(page.includes('canBack={nav.canBack}') && page.includes('canForward={nav.canForward}') && page.includes('onUp={up}'));
+  assert.ok(page.includes('[folderKey(parent)]: unitKey(current)'), 'Up selects the folder you came from, as Explorer does');
+});
+
+test("the keyboard: the shortcuts are explorerKeys' and are the page's only outside fields, dialogs and menus; Enter on a button or a row is that control's own", () => {
+  const page = code(read('page.tsx'));
+  assert.ok(page.includes("document.addEventListener('keydown', onKey)") && page.includes('explorerShortcut(e)'));
+  assert.ok(page.includes('[role="dialog"], [role="menu"]') && page.includes('input, textarea, select, [contenteditable="true"], [role="combobox"]'), 'not under a popup or a menu, not in a field');
+  assert.ok(page.includes("action === 'open' && t !== document.body && t !== pane.current"), "Enter on a button is the button's");
+  assert.ok(page.includes("const wanted: ActionKey = a === 'properties' ? 'properties' : a === 'rename' ? 'edit' : 'toggle'"), 'Alt+Enter is Properties, F2 Edit details, Delete Deactivate: each through unitActions, so a person who may not does nothing');
+  assert.ok(page.includes("act.label !== 'Deactivate'"), 'Delete only deactivates, it never activates');
+  const contents = code(read('Contents.tsx'));
+  assert.ok(contents.includes('onKeyDownCapture={onKeyDownCapture}') && contents.includes("el.matches('[data-item]')") && contents.includes('moveSelection(keys.length, at, e.key,') && contents.includes('typeAhead(names, at, e.key)'), 'arrows, Home, End and a letter move the selection, only on an item');
+  assert.ok(contents.includes('columnsOf(box.current)'), 'a grid in Icons: Up and Down go a row');
+});
+
+test("FILES: the documents filed in the folder come after its folders (one list for the keyboard), from the library's own list; empty, failed, refused and long lists have their words", () => {
+  const contents = code(read('Contents.tsx'));
+  assert.ok(contents.includes('itemKeys(kids, shown)') && contents.includes('sortFolders(') && contents.includes('sortFiles(') && contents.includes('capFiles(sorted, limit)'), 'folders first, then files, sorted, capped');
+  assert.ok(contents.includes('title="This folder is empty"') && contents.includes('Show more') && contents.includes('FILE_PAGE'), 'an empty folder says so; a long list has Show more');
+  assert.ok(contents.includes('title="Couldn\'t load the files"') && contents.includes('onRetry={canRetry(files.error) ? files.onRetry : undefined}'), 'a list that did not load is not an empty folder, and can be asked again');
+  assert.ok(contents.includes('files.refused') && contents.includes('Documents are not shown to you'), 'a refusal is said, not an error');
+  assert.ok(contents.includes('<Th priority={2} sortKey="status"') && contents.includes('<Th priority={3} sortKey="review"') && contents.includes('Next review') && contents.includes('<Th priority={3} sortKey="version"'), 'the Details columns of a file: Name, Status, Type, Version, Owner, Next review');
+  assert.ok(contents.includes("A folder's document count includes the folders under it."), "the count's meaning is in an (i)");
+  const api = readFileSync(new URL('../../../../../lib/directoryFilesApi.ts', import.meta.url), 'utf8');
+  assert.ok(api.includes("LIBRARY_LIST_KEY = ['gov-docs-workspace']") && api.includes('lean: 1') && api.includes("'/governance/documents'"), "the library's own lean list and its cache key: one request, the server's own read filter");
+  const data = code(read('directoryFilesData.ts'));
+  assert.ok(data.includes('queryKey: LIBRARY_LIST_KEY') && data.includes('statusOf(q.error) === 403') && data.includes('failed: q.isError && !parsed && !refused'));
+  const page = code(read('page.tsx'));
+  assert.ok(page.includes('filesIn(allFiles, current)') && page.includes('libraryFileHref(f)') && page.includes('fileMenuItems('), "the folder's own files; right-click: Open, Open in the library, Copy link");
+  const menu = code(read('unitMenu.ts'));
+  for (const label of ["'Open'", "'Open in the library'", "'Copy link'"]) assert.ok(menu.includes(label), label);
+});
+
+test('PROPERTIES: the popup opens from the toolbar, the menus, Alt+Enter and a link, not from a double-click; Edit details is the same popup with the cursor in the first field', () => {
+  const page = code(read('page.tsx'));
+  assert.ok(page.includes("if (key === 'properties') openPopup(id, 'details')") && page.includes("else if (key === 'edit') { setRenaming(id); openPopup(id, 'details'); }"));
+  assert.ok(page.includes('focusName={renaming === popupNode.id}') && page.includes("setAddress({ open: '', tab: 'details' })"));
+  const popup = code(read('UnitPopup.tsx'));
+  assert.ok(popup.includes('`Properties · ${node.level_label}') && popup.includes('<FolderIcon'), "the dialog says Properties under the folder's icon");
+  const model = code(read('directoryModel.ts'));
+  assert.ok(model.includes("key: 'properties', label: 'Properties', hidden: false") && model.includes("key: 'edit', label: 'Edit details', hidden: !manage"), "everyone reads Properties; Edit details is the manager's");
+  assert.ok(code(read('DetailsTab.tsx')).includes('focusName && canManage'));
+});
+
+test('YELLOW FOLDERS: one file draws every folder and file icon and holds the only colour codes of the Directory; the open one, the grey one and the file page are there; the rest uses tokens', () => {
+  const icons = read('folderIcon.tsx');
+  for (const piece of ['FOLDER_BACK', 'FOLDER_FRONT', 'FOLDER_GREY_BACK', 'FOLDER_GREY_FRONT', 'export function FolderIcon', 'export function FileIcon', 'open?: boolean', 'inactive?: boolean', 'badge?: boolean', 'aria-hidden']) assert.ok(icons.includes(piece), piece);
+  assert.ok(/(?:FOLDER_BACK|FOLDER_FRONT) = '#[0-9A-Fa-f]{6}'/.test(icons), 'the yellows are named constants');
+  for (const name of files.filter((n) => n !== 'folderIcon.tsx')) assert.ok(!/#[0-9a-fA-F]{6}\b/.test(code(read(name))), `${name}: a colour code outside folderIcon.tsx`);
+  for (const name of ['UnitTree.tsx', 'Contents.tsx', 'AddressBar.tsx', 'UnitPopup.tsx', 'EmptyFolder.tsx']) assert.ok(read(name).includes('<FolderIcon'), `${name} draws the yellow folder`);
+  for (const name of ['UnitTree.tsx', 'Contents.tsx', 'AddressBar.tsx', 'UnitPopup.tsx']) assert.ok(!/\b(Folder|FolderOpen|Building2)\b[^'"\n]*from 'lucide-react'/.test(read(name)), `${name}: a lucide folder is left`);
+  assert.ok(code(read('UnitTree.tsx')).includes('<FolderIcon size={20} open={on} inactive='), 'the open folder is the one you are in');
 });
 
 test('the popup is the kit\'s centered dialog with the dirty guard; its tabs come from the registry and it names none; placeholders are not shown until enabled', () => {
@@ -148,7 +215,7 @@ test('the address bar and the tree are labelled, the up button and every crumb a
   const bar = code(read('AddressBar.tsx'));
   assert.ok(bar.includes('<nav aria-label="Location"') && bar.includes('aria-label="Up one level"') && bar.includes('aria-current="page"') && bar.includes('<ol'));
   const contents = code(read('Contents.tsx'));
-  assert.ok(contents.includes('aria-labelledby="directory-here"') && contents.includes('aria-label={`Actions for ${node.name}`}') === false && contents.includes('label={`Actions for ${node.name}`}'), 'every row has a named "⋯"');
+  assert.ok(contents.includes('aria-labelledby="directory-here"') && contents.includes('aria-label={`Actions for ${node.name}`}') === false && contents.includes('label={`Actions for ${node.name}`}') && contents.includes('menuLabel={`Actions for ${file.title}`}'), 'the selected folder and file have a named "⋯" (every one on a phone)');
 });
 
 test('Access: who has access and why, the levels given here and inherited, and the writes (give, change, take back, block) are the manager\'s; a reader sees the lists only', () => {

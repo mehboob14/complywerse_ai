@@ -179,7 +179,7 @@ export function DefaultCard({ subject, unit, unitName, state, org, canEdit, targ
           <>
             <Body subject={subject} row={view.row} />
             {view.idle && view.instead && (
-              <p className="text-ds-body text-ds-fg-muted">In force instead, from {sourceName(view.instead.source)}: {rowWords(view.instead.row)}</p>
+              <p className="text-ds-body text-ds-fg-muted">Active instead, from {sourceName(view.instead.source)}: {rowWords(view.instead.row)}</p>
             )}
             {view.idle && !view.instead && state.own && !state.own.is_active && <p className="text-ds-body text-ds-fg-muted">Switched off: documents do not use it.</p>}
             {orgLine && <p className="text-ds-label font-normal text-ds-fg-muted [overflow-wrap:anywhere]">{orgLine}</p>}
@@ -213,7 +213,7 @@ export function DefaultCard({ subject, unit, unitName, state, org, canEdit, targ
               </span>
               {state.own && (
                 <span className="inline-flex items-center gap-[4px]">
-                  <Checkbox label="In force" checked={draft.active} disabled={save.isPending} onChange={(e) => setDraft({ ...draft, active: e.target.checked })} />
+                  <Checkbox label="Active" checked={draft.active} disabled={save.isPending} onChange={(e) => setDraft({ ...draft, active: e.target.checked })} />
                   <InfoTip text={ACTIVE_NOTE} label="About switching a default off" />
                 </span>
               )}

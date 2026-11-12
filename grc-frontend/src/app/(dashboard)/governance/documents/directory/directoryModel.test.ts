@@ -145,7 +145,7 @@ test('closing a unit moves the selection up to it when the selection was under i
   assert.equal(selectionAfterClose(tree, null, 4), null);
 });
 
-test('the keys of the tree: arrows move, Right opens then enters, Left closes then goes up, Home and End, Enter opens the popup, a letter jumps', () => {
+test('the keys of the tree: arrows move, Right opens then enters, Left closes then goes up, Home and End, Enter opens the folder, a letter jumps', () => {
   const d = dir();
   const tree = buildTree(d.nodes);
   const names = (id: number) => tree.node(id)!.name;
@@ -167,7 +167,7 @@ test('the keys of the tree: arrows move, Right opens then enters, Left closes th
   assert.deepEqual(key(rows, 3, 'ArrowLeft'), { focus: null }, 'a top unit goes to the organisation');
   assert.equal(key(rows, null, 'ArrowLeft'), null);
   assert.deepEqual(key(rows, 5, 'Enter'), { open: 5 });
-  assert.equal(key(rows, null, 'Enter'), null, 'the organisation has no popup');
+  assert.equal(key(rows, null, 'Enter'), null, 'the organisation is already open: nothing to go into');
   assert.deepEqual(key(rows, null, 'l'), { focus: 6 }, 'a letter goes to the next unit that starts with it');
   assert.deepEqual(key(rows, 6, 'L'), { focus: 6 }, 'and wraps round to itself when it is the only one');
   assert.deepEqual(key(rows, 3, 'o'), { focus: 1 });
@@ -184,6 +184,8 @@ test('actions of a unit the person manages: New names the next level, Move, Deac
   assert.equal(ops.new.label, 'New Sub-department');
   assert.deepEqual([ops.new.hidden, ops.new.disabled], [false, false]);
   assert.equal(ops.edit.label, 'Edit details');
+  assert.deepEqual([ops.properties.label, ops.properties.hidden, ops.properties.disabled], ['Properties', false, false], 'the popup is Properties');
+  assert.deepEqual(unitActions(tree, 1, ctx).map((x) => x.key), ['new', 'properties', 'edit', 'move', 'toggle', 'access', 'approvals']);
   assert.deepEqual([ops.move.hidden, ops.move.disabled], [false, false]);
   assert.equal(ops.toggle.label, 'Deactivate');
   assert.ok(ops.access.hidden && ops.approvals.hidden, 'no Access or Approvals tab yet');
@@ -211,12 +213,12 @@ test('actions: nothing can be added under the deepest level, and the reason says
   assert.equal(c.new.label, 'New Unit', 'still named by the deepest level');
 });
 
-test('actions for a person who manages nothing: only Details is offered, and the page is view only', () => {
+test('actions for a person who manages nothing: only Properties is offered, and the page is view only', () => {
   const nodes = dir(false).nodes;
   const tree = buildTree(nodes);
   const ops = Object.fromEntries(unitActions(tree, 1, { ...ctx, canTop: false }).map((x) => [x.key, x]));
-  assert.equal(ops.edit.label, 'Details');
-  assert.ok(ops.new.hidden && ops.move.hidden && ops.toggle.hidden);
+  assert.deepEqual([ops.properties.label, ops.properties.hidden], ['Properties', false], 'a reader opens Properties (read-only)');
+  assert.ok(ops.new.hidden && ops.edit.hidden && ops.move.hidden && ops.toggle.hidden);
   assert.equal(viewOnly(nodes, false), true);
   assert.equal(viewOnly(nodes, true), false, 'the global right alone is not view only');
   assert.equal(viewOnly(dir(true).nodes, false), false);

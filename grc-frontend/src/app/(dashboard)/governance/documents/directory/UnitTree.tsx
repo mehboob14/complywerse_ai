@@ -2,14 +2,16 @@
 
 // The organisation as a tree (left of the Directory): the organisation, its departments, their sub-departments and units, as one keyboard tree (role="tree" with the lines flat and
 // each one's level, place in its set and open state said, so a screen reader reads "Operations, level 2, 3 of 5, collapsed"). A click on a line goes to that unit (its contents appear
-// on the right); a double-click or Enter opens the unit's popup; a click on the arrow opens or closes it. Keys: Up and Down move, Right opens then goes in, Left closes then goes
+// on the right); a double-click or Enter opens it (goes into it and shows what is under it, as in Explorer); a click on the arrow opens or closes it. The folder you are in is drawn open
+// (a yellow folder with its front panel leaning back), a unit switched off grey. Keys: Up and Down move, Right opens then goes in, Left closes then goes
 // up, Home and End, a letter jumps to the next unit that starts with it (the rules are directoryModel.treeKey, tested). One line is the tab stop (the selected one); moving with a
 // key selects, as Explorer does, so the contents follow. A unit switched off says "Inactive" in words. A search box finds a unit anywhere in the tree by name or code; the results
 // replace the tree until it is cleared. Right-click opens the unit's menu.
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
-import { Building2, ChevronDown, ChevronRight, Folder, FolderOpen, Search } from 'lucide-react';
+import { ChevronDown, ChevronRight, Search } from 'lucide-react';
 import { clsx } from 'clsx';
 import { TextInput } from '@/components/ui/ds';
+import { FolderIcon } from './folderIcon';
 import { countText, findUnits, treeKey, type DirectoryTree, type TreeRow } from './directoryModel';
 
 const ROW = 'flex min-h-[32px] cursor-pointer items-center gap-[6px] rounded-ds-control pr-[8px] text-ds-body focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--ds-focus)] [@media(pointer:coarse)]:min-h-[44px]';
@@ -18,9 +20,10 @@ interface Props {
   tree: DirectoryTree;
   rows: readonly TreeRow[];
   selected: number | null;
-  /** a click or a key went to this unit (null: the organisation); `by` says which, so Back can undo a click but not every arrow press */
+  /** a click or a key went to this unit (null: the organisation); `by` says which: a click is a step Back can undo, an arrow press only moves the selection */
   onSelect: (id: number | null, by: 'click' | 'key') => void;
   onToggle: (id: number) => void;
+  /** a double-click or Enter: open the folder (go into it) */
   onOpen: (id: number) => void;
   onContext: (e: MouseEvent, id: number | null) => void;
 }
@@ -105,7 +108,7 @@ export function UnitTree({ tree, rows, selected, onSelect, onToggle, onOpen, onC
                 ) : (
                   <span aria-hidden className="h-[24px] w-[24px] shrink-0" />
                 )}
-                {row.id === null ? <Building2 aria-hidden className="h-[16px] w-[16px] shrink-0" strokeWidth={1.75} /> : row.open ? <FolderOpen aria-hidden className="h-[16px] w-[16px] shrink-0" strokeWidth={1.75} /> : <Folder aria-hidden className="h-[16px] w-[16px] shrink-0" strokeWidth={1.75} />}
+                <FolderIcon size={20} open={on} inactive={!!node && !node.is_active} />
                 <span className={clsx('min-w-0 flex-1 truncate', node && !node.is_active && 'text-ds-fg-muted')}>{node ? node.name : 'Organisation'}</span>
                 {node && !node.is_active && <span className="shrink-0 rounded-full border border-ds-border bg-ds-surface-subtle px-[6px] text-ds-label font-normal text-ds-fg-muted">Inactive</span>}
                 <span className="sr-only">{countText(total, 'document')}</span>
