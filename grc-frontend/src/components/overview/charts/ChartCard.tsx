@@ -5,15 +5,18 @@
 // (the person may not see it: a lock and why), nothing to show (a plain line that says what fills it), or the chart. A failed or refused request is never drawn
 // as a chart of zeros. The card fills the height of its grid cell so a row of cards is level.
 //
-//   <ChartCard id="by-status" title="Issues by status" info="…" state="ready">…</ChartCard>
+//   <ChartCard id="by-status" title="Issues by status" info="…" href="/issues/register" hrefLabel="Open the issue register" state="ready">…</ChartCard>
 //   <ChartCard id="trend" title="Open issues, 12 months" state="empty" emptyText="No history yet. It builds up as issues are raised and closed.">
 //
 // Tokens and arbitrary values only (kit rules). The heading takes `!` like the kit's SectionCard (the shell remaps a bare h2).
 import type { ReactNode } from 'react';
 import { clsx } from 'clsx';
-import { Lock } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowUpRight, Lock } from 'lucide-react';
 import { InfoTip } from '../../ui/InfoTip';
 import { ErrorState } from '../../ui/ds';
+import { linkClasses } from '../../ui/ds/linkModel';
+import { openLinkName } from './chartModel';
 
 export type ChartState = 'loading' | 'error' | 'denied' | 'empty' | 'ready';
 
@@ -25,13 +28,19 @@ export interface ChartCardProps {
   info?: string;
   /** one line of facts beside the title: "Last 12 months" */
   meta?: ReactNode;
-  /** the card's own controls (a pivot, a link to the records), on the right of the title row */
+  /** the card's own controls (a pivot, a filter), on the right of the title row */
   actions?: ReactNode;
+  /** where the card's "Open" link goes: the module's list the chart is a picture of (the card is not a link; its parts are) */
+  href?: string;
+  /** what the "Open" link is called for a screen reader, in words that say where it goes: "Open the risk register" (default "Open <title>") */
+  hrefLabel?: string;
   state: ChartState;
   /** `error`: what failed, in the server's words, and Retry when asking again can help */
   error?: { title?: string; message?: string; onRetry?: () => void } | null;
   /** `empty`: what the card would show and what fills it, one plain line: "No issues yet. They appear here once one is raised." */
   emptyText?: string;
+  /** `empty`: what to do about it, under the line (an "Add risk" button or link); an empty card says what to do, not only "No data" */
+  emptyAction?: ReactNode;
   /** `denied`: why the person may not see it ("Your role cannot read vendor scores.") */
   deniedText?: string;
   /** `loading`: how tall the chart will be, so the card does not jump (default 160) */
@@ -41,14 +50,24 @@ export interface ChartCardProps {
   children?: ReactNode;
 }
 
-export function ChartCard({ id, title, info, meta, actions, state, error, emptyText, deniedText, loadingHeight = 160, className, children }: ChartCardProps) {
+export function ChartCard({ id, title, info, meta, actions, href, hrefLabel, state, error, emptyText, emptyAction, deniedText, loadingHeight = 160, className, children }: ChartCardProps) {
   return (
     <section id={id} aria-labelledby={`${id}-h`} className={clsx('flex h-full min-w-0 scroll-mt-[64px] flex-col rounded-ds-card border border-ds-border bg-ds-surface p-[16px]', className)}>
       <div className="mb-[12px] flex flex-wrap items-center gap-x-[4px] gap-y-[8px]">
         <h2 id={`${id}-h`} className="min-w-0 break-words !text-ds-section !text-ds-fg">{title}</h2>
         {info && <InfoTip text={info} label={`About ${title.toLowerCase()}`} />}
         {meta && <span className="ml-[4px] text-ds-body text-ds-fg-muted">{meta}</span>}
-        {actions && <div className="ml-auto flex max-w-full flex-wrap items-center gap-[8px]">{actions}</div>}
+        {(actions || href) && (
+          <div className="ml-auto flex max-w-full flex-wrap items-center gap-x-[12px] gap-y-[8px]">
+            {actions}
+            {href && (
+              <Link href={href} aria-label={openLinkName(title, hrefLabel)} className={clsx('inline-flex items-center gap-[2px]', linkClasses({ tone: 'text', size: 'label' }))}>
+                Open
+                <ArrowUpRight aria-hidden className="h-[14px] w-[14px] shrink-0" strokeWidth={2} />
+              </Link>
+            )}
+          </div>
+        )}
       </div>
       <div className="min-h-0 min-w-0 flex-1">
         {state === 'loading' && (
@@ -64,7 +83,12 @@ export function ChartCard({ id, title, info, meta, actions, state, error, emptyT
             {deniedText ?? 'Your role cannot see this.'}
           </p>
         )}
-        {state === 'empty' && <p className="py-[8px] text-ds-body text-ds-fg-muted">{emptyText ?? 'Nothing to show yet.'}</p>}
+        {state === 'empty' && (
+          <div className="py-[8px]">
+            <p className="text-ds-body text-ds-fg-muted">{emptyText ?? 'Nothing to show yet.'}</p>
+            {emptyAction && <div className="mt-[8px] flex flex-wrap gap-[8px]">{emptyAction}</div>}
+          </div>
+        )}
         {state === 'ready' && children}
       </div>
     </section>

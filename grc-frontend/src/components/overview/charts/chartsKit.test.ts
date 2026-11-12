@@ -17,8 +17,8 @@ const code = (text: string) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^
 
 test('the folder is what the pins read', () => {
   assert.deepEqual(SOURCES.map((s) => s.file).sort(), [
-    'BarList.tsx', 'ChartCard.tsx', 'ChartGrid.tsx', 'DonutChart.tsx', 'Heatmap.tsx', 'KpiTile.tsx', 'Picture.tsx', 'ScoreRing.tsx', 'SegmentBar.tsx', 'Sparkline.tsx',
-    'StackedBars.tsx', 'TrendChart.tsx', 'chartModel.ts', 'index.ts', 'palette.ts',
+    'AreaTiles.tsx', 'BarList.tsx', 'ChartCard.tsx', 'ChartGrid.tsx', 'DonutChart.tsx', 'Heatmap.tsx', 'KpiTile.tsx', 'Picture.tsx', 'ScoreRing.tsx', 'SegmentBar.tsx', 'Sparkline.tsx',
+    'StackedBars.tsx', 'TrendChart.tsx', 'areaModel.ts', 'chartModel.ts', 'index.ts', 'palette.ts',
   ].sort());
 });
 
@@ -87,4 +87,43 @@ test('the colours are the palette\'s: no hex outside palette.ts, and the eight h
     assert.deepEqual(hexes.filter((h) => !['#ffffff', '#1f2933'].includes(h.toLowerCase())), [], `${file}: a colour that is not in the palette`);
   }
   assert.deepEqual([...SERIES], ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948']);
+});
+
+test('ChartCard has an "Open" link in its title row, named for where it goes, and is not itself a link; ScoreRing and KpiTile take a link too', () => {
+  const card = code(SOURCES.find((s) => s.file === 'ChartCard.tsx')!.text);
+  assert.match(card, /href\?: string;/);
+  assert.match(card, /hrefLabel\?: string;/);
+  assert.match(card, /<Link href=\{href\} aria-label=\{openLinkName\(title, hrefLabel\)\}/);
+  assert.match(card, /<section id=\{id\}/, 'the card is a section, not a link: its chart parts are links of their own');
+  const ring = code(SOURCES.find((s) => s.file === 'ScoreRing.tsx')!.text);
+  assert.match(ring, /href\?: string;/);
+  assert.match(ring, /aria-label=\{`\$\{text\}\. \$\{openLinkName\(caption, hrefLabel\)\}`\}/, 'the link of the ring says the score and where it goes');
+  const tile = code(SOURCES.find((s) => s.file === 'KpiTile.tsx')!.text);
+  assert.match(tile, /after:absolute after:inset-0/, 'the whole tile is the target of its link');
+});
+
+test('every link a chart makes has a name that says where it goes (Open <label>: <figure>)', () => {
+  for (const file of ['BarList.tsx', 'DonutChart.tsx', 'SegmentBar.tsx', 'StackedBars.tsx']) {
+    assert.match(code(SOURCES.find((s) => s.file === file)!.text), /aria-label=\{partLinkName\(/, file);
+  }
+  assert.match(code(SOURCES.find((s) => s.file === 'Heatmap.tsx')!.text), /aria-label=\{`Open \$\{name\}`\}/);
+});
+
+test('a bar of StackedBars is clickable, and the keyboard has the same links in a list that shows when one has focus (the picture is no tab stop)', () => {
+  const bars = code(SOURCES.find((s) => s.file === 'StackedBars.tsx')!.text);
+  assert.match(bars, /onClick=\{go\}/);
+  assert.match(bars, /\[&:not\(:focus-within\)\]:sr-only/);
+  assert.match(bars, /categories\.some\(\(c\) => c\.href\)/);
+});
+
+test('AreaTiles follows the kit rules: a list of tiles, a link when it has an address, a colour never alone (its word is in the name, the title and the legend), a phone has two columns', () => {
+  const tiles = code(SOURCES.find((s) => s.file === 'AreaTiles.tsx')!.text);
+  assert.match(tiles, /<ul aria-label=\{label\}/);
+  assert.match(tiles, /grid-cols-2/);
+  assert.match(tiles, /<Link href=\{t\.href\} title=\{t\.title\} aria-label=\{t\.linkName\}/);
+  assert.match(tiles, /\{`, \$\{t\.word\}`\}/, 'a tile that is no link still says its status word to a screen reader');
+  assert.match(tiles, /legendOf\(shown\)/);
+  assert.match(tiles, /moreText/, 'a cut grid ends in "See all N"');
+  assert.match(tiles, /STATUS\[tone\]/, 'the colour of the ring is the status palette');
+  assert.doesNotMatch(tiles, /useQuery|fetch\(/);
 });

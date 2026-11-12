@@ -1,5 +1,6 @@
 // The chart kit of the Overview pages (graphical dashboards on the design-system kit). One import line for a page:
-//   import { ChartCard, ChartGrid, Cell, KpiRow, KpiTile, DonutChart, BarList, SegmentBar, StackedBars, TrendChart, Heatmap, ScoreRing, Sparkline, Picture } from '@/components/overview/charts';
+//   import { ChartCard, ChartGrid, Cell, KpiRow, KpiTile, DonutChart, BarList, SegmentBar, StackedBars, TrendChart, Heatmap, ScoreRing, AreaTiles, Sparkline, Picture } from '@/components/overview/charts';
+// and from the same place the compact worklist and the Back rule: `MyWorkCard` from '@/components/overview/MyWorkCard', `useReturnToPlace` from '@/components/overview/useReturnToPlace'.
 // and, for the colours and the pure rules (tested in chartModel.test.ts): { SERIES, STATUS, BRAND, … } from '@/components/overview/charts/palette' and the helpers from
 // '@/components/overview/charts/chartModel'. Rules of use: charts/README in this folder's header comments, and features/ux-revamp-platform.md §13.
 export { ChartCard, type ChartCardProps, type ChartState } from './ChartCard';
@@ -13,6 +14,8 @@ export { StackedBars, type StackedBarsProps, type StackCategory, type StackSerie
 export { TrendChart, type TrendChartProps, type TrendRow, type TrendSeries } from './TrendChart';
 export { Heatmap, type HeatmapProps } from './Heatmap';
 export { ScoreRing, type ScoreRingProps } from './ScoreRing';
+export { AreaTiles, type AreaTilesProps } from './AreaTiles';
+export { AREA_WORDS, areaTilesHeight, type AreaTileItem, type AreaTone } from './areaModel';
 export { Picture, Swatches, type PictureProps } from './Picture';
 export * from './chartModel';
 export { SERIES, STATUS, BRAND, OTHER, RAMP, seriesColor, type StatusColor } from './palette';

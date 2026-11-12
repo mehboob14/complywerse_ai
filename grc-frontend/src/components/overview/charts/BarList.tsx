@@ -8,6 +8,7 @@
 //   <BarList label="Vendors by tier" rows={[{ key: 't1', label: 'Tier 1', value: 12, href: '/vendor-risk/vendors?tier=1' }, …]} />
 import Link from 'next/link';
 import { formatCount } from '../../../lib/format';
+import { partLinkName } from './chartModel';
 import { BRAND, TRACK } from './palette';
 
 export interface BarRow {
@@ -33,16 +34,18 @@ export interface BarListProps {
   color?: string;
   /** the width of the name column on a screen, in px (default 140) */
   nameWidth?: number;
+  /** what a bar counts, for the name of its link ("issues": "Open High: 12 issues") */
+  noun?: string;
 }
 
-export function BarList({ label, rows, max, color = BRAND, nameWidth = 140 }: BarListProps) {
+export function BarList({ label, rows, max, color = BRAND, nameWidth = 140, noun }: BarListProps) {
   const scale = max ?? Math.max(1, ...rows.map((r) => (Number.isFinite(r.value) ? r.value : 0)));
   return (
     <ul aria-label={label} className="m-0 flex list-none flex-col gap-[8px] p-0">
       {rows.map((r) => {
         const width = Number.isFinite(r.value) && r.value > 0 ? Math.max(2, Math.min(100, (r.value / scale) * 100)) : 0;
         const name = r.href
-          ? <Link href={r.href} title={r.label} className="rounded-ds-control hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring">{r.label}</Link>
+          ? <Link href={r.href} title={r.label} aria-label={partLinkName(r.label, r.valueText ?? formatCount(r.value), noun)} className="rounded-ds-control hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring">{r.label}</Link>
           : r.label;
         return (
           <li key={r.key} className="grid items-center gap-x-[12px] gap-y-[4px] [grid-template-columns:minmax(0,1fr)_auto] min-[420px]:[grid-template-columns:var(--bar-name)_minmax(0,1fr)_auto]" style={{ ['--bar-name' as string]: `${nameWidth}px` }}>

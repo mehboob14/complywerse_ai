@@ -3,7 +3,8 @@
 // KpiTile: the figure a dashboard leads with: the label, the figure at 24px, which way it moved ("Up 3", with an arrow, in the colour that says whether that is
 // good for THIS figure) and its shape over time (a Sparkline), a bar when the figure is a share, the figure as a link when it opens the records. The five states are
 // the StatTile's and never confused (statModel.ts): the figure, "Not recorded" (value null: nothing is recorded, which is not 0), loading, failed with Retry, and
-// "No access". A refused or failed request is never a 0. Use it in a KpiRow; a plain number with nothing to say over time is the kit's StatTile.
+// "No access". A refused or failed request is never a 0. With `href` the WHOLE tile is the link (the figure is the link's text, stretched over the tile, so the
+// target is the tile, one tab stop, the (i) stays pressable above it): Overview rule R6. Use it in a KpiRow; a plain number with nothing to say over time is the kit's StatTile.
 //
 //   <KpiTile label="Open issues" value={formatCount(42)} href="/issues/register?chip=open" linkLabel="42 open issues. Open the register" tone="danger"
 //     delta={deltaOf(changeOf(series), 'down')} spark={{ values: series, label: 'Open issues, last 12 months', summary: trendText('Open issues', points) }} />
@@ -57,10 +58,10 @@ export function KpiTile({ label, value, unit, note, info, href, linkLabel, tone 
   const state = tileState({ denied, error: error !== null, loading, value });
   const Arrow = delta ? ARROW[delta.direction] : null;
   return (
-    <div className={clsx('flex min-w-0 flex-col rounded-ds-card border border-ds-border bg-ds-surface p-[16px]', className)}>
+    <div className={clsx('flex min-w-0 flex-col rounded-ds-card border border-ds-border bg-ds-surface p-[16px]', state === 'value' && href && 'relative hover:border-ds-border-strong hover:bg-ds-surface-hover has-[a:focus-visible]:border-ds-border-strong', className)}>
       <div className="flex items-center gap-[4px]">
         <p className="min-w-0 break-words text-ds-label text-ds-fg-muted">{label}</p>
-        {info && state === 'value' && <InfoTip text={info} label={`About ${label.toLowerCase()}`} />}
+        {info && state === 'value' && <span className="relative z-[1] inline-flex"><InfoTip text={info} label={`About ${label.toLowerCase()}`} /></span>}
       </div>
 
       {state === 'denied' && (
@@ -90,7 +91,7 @@ export function KpiTile({ label, value, unit, note, info, href, linkLabel, tone 
           <div className="mt-[4px] flex items-end justify-between gap-[8px]">
             <div className="flex min-w-0 flex-wrap items-baseline gap-x-[8px]">
               {href ? (
-                <Link href={href} aria-label={linkLabel ?? `${value} ${label.toLowerCase()}`} className={clsx('w-fit min-w-[24px] rounded-ds-control text-[24px] font-[600] leading-[32px] tabular-nums hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring', TONE[tone])}>{value}</Link>
+                <Link href={href} aria-label={linkLabel ?? `${value} ${label.toLowerCase()}`} className={clsx('w-fit min-w-[24px] rounded-ds-control text-[24px] font-[600] leading-[32px] tabular-nums after:absolute after:inset-0 after:rounded-ds-card hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring', TONE[tone])}>{value}</Link>
               ) : (
                 <p className={clsx('text-[24px] font-[600] leading-[32px] tabular-nums', TONE[tone])}>{value}</p>
               )}

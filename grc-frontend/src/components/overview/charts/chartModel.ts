@@ -180,3 +180,18 @@ export function sliceData(slices: readonly Slice[], firstColumn: string, valueCo
   const pct = shares(slices.map((s) => s.value));
   return { columns: [firstColumn, valueColumn, 'Share'], rows: slices.map((s, i) => [s.label, s.value, total > 0 ? shareText(pct[i], s.value) : null]) };
 }
+
+// ── links ────────────────────────────────────────────────────────────────────
+
+/** The accessible name of a card's "Open" link: the page's own words ("Open risk register, 12 high risks") or "Open <title>". The visible word is "Open", so
+ *  the name always starts with it (WCAG 2.5.3, label in name). */
+export function openLinkName(title: string, hrefLabel?: string): string {
+  const own = hrefLabel?.trim();
+  if (!own) return `Open ${title.trim().toLowerCase()}`;
+  return /^open\b/i.test(own) ? own : `Open ${own}`;
+}
+
+/** The name of a link a graphic makes (a legend row, a bar, a slice): where it goes and what it holds, "Open High: 12 issues". The visible label stays whole inside it. */
+export function partLinkName(label: string, valueText: string, noun?: string): string {
+  return `Open ${label}: ${valueText}${noun ? ` ${noun}` : ''}`;
+}

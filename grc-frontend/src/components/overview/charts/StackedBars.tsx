@@ -2,13 +2,16 @@
 
 // StackedBars: a count per category split into series (open / closed, by severity, by state): horizontal bars by default (long names read left to right, and the
 // chart is as tall as its rows need), or columns. The bars stack on one axis, the parts are separated by 2px of the surface, a click on a bar opens that
-// category's records when it has a `href` (the keyboard has the same links wherever the page lists the categories; the numbers are in the table for a screen reader).
+// category's records when it has a `href`. The keyboard has the same links in a list under the chart that is hidden until a link in it has focus (the picture is
+// not a tab stop); the numbers are in the table for a screen reader.
 // Colour follows the SERIES entry, never the rank. More than six series is a table, not a chart.
 //
 //   <StackedBars label="Vendors by tier and risk" firstColumn="Tier" categories={[{ key: 't1', label: 'Tier 1', cells: { high: 3, medium: 5, low: 4 } }]} series={[{ key: 'high', label: 'High', color: STATUS.bad }, …]} />
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { formatCount } from '../../../lib/format';
+import { partLinkName } from './chartModel';
 import { Picture, Swatches } from './Picture';
 import { AXIS, GRID, HOVER, SERIES, SURFACE, TIP } from './palette';
 
@@ -64,6 +67,15 @@ export function StackedBars({ label, firstColumn, categories, series, layout = '
           </ResponsiveContainer>
         )}
       </Picture>
+      {categories.some((c) => c.href) && (
+        <ul aria-label={`${label}: open a category`} className="m-0 mt-[8px] flex list-none flex-wrap gap-x-[12px] gap-y-[4px] p-0 [&:not(:focus-within)]:sr-only">
+          {categories.filter((c) => c.href).map((c) => (
+            <li key={c.key}>
+              <Link href={c.href as string} aria-label={partLinkName(c.label, formatCount(series.reduce((n, s) => n + (c.cells[s.key] ?? 0), 0)))} className="rounded-ds-control text-ds-label text-ds-primary-text hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring">{c.label}</Link>
+            </li>
+          ))}
+        </ul>
+      )}
       <Swatches items={series.map((s, i) => ({ key: s.key, label: s.label, color: colorOf(s, i) }))} />
     </div>
   );

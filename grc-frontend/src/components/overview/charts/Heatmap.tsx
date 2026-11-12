@@ -47,7 +47,7 @@ export function Heatmap({ label, rowTitle, colTitle, rows, cols, cells, href, zo
         <tbody>
           {rows.map((r, ri) => (
             <tr key={r} className="!bg-transparent">
-              <th scope="row" className="!bg-transparent !p-[2px] pr-[6px] text-right text-ds-label font-normal text-ds-fg-muted">{r}</th>
+              <th scope="row" className="!bg-transparent !p-[2px] pr-[6px] text-right !text-ds-label font-normal text-ds-fg-muted">{r}</th>
               {cols.map((c, ci) => {
                 const v = cells[ri]?.[ci] ?? null;
                 const step = heatStep(v, top, RAMP.length);
@@ -59,7 +59,7 @@ export function Heatmap({ label, rowTitle, colTitle, rows, cols, cells, href, zo
                 return (
                   <td key={c} className="!h-[36px] !min-w-[36px] !rounded-ds-control !p-0 text-center text-ds-label tabular-nums" style={style}>
                     {link ? (
-                      <Link href={link} aria-label={name} className="flex h-[36px] min-w-[36px] items-center justify-center rounded-ds-control font-[600] hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring" style={{ color: 'inherit' }}>{body}</Link>
+                      <Link href={link} aria-label={`Open ${name}`} className="flex h-[36px] min-w-[36px] items-center justify-center rounded-ds-control font-[600] hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring" style={{ color: 'inherit' }}>{body}</Link>
                     ) : (
                       <span aria-label={name} className="flex h-[36px] min-w-[36px] items-center justify-center">{body}</span>
                     )}

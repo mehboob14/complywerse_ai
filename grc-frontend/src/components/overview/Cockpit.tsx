@@ -1,8 +1,10 @@
 'use client';
 
-// The cockpit frame of a module's Overview (the Governance Overview is its first content; Compliance, Risk and Performance can fill the same slots): a
-// band of counters on top, the person's own prioritised work beside one compact posture card, and the breakdowns below. The frame only arranges what the
-// page hands it, and the layout rules are cockpitModel.ts:
+// The cockpit frame of a module's Overview (the Governance Overview is its first content; Compliance, Risk and Performance can fill the same slots). Overview v2
+// order (rule R1, posture first): `hero` (the KpiRow), `visuals` (a ChartGrid of ChartCards), `work` (the compact MyWorkCard) and nothing else is required.
+// `band` (the counters chips), `posture` (a card beside the work) and `breakdowns` (cards below) are optional and absent by default: the chip wall is the
+// attention list Overview v2 removes, so a page that passes none gets the three slots above and the work card across the page. Where `band` IS given it
+// keeps its old place under the hero. The frame only arranges what the page hands it, and the layout rules are cockpitModel.ts:
 //   full       work (8 parts, at least 600px: a row of it needs that for its title to have a line of its own) beside posture (5 parts, at least 340px);
 //              stacked when the page is narrower than the two need (under 956px: a laptop with the rail, a window with the panel docked is 1032px)
 //   solo       the person has little to do: a short strip of work, the posture across the page
@@ -30,22 +32,23 @@ export interface Breakdown {
 }
 
 export interface CockpitProps {
-  mode: CockpitMode;
-  /** a phone: the breakdowns are closed disclosures */
-  narrow: boolean;
-  /** the counters band (a CounterBand) */
-  band: ReactNode;
+  /** the layout (default `full`: with a posture card the work stands beside it; without one it takes the row) */
+  mode?: CockpitMode;
+  /** a phone: the breakdowns are closed disclosures (default false) */
+  narrow?: boolean;
+  /** the counters band (a CounterBand): optional and absent by default, Overview v2 has no chip wall */
+  band?: ReactNode;
   /** the figures a dashboard leads with (a KpiRow of KpiTiles, components/overview/charts), above the band: drawn in every layout but `work-only`, never folded on a phone */
   hero?: ReactNode;
   /** the graphical part (a ChartGrid of ChartCards), under the band and above the person's work: drawn in every layout but `work-only`, never folded on a phone */
   visuals?: ReactNode;
   /** `work-only`: the one notice that says why nothing else is drawn */
   refusal?: ReactNode;
-  /** the person's work (a WorkListCard) */
+  /** the person's work: a MyWorkCard (slim, three one-line rows) or a WorkListCard (the long list) */
   work: ReactNode;
-  /** the compact posture card */
-  posture: ReactNode;
-  breakdowns: readonly Breakdown[];
+  /** the compact posture card, beside the work */
+  posture?: ReactNode;
+  breakdowns?: readonly Breakdown[];
 }
 
 const SPAN: Record<BreakdownSize, string> = { normal: '', wide: 'md:col-span-2', band: 'xl:col-span-3' };
@@ -90,7 +93,7 @@ function BreakdownCard({ b, narrow }: { b: Breakdown; narrow: boolean }) {
   );
 }
 
-export function Cockpit({ mode, narrow, band, hero, visuals, refusal, work, posture, breakdowns }: CockpitProps) {
+export function Cockpit({ mode = 'full', narrow = false, band, hero, visuals, refusal, work, posture, breakdowns = [] }: CockpitProps) {
   if (mode === 'work-only') {
     return (
       <div className="flex flex-col gap-[16px]">
@@ -104,7 +107,7 @@ export function Cockpit({ mode, narrow, band, hero, visuals, refusal, work, post
       {hero}
       {band}
       {visuals}
-      {mode === 'solo' ? (
+      {mode === 'solo' || !posture ? (
         <div className="flex flex-col gap-[16px]">
           {work}
           {posture}
@@ -115,9 +118,11 @@ export function Cockpit({ mode, narrow, band, hero, visuals, refusal, work, post
           <div className="min-w-0 flex-[5_1_340px]">{posture}</div>
         </div>
       )}
-      <div className="grid items-start gap-[16px] md:grid-cols-2 xl:grid-cols-3">
-        {breakdowns.map((b) => <BreakdownCard key={b.id} b={b} narrow={narrow} />)}
-      </div>
+      {breakdowns.length > 0 && (
+        <div className="grid items-start gap-[16px] md:grid-cols-2 xl:grid-cols-3">
+          {breakdowns.map((b) => <BreakdownCard key={b.id} b={b} narrow={narrow} />)}
+        </div>
+      )}
     </div>
   );
 }

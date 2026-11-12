@@ -6,6 +6,7 @@ import { KIND_META, type Inbox, type InboxItem, type InboxNotice, type Kind, typ
 import { chipsOf } from '../../lib/inbox/inboxView.ts';
 import { inboxChip } from '../../lib/statuses/inbox.ts';
 import type { Tone } from '../../lib/status.ts';
+import { dueBadge } from '../ui/ds/workModel.ts';
 
 export type WorkState = 'loading' | 'unavailable' | 'empty' | 'content';
 
@@ -108,3 +109,24 @@ export function rowOf(item: InboxItem): RowModel {
     extraLink: item.extraLinks[0],
   };
 }
+
+// ── the compact card (MyWorkCard) ────────────────────────────────────────────
+
+/** A compact "My work" card shows this many rows before "See all N" (Overview rule R3: never taller than three one-line rows). */
+export const MY_WORK_ROWS = 3;
+
+/** A due date in the few characters a one-line row has: "Overdue 3d", "Due today", "Due in 2d", "Due 12 Nov 2026". The word is always there; the tone backs it up. */
+export function compactDue(row: Pick<RowModel, 'due' | 'overdue'>, today: Date = new Date()): { text: string; tone: Tone } {
+  const badge = dueBadge({ due: row.due, overdue: row.overdue, today });
+  return { text: badge.text.replace(/^Overdue by (\d+) days?$/, 'Overdue $1d').replace(/^Due in (\d+) days?$/, 'Due in $1d'), tone: badge.tone };
+}
+
+/** What the header of the card says after its title: the true count and how many are late ("12", "3 overdue"); nothing while it is not known. */
+export function workHeader(work: Pick<Work, 'state' | 'counts'>): { count: string; overdue: string } | null {
+  if (work.state !== 'content') return null;
+  const { all, overdue } = work.counts;
+  return { count: String(all), overdue: overdue > 0 ? `${overdue} overdue` : '' };
+}
+
+/** The name of a row's link for a screen reader: the action first, then what it is about ("Approve: Information security policy"). */
+export const rowLinkName = (row: Pick<RowModel, 'action' | 'title'>): string => `${row.action.label}: ${row.title}`;

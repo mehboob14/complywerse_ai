@@ -11,7 +11,7 @@ import { useRouter } from 'next/navigation';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import { formatCount } from '../../../lib/format';
 import { chartFocusOff } from '../../ui/ds/chartText';
-import { positive, shares, shareText, sum, withColors, type Slice } from './chartModel';
+import { partLinkName, positive, shares, shareText, sum, withColors, type Slice } from './chartModel';
 import { SURFACE, TIP } from './palette';
 
 export interface DonutChartProps {
@@ -57,7 +57,7 @@ export function DonutChart({ label, slices, centre, size = 148, noun = 'items' }
             <span className="flex min-w-0 items-center gap-[8px] text-ds-body text-ds-fg-body">
               <span aria-hidden className="h-[8px] w-[8px] shrink-0 rounded-full" style={{ backgroundColor: p.color }} />
               {p.href ? (
-                <Link href={p.href} title={p.label} className="min-w-0 truncate rounded-ds-control hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring">{p.label}</Link>
+                <Link href={p.href} title={p.label} aria-label={partLinkName(p.label, formatCount(p.value), noun)} className="min-w-0 truncate rounded-ds-control hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring">{p.label}</Link>
               ) : (
                 <span className="min-w-0 truncate" title={p.label}>{p.label}</span>
               )}
