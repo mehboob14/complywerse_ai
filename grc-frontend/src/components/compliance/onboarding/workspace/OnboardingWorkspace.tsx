@@ -8,6 +8,7 @@
  */
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, ArrowRight, Play } from 'lucide-react';
 import { PageHeading } from '@/components/ui/ds/PageHeading';
@@ -45,6 +46,7 @@ interface SaveProblem { message: string; lines: string[]; locked: boolean }
 
 export default function OnboardingWorkspace({ id }: { id: number }) {
   const qc = useQueryClient();
+  const router = useRouter();                                  // the version review takes the person on to the onboarding it started
   const notify = useNotify();
   const key = ONBOARDING_KEYS.detail(id);
   const view = useQuery({ queryKey: key, queryFn: () => onboardingApi.detail(id) });
