@@ -13,7 +13,7 @@ export function unlessArchivedAsked<T extends Doc>(docs: T[], statusFilter: stri
 }
 
 /** What archiving does, as its confirmation says it (the document page and the library's row Archive). */
-export const ARCHIVE_LINE = 'It is no longer in force, so staff stop reading it, and the reviews, approvals and acknowledgements still waiting '
+export const ARCHIVE_LINE = 'It is no longer published, so staff stop reading it, and the reviews, approvals and acknowledgements still waiting '
   + 'are cancelled. Every version, signature and the history are kept; the library lists it under Archived, where its editors can '
   + 'restore it as a draft.';
 

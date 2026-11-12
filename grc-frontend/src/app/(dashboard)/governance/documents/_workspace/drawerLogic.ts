@@ -33,9 +33,9 @@ export const utcDate: DateText = (d) => (d ? dateFmt.format(d) : '');
 /** "1.2" -> "v1.2"; none -> "—" (the words of lib.tsx's verLabel, which draws React and so cannot be loaded by a plain test). */
 export const versionText = (v: string | null | undefined): string => (!v ? DASH : v.startsWith('v') ? v : `v${v}`);
 
-/** "v1.0 in force" while a newer version than the one in force is on its way; null otherwise (lib.tsx's inForceNote). */
+/** "v1.0 published" while a newer version than the published one is on its way; null otherwise (lib.tsx's inForceNote). */
 export function inForceText(d: Pick<LibDoc, 'version_in_force' | 'current_version'>): string | null {
-  return d.version_in_force && d.version_in_force !== d.current_version ? `${versionText(d.version_in_force)} in force` : null;
+  return d.version_in_force && d.version_in_force !== d.current_version ? `${versionText(d.version_in_force)} published` : null;
 }
 
 /** "confidential" -> "Confidential", "top_secret" -> "Top secret". */
@@ -58,7 +58,7 @@ export interface InfoRow {
   /** nothing was set: drawn quietly */
   empty: boolean;
   kind: InfoKind;
-  /** a small line under the value ("v1.0 in force") */
+  /** a small line under the value ("v1.0 published") */
   note?: string;
   /** takes both columns */
   wide?: boolean;

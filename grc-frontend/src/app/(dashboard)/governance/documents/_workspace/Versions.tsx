@@ -32,7 +32,7 @@ type VersionRow = { id: number; number: string; kind: string | null; at: string 
  *  older row saying "Superseded" read as an error). */
 function VersionLink({ doc, v, original, here }: { doc: GovDoc; v: VersionRow & { state: VersionState }; original: boolean; here: string }) {
   const earlier = v.state === 'superseded';
-  const word = v.state === 'in-force' ? 'In force' : earlier ? null : statusLabel(doc.status);
+  const word = v.state === 'in-force' ? 'Published' : earlier ? null : statusLabel(doc.status);
   const inForce = v.state === 'in-force' || (v.state === 'current' && doc.status === 'published');
   const look = inForce ? 'border-ds-primary bg-ds-primary text-ds-on-primary' : 'border-ds-border-control text-ds-fg';
   return (

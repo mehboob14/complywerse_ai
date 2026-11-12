@@ -36,7 +36,7 @@ const CARDS: { key: CardKey; label: string; tip: string }[] = [
   { key: 'draft', label: 'Draft', tip: 'Not yet sent for review' },
   { key: 'inReview', label: 'In review', tip: 'Waiting for a review or an approval' },
   { key: 'approved', label: 'Approved', tip: 'Approved, waiting to be published' },
-  { key: 'published', label: 'Published', tip: 'In force' },
+  { key: 'published', label: 'Published', tip: 'The version everyone reads' },
 ];
 
 /** What a bucket's chip says: a word or two (the full wording is its tooltip and the filter list's). */
@@ -106,9 +106,9 @@ function HealthTile({ health, review, noun, onReview }: { health: Kpis['health']
       aria-label="Review health"
       className={`${TILE_BASE} col-span-3 flex-row items-center gap-[14px] overflow-hidden border-ds-border py-[6px] xl:col-span-1`}
     >
-      <div className="relative h-[56px] w-[56px] shrink-0" title={reviewable > 0 ? `${percent(health.upToDate, reviewable)}% of the ${documents(reviewable, noun)} in force are up to date` : undefined}>
+      <div className="relative h-[56px] w-[56px] shrink-0" title={reviewable > 0 ? `${percent(health.upToDate, reviewable)}% of the ${documents(reviewable, noun)} with a review owed are up to date` : undefined}>
         <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} className="-rotate-90" aria-hidden>
-          {/* the track: the whole ring in a pale grey, the arcs are drawn over it (it shows only in the gaps between arcs, or alone when nothing is in force) */}
+          {/* the track: the whole ring in a pale grey, the arcs are drawn over it (it shows only in the gaps between arcs, or alone when no review is owed) */}
           <circle cx={SIZE / 2} cy={SIZE / 2} r={RADIUS} fill="none" stroke="#e8edf1" strokeWidth={STROKE} />
           {arcs.map((arc) => (
             <circle
@@ -137,8 +137,8 @@ function HealthTile({ health, review, noun, onReview }: { health: Kpis['health']
             label="About review health"
             align="end"
             text={reviewable > 0
-              ? `Of the ${documents(reviewable, noun)} in force: a review is owed on published and approved documents. Click a number to list them.`
-              : 'A review is owed on published and approved documents. None is in force yet.'}
+              ? `A review is owed on published and approved documents: ${documents(reviewable, noun)}. Click a number to list them.`
+              : 'A review is owed on published and approved documents. None is published yet.'}
           />
         </div>
         {reviewable > 0 ? (
@@ -170,7 +170,7 @@ function HealthTile({ health, review, noun, onReview }: { health: Kpis['health']
             })}
           </div>
         ) : (
-          <div className="mt-1 text-ds-label text-ds-fg-muted">None in force yet</div>
+          <div className="mt-1 text-ds-label text-ds-fg-muted">None published yet</div>
         )}
       </div>
     </div>

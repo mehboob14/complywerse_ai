@@ -141,11 +141,11 @@ export function railOptions(input: RailInput): Record<FacetKey, RailOption[]> {
   };
 }
 
-/** The values a facet's option list may be ordered by: the person's choices first, then (for long lists) the most documents, then the name; "none" last. The tree and the
- *  short lists keep their own order. */
+/** The values a facet's option list may be ordered by: the person's choices first, then "No owner" / "No framework" (the gap the quick chip "No owner" used to find: one
+ *  press, never behind "Show more"), then (for long lists) the most documents, then the name. The tree and the short lists keep their own order. */
 export function orderedOptions(facet: FacetKey, options: readonly RailOption[], chosen: readonly string[], count: (value: string) => number): RailOption[] {
   if (facet !== 'frameworks' && facet !== 'owners') return options.slice();
   const none = new Set([NO_FRAMEWORK, NO_OWNER]);
-  const rank = (o: RailOption) => (chosen.includes(o.value) ? 0 : none.has(o.value) ? 2 : 1);
+  const rank = (o: RailOption) => (chosen.includes(o.value) ? 0 : none.has(o.value) ? 1 : 2);
   return options.slice().sort((a, b) => rank(a) - rank(b) || count(b.value) - count(a.value) || a.label.localeCompare(b.label, undefined, { sensitivity: 'base', numeric: true }));
 }

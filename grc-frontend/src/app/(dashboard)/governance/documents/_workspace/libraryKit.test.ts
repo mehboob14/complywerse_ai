@@ -104,7 +104,7 @@ test('the files that were rewritten on the kit hold its token rules: no named te
   assert.deepEqual(found, []);
 });
 
-test('the library lays its list out by the room its explorer has, never by the window: no breakpoint variant and no viewport height in the files that draw the list, the board and the links', () => {
+test('the library lays its list out by the room its explorer has, never by the window: no breakpoint variant and no viewport height in the files that draw the list and the links', () => {
   const found: string[] = [];
   // Versions.tsx is the details panel's (its width is the kit panel's, which follows the window); BulkBar and the popovers are fixed to the window on purpose
   for (const name of ['DocumentsWorkspace.tsx', 'libraryRows.tsx', 'DocumentDetail.tsx', 'DocumentDrawer.tsx', 'FolderRows.tsx', 'cells.tsx', 'libraryItems.tsx']) {

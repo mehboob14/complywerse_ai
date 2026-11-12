@@ -1,7 +1,7 @@
 // What the library remembers for one person on one browser: which columns, how dense, how many rows a page, and the views they saved.
 // A convenience, never state that matters: storage can be missing, blocked or full, so every read and write is guarded and the page
 // works the same without it. Pure (the store is passed in), so `node --test` runs libraryPrefs.test.ts against it.
-import { DEFAULT_STATE, GROUP_KEYS, LIBRARY_VIEWS, fromParams, toParams, type GroupKey, type LibraryViewId, type SavedView } from './libraryModel.ts';
+import { DEFAULT_STATE, GROUP_KEYS, fromParams, layoutOf, toParams, type GroupKey, type LibraryViewId, type SavedView } from './libraryModel.ts';
 
 export type Density = 'comfortable' | 'compact';
 export interface Prefs { hidden: string[]; density: Density; pageSize: number }
@@ -69,7 +69,7 @@ export function loadViews(store: KeyValueStore | null, key: string): SavedView[]
   for (const v of raw) {
     if (!v || typeof v.id !== 'string' || typeof v.name !== 'string' || !v.name.trim()) continue;
     const params = typeof v.query === 'string' ? new URLSearchParams(v.query) : toParams(DEFAULT_STATE);
-    const layout = (LIBRARY_VIEWS as readonly string[]).includes(v.layout) ? (v.layout as LibraryViewId) : undefined;
+    const layout = layoutOf(v.layout) ?? undefined;                                  // a view saved on the old board opens as a list
     const group = (GROUP_KEYS as readonly string[]).includes(v.group) ? (v.group as GroupKey) : undefined;
     out.push({ id: v.id, name: v.name.trim(), state: fromParams(params), ...(layout ? { layout } : {}), ...(group ? { group } : {}) });
   }
@@ -91,7 +91,7 @@ export function loadFolderPrefs(store: KeyValueStore | null, key: string): Folde
   const out: FolderPrefs = { view: null, open: {} };
   const raw = read(store, key) as { view?: unknown; open?: unknown; group?: unknown } | null;
   if (!raw || typeof raw !== 'object') return out;
-  if ((LIBRARY_VIEWS as readonly string[]).includes(raw.view as string)) out.view = raw.view as LibraryViewId;
+  out.view = layoutOf(raw.view);
   if ((GROUP_KEYS as readonly string[]).includes(raw.group as string)) out.group = raw.group as GroupKey;
   if (raw.open && typeof raw.open === 'object' && !Array.isArray(raw.open)) {
     const open = raw.open as Record<string, unknown>;

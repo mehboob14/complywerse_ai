@@ -93,13 +93,13 @@ export interface Badge { word: string; tone: Tone }
 
 /** What each label says, for the "How it works" sheet. */
 export const BADGE_MEANING: readonly { word: BadgeWord; meaning: string }[] = [
-  { word: 'Live', meaning: 'Published and in force.' },
+  { word: 'Live', meaning: 'Published. Everyone it applies to has to follow it.' },
   { word: 'Needs a fresh look', meaning: 'Live, but its check-up date has passed.' },
-  { word: 'Out of date', meaning: 'It has expired and is not in force.' },
+  { word: 'Out of date', meaning: 'It has expired and no longer applies.' },
   { word: 'Not live yet', meaning: 'A draft. Nobody has to follow it.' },
   { word: 'On its way', meaning: 'Being checked, signed off or waiting to be published.' },
-  { word: 'Update on its way', meaning: 'A newer version is being worked on; the one in force still applies.' },
-  { word: 'Exception applied', meaning: 'An exception is in place, so it is not in force.' },
+  { word: 'Update on its way', meaning: 'A newer version is being worked on; the published one still applies.' },
+  { word: 'Exception applied', meaning: 'An exception is in place, so it is not enforced.' },
   { word: 'Archived', meaning: 'Taken out of use.' },
 ];
 
@@ -220,7 +220,7 @@ export function linesOf(d: TrackerDoc, s: Standing, ctx: Pick<TrackerContext, 'n
   const author = first(d.author_name) ?? owner;
   const reviewDay = dayOf(d.next_review_date);
   const checkUp = reviewDay ? `Next check-up is ${reviewDay}.` : 'No check-up date is set.';
-  const stays = d.version_in_force && d.version_in_force !== d.current_version ? ` ${version(d.version_in_force)} is still in force.` : '';
+  const stays = d.version_in_force && d.version_in_force !== d.current_version ? ` ${version(d.version_in_force)} is still published.` : '';
   const mineWords = people?.mine ? WAITING_FOR_YOU[people.mine.kind] : undefined;
   const sent = people?.sent && (people.sent.waiting.length > 0 || people.sent.more > 0) ? nameList(people.sent.waiting, people.sent.more) : '';
 
@@ -246,7 +246,7 @@ export function linesOf(d: TrackerDoc, s: Standing, ctx: Pick<TrackerContext, 'n
     }
     case 'review_required':
       return {
-        now: s.live ? 'Flagged for a fresh review. The version in force still applies.' : `Flagged for review.${stays}`,
+        now: s.live ? 'Flagged for a fresh review. The published version still applies.' : `Flagged for review.${stays}`,
         next: 'Once reviewed, an approver decides whether to sign it off.',
       };
     case 'published': {
@@ -273,12 +273,12 @@ export function linesOf(d: TrackerDoc, s: Standing, ctx: Pick<TrackerContext, 'n
     case 'expired': {
       const ran = dayOf(d.expiry_date);
       return {
-        now: ran ? `It ran out on ${ran} and is not in force.` : 'It has run out and is not in force.',
+        now: ran ? `It ran out on ${ran} and no longer applies.` : 'It has run out and no longer applies.',
         next: owner ? `${owner} needs to publish a new version.` : 'It has no owner to replace it.',
       };
     }
     case 'exception_applied':
-      return { now: 'An exception applies, so it is not in force.', next: 'A new version has to be published for it to be in force again.' };
+      return { now: 'An exception is in place, so it is not enforced.', next: 'A new version has to be published for it to be enforced again.' };
     case 'archived':
       return { now: 'Taken out of use. Nobody has to follow it.', next: 'It can be restored as a draft.' };
     default:

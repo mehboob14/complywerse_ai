@@ -557,18 +557,24 @@ export function fromParams(p: URLSearchParams): LibraryState {
   return { filters: f, sort };
 }
 
-/** How the library is laid out: the register table, a folder for each department, a board by status or by the chosen grouping, a review calendar, or the tracker (a card for
- *  each document with the steps it has been through). Not part of LibraryState: a saved view is the same view in any layout, so views are matched without it. */
-export type LibraryViewId = 'table' | 'folders' | 'board' | 'calendar' | 'tracker';
-export const LIBRARY_VIEWS: readonly LibraryViewId[] = ['table', 'folders', 'board', 'calendar', 'tracker'];
+/** How the library is laid out: the register table, a folder for each department, a review calendar, or the tracker (a card for each document with the steps it has been through).
+ *  Not part of LibraryState: a saved view is the same view in any layout, so views are matched without it. (The Board is not here: it lives on the Governance Overview.) */
+export type LibraryViewId = 'table' | 'folders' | 'calendar' | 'tracker';
+export const LIBRARY_VIEWS: readonly LibraryViewId[] = ['table', 'folders', 'calendar', 'tracker'];
+
+/** The layout a written-down name stands for (an address, a saved view, the layout a browser remembers): one of the four, or the List for the "board" the library used to have (an old
+ *  link, a saved view or a remembered choice opens the list: no error, no blank page); null when the name is none of them. */
+export function layoutOf(name: unknown): LibraryViewId | null {
+  if (name === 'board') return 'table';
+  return (LIBRARY_VIEWS as readonly unknown[]).includes(name) ? (name as LibraryViewId) : null;
+}
 
 /** The layout an address asks for (`?view=folders`); null when it says none, so a link without it behaves as it always did. */
 export function viewFromParams(p: URLSearchParams): LibraryViewId | null {
-  const v = p.get('view');
-  return (LIBRARY_VIEWS as readonly string[]).includes(v ?? '') ? (v as LibraryViewId) : null;
+  return layoutOf(p.get('view'));
 }
 
-/** What the list and the board are grouped by (`?group=owner`): the Workspace's Group by. `none` is a flat list; the board's columns are the life-cycle steps unless a grouping is chosen.
+/** What the list is grouped by (`?group=owner`): the Workspace's Group by. `none` is a flat list.
  *  Not part of LibraryState either: grouping is a way of looking, it never changes which documents match. */
 export type GroupKey = 'none' | 'department' | 'status' | 'owner' | 'classification' | 'type' | 'framework' | 'review';
 export const GROUP_KEYS: readonly GroupKey[] = ['none', 'department', 'status', 'owner', 'classification', 'type', 'framework', 'review'];
@@ -611,14 +617,16 @@ export interface SavedView { id: string; name: string; state: LibraryState; buil
 const view = (id: string, name: string, filters: Partial<Filters>, look: { layout?: LibraryViewId; group?: GroupKey } = {}): SavedView =>
   ({ id, name, builtIn: true, state: { filters: { ...NO_FILTERS, ...filters }, sort: DEFAULT_SORT }, ...look });
 
-/** The views everyone has. */
+/** The single-filter views the library used to list as quick chips and in the Views menu. The filter bar does each of them now (Mine and Waiting for me are its two checks; Review, Status,
+ *  Owner and Framework are its groups: libraryFilterBar.test.ts holds that), so they are no longer listed anywhere on the page; they stay as the names of those states. The Views menu keeps
+ *  the compound views (libraryViews.ts) and the person's own. */
 export const BUILT_IN_VIEWS: SavedView[] = [
   view('all', 'All documents', {}),
   view('mine', 'My documents', { mine: true }, { layout: 'tracker' }),
   view('waiting', 'Waiting for me', { waiting: true }),
   view('overdue', 'Review overdue', { review: ['overdue'] }),
   view('drafts', 'Drafts and in review', { statuses: ['draft', 'pending_review', 'pending_approval'] }),
-  view('in-force', 'In force', { statuses: ['published'] }),
+  view('in-force', 'Published', { statuses: ['published'] }),
   view('no-owner', 'Without an owner', { owners: [NO_OWNER] }),
   view('no-framework', 'Without a framework', { frameworks: [NO_FRAMEWORK] }),
   view('archived', 'Archived', { statuses: ['archived'] }),

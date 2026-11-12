@@ -82,7 +82,7 @@ test('Now and Next name only what the data holds: no name for who a review waits
   assert.equal(t({ status: 'draft', version_in_force: null }).now, 'Omar Tariq is writing it. Nobody has to follow it yet.');
   assert.equal(t({ status: 'draft', version_in_force: null, author_name: null }).now, 'Maria Lopez is writing it. Nobody has to follow it yet.');
   assert.equal(t({ status: 'draft', version_in_force: null, author_name: null, owner_name: null }).now, 'Still being written. Nobody has to follow it yet.');
-  assert.equal(t({ status: 'draft', version_in_force: '1.0', current_version: '1.1' }).now, 'Omar Tariq is writing it. v1.0 is still in force.');
+  assert.equal(t({ status: 'draft', version_in_force: '1.0', current_version: '1.1' }).now, 'Omar Tariq is writing it. v1.0 is still published.');
   // in review with no names anywhere: generic, and neither the owner nor the author is made the reviewer
   const generic = t({ status: 'pending_review', version_in_force: null });
   assert.equal(generic.now, 'Waiting for review.');
@@ -116,9 +116,9 @@ test('a live document says how many still have to confirm, only when the row car
   assert.equal(late.now, 'Live, but its check-up was due 1 Nov 2026, 10 days ago.');
   assert.equal(late.next, 'Maria Lopez needs to confirm it is still correct.');
   assert.equal(t({ next_review_date: '2026-11-01T00:00:00', owner_name: null }).next, 'It has no owner. Someone needs to take it on.');
-  assert.equal(t({ status: 'expired', expiry_date: '2026-10-20T00:00:00' }).now, 'It ran out on 20 Oct 2026 and is not in force.');
-  assert.equal(t({ status: 'expired' }).now, 'It has run out and is not in force.');
-  assert.equal(t({ status: 'exception_applied' }).now, 'An exception applies, so it is not in force.');
+  assert.equal(t({ status: 'expired', expiry_date: '2026-10-20T00:00:00' }).now, 'It ran out on 20 Oct 2026 and no longer applies.');
+  assert.equal(t({ status: 'expired' }).now, 'It has run out and no longer applies.');
+  assert.equal(t({ status: 'exception_applied' }).now, 'An exception is in place, so it is not enforced.');
   assert.equal(t({ status: 'archived' }).next, 'It can be restored as a draft.');
   assert.equal(t({ status: 'weird' }).now, '');
 });

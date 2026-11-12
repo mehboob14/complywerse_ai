@@ -129,11 +129,11 @@ test('the rail lists the options the page always offered, the department tree in
   assert.equal(o.frameworks[0].value, 'none');
 });
 
-test('long option lists put the person\'s choices first, then the most documents, "none" last', () => {
+test('long option lists put the person\'s choices first, then "none" (No owner, the gap), then the most documents', () => {
   const list = [{ value: 'none', label: 'No owner' }, { value: '1', label: 'Ann' }, { value: '2', label: 'Bob' }, { value: '3', label: 'Cy' }];
   const count = (v: string) => ({ none: 99, '1': 1, '2': 7, '3': 7 }[v] ?? 0);
-  assert.deepEqual(orderedOptions('owners', list, [], count).map((x) => x.value), ['2', '3', '1', 'none']);
-  assert.deepEqual(orderedOptions('owners', list, ['1'], count).map((x) => x.value), ['1', '2', '3', 'none']);
+  assert.deepEqual(orderedOptions('owners', list, [], count).map((x) => x.value), ['none', '2', '3', '1']);
+  assert.deepEqual(orderedOptions('owners', list, ['1'], count).map((x) => x.value), ['1', 'none', '2', '3']);
   assert.deepEqual(orderedOptions('statuses', list, [], count).map((x) => x.value), ['none', '1', '2', '3']);          // the short lists keep their own order
   assert.equal(fold('Zürich'), 'zurich');
 });

@@ -361,7 +361,7 @@ export function verLabel(v: string | null | undefined): string {
   return v.startsWith('v') ? v : `v${v}`;
 }
 
-/** "v1.0 in force" while a newer version than the one in force is on its way; null otherwise. */
+/** "v1.0 published" while a newer version than the published one is on its way; null otherwise. */
 export function inForceNote(d: { version_in_force?: string | null; current_version?: string | null }): string | null {
-  return d.version_in_force && d.version_in_force !== d.current_version ? `${verLabel(d.version_in_force)} in force` : null;
+  return d.version_in_force && d.version_in_force !== d.current_version ? `${verLabel(d.version_in_force)} published` : null;
 }

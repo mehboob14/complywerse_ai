@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { GLOSSARY, HOW_STEPS, TERM_KEYS, plainOf, termLabel } from './glossary.ts';
 
 test('the seven words, each with its library spelling and a plain meaning', () => {
-  assert.deepEqual(TERM_KEYS.map((k) => GLOSSARY[k].word), ['Attestation', 'In force', 'Review cycle', 'Owner', 'Approver', 'Out of date', 'Framework']);
+  assert.deepEqual(TERM_KEYS.map((k) => GLOSSARY[k].word), ['Attestation', 'Published', 'Review cycle', 'Owner', 'Approver', 'Out of date', 'Framework']);
   assert.deepEqual(Object.keys(GLOSSARY).sort(), [...TERM_KEYS].sort());
   for (const k of TERM_KEYS) {
     const plain = plainOf(k);
@@ -26,7 +26,7 @@ test('no meaning leans on jargon, an id or a vendor: the words of the glossary a
     assert.ok(!/\b(gpt|openai|anthropic|claude)\b/i.test(plain), k);
     assert.ok(!/#\d|[0-9a-f]{16,}/i.test(plain), k);
   }
-  // "out of date" says expired and overdue are not the same thing; "in force" says it holds while a newer version is written
+  // "out of date" says expired and overdue are not the same thing; "published" says it holds while a newer version is written
   assert.ok(/expired/i.test(GLOSSARY.out_of_date.plain) && /check-up/i.test(GLOSSARY.out_of_date.plain));
   assert.ok(/newer version/i.test(GLOSSARY.in_force.plain));
   assert.ok(/Not always the person who wrote it/.test(GLOSSARY.owner.plain));

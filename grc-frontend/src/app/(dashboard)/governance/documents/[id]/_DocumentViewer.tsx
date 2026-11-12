@@ -736,7 +736,7 @@ export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, htm
           <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5" role="status">
             <span className="min-w-0 flex-1 text-sm text-amber-950">
               {reading.id === doc?.in_force_version_id
-                ? <><span className="font-semibold">Reading v{reading.number}</span>, the published version in force. The current version is v{doc?.current_version || '1.0'}{SIGNOFF_STATUS[doc?.status] ? `, ${SIGNOFF_STATUS[doc.status].label.toLowerCase()}` : ''}.</>
+                ? <><span className="font-semibold">Reading v{reading.number}</span>, the published version. The current version is v{doc?.current_version || '1.0'}{SIGNOFF_STATUS[doc?.status] ? `, ${SIGNOFF_STATUS[doc.status].label.toLowerCase()}` : ''}.</>
                 : <><span className="font-semibold">Reading v{reading.number}</span> - not the current version (v{doc?.current_version || '1.0'}).</>}
             </span>
             <Button onClick={onStopReading}>Back to the current version</Button>

@@ -28,9 +28,10 @@ export interface RecordExplorerProps {
   head: WithFit;
   /** an error or a notice above the explorer */
   notices?: ReactNode;
-  quick: FilterChip[];
-  onQuick: (key: string) => void;
-  quickLabel: string;
+  /** the quick-view chips above the records; a page whose filters do it all (the library) leaves them out and no row is drawn */
+  quick?: FilterChip[];
+  onQuick?: (key: string) => void;
+  quickLabel?: string;
   /** after the chips: the Views menu */
   quickExtra?: ReactNode;
   search: string;
@@ -63,6 +64,8 @@ export interface RecordExplorerProps {
   /** where the filters are: a rail beside the list ("side", the default) or a bar above it ("top": the list takes the whole width) */
   railPlacement?: 'side' | 'top';
 }
+
+const noop = (): void => {};
 
 export function RecordExplorer({
   label, noun, head, notices, quick, onQuick, quickLabel, quickExtra, search, onSearch, searchLabel, searchRef, views, actions, groups, onToggle, onClear, onClearAll, filtering,
@@ -119,11 +122,13 @@ export function RecordExplorer({
         )}
 
         <div className="flex min-w-0 flex-col gap-[8px]">
-          <div className="flex min-w-0 items-start gap-[8px]">
-            {/* a phone-sized explorer keeps the chips on one line that scrolls sideways (the records are what the screen is for); with more room they wrap */}
-            <FilterChips label={quickLabel} chips={quick} onToggle={onQuick} overflow={fit.compact ? 'scroll' : 'wrap'} className="min-w-0 flex-1" />
-            {quickExtra}
-          </div>
+          {((quick && quick.length > 0) || quickExtra) && (
+            <div className="flex min-w-0 items-start gap-[8px]">
+              {/* a phone-sized explorer keeps the chips on one line that scrolls sideways (the records are what the screen is for); with more room they wrap */}
+              <FilterChips label={quickLabel ?? 'Quick views'} chips={quick ?? []} onToggle={onQuick ?? noop} overflow={fit.compact ? 'scroll' : 'wrap'} className="min-w-0 flex-1" />
+              {quickExtra}
+            </div>
+          )}
           <div role="search" aria-label={`Search the ${noun.other}`} className="flex min-w-0 flex-wrap items-center gap-[8px]">
             <TextInput
               ref={searchRef}

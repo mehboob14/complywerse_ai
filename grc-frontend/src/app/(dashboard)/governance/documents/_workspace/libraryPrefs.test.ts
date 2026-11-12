@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { DEFAULT_PREFS, loadPrefs, loadViews, newViewId, prefsKey, savePrefs, saveViews, viewsKey, type KeyValueStore } from './libraryPrefs.ts';
+import { DEFAULT_PREFS, foldersKey, loadFolderPrefs, loadPrefs, loadViews, newViewId, prefsKey, savePrefs, saveViews, viewsKey, type KeyValueStore } from './libraryPrefs.ts';
 import { DEFAULT_STATE, NO_FILTERS, type SavedView } from './libraryModel.ts';
 
 const memory = (): KeyValueStore & { data: Record<string, string> } => {
@@ -46,6 +46,18 @@ test('saved views keep their filters and sort, and the built-in ones are never s
   s.data[viewsKey(7)] = JSON.stringify([{ id: 5, name: 'x' }, { id: 'ok', name: '  ' }, { id: 'fine', name: 'Fine', query: 'review=overdue,zzz' }]);
   assert.deepEqual(loadViews(s, viewsKey(7)).map((v) => [v.id, v.state.filters.review]), [['fine', ['overdue']]]);
   assert.deepEqual(loadViews(null, viewsKey(7)), []);
+});
+
+test('a view saved on the Board, and a layout remembered as the Board, open as the list (the Board is on the Governance Overview now)', () => {
+  const s = memory();
+  s.data[viewsKey(7)] = JSON.stringify([{ id: 'mine-1', name: 'Pipeline', query: 'status=draft', layout: 'board', group: 'status' }, { id: 'mine-2', name: 'Tracker', query: '', layout: 'tracker' }, { id: 'mine-3', name: 'Odd', query: '', layout: 'grid' }]);
+  assert.deepEqual(loadViews(s, viewsKey(7)).map((v) => [v.id, v.layout, v.group]), [['mine-1', 'table', 'status'], ['mine-2', 'tracker', undefined], ['mine-3', undefined, undefined]]);
+  s.data[foldersKey(7)] = JSON.stringify({ view: 'board', open: {} });
+  assert.equal(loadFolderPrefs(s, foldersKey(7)).view, 'table');
+  s.data[foldersKey(7)] = JSON.stringify({ view: 'calendar', open: {} });
+  assert.equal(loadFolderPrefs(s, foldersKey(7)).view, 'calendar');
+  s.data[foldersKey(7)] = JSON.stringify({ view: 'grid', open: {} });
+  assert.equal(loadFolderPrefs(s, foldersKey(7)).view, null);
 });
 
 test('a new view gets an id no other view has', () => {

@@ -526,7 +526,7 @@ export default function StudioWorkspacePage() {
             ))}
           </div>
           <Button aria-pressed={tracking} variant={tracking ? 'primary' : 'secondary'} leftIcon={<GitCompare aria-hidden />} onClick={() => (tracking ? setCompare(null) : showChanges())}
-            title="Every change since the version in force (or the original, until the document is published), marked in the document, with who made each">Tracked changes</Button>
+            title="Every change since the published version (or the original, until the document is published), marked in the document, with who made each">Tracked changes</Button>
           <Button leftIcon={<Download aria-hidden />} onClick={() => setDialog('export')}>Export</Button>
           {/* everything is in the library already (saved with Save to the library): nothing to save until the text changes */}
           {!maySave ? null : inLibrary && session.unsaved_in_library === false && saveState === 'saved' ? (

@@ -5,7 +5,8 @@
  * whole library), the page's state (filters, sort, the document open and the layout live in the ADDRESS, on the kit's useAddressState, so a link opens the same view; the
  * person's density, rows per page, saved views and open folders are kept in their browser), the mutations and what each part draws. What a filter MEANS is libraryModel.ts, the
  * facets and their live counts are libraryFacets.ts over components/records/facetEngine.ts (held to libraryModel by a parity test), the rows are libraryRows.tsx, the folders
- * libraryFolders.ts, the board libraryBoard.ts, the numbers the page states libraryNumbers.ts.
+ * libraryFolders.ts, the numbers the page states libraryNumbers.ts. There is no quick-view row and no Board here: the filter bar does what the chips did, and the Board lives on the
+ * Governance Overview.
  *
  * The library loads ONCE, whole and lean: every count, every facet number and the export are over all the documents (the response says when it could not hold them all).
  * Every write is reported when the server has answered (useReportedMutation: a failure stays on screen with the server's words and a Retry) and archiving asks first
@@ -26,7 +27,6 @@ import {
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { ListNotice } from '@/components/governance/ListNotice';
 import { AppliedFilters } from '@/components/records/AppliedFilters';
-import { BoardColumns } from '@/components/records/BoardColumns';
 import { BulkBar, type BulkActionDef } from '@/components/records/BulkBar';
 import { RecordExplorer } from '@/components/records/RecordExplorer';
 import type { ExplorerFit } from '@/components/records/explorerFit';
@@ -48,7 +48,6 @@ import { coverageFromRows, fetchAttention, fetchCoverage, fetchLibrary, bulkArch
 import { ARCHIVE_LINE, libraryCounts, unlessArchivedAsked } from './archive';
 import { creation, departmentScopes, departmentPaths } from './library';
 import { LIBRARY_SCHEMA, filtersPatch, groupPatch, openPatch, pageOf, statePatch, viewPatch, type LibraryAddress } from './libraryAddress';
-import { groupDocuments, statusesOfColumn } from './libraryBoard';
 import {
   FACET_TITLE, OPEN_AT_FIRST, RAIL_ORDER, SEARCHABLE, chosenOf, departmentsAbove, indexDocuments, orderedOptions, railOptions, ruleOf,
 } from './libraryFacets';
@@ -64,11 +63,11 @@ import { GroupsToolbar, groupedItems } from './GroupedRows';
 import { NeedsYou } from './NeedsYou';
 import { TrackerView } from './TrackerView';
 import { buildCalendar, calendarShowAll } from './libraryCalendar';
-import { GROUP_LABEL, NO_FOLD, boardByGroup, boardSubline, flipGroup, groupDocs, groupIsOpen, groupedOrder, setAllGroups, showAllByColumn, type GroupFold } from './libraryGroups';
+import { GROUP_LABEL, NO_FOLD, flipGroup, groupDocs, groupIsOpen, groupedOrder, setAllGroups, type GroupFold } from './libraryGroups';
 import { peopleOf } from './libraryTracker';
 import { WORKSPACE_VIEWS, activeView as findActiveView, viewLook } from './libraryViews';
 import {
-  ATTENTION_LABEL, BUILT_IN_VIEWS, NO_FILTERS, SORT_KEYS, attentionDepartment, exportColumnsFor, isFiltering, nextSort, nextStatuses, sortDocs, toCsv,
+  ATTENTION_LABEL, NO_FILTERS, SORT_KEYS, attentionDepartment, exportColumnsFor, isFiltering, nextSort, nextStatuses, sortDocs, toCsv,
   type FacetKey, type Filters, type GroupKey, type LibraryViewId, type MatchContext, type SavedView, type Sort, type SortKey,
 } from './libraryModel';
 import { csvName, exportWords, headCount, isCut, loadedNotice, missingOpen, noMatch, pagerNoun } from './libraryNumbers';
@@ -104,10 +103,9 @@ const SORT_LABEL: Record<SortKey, string> = {
   title: 'Title', type: 'Type', lifecycle: 'Status', owner: 'Owner', department: 'Department', frameworks: 'Frameworks', attestation: 'Attestation', review: 'Next review',
   version: 'Version', updated: 'Last updated',
 };
-/** The quick views in the chip row, in order, with the short words a chip has room for; every other built-in view is in the Views menu. */
-const QUICK: [string, string][] = [
-  ['all', 'All'], ['mine', 'Mine'], ['waiting', WAITING_LABEL], ['overdue', 'Review overdue'], ['drafts', 'Drafts & in review'], ['in-force', 'In force'], ['framework-coverage', 'Framework coverage'], ['acks-outstanding', 'Acknowledgements'], ['review-calendar', 'Review calendar'], ['no-owner', 'No owner'], ['archived', 'Archived'],
-];
+/** The explorer wants a row of quick chips; the library has none (the filter bar does what they did), so it is given an empty one. */
+const NO_QUICK: FilterChip[] = [];
+const noQuick = () => undefined;
 const BULK_ICON = { publish: Send, 'assign-owner': UserPlus, 'set-review': CalendarClock, archive: Archive, restore: ArchiveRestore } as const;
 const NO_KEYS: ReadonlySet<string> = new Set<string>();
 const NO_COUNTS: Record<number, { done: number; total: number }> = {};
@@ -185,7 +183,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
     setSaved(loadViews(browserStore(), viewsKey(currentUserId)));
   }, [currentUserId]);
   const changePrefs = (next: Prefs) => { setPrefs(next); savePrefs(browserStore(), prefsKey(currentUserId), next); };
-  const views = useMemo(() => [...BUILT_IN_VIEWS, ...WORKSPACE_VIEWS, ...saved], [saved]);
+  const views = useMemo(() => [...WORKSPACE_VIEWS, ...saved], [saved]);
   const [folderPrefs, setFolderPrefs] = useState<FolderPrefs | null>(null);
   useEffect(() => { setFolderPrefs(loadFolderPrefs(browserStore(), foldersKey(currentUserId))); }, [currentUserId]);
   const changeFolderPrefs = (next: FolderPrefs) => { setFolderPrefs(next); saveFolderPrefs(browserStore(), foldersKey(currentUserId), next); };
@@ -246,12 +244,11 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   const now = useMemo(() => new Date(), [listData]);
   const matchCtx: MatchContext = useMemo(() => ({ ...lookups, now, attention: attnIds, waiting: waiting.ids }), [lookups, now, attnIds, waiting.ids]);
 
-  // ── the layout: the list, a folder for each department, or the board ──
+  // ── the layout: the list, a folder for each department, the review calendar or the tracker ──
   const noDepartments = !departments.some((d) => d.is_active !== false);
   const view: LibraryViewId = chooseView({ address: viewParam, remembered: folderPrefs?.view ?? null, departments });
   const deciding = viewParam == null && (folderPrefs == null || (folderPrefs.view == null && departmentsQ.isLoading));
   const inFolders = view === 'folders';
-  const inBoard = view === 'board';
   const inTracker = view === 'tracker';
   const inCalendar = view === 'calendar';
   const group: GroupKey = groupParam ?? folderPrefs?.group ?? 'none';
@@ -296,7 +293,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   };
   const clearFacet = (facet: string) => setFilters({ ...filters, [facet]: [] } as Filters);
 
-  // ── the quick views, with the number each would show ──
+  // ── the views of the Views menu, with the number each would show ──
   const viewCounts = useMemo(() => {
     const out: Record<string, number> = {};
     for (const v of views) out[v.id] = countMatching(index, chosenOf(v.state.filters), ruleOf(v.state.filters, matchCtx));
@@ -308,20 +305,6 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
     const look = viewLook(v);
     setAddress({ ...statePatch(v.state), ...(look.layout ? viewPatch(look.layout) : {}), ...groupPatch(look.group ?? null) });
     if (look.layout) changeFolderPrefs({ ...(folderPrefs ?? {}), view: look.layout, open: folderPrefs?.open ?? {}, group: look.group ?? null });
-  };
-  const waitingNumber = waitingCount(waiting, allDocs);
-  const quick: FilterChip[] = [
-    ...(!activeView && filtering ? [{ key: 'custom', label: 'Custom filters', count: filteredDocs.length, active: true, title: 'Custom filters: press to clear them' }] : []),
-    ...QUICK.map(([id, label]) => ({
-      key: id, label, active: activeView?.id === id, count: id === 'waiting' ? waitingNumber : viewCounts[id] ?? 0,
-      title: id === 'waiting' && waiting.state !== 'ready' ? waitingNote(waiting)?.title : undefined,
-    })),
-    ...(activeView && !QUICK.some(([id]) => id === activeView.id) ? [{ key: activeView.id, label: activeView.name, active: true, count: viewCounts[activeView.id] ?? 0 }] : []),
-  ];
-  const onQuick = (key: string) => {
-    if (key === 'custom') { setFilters(NO_FILTERS); return; }
-    const v = views.find((x) => x.id === key);
-    if (v) applyView(v);
   };
 
   // ── saved views ──
@@ -340,7 +323,6 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
     notify.success('View deleted');
   };
   const viewItems: MenuItem[] = [
-    ...BUILT_IN_VIEWS.map((v, i) => ({ key: `v:${v.id}`, label: v.name, checked: activeView?.id === v.id, radio: true, trailing: String(viewCounts[v.id] ?? 0), section: i === 0 ? 'Views' : undefined, onSelect: () => applyView(v) })),
     ...WORKSPACE_VIEWS.map((v, i) => ({ key: `v:${v.id}`, label: v.name, checked: activeView?.id === v.id, radio: true, trailing: String(viewCounts[v.id] ?? 0), section: i === 0 ? 'Compliance' : undefined, onSelect: () => applyView(v) })),
     ...saved.map((v, i) => ({ key: `v:${v.id}`, label: v.name, checked: activeView?.id === v.id, radio: true, trailing: String(viewCounts[v.id] ?? 0), section: i === 0 ? 'Saved by you' : undefined, onSelect: () => applyView(v) })),
     { key: 'save', label: 'Save current filters as a view…', section: 'Manage', disabled: !filtering || !!activeView, reason: !filtering ? 'Filter or search first' : activeView ? 'This is already a view' : undefined, onSelect: () => setNaming(true) },
@@ -411,7 +393,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   const ticked = actionableIds(selection.selected, filteredDocs.map((doc) => ({ doc, match: true })));
 
   const listItems = useMemo((): { items: RecordItem<GovDoc>[]; drawn: number[] } => {
-    if (inBoard || inTracker || inCalendar || waitingForData) return { items: [], drawn: [] };
+    if (inTracker || inCalendar || waitingForData) return { items: [], drawn: [] };
     if (folders) {
       const built = folderItems({
         folders, view: foldView, extra, uid, selectable, selected: selection.selected,
@@ -438,7 +420,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
     }
     return { items: recordRows(pageRows, 0, toggleRow), drawn: pageRows.map((r) => r.doc.id) };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inBoard, inTracker, inCalendar, grouped, docGroups, group, gfold, waitingForData, folders, foldView.saved, folderPrefs, shut, filtering, filteredDocs.length, extra, uid, selectable, selection.selected, at, fold, pageRows]);
+  }, [inTracker, inCalendar, grouped, docGroups, group, gfold, waitingForData, folders, foldView.saved, folderPrefs, shut, filtering, filteredDocs.length, extra, uid, selectable, selection.selected, at, fold, pageRows]);
   const pageIds = listItems.items.filter((i) => i.kind === 'row' && !i.context).map((i) => (i as { id: number }).id);
 
   // ── handlers ──
@@ -456,7 +438,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   });
   const archive = useReportedMutation({
     mutationFn: (ids: number[]) => bulkArchive(ids),
-    success: (_, ids) => (ids.length === 1 ? { title: 'Document archived', message: 'It is no longer in force; its versions and history are kept.' } : `${ids.length} archived`),
+    success: (_, ids) => (ids.length === 1 ? { title: 'Document archived', message: 'It is no longer published; its versions and history are kept.' } : `${ids.length} archived`),
     failure: "Couldn't archive the documents",
     invalidate: REFRESH_KEYS,
     onError: refreshAll,
@@ -464,7 +446,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   const restore = useReportedMutation({
     mutationFn: async (ids: number[]) => { for (const id of ids) await restoreDocument(id); },
     success: (_, ids) => (ids.length === 1
-      ? { title: 'Restored as a draft', message: 'Send it for review when it is ready: it is in force again once approved and published.' }
+      ? { title: 'Restored as a draft', message: 'Send it for review when it is ready; staff read it again once it is approved and published.' }
       : `${ids.length} restored as drafts`),
     failure: 'Not restored',
     invalidate: REFRESH_KEYS,
@@ -613,7 +595,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
     onMove: (dir) => setCursor((c) => moveCursor(listItems.drawn, c, dir)),
     onOpen: () => { if (cursor != null) setOpenId(cursor); },
     onEscape: () => { if (selection.selected.size > 0) selection.clear(); },
-  }, !inBoard && !inTracker && !inCalendar);
+  }, !inTracker && !inCalendar);
   useEffect(() => {
     if (cursor != null) document.querySelector(`[data-record-row="${cursor}"]`)?.scrollIntoView({ block: 'nearest' });
   }, [cursor]);
@@ -644,6 +626,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   );
   const notice = loadedNotice(allDocs.length, serverTotal);
   const waitNote = filters.waiting ? waitingNote(waiting) : null;
+  const waitingNumber = waitingCount(waiting, allDocs);
   const words = exportWords({ shown: filteredDocs.length, loaded: allDocs.length, total: serverTotal, canExport: filteredDocs.length > 0 });
   const chips = filterChips(filters, {
     types: railOpts.types, statuses: railOpts.statuses, owners: railOpts.owners, departments: railOpts.departments, frameworks: railOpts.frameworks, classifications: railOpts.classifications,
@@ -698,32 +681,6 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
             activeId={openId}
             onOpen={(d) => setOpenId(d.id)}
             onShowAll={(c) => { const s = calendarShowAll(c); if ('review' in s) setFilters({ ...filters, review: s.review }); else changeGroup('review'); changeView('table'); }}
-          />
-        </div>
-      );
-    }
-    if (inBoard) {
-      const board = group === 'none' ? groupDocuments(ordered, archivedList) : boardByGroup(ordered, group, groupLookups, now);
-      return (
-        <div className="rounded-ds-card border border-ds-border bg-ds-surface">
-          <BoardColumns
-            label={group === 'none' ? 'Documents by status' : `Documents by ${GROUP_LABEL[group].toLowerCase()}`}
-            columns={board}
-            getId={(d: GovDoc) => d.id}
-            activeId={openId}
-            cardLabel={(d: GovDoc) => d.title}
-            onOpen={(d: GovDoc) => setOpenId(d.id)}
-            onShowAll={(column) => {
-              if (group === 'none') setFilters({ ...filters, statuses: statusesOfColumn(column, filteredDocs) });
-              else { const p = showAllByColumn(group, column); if (p) setFilters({ ...filters, ...p }); }
-              changeView('table');
-            }}
-            renderCard={(d: GovDoc) => (
-              <>
-                <span dir="auto" className="line-clamp-2 text-ds-body font-[600] text-ds-fg [overflow-wrap:anywhere]">{d.title}</span>
-                <span className="truncate text-ds-label text-ds-fg-muted">{group === 'none' ? [d.document_code, d.owner_name || 'Unassigned'].filter(Boolean).join(' · ') : boardSubline(d, group, lookups)}</span>
-              </>
-            )}
           />
         </div>
       );
@@ -784,7 +741,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
     );
   })();
 
-  const viewOptions = [{ value: 'table', label: 'List' }, { value: 'folders', label: 'Folders' }, { value: 'board', label: 'Board' }, { value: 'calendar', label: 'Calendar' }, { value: 'tracker', label: 'Tracker' }];
+  const viewOptions = [{ value: 'table', label: 'List' }, { value: 'folders', label: 'Folders' }, { value: 'calendar', label: 'Calendar' }, { value: 'tracker', label: 'Tracker' }];
   const head = (fit: ExplorerFit) => (
     <PageHeader
       variant="page"
@@ -833,28 +790,29 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
             )}
           </>
         )}
-        quick={noList || loading ? [] : quick}
-        onQuick={onQuick}
+        quick={NO_QUICK}
+        onQuick={noQuick}
         quickLabel="Quick views"
-        quickExtra={noList || loading ? undefined : <Menu label="Views" items={viewItems} />}
         search={filters.search}
         onSearch={(q) => setFilters({ ...filters, search: q })}
         searchLabel="Search documents by title, code, owner, department or framework"
         searchRef={searchRef}
         views={{ label: 'Library view', name: `${uid}-view`, options: viewOptions, value: view, onChange: (v) => changeView(v as LibraryViewId) }}
         actions={(fit) => (
-          <>
-            {!inBoard && !inFolders && !inTracker && !inCalendar && !grouped && parents.length > 0 && !loading && !fit.compact && (
+          // one box that wraps: Views, Sort, Group and Export do not fit one line of a phone, and a long view name must not push the page sideways
+          <div className="flex min-w-0 flex-wrap items-center justify-end gap-[8px]">
+            {!inFolders && !inTracker && !inCalendar && !grouped && parents.length > 0 && !loading && !fit.compact && (
               <Button variant="ghost" onClick={() => setFold(allParentsOpen ? collapseAll(parents) : expandAll(fold))} leftIcon={allParentsOpen ? <ChevronsDownUp aria-hidden /> : <ChevronsUpDown aria-hidden />}>
                 <span className={fit.tight ? 'sr-only' : undefined}>{allParentsOpen ? 'Collapse all' : 'Expand all'}</span>
               </Button>
             )}
-            {!inBoard && !inCalendar && <Menu label="Sort" items={sortItems} />}
-            {(view === 'table' || view === 'board') && <GroupMenu value={group} onChange={changeGroup} />}
+            {!noList && !loading && <Menu label={activeView ? `Views: ${truncate(activeView.name, 24).text}` : 'Views'} items={viewItems} />}
+            {!inCalendar && <Menu label="Sort" items={sortItems} />}
+            {view === 'table' && <GroupMenu value={group} onChange={changeGroup} />}
             <Button leftIcon={<Download aria-hidden />} onClick={exportCsv} disabled={filteredDocs.length === 0 || loading} title={words.title}>
               <span className={fit.tight ? 'sr-only' : undefined}>{words.label}</span>
             </Button>
-          </>
+          </div>
         )}
         railPlacement="top"
         groups={groups}
@@ -863,7 +821,15 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
         onClearAll={() => setFilters(NO_FILTERS)}
         filtering={filterCountNow}
         railHead={currentUserId != null ? (
-          <Checkbox label="Mine" checked={filters.mine} onChange={(e) => setFilters({ ...filters, mine: e.target.checked })} />
+          <div className="flex flex-wrap items-center gap-x-[16px]">
+            <Checkbox label="Mine" checked={filters.mine} onChange={(e) => setFilters({ ...filters, mine: e.target.checked })} />
+            <Checkbox
+              label={waitingNumber == null ? WAITING_LABEL : `${WAITING_LABEL} (${waitingNumber})`}
+              title={waiting.state !== 'ready' ? waitingNote(waiting)?.title : undefined}
+              checked={filters.waiting}
+              onChange={(e) => setFilters({ ...filters, waiting: e.target.checked })}
+            />
+          </div>
         ) : undefined}
         shown={filteredDocs.length}
         applied={loading || noList ? null : (

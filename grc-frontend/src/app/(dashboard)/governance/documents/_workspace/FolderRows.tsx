@@ -76,7 +76,7 @@ export function FolderHeadRow({ node, open, colSpan, tick, headId, controls, onT
   tick: ReactNode;
   /** this row's id, which the folder above it lists in aria-controls */
   headId: string;
-  /** the ids of what this folder controls: the folders inside it and its documents */
+  /** the ids of what this folder controls: the folders inside it (its documents are rows of the table, with no one element of their own to name) */
   controls: string[];
   onToggle: () => void;
 }) {

@@ -32,7 +32,7 @@ test('a sign-off the life cycle also asks for is one document; the requests the 
   assert.deepEqual(Array.from(w.ids), [10]);
 });
 
-test('before any source has answered the state is loading and the chip draws no number; a source that never answered is said', () => {
+test('before any source has answered the state is loading and the check draws no number; a source that never answered is said', () => {
   const loading = waitingForMe(buildInbox([{ id: 'doc.lifecycle', state: { state: 'loading' } }, { id: 'doc.signoff', state: { state: 'loading' } }], NOW));
   assert.equal(loading.state, 'loading');
   assert.equal(waitingCount(loading, [{ id: 10 }]), null);

@@ -32,7 +32,7 @@ export function waitingForMe(inbox: Pick<Inbox, 'items' | 'sources'>): Waiting {
   return { ids, state: 'ready' };
 }
 
-/** What the "Waiting for me" chip counts: the number, or null while it is not known (the chip then draws no number rather than 0). */
+/** What the "Waiting for me" check counts: the number, or null while it is not known (the check then draws no number rather than 0). */
 export const waitingCount = (w: Waiting, rows: readonly { id: number }[]): number | null =>
   w.state === 'loading' ? null : rows.reduce((n, d) => n + (w.ids.has(d.id) ? 1 : 0), 0);
 

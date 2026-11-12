@@ -79,9 +79,9 @@ test('classification is capitalised as a sentence', () => {
   assert.equal(byKey(doc({ classification: 'TOP_SECRET' })).classification.value, 'Top secret');
 });
 
-test('the version says which one is in force while a newer one is on its way', () => {
+test('the version says which one is published while a newer one is on its way', () => {
   const r = byKey(doc({ status: 'pending_review', current_version: '1.3', version_in_force: '1.2' }));
-  assert.deepEqual([r.version.value, r.version.note], ['v1.3', 'v1.2 in force']);
+  assert.deepEqual([r.version.value, r.version.note], ['v1.3', 'v1.2 published']);
   assert.equal(byKey(doc()).version.note, undefined);                                 // the same number: nothing to add
   assert.equal(byKey(doc({ version_in_force: null, status: 'draft' })).version.note, undefined);
 });
@@ -111,9 +111,9 @@ test('the dates are written by the function the component passes in', () => {
   assert.equal(r.find((x) => x.key === 'effective')?.value, 'D1');
 });
 
-test('version words match the library: a "v" in front, a dash for none, "in force" only when it differs', () => {
+test('version words match the library: a "v" in front, a dash for none, "published" only when it differs', () => {
   assert.deepEqual([versionText('1.2'), versionText('v2.0'), versionText(null), versionText('')], ['v1.2', 'v2.0', DASH, DASH]);
-  assert.equal(inForceText({ version_in_force: '1.0', current_version: '1.1' }), 'v1.0 in force');
+  assert.equal(inForceText({ version_in_force: '1.0', current_version: '1.1' }), 'v1.0 published');
   assert.equal(inForceText({ version_in_force: '1.1', current_version: '1.1' }), null);
   assert.equal(inForceText({ version_in_force: null, current_version: '1.1' }), null);
 });

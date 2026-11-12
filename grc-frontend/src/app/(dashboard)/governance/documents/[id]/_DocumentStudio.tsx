@@ -181,14 +181,14 @@ export default function DocumentStudio() {
   // documents are archived, never deleted (the user, 2026-10-17): every version, signature and the history are kept
   const archive = useReportedMutation({
     mutationFn: () => bulkArchive([id]),
-    success: { title: 'Document archived', message: 'It is no longer in force; its versions and history are kept.' },
+    success: { title: 'Document archived', message: 'It is no longer published; its versions and history are kept.' },
     failure: 'Not archived',
     onSuccess: () => { setPopup(null); refreshLibrary(); },
   });
-  // back as a draft: it is reviewed, approved and published again before it is in force; no version is made by restoring
+  // back as a draft: it is reviewed, approved and published again before staff read it; no version is made by restoring
   const unarchive = useReportedMutation({
     mutationFn: () => restoreDocument(id),
-    success: { title: 'Restored as a draft', message: 'Send it for review when it is ready: it is in force again once approved and published.' },
+    success: { title: 'Restored as a draft', message: 'Send it for review when it is ready; staff read it again once it is approved and published.' },
     failure: 'Not restored',
     onSuccess: () => { refreshLibrary(); },
   });
@@ -428,7 +428,7 @@ export default function DocumentStudio() {
               {doc.newer_version && !archived ? (
                 <StatusPill tone="warning" label={newerWords} className="shrink-0" />
               ) : inForceNote && (
-                <StatusPill tone="success" label={`v${doc.version_in_force} in force`} className="shrink-0" />
+                <StatusPill tone="success" label={`v${doc.version_in_force} published`} className="shrink-0" />
               )}
               <StatusPill tone="neutral" label={TYPE_LABEL[doc.doc_type] ?? doc.doc_type} className="hidden shrink-0 sm:inline-flex" />
               <IconButton label="Details" onClick={() => setPopup('details')}><Info aria-hidden /></IconButton>
@@ -473,8 +473,8 @@ export default function DocumentStudio() {
             <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[#c3ccd5] bg-[#eef1f4] px-4 py-2" role="status">
               <Archive className="h-4 w-4 shrink-0 text-[#3f4b58]" aria-hidden />
               <span className="min-w-0 flex-1 text-[13px] text-[#26323d]">
-                <span className="font-semibold text-[#1f2933]">Archived{doc.archived_at ? ` ${day(doc.archived_at)}` : ''}{doc.archived_by_name ? ` by ${doc.archived_by_name}` : ''}</span> · not in force
-                {canEdit && <InfoTip className="ml-1" label="About restoring" text="Restore it to work on it again as a draft; it is in force again once approved and published." />}
+                <span className="font-semibold text-[#1f2933]">Archived{doc.archived_at ? ` ${day(doc.archived_at)}` : ''}{doc.archived_by_name ? ` by ${doc.archived_by_name}` : ''}</span> · not published
+                {canEdit && <InfoTip className="ml-1" label="About restoring" text="Restore it to work on it again as a draft. Staff read it again once it is approved and published." />}
               </span>
               {canEdit && (
                 <Button leftIcon={<ArchiveRestore aria-hidden />} loading={unarchive.isPending} onClick={() => unarchive.mutate()}>Restore</Button>
@@ -485,7 +485,7 @@ export default function DocumentStudio() {
             <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2" role="status">
               <span className="min-w-0 flex-1 text-[13px] font-medium text-amber-950">
                 {stepLine({ kind: personal.kind, due })}
-                {personal.kind === 'acknowledge' && ackVersion !== version ? ` · v${ackVersion} in force` : ''}
+                {personal.kind === 'acknowledge' && ackVersion !== version ? ` · v${ackVersion} published` : ''}
                 <InfoTip className="ml-1" label="What to do first" text={`Read the document first, then ${personal.kind === 'acknowledge' ? 'acknowledge it' : 'sign it'}.`} />
               </span>
               <Button variant="primary" leftIcon={<PenLine aria-hidden />} onClick={act}>{personal.label}</Button>
@@ -495,7 +495,7 @@ export default function DocumentStudio() {
             <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[#99d5cc] bg-[#effaf8] px-4 py-2" role="status">
               <span className="min-w-0 flex-1 text-[13px] text-[#0b3f38]">
                 {inForceNote}
-                <InfoTip className="ml-1" label="About the published version" text="The published version stays in force until the new one is approved and published." />
+                <InfoTip className="ml-1" label="About the published version" text="The published version stays the one people read until the new one is approved and published." />
               </span>
               {!doc.newer_version && doc.in_force_version_id && (
                 <Button onClick={() => setReading({ id: doc.in_force_version_id, number: doc.version_in_force })}>Read v{doc.version_in_force}</Button>
@@ -580,7 +580,7 @@ export default function DocumentStudio() {
         <div className="p-4"><SignoffAction documentId={id} due={mySign?.due_date} version={version} onDirty={setSignDirty} /></div>
       </AnimatedModal>
       <AnimatedModal isOpen={popup === 'ack' && !!myAck} onClose={() => setPopup(null)} size="xl" className={FULL_ON_PHONE} title="Acknowledge" dirty={ackDirty}
-        subtitle={`${doc.title} · version ${ackVersion}${ackVersion !== version ? ', the one in force' : ''}`}>
+        subtitle={`${doc.title} · version ${ackVersion}${ackVersion !== version ? ', the published one' : ''}`}>
         <div className="p-4">
           {myAck && <AckAction base={`/governance/documents/${id}/lifecycle`} row={myAck} open version={ackVersion} onCancel={() => setPopup(null)} onDone={() => { setPopup(null); refreshAll(); }} onDirty={setAckDirty} />}
         </div>

@@ -1,6 +1,6 @@
 // "Group by" of the Governance → Documents library (the Workspace), without React, so `node --test` checks it (libraryGroups.test.ts): which group a document is in for each way of
 // grouping, the groups in a sensible order, and what a group header says about its documents (how many, how many reviews are overdue, how many people have acknowledged, how
-// many have no owner). Used by the grouped List (GroupedRows.tsx) and by the Board when a grouping is chosen.
+// many have no owner). Used by the grouped List (GroupedRows.tsx).
 //
 // What a number means is the library's own and is USED here, not copied: a review is overdue by libraryModel.reviewState (the rule of the Review filter, the folders and the
 // Governance overview); a document's frameworks are library.shownFrameworkIds; the attestation of a document is what the server sent with it (`attestation`, the coverage map's
@@ -9,7 +9,6 @@
 //
 // A document with several frameworks is in each of them (counted under each); every other grouping puts a document in exactly one group. Inside a group the documents keep the
 // order they were given in (the page sorts first).
-import type { BoardColumn } from '../../../../../components/records/explorerModel.ts';
 import { buildTree, treeEntries, type TreeDoc, type TreeEntry } from './docTree.ts';
 import { shownFrameworkIds } from './library.ts';
 import { percent } from './libraryKpisLogic.ts';
@@ -37,7 +36,7 @@ export const groupButtonLabel = (key: GroupKey): string => `Group: ${GROUP_LABEL
 export function groupNote(key: GroupKey): string {
   const base = 'Overdue counts the reviews past their date. Acknowledged is the people who confirmed out of the people asked, over the documents that have an acknowledgement request.';
   if (key === 'framework') return `${base} A document with several frameworks is counted under each of them.`;
-  if (key === 'review') return `${base} Documents with no review owed (drafts, expired and archived ones) are in Not in force.`;
+  if (key === 'review') return `${base} Documents with no review owed (drafts, expired and archived ones) are in Not published.`;
   return base;
 }
 
@@ -119,7 +118,7 @@ export function groupOf(d: GroupDoc, key: GroupKey, lk: Pick<GroupLookups, 'depa
     }
     case 'review': {
       const s = reviewState(d, now);
-      if (!s.bucket) return [{ id: 'not-in-force', label: 'Not in force', none: true, rank: 1 }];
+      if (!s.bucket) return [{ id: 'not-in-force', label: 'Not published', none: true, rank: 1 }];
       if (!s.due) return [{ id: 'none', label: 'No review date', none: true, rank: 0 }];
       const y = s.due.getUTCFullYear();
       const m = s.due.getUTCMonth();
@@ -216,7 +215,7 @@ export function groupsLine({ groups, documents, loaded, total }: { groups: numbe
 }
 
 /** What "Show all" on a group sets in the library's own filters (it replaces that facet), or null where the filters cannot say it: a classification that is not recorded, a month,
- *  "Not in force". A department takes in the departments under it, as the Department filter always does. */
+ *  "Not published". A department takes in the departments under it, as the Department filter always does. */
 export function showAllPatch(key: GroupKey, g: Pick<DocGroup<unknown>, 'id' | 'none'>): Partial<Filters> | null {
   switch (key) {
     case 'none': return null;
@@ -230,29 +229,12 @@ export function showAllPatch(key: GroupKey, g: Pick<DocGroup<unknown>, 'id' | 'n
   }
 }
 
-/** What "Show all" on a Board column sets, from the column's id (`owner:5`, the key of its group): showAllPatch for that group. The id of the group of "none of these" is always `none`. */
-export function showAllByColumn(key: GroupKey, columnId: string): Partial<Filters> | null {
-  const id = columnId.startsWith(`${key}:`) ? columnId.slice(key.length + 1) : columnId;
-  return showAllPatch(key, { id, none: id === 'none' });
-}
-
 /** The documents of the groups in the order they are shown, each once (a document of two frameworks is listed in the first): what the CSV and the details panel's next / previous follow. */
 export function groupedOrder<D extends { id: number }>(groups: readonly Pick<DocGroup<D>, 'docs'>[]): D[] {
   const seen = new Set<number>();
   const out: D[] = [];
   for (const g of groups) for (const d of g.docs) if (!seen.has(d.id)) { seen.add(d.id); out.push(d); }
   return out;
-}
-
-/** The Board's columns for a grouping: one for each group that has documents (no empty columns), in the groups' order. A document with several frameworks is on a card in each. */
-export function boardByGroup<D extends GroupDoc>(docs: readonly D[], key: GroupKey, lk: GroupLookups, now: Date = new Date()): BoardColumn<D>[] {
-  return groupDocs(docs, key, lk, now).map((g) => ({ id: g.key, label: g.label, rows: g.docs }));
-}
-
-/** The small line under a card's title on the Board by a grouping: the code, then the one fact the column does not already say (the owner, or the department when the columns ARE the owners). */
-export function boardSubline(d: GroupDoc, key: GroupKey, lk: Pick<GroupLookups, 'departments'>): string {
-  const dept = d.department_id != null ? lk.departments[String(d.department_id)] : undefined;
-  return [d.document_code, key === 'owner' ? dept : d.owner_name?.trim() || 'Unassigned'].filter(Boolean).join(' · ');
 }
 
 // ─── Open and closed ─────────────────────────────────────────────────────────────────────────────────────────────────────

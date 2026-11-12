@@ -66,9 +66,7 @@ export function folderItems(i: FolderItemsInput): { items: RecordItem<GovDoc>[];
     rowsOf: i.rowsOf,
   });
   const headId = (n: FolderNode<GovDoc>) => `${i.uid}-folder-${n.key}`;
-  const docsId = (n: FolderNode<GovDoc>) => `${i.uid}-docs-${n.key}`;
   const cardHeadId = (n: FolderNode<GovDoc>) => `${i.uid}-cfolder-${n.key}`;
-  const cardDocsId = (n: FolderNode<GovDoc>) => `${i.uid}-cdocs-${n.key}`;
   const items: RecordItem<GovDoc>[] = [];
   const drawn: DrawnRow<GovDoc>[] = [];
   plan.forEach((p) => {
@@ -86,9 +84,9 @@ export function folderItems(i: FolderItemsInput): { items: RecordItem<GovDoc>[];
         kind: 'group',
         id: node.key,
         table: (columns) => (
-          <FolderHeadRow node={node} open={p.open} colSpan={columns} tick={tick} headId={headId(node)} controls={[...(node.top.length > 0 ? [docsId(node)] : []), ...node.folders.map(headId)]} onToggle={() => i.onFlip(node.key)} />
+          <FolderHeadRow node={node} open={p.open} colSpan={columns} tick={tick} headId={headId(node)} controls={node.folders.map(headId)} onToggle={() => i.onFlip(node.key)} />
         ),
-        card: <FolderHeadCard node={node} open={p.open} tick={tick} headId={cardHeadId(node)} controls={[...(node.top.length > 0 ? [cardDocsId(node)] : []), ...node.folders.map(cardHeadId)]} onToggle={() => i.onFlip(node.key)} />,
+        card: <FolderHeadCard node={node} open={p.open} tick={tick} headId={cardHeadId(node)} controls={node.folders.map(cardHeadId)} onToggle={() => i.onFlip(node.key)} />,
       });
       return;
     }

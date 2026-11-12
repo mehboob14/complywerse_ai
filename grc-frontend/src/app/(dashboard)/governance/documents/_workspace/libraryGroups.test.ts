@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  GROUP_LABEL, GROUP_MENU, attestationOf, boardByGroup, boardSubline, flipGroup, groupedOrder, showAllByColumn, groupAria, groupButtonLabel, groupDocs, groupIsOpen, groupNote, groupOf, groupTrees, groupsLine, NO_FOLD,
+  GROUP_LABEL, GROUP_MENU, attestationOf, flipGroup, groupedOrder, groupAria, groupButtonLabel, groupDocs, groupIsOpen, groupNote, groupOf, groupTrees, groupsLine, NO_FOLD,
   planGroups, setAllGroups, showAllPatch, type GroupDoc, type GroupLookups,
 } from './libraryGroups.ts';
 import { GROUP_KEYS, type GroupKey } from './libraryModel.ts';
@@ -91,13 +91,13 @@ test('framework: the order is by size then name with "No framework" last (the un
   assert.deepEqual(groups[0].docs.map((d) => d.id), [1, 2]);
 });
 
-test('review month: by the month of the next review, the calendar order; "No review date", then "Not in force" (no review owed) last', () => {
+test('review month: by the month of the next review, the calendar order; "No review date", then "Not published" (no review owed) last', () => {
   const docs = [
     doc(1, { next_review_date: '2027-01-15T00:00:00' }), doc(2, { next_review_date: '2026-11-30T00:00:00' }), doc(3, { next_review_date: '2026-03-01T00:00:00' }),
     doc(4, { next_review_date: null }), doc(5, { status: 'draft', next_review_date: '2026-12-01T00:00:00' }), doc(6, { next_review_date: '2027-01-02T00:00:00' }), doc(7, { status: 'archived', next_review_date: null }),
   ];
   const groups = groupDocs(docs, 'review', LK, NOW);
-  assert.deepEqual(groups.map((g) => [g.label, g.count]), [['March 2026', 1], ['November 2026', 1], ['January 2027', 2], ['No review date', 1], ['Not in force', 2]]);
+  assert.deepEqual(groups.map((g) => [g.label, g.count]), [['March 2026', 1], ['November 2026', 1], ['January 2027', 2], ['No review date', 1], ['Not published', 2]]);
   assert.deepEqual(groups.map((g) => g.id), ['2026-03', '2026-11', '2027-01', 'none', 'not-in-force']);
 });
 
@@ -134,15 +134,6 @@ test('acknowledged never rounds to an extreme that is not true, and reads the co
   assert.deepEqual(attestationOf(doc(1, { attestation: { pct: 50, done: 1, total: 2 } }), { counts: { 1: { done: 9, total: 9 } } }), { done: 1, total: 2 });   // the row wins
 });
 
-test('the Board by a grouping: one column for each group that has documents, no empty columns, the groups\' order; a card for a document in each of its frameworks', () => {
-  const docs = [doc(1, { status: 'draft', framework_ids: [1, 2] }), doc(2, { status: 'published', framework_ids: [1] })];
-  const byStatus = boardByGroup(docs, 'status', LK, NOW);
-  assert.deepEqual(byStatus.map((c) => [c.id, c.label, c.rows.length]), [['status:draft', 'Draft', 1], ['status:published', 'Published', 1]]);
-  const byFramework = boardByGroup(docs, 'framework', LK, NOW);
-  assert.deepEqual(byFramework.map((c) => [c.label, c.rows.map((d) => d.id)]), [['ISO 27001', [1, 2]], ['SOC 2', [1]]]);
-  assert.deepEqual(boardByGroup(docs, 'none', LK, NOW), []);
-});
-
 test('what "Show all" on a group sets in the library\'s filters, and null where they cannot say it', () => {
   const g = (id: string, none = false) => ({ id, none });
   assert.deepEqual(showAllPatch('department', g('10')), { departments: ['10'] });
@@ -167,7 +158,7 @@ test('the words of a group: what a screen reader hears, the count line (cut says
   assert.equal(groupsLine({ groups: 6, documents: 128, loaded: 128, total: 128 }), '6 groups · 128 documents');
   assert.equal(groupsLine({ groups: 1, documents: 1, loaded: 1000, total: 1240 }), '1 group · 1 document in the 1,000 loaded');
   assert.ok(groupNote('framework').includes('counted under each'));
-  assert.ok(groupNote('review').includes('Not in force'));
+  assert.ok(groupNote('review').includes('Not published'));
   assert.ok(!groupNote('owner').includes('counted under each'));
 });
 
@@ -231,22 +222,7 @@ test('GroupKey is the lead\'s contract: every key groups without throwing, on an
   }
 });
 
-test('a Board card says the one fact its column does not: the owner, or the department when the columns are the owners', () => {
-  const d = doc(1, { document_code: 'POL-1', department_id: 11 });
-  assert.equal(boardSubline(d, 'status', LK), 'POL-1 · Dana Okoro');
-  assert.equal(boardSubline(d, 'owner', LK), 'POL-1 · Support');
-  assert.equal(boardSubline(doc(2, { owner_id: null, owner_name: null }), 'department', LK), 'Unassigned');
-  assert.equal(boardSubline(doc(3, { document_code: 'X', department_id: null }), 'owner', LK), 'X');
-});
-
-test('Show all on a Board column is read from the id of the column, and the shown order lists a document once', () => {
+test('the shown order lists a document once', () => {
   const docs = [doc(1, { framework_ids: [1, 2] }), doc(2, { framework_ids: [2] }), doc(3, { owner_id: null, owner_name: null })];
-  assert.deepEqual(showAllByColumn('owner', 'owner:6'), { owners: ['6'] });
-  assert.deepEqual(showAllByColumn('owner', 'owner:none'), { owners: ['none'] });
-  assert.deepEqual(showAllByColumn('department', 'department:none'), { departments: ['none'] });
-  assert.equal(showAllByColumn('review', 'review:2026-11'), null);
-  assert.deepEqual(showAllByColumn('review', 'review:none'), { review: ['unscheduled'] });
-  const columns = boardByGroup(docs, 'framework', LK, NOW);
-  assert.deepEqual(showAllByColumn('framework', columns[0].id), { frameworks: [columns[0].id.slice('framework:'.length)] });
   assert.deepEqual(groupedOrder(groupDocs(docs, 'framework', LK, NOW)).map((d) => d.id), [1, 2, 3]);             // SOC 2 (2 documents) first, in the order given: 1, 2; ISO adds nothing new; then No framework: 3
 });

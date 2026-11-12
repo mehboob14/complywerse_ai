@@ -1,12 +1,12 @@
-// The compliance views of the Workspace, as data the library merges into its built-in views (libraryModel.BUILT_IN_VIEWS): each remembers the filters and the order (the state the
+// The compliance views of the Workspace, as data the Views menu lists (the library's single-filter views are the filter bar's now: libraryModel.BUILT_IN_VIEWS): each remembers the filters and the order (the state the
 // library already saves in a view), the layout it is looked at in and the grouping, in the library's own Filters vocabulary: nothing here is a filter the library cannot express.
 // Pure (no React), so `node --test` checks it (libraryViews.test.ts).
 //
-//   Framework coverage         list, grouped by framework      the documents in force; each framework's line says how many, how many reviews are late, how many have acknowledged
+//   Framework coverage         list, grouped by framework      the published documents; each framework's line says how many, how many reviews are late, how many have acknowledged
 //   Overdue by owner           list, grouped by owner          reviews past their date, the oldest first
 //   Acknowledgements outstanding  list, grouped by department  documents with an acknowledgement request that not everyone has answered, the least answered first
 //   Review calendar            calendar                        the next twelve months of reviews
-//   Approval pipeline          board, by status                documents on their way (draft, in review, in approval, approved)
+//   Approval pipeline          list, grouped by status         documents on their way (draft, in review, in approval, approved)
 //   Restricted                 list, grouped by department     the Restricted classification
 //
 // Left out of the designs this was taken from: "Risk & Compliance" and "By owner (all)": the first is a department name of the sample, the second is the Overdue view without its filter
@@ -24,12 +24,12 @@ const view = (id: string, name: string, layout: LibraryViewId, group: GroupKey, 
 
 /** The new built-in views, in the order the Views menu lists them (after the library's own). The ids never change: a link or a remembered choice may carry them. */
 export const WORKSPACE_VIEWS: WorkspaceView[] = [
-  // a draft does not cover a framework: what is in force does; the documents inside a framework read A to Z
+  // a draft does not cover a framework: what is published does; the documents inside a framework read A to Z
   view('framework-coverage', 'Framework coverage', 'table', 'framework', { statuses: ['published'] }, { key: 'title', dir: 'asc' }),
   view('overdue-by-owner', 'Overdue by owner', 'table', 'owner', { review: ['overdue'] }, { key: 'review', dir: 'asc' }),
   view('acks-outstanding', 'Acknowledgements outstanding', 'table', 'department', { attestation: ['in_progress', 'not_started'] }, { key: 'attestation', dir: 'asc' }),
   view('review-calendar', 'Review calendar', 'calendar', 'none', {}, { key: 'review', dir: 'asc' }),
-  view('approval-pipeline', 'Approval pipeline', 'board', 'status', { statuses: ['draft', 'pending_review', 'pending_approval', 'approved'] }),
+  view('approval-pipeline', 'Approval pipeline', 'table', 'status', { statuses: ['draft', 'pending_review', 'pending_approval', 'approved'] }),
   view('restricted', 'Restricted', 'table', 'department', { classifications: ['restricted'] }),
 ];
 

@@ -2,7 +2,7 @@
 
 /**
  * The "Group by" control of the Workspace: the kit's Menu with one radio item for each way of grouping (the choice is checked) and the grouping in its label ("Group: Department").
- * It is the page's to place (the toolbar, beside Sort) and to show (a layout that groups: the List and the Board); `keys` narrows what it offers. The words are libraryGroups.ts.
+ * It is the page's to place (the toolbar, beside Sort) and to show (the layout that groups: the List); `keys` narrows what it offers. The words are libraryGroups.ts.
  */
 import { Menu, type MenuItem } from '@/components/ui/ds';
 import { GROUP_LABEL, GROUP_MENU, groupButtonLabel } from './libraryGroups';

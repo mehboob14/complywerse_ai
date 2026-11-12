@@ -50,8 +50,8 @@ test('what is moved leaves the selection; what could not be moved stays ticked, 
 test('the layout is in the address, the switch is in the toolbar, and the choice is remembered', () => {
   assert.ok(workspace.includes('useAddressState(LIBRARY_SCHEMA)') && workspace.includes('viewPatch(next)'));
   assert.ok(workspace.includes('saveFolderPrefs(browserStore(), foldersKey(currentUserId), next)'));
-  // the switch is the kit's SegmentedControl (a native radio group named "Library view"): List, Folders and the read-only Board; a choice calls the page's changeView
-  assert.ok(workspace.includes("label: 'Library view'") && workspace.includes("{ value: 'table', label: 'List' }, { value: 'folders', label: 'Folders' }, { value: 'board', label: 'Board' }"));
+  // the switch is the kit's SegmentedControl (a native radio group named "Library view"): List, Folders, Calendar and Tracker (no Board: it lives on the Governance Overview); a choice calls the page's changeView
+  assert.ok(workspace.includes("label: 'Library view'") && workspace.includes("{ value: 'table', label: 'List' }, { value: 'folders', label: 'Folders' }, { value: 'calendar', label: 'Calendar' }, { value: 'tracker', label: 'Tracker' }") && !workspace.includes("'board'"));
   assert.ok(explorer.includes('<SegmentedControl') && workspace.includes('changeView(v as LibraryViewId)'));
 });
 

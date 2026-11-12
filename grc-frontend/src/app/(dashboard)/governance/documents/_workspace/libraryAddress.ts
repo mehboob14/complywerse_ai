@@ -4,7 +4,7 @@
 // name, a sort written in capitals) and never less; libraryAddress.test.ts holds the two readings together. Pure (no React).
 import { flag, integer, listOf, text, type ParamSpec } from '../../../../../lib/addressState.ts';
 import {
-  ATTENTION_KINDS, ATTESTATION_BUCKETS, DEFAULT_SORT, EXPIRY_PARAM, GROUP_KEYS, LIBRARY_VIEWS, NO_FILTERS, REVIEW_BUCKETS, SORT_KEYS, nextStatuses,
+  ATTENTION_KINDS, ATTESTATION_BUCKETS, DEFAULT_SORT, EXPIRY_PARAM, GROUP_KEYS, NO_FILTERS, REVIEW_BUCKETS, SORT_KEYS, layoutOf, nextStatuses,
   type AttentionKind, type Filters, type GroupKey, type LibraryState, type LibraryViewId, type SortKey,
 } from './libraryModel.ts';
 
@@ -20,7 +20,7 @@ const attention = (): ParamSpec<AttentionKind | null> => ({
 });
 const layout = (): ParamSpec<LibraryViewId | null> => ({
   default: null,
-  read: ([first]) => ((LIBRARY_VIEWS as readonly string[]).includes((first ?? '').trim()) ? ((first ?? '').trim() as LibraryViewId) : undefined),
+  read: ([first]) => layoutOf((first ?? '').trim()) ?? undefined,                    // an old ?view=board opens the list (libraryModel.layoutOf)
   write: (view) => (view ? [view] : []),
 });
 const grouping = (): ParamSpec<GroupKey | null> => ({

@@ -44,6 +44,12 @@ test('what the page writes is what it always wrote, and a foreign name stays whe
   assert.ok(writeAddress(LIBRARY_SCHEMA, 'aiDraftTitle=Remote+work&q=x', addressOf(read('q=x')) as never).includes('aiDraftTitle=Remote'));
 });
 
+test('the Board is not a layout any more: an old ?view=board is read as the list, and the address that comes back is a list address', () => {
+  assert.equal(read('view=board&status=published').view, 'table');
+  assert.equal(read('view=nonsense').view, null);
+  assert.deepEqual(entries(writeAddress(LIBRARY_SCHEMA, 'view=board&status=published', addressOf(read('view=board&status=published')) as never)), entries('view=table&status=published'));
+});
+
 test('the legacy ?id= link is read as the open document and rewritten as ?open=', () => {
   const page = read('id=17&status=published');
   assert.equal(page.openId, 17);

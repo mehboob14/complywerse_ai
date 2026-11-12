@@ -99,7 +99,7 @@ export function OwnerAvatar({ doc, withName = false }: { doc: GovDoc; withName?:
   if (!name) {
     const gap = reviewable(doc);
     return gap ? (
-      <span className="inline-flex items-center gap-[4px] text-ds-body font-[600] text-ds-warning" title="In force with no owner">
+      <span className="inline-flex items-center gap-[4px] text-ds-body font-[600] text-ds-warning" title="Published with no owner">
         <AlertCircle aria-hidden className="h-[16px] w-[16px] shrink-0" strokeWidth={1.75} />
         <span className={withName ? '' : 'sr-only'}>Unassigned</span>
       </span>

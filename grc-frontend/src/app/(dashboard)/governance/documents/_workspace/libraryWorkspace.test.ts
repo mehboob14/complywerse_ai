@@ -53,7 +53,7 @@ test('a group\'s header is a real button that says whether it is open, its tick 
   assert.ok(rows.includes('recordRows(p.rows, 1, i.toggleRow)') && rows.includes("kind: 'more'") && rows.includes("kind: 'group'"));
 });
 
-test('nothing appears only on hover or is dragged: the calendar and the board are read-only, every action is a button', () => {
+test('nothing appears only on hover or is dragged: the calendar is read-only, every action is a button', () => {
   for (const name of COMPONENTS) {
     const src = read(name);
     assert.ok(!/opacity-0\b[^'"`]*group-(hover|focus)|group-(hover|focus)[^'"`]*opacity-(100|[1-9]\d)/.test(src), name);

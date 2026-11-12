@@ -23,7 +23,7 @@ test('the six compliance views, with their layout and grouping, each built-in, i
     ['overdue-by-owner', 'Overdue by owner', 'table', 'owner'],
     ['acks-outstanding', 'Acknowledgements outstanding', 'table', 'department'],
     ['review-calendar', 'Review calendar', 'calendar', 'none'],
-    ['approval-pipeline', 'Approval pipeline', 'board', 'status'],
+    ['approval-pipeline', 'Approval pipeline', 'table', 'status'],
     ['restricted', 'Restricted', 'table', 'department'],
   ]);
   assert.ok(WORKSPACE_VIEWS.every((v) => v.builtIn));
@@ -50,7 +50,7 @@ test('each state is in the library\'s own grammar: it survives the address, and 
   assert.deepEqual(loadViews(kv, 'k'), []);
 });
 
-test('Framework coverage keeps what is in force (a draft covers nothing) and sorts A to Z inside a framework', () => {
+test('Framework coverage keeps what is published (a draft covers nothing) and sorts A to Z inside a framework', () => {
   const v = view('framework-coverage');
   assert.deepEqual(keep(v, [doc(1), doc(2, { status: 'draft' }), doc(3, { status: 'approved' }), doc(4, { status: 'archived' })]), [1]);
   assert.deepEqual(v.state.sort, { key: 'title', dir: 'asc' });
@@ -68,7 +68,7 @@ test('Acknowledgements outstanding keeps the documents with a request that not e
   assert.deepEqual(v.state.sort, { key: 'attestation', dir: 'asc' });
 });
 
-test('Approval pipeline keeps the documents on their way and nothing in force; Restricted keeps the Restricted classification in whatever case the data spells it', () => {
+test('Approval pipeline keeps the documents on their way and nothing published; Restricted keeps the Restricted classification in whatever case the data spells it', () => {
   assert.deepEqual(keep(view('approval-pipeline'), ['draft', 'pending_review', 'pending_approval', 'approved', 'published', 'archived', 'expired'].map((status, i) => doc(i + 1, { status }))), [1, 2, 3, 4]);
   assert.deepEqual(keep(view('restricted'), [doc(1, { classification: 'Restricted' }), doc(2, { classification: 'restricted' }), doc(3), doc(4, { classification: null })]), [1, 2]);
 });
@@ -81,11 +81,11 @@ test('the page is on the view its filters, order, layout and grouping say: an ol
   const all = [...BUILT_IN_VIEWS, ...WORKSPACE_VIEWS];
   const overdue = BUILT_IN_VIEWS.find((v) => v.id === 'overdue')!;
   assert.equal(activeView(all, overdue.state, 'table', 'none')?.id, 'overdue');
-  assert.equal(activeView(all, overdue.state, 'board', 'department')?.id, 'overdue');                 // the library's older view: any layout, any grouping
+  assert.equal(activeView(all, overdue.state, 'tracker', 'department')?.id, 'overdue');                 // the library's older view: any layout, any grouping
   assert.equal(activeView(all, view('overdue-by-owner').state, 'table', 'owner')?.id, 'overdue-by-owner');
   assert.equal(activeView(all, view('overdue-by-owner').state, 'table', 'department'), null);          // its filters and order, another grouping: a custom look
   assert.equal(activeView(all, view('restricted').state, 'table', 'department')?.id, 'restricted');
-  assert.equal(activeView(all, view('restricted').state, 'board', 'department'), null);
+  assert.equal(activeView(all, view('restricted').state, 'folders', 'department'), null);
   assert.equal(activeView(all, view('review-calendar').state, 'calendar', 'none')?.id, 'review-calendar');
   assert.equal(activeView(all, view('review-calendar').state, 'table', 'none'), null);
   assert.equal(activeView([], overdue.state, 'table', 'none'), null);
@@ -98,11 +98,11 @@ test('where several views fit, the one that remembers both layout and grouping w
   const both = { id: 'both', name: 'b', state, layout: 'table' as const, group: 'department' as const };
   assert.equal(activeView([plain, layoutOnly, both], state, 'table', 'department')?.id, 'both');
   assert.equal(activeView([plain, layoutOnly], state, 'table', 'owner')?.id, 'layout');
-  assert.equal(activeView([plain, { ...plain, id: 'second' }], state, 'board', 'none')?.id, 'plain');
+  assert.equal(activeView([plain, { ...plain, id: 'second' }], state, 'tracker', 'none')?.id, 'plain');
 });
 
 test('applying a view sets its layout and grouping where it remembers them, and leaves the page\'s own where it does not', () => {
-  assert.deepEqual(viewLook(view('approval-pipeline')), { layout: 'board', group: 'status' });
+  assert.deepEqual(viewLook(view('approval-pipeline')), { layout: 'table', group: 'status' });
   assert.deepEqual(viewLook(BUILT_IN_VIEWS[0]), {});
   assert.deepEqual(viewLook({ layout: 'tracker' }), { layout: 'tracker' });
 });

@@ -3,7 +3,7 @@
 /**
  * The Calendar layout of the library: the documents that owe a review, in a card for what is overdue, one for each of the next twelve months (by their next review date), one for what is
  * due later and one for what has no review date. Each card has its count and its first documents (the whole line opens the document, as a row does); "+N more" asks the page to show
- * the rest (a filter or the list) or, without a page that answers, lists them all in place. A quiet month says "Nothing due". Read-only, like the Board: a review date changes in the
+ * the rest (a filter or the list) or, without a page that answers, lists them all in place. A quiet month says "Nothing due". Read-only: a review date changes in the
  * document or in bulk, never by dragging. Which documents are in which card, and the line under a title, is libraryCalendar.ts; the cards are laid out by the room the calendar has (as many
  * as fit, 220px at the least), never by the window, so a phone gets one column and nothing scrolls sideways.
  */

@@ -18,7 +18,7 @@ export interface FilterOptions {
 
 /** The words of the optional expiry filter, on its chip and in the filter list. */
 export const EXPIRING_LABEL = 'Expiring in 30 days';
-/** The words of the "Waiting for me" view, on its chip and its filter. */
+/** The words of the "Waiting for me" check in the filter bar, and of its applied-filter chip. */
 export const WAITING_LABEL = 'Waiting for me';
 
 /** The (i) beside the Department filter: choosing a department keeps the documents of the departments under it too (libraryModel.matchesFilters). */
