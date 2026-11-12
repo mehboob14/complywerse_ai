@@ -74,3 +74,32 @@ test('nothing in the explorer is fixed to the window or pinned under a bar the p
   assert.ok(!/sticky top-\[/.test(read('RecordExplorer.tsx')));                       // the rail is in the page's flow, not pinned under a bar
   assert.ok(read('RecordTable.tsx').includes('overflow-clip'));                       // a rounded frame that is not a scroll box: the header sticks to the page's scroll
 });
+
+test('the filters are a rail beside the list unless the page asks for a bar on top: "side" is the default, the fit of the side rail is untouched, and a phone keeps the Filters button and its sheet', () => {
+  const explorer = read('RecordExplorer.tsx');
+  assert.ok(explorer.includes("railPlacement = 'side'") && explorer.includes("railPlacement?: 'side' | 'top'"));
+  assert.ok(explorer.includes("onTop ? fitExplorerTop(width) : fitExplorer(width, railWas.current, minList)"));
+  assert.ok(explorer.includes('const bar = onTop && !fit.compact;') && explorer.includes('const button = onTop ? fit.compact : !fit.rail;'));   // the button is the side rail's own rule where the rail is on the side
+  assert.ok(explorer.includes('{bar && <TopFilterBar') && explorer.includes('open={sheet && button}'));
+  assert.ok(explorer.includes('nested={onTop}'));                                                                                           // the sheet's groups are the bar's nested ones only when the filters are on top
+  const rail = read('FacetRail.tsx');
+  assert.ok(rail.includes('nested = false') && rail.includes('const asTree = nested &&'));                                                  // an indented group is a flat list unless it is asked to be a tree
+});
+
+test('the top filter bar is a row of disclosures: a button says whether its panel is open and what it controls, Escape shuts it and returns the focus, a press outside or a Tab out shuts it, one panel at a time, no portal, nothing fixed', () => {
+  const bar = read('TopFilterBar.tsx');
+  assert.ok(bar.includes('aria-expanded={open}') && bar.includes('aria-controls={panelId}') && bar.includes('id={panelId}'));
+  assert.ok(bar.includes("e.key !== 'Escape'") && bar.includes('e.stopPropagation()') && bar.includes('chips.current[key]?.focus()'));
+  assert.ok(bar.includes("document.addEventListener('pointerdown', outside)") && bar.includes("document.removeEventListener('pointerdown', outside)"));
+  assert.ok(bar.includes('e.relatedTarget && !e.currentTarget.contains(e.relatedTarget as Node)'));
+  assert.ok(bar.includes('setOpenKey(open ? null : g.key)'));
+  assert.ok(!/createPortal|(?<![\w-])fixed(?![\w-])|(?<![\w-])sticky(?![\w-])/.test(bar.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')));
+  assert.ok(bar.includes('<FacetGroupBody group={g} onToggle={onToggle} onClear={onClear} nested />'));                                       // the body is the rail's, not a copy of it
+});
+
+test('the tree of an indented group: a parent has a button that says whether it is open and what it controls, a chosen option opens the branches above it, and a search leaves the tree for a flat list that says where each hit is', () => {
+  const rail = read('FacetRail.tsx');
+  assert.ok(rail.includes('aria-expanded={shown}') && rail.includes('aria-controls={shown ?'));
+  assert.ok(rail.includes('ancestorValues(nodes, chosenValues)') && rail.includes('optionTree(group.options)'));
+  assert.ok(rail.includes('asTree && !q ?') && rail.includes('pathAbove(o.title, o.label)'));
+});

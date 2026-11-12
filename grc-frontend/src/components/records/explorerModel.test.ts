@@ -1,10 +1,10 @@
 // node --test "src/components/records/explorerModel.test.ts"
-// The selection, the cursor, the keys, the board and the option lists of the facet explorer.
+// The selection, the cursor, the keys, the board, the option lists and the option tree of the facet explorer.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  canSelectAll, groupBoard, keepMatching, keyAction, moveCursor, selectAllMatching, selectedLabel, shownOptions, tickState, toggleAll, toggleOne,
+  ancestorValues, canSelectAll, groupBoard, keepMatching, keyAction, moveCursor, optionTree, pathAbove, selectAllMatching, selectedLabel, shownOptions, tickState, toggleAll, toggleOne,
 } from './explorerModel.ts';
 
 test('a header tick box ticks the rows of its page, unticks them when all are ticked, and leaves other ticks alone', () => {
@@ -85,4 +85,54 @@ test('an option list shows its first few and "Show N more", but a choice is neve
   assert.deepEqual([chosen.shown.length, chosen.hidden, chosen.shown[7].value], [8, 4, '10']);
   assert.equal(shownOptions(options, undefined, false, false, []).hidden, 0);
   assert.equal(shownOptions(options.slice(0, 5), 7, false, false, []).hidden, 0);
+});
+
+// the departments as the Documents rail lists them: "No department", then the tree in pre-order with its indent
+const DEPTS = [
+  { value: 'none', label: 'No department' },
+  { value: '1', label: 'Information Security', indent: 0 },
+  { value: '2', label: 'Cyber Defence', indent: 1 },
+  { value: '3', label: 'Identity and Access', indent: 2 },
+  { value: '9', label: 'Network', indent: 2 },
+  { value: '4', label: 'Risk', indent: 0 },
+  { value: '5', label: 'Closed Unit', indent: 1 },
+];
+
+test('an indented option list is read as a tree: a parent is the nearest option above with a smaller indent, and the nodes keep the order of the list', () => {
+  const tree = optionTree(DEPTS);
+  assert.equal(tree.length, DEPTS.length);
+  assert.deepEqual(tree.map((n) => [n.option.value, n.depth, n.parent]), [['none', 0, -1], ['1', 0, -1], ['2', 1, 1], ['3', 2, 2], ['9', 2, 2], ['4', 0, -1], ['5', 1, 5]]);
+  assert.deepEqual(tree[1].children, [2]);
+  assert.deepEqual(tree[2].children, [3, 4]);
+  assert.deepEqual(tree[0].children, []);
+  assert.deepEqual(tree[5].children, [6]);
+});
+
+test('a level the list skips is closed up, a missing indent is a top option, an empty list is no tree, and a sibling after a deep branch returns to its own parent', () => {
+  assert.deepEqual(optionTree([]), []);
+  const bare: { value: string; indent?: number }[] = [{ value: 'a' }, { value: 'b' }];
+  assert.deepEqual(optionTree(bare).map((n) => [n.depth, n.parent]), [[0, -1], [0, -1]]);
+  const skipped = optionTree([{ value: 'a', indent: 0 }, { value: 'b', indent: 2 }, { value: 'c', indent: 1 }, { value: 'd', indent: 3 }, { value: 'e', indent: 1 }]);
+  assert.deepEqual(skipped.map((n) => [n.option.value, n.depth, n.parent]), [['a', 0, -1], ['b', 1, 0], ['c', 1, 0], ['d', 2, 2], ['e', 1, 0]]);
+  assert.deepEqual(optionTree([{ value: 'x', indent: -3 }, { value: 'y', indent: 1 }]).map((n) => [n.depth, n.parent]), [[0, -1], [1, 0]]);      // a negative indent is a top option
+});
+
+test('what a chosen option needs open is every option above it, and nothing for a top option, an unknown value or no choice', () => {
+  const tree = optionTree(DEPTS);
+  assert.deepEqual(Array.from(ancestorValues(tree, ['3'])).sort(), ['1', '2']);
+  assert.deepEqual(Array.from(ancestorValues(tree, ['3', '5'])).sort(), ['1', '2', '4']);
+  assert.deepEqual(Array.from(ancestorValues(tree, ['2'])), ['1']);
+  assert.deepEqual(Array.from(ancestorValues(tree, ['1', 'none', '4'])), []);
+  assert.deepEqual(Array.from(ancestorValues(tree, ['404'])), []);
+  assert.deepEqual(Array.from(ancestorValues(tree, [])), []);
+});
+
+test('a hit found out of its tree says where it is: the whole name without its own part, nothing for a top option', () => {
+  assert.equal(pathAbove('Information Security › Cyber Defence › Identity and Access', 'Identity and Access'), 'Information Security › Cyber Defence');
+  assert.equal(pathAbove('Information Security › Cyber Defence', 'Cyber Defence'), 'Information Security');
+  assert.equal(pathAbove('Finance', 'Finance'), '');
+  assert.equal(pathAbove(undefined, 'Finance'), '');
+  assert.equal(pathAbove('', 'Finance'), '');
+  assert.equal(pathAbove('Group / Finance', 'Finance'), 'Group');
+  assert.equal(pathAbove('The whole name of it', 'Finance'), 'The whole name of it');           // a title that does not end with the label is shown as it is
 });

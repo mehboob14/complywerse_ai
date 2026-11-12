@@ -27,7 +27,7 @@ from ....models import (
     DocumentObligation, DocumentRouteHold, DocumentRouteStage, DocumentSignoffAssignment, DocumentSignature,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
-from ....services import esign
+from ....services import approval_defaults, esign
 from .documents import _patch_signoff_content, _snapshot_content_version, create_audit_log
 from .. import doc_lifecycle, routes
 from ..permissions import can_edit, ensure_not_archived, require_doc_changer, require_doc_editor, require_doc_reader
@@ -46,8 +46,8 @@ OWN_ROUTE = ("This document follows an approval route of its own. Change who rev
 
 # ── schemas ──────────────────────────────────────────────────────────────
 class ParticipantIn(BaseModel):
-    target_type: str   # user | role | team
-    target_id: int
+    target_type: str   # user | role | team | unit_owner | parent_owner (the last two name nobody: the owner of the document's unit, or of the unit above it)
+    target_id: int = 0
 
 
 class ParticipantsUpdate(BaseModel):
@@ -178,6 +178,8 @@ def _resolve_target_users(db: Session, tenant_ids: List[int], target_type: str, 
 
         team = db.query(Team).filter(Team.id == target_id).first()
         return org_departments.team_member_ids(db, team) if team else set()      # a department's people, or a legacy team's
+    if target_type == "unit_owner":                # the head of a unit, else of the nearest one above it (approval_defaults.anchor)
+        return approval_defaults.owner_user_ids(db, tenant_ids, target_id)
     return set()
 
 
@@ -193,13 +195,54 @@ def _target_display(db: Session, target_type: str, target_id: int) -> str:
         from ....models import Team
         t = db.query(Team).filter(Team.id == target_id).first()
         return f"Department: {t.name}" if t else f"Department #{target_id}"
+    if target_type == "unit_owner":
+        return approval_defaults.owner_label(db, target_id)
     return f"{target_type} #{target_id}"
+
+
+def anchored(db: Session, doc: GovernanceDocument, target_type: str, target_id: int = 0):
+    """A participant as the document stores it: an owner (``routes.OWNERS``) is the owner of one unit, the document's own or the one
+    above it (``approval_defaults.anchor``); a person, role or team is stored as it is."""
+    if target_type in routes.OWNERS:
+        return approval_defaults.anchor(db, doc, target_type, target_id)
+    return target_type, target_id
 
 
 def _assignments(db: Session, document_id: int) -> List[DocumentSignoffAssignment]:
     return db.query(DocumentSignoffAssignment).filter(
         DocumentSignoffAssignment.document_id == document_id
     ).order_by(DocumentSignoffAssignment.id).all()
+
+
+def ensure_prepared_by(db: Session, doc: GovernanceDocument, by: Optional[int], now: Optional[datetime] = None) -> None:
+    """A document always has someone who prepared it: its owner, else its author, else whoever is acting."""
+    if not any(a.role_type == "prepared_by" for a in _assignments(db, doc.id)):
+        db.add(DocumentSignoffAssignment(tenant_id=doc.tenant_id, document_id=doc.id, role_type="prepared_by", target_type="user",
+                                         target_id=doc.owner_id or doc.author_id or by, added_by=by, added_at=now or datetime.utcnow()))
+
+
+def write_route(db: Session, doc: GovernanceDocument, stages: List[dict], by: Optional[int]) -> None:
+    """Make ``stages`` (``routes.validate``'s) the document's approval route: its stages and its reviewers and approvers replace
+    what it had (prepared-by stays). The one place a route is written: Submit for review (``set_route``) and a department's
+    default route (``approval_defaults.apply_to_document``). Flushes; the caller commits."""
+    document_id = doc.id
+    db.query(DocumentRouteStage).filter(DocumentRouteStage.document_id == document_id).delete()
+    db.query(DocumentSignoffAssignment).filter(DocumentSignoffAssignment.document_id == document_id,
+                                               DocumentSignoffAssignment.role_type != "prepared_by").delete()
+    now = datetime.utcnow()
+    for s in stages:
+        db.add(DocumentRouteStage(tenant_id=doc.tenant_id, document_id=document_id, position=s["position"], name=s["name"], kind=s["kind"],
+                                  order_mode=s["order"], rule=s["rule"], min_count=s["min_count"], due_days=s["due_days"],
+                                  signature=s["signature"], allow_reject=s["allow_reject"], allow_delegate=s["allow_delegate"],
+                                  created_by=by, created_at=now))
+        for i, (target_type, target_id) in enumerate(s["people"], start=1):
+            target_type, target_id = anchored(db, doc, target_type, target_id)
+            db.add(DocumentSignoffAssignment(tenant_id=doc.tenant_id, document_id=document_id,
+                                             role_type="approver" if s["kind"] == "approval" else "reviewer",
+                                             target_type=target_type, target_id=target_id, stage_position=s["position"], position=i,
+                                             added_by=by, added_at=now))
+    ensure_prepared_by(db, doc, by, now)
+    db.flush()
 
 
 def _signatures(db: Session, document_id: int) -> List[DocumentSignature]:
@@ -262,11 +305,12 @@ def nobody_can_sign(db: Session, doc: GovernanceDocument) -> List[str]:
     return out
 
 
-def signoff_targets(db: Session, tenant_ids: List[int]) -> Dict[str, list]:
+def signoff_targets(db: Session, tenant_ids: List[int], department_id: Optional[int] = None) -> Dict[str, list]:
     """Who a document's reviewers and approvers (and Governance Settings' escalation) can be: the platform's people by name, the
     roles an access-review connector did not make (a role whose every link it imported, such as "DigitalOcean: team My Team", has
     nobody who can sign) and the active teams (the departments' picker records), each counting the people ``_resolve_target_users``
-    would ask."""
+    would ask; and the two owners (``owners``: the head of the document's unit, and of the unit above it), by the person they are
+    today when ``department_id`` (the document's unit) is given."""
     from sqlalchemy import func
 
     from ....models import Team
@@ -278,7 +322,8 @@ def signoff_targets(db: Session, tenant_ids: List[int]) -> Dict[str, list]:
     rows = db.query(Team).filter(Team.tenant_id.in_(tenant_ids), Team.is_active.is_(True)).order_by(func.lower(Team.name), Team.id).all()
     asked = org_departments.team_member_sets(db, rows)
     teams = [{"id": t.id, "name": t.name, "member_count": len(asked[t.id] & people.keys())} for t in rows]
-    return {"users": users, "roles": signoff_roles(db, tenant_ids, set(people)), "teams": teams}
+    return {"users": users, "roles": signoff_roles(db, tenant_ids, set(people)), "teams": teams,
+            "owners": approval_defaults.owner_options(db, tenant_ids, department_id)}
 
 
 def signoff_roles(db: Session, tenant_ids: List[int], people: Optional[Set[int]] = None) -> List[dict]:
@@ -428,6 +473,10 @@ def get_signoff(
             "may_sign_as_is": step.as_is,
             "decide": decide,
         },
+        # the department's default reviewers and approvers copied in when nobody was named (approval_defaults.py): {subject, subjects, source,
+        # sources} while those people are still in; defaults_available is what Send would copy in now (nobody named yet)
+        "defaults_applied": approval_defaults.applied_view(db, doc, assignments),
+        "defaults_available": approval_defaults.available_view(db, doc, assignments),
         # changes asked for are resubmitted; a proposed change that holds it is accepted or rejected by the owner instead
         "can_resubmit": editor and route_view["hold"] is not None and route_view["hold"]["kind"] != "proposal" and doc.status != "archived",
         "can_withdraw": editor and doc.status in routes.PENDING,
@@ -476,11 +525,12 @@ def set_participants(
 
     def _add(role_type, items):
         for it in items:
-            if it.target_type not in ("user", "role", "team"):
+            if it.target_type not in ("user", "role", "team") + routes.OWNERS:
                 continue
+            target_type, target_id = anchored(db, doc, it.target_type, int(it.target_id))
             db.add(DocumentSignoffAssignment(
                 tenant_id=doc.tenant_id, document_id=document_id, role_type=role_type,
-                target_type=it.target_type, target_id=int(it.target_id),
+                target_type=target_type, target_id=target_id,
                 added_by=current_user.id, added_at=datetime.utcnow(),
             ))
 
@@ -529,24 +579,7 @@ def set_route(
     refuse_imported_accounts(db, named)
 
     before = _round_summary(db, doc) if routes.is_custom(routes.stages(db, doc)) else None
-    db.query(DocumentRouteStage).filter(DocumentRouteStage.document_id == document_id).delete()
-    db.query(DocumentSignoffAssignment).filter(DocumentSignoffAssignment.document_id == document_id,
-                                               DocumentSignoffAssignment.role_type != "prepared_by").delete()
-    now = datetime.utcnow()
-    for s in stages:
-        db.add(DocumentRouteStage(tenant_id=doc.tenant_id, document_id=document_id, position=s["position"], name=s["name"], kind=s["kind"],
-                                  order_mode=s["order"], rule=s["rule"], min_count=s["min_count"], due_days=s["due_days"],
-                                  signature=s["signature"], allow_reject=s["allow_reject"], allow_delegate=s["allow_delegate"],
-                                  created_by=current_user.id, created_at=now))
-        for i, (target_type, target_id) in enumerate(s["people"], start=1):
-            db.add(DocumentSignoffAssignment(tenant_id=doc.tenant_id, document_id=document_id,
-                                             role_type="approver" if s["kind"] == "approval" else "reviewer",
-                                             target_type=target_type, target_id=target_id, stage_position=s["position"], position=i,
-                                             added_by=current_user.id, added_at=now))
-    if not any(a.role_type == "prepared_by" for a in _assignments(db, document_id)):
-        db.add(DocumentSignoffAssignment(tenant_id=doc.tenant_id, document_id=document_id, role_type="prepared_by", target_type="user",
-                                         target_id=doc.owner_id or doc.author_id or current_user.id, added_by=current_user.id, added_at=now))
-    db.flush()
+    write_route(db, doc, stages, current_user.id)
     after = _round_summary(db, doc) if stages else None
     if before != after:
         create_audit_log(db=db, document_id=document_id, tenant_id=doc.tenant_id, user_id=current_user.id, action="route_set",
@@ -577,6 +610,8 @@ def send_for_review(
     waiting = proposals.waiting_before_send(db, doc)          # a proposed change is decided first (it would hold the review)
     if waiting:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=waiting)
+    if doc.status not in routes.PENDING:
+        approval_defaults.ensure(db, doc, current_user.id)         # nobody named: the unit's default is copied in; a locked one's people have to stay (400)
     assignments = _assignments(db, document_id)
     route = routes.stages(db, doc)
     if routes.is_custom(route):
@@ -625,12 +660,13 @@ def send_for_review(
 
 @router.get("/signoff/targets")
 def get_signoff_targets(
+    department_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
     """Who can be chosen to review or approve a document (``signoff_targets``). Anyone signed in, as the people and team lists are:
-    anyone may create a document and choose who signs it."""
-    return signoff_targets(db, get_user_tenants(current_user, db))
+    anyone may create a document and choose who signs it. ``department_id``: the document's unit, for its owners' names."""
+    return signoff_targets(db, get_user_tenants(current_user, db), department_id)
 
 
 @router.post("/{document_id}/signoff/sign", dependencies=[Depends(require_doc_reader)])

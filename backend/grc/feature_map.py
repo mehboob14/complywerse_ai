@@ -48,6 +48,7 @@ BY_PREFIX: Dict[str, Place] = {
     "/governance/document-attestations": ("Governance", "Attestations"),
     "/governance/policy-exceptions": ("Governance", "Policy Exceptions"),
     "/governance/exception-approval-rules": ("Governance", "Policy Exceptions"),
+    "/governance/approval-defaults": ("Governance", "Documents"),
     "/governance/exceptions": ("Governance", "Policy Exceptions"),
     "/governance/objectives": ("Governance", "Objectives"),
     "/governance/issues": ("Governance", "Objectives"),

@@ -1475,6 +1475,8 @@ ENDPOINT_EVENT_TYPES: list[_EndpointEvent] = [
     ("department_updated", "Department updated", "Administration", ("admin_departments_router.update_department",), None),
     ("department_member_added", "Department member added", "Administration", ("admin_departments_router.add_member",), None),
     ("department_member_removed", "Department member removed", "Administration", ("admin_departments_router.remove_member",), None),
+    ("department_access_granted", "Department access given or blocked", "Administration", ("admin_departments_router.set_department_grant",), None),
+    ("department_access_removed", "Department access removed", "Administration", ("admin_departments_router.remove_department_grant",), None),
     ("company_settings_updated", "Company settings updated", "Administration",
      ("admin_router.update_organization_profile", "tenants_router.update_tenant"), None),
     ("business_unit_created", "Business unit created", "Administration",

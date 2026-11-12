@@ -263,6 +263,9 @@ export interface NavAccess {
   signedIn: boolean;
 }
 
+/** a person with a level on some unit (/auth/me user.unit_rights: given by the Directory's Access tab) has the owner's door to the Documents area too */
+export const hasUnitRights = (rights: unknown): boolean => !!rights && typeof rights === 'object' && Object.keys(rights as object).length > 0;
+
 export const NO_ACCESS: NavAccess = { isAdmin: false, permissions: [], modules: [], features: [], headsDepartment: false, signedIn: false };
 
 const normalizePerm = (perm: string): string => {
@@ -279,7 +282,7 @@ export function navAccessFromMe(me: any): NavAccess {
     .map(normalizePerm);
   const explicit: string[] = Array.isArray(user.allowed_modules) ? user.allowed_modules : [];
   const modules = Array.from(new Set([...explicit, ...permissions.map((perm) => perm.split(':')[0]).filter((mod) => !!mod)]));
-  return { isAdmin: !!user.is_admin, permissions, modules, features: Array.isArray(me.tenant?.features) ? me.tenant.features : [], headsDepartment: !!user.heads_department, signedIn: true };
+  return { isAdmin: !!user.is_admin, permissions, modules, features: Array.isArray(me.tenant?.features) ? me.tenant.features : [], headsDepartment: !!user.heads_department || hasUnitRights(user.unit_rights), signedIn: true };
 }
 
 /** Whether the granted permissions (as /auth/me lists them, normalised) cover a required one: the rule the menu, the palette and the panel share. */

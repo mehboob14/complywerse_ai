@@ -19,6 +19,7 @@ import { Button, ErrorState, FormField, MultiSelect, Notice, Select, Textarea, T
 import { DepartmentSelect } from '@/components/governance/DepartmentSelect';
 import { useAdminDepartments } from '@/components/admin/DepartmentForm';
 import { isRuled } from './_approval';
+import { useImplementerDefault } from './_implementerDefault';
 import { IMPLEMENTER_NOTE, documentUnitPath, formErrors, payloadOf, resolveDocument, sameForm, unitPlaceholder, type DocRef, type DocumentOption, type ExceptionForm } from './_logic';
 import { AssetAssist, DraftAssist, PeriodAssist } from './_assistOwner';
 import { DocumentPicker } from './_DocumentPicker';
@@ -57,7 +58,7 @@ function SourceFailed({ what, source }: { what: string; source: Source<unknown> 
   return <ErrorState compact title={`Couldn't load the ${what}`} message={errorMessage(source.error)} onRetry={() => { void source.refetch(); }} />;
 }
 
-export function ExceptionFormDrawer({ exception, initial, documents, assets, onClose }: {
+export function ExceptionFormDrawer({ exception, initial: opened, documents, assets, onClose }: {
   /** the exception being changed; null raises a new one */
   exception: ExceptionItem | null;
   /** where the form starts (formFrom for an edit; emptyForm or formForPolicy for a new one): the drawer is dirty when it differs */
@@ -67,7 +68,7 @@ export function ExceptionFormDrawer({ exception, initial, documents, assets, onC
   onClose: () => void;
 }) {
   const editing = exception !== null;
-  const [form, setForm] = useState<ExceptionForm>(initial);
+  const [form, setForm] = useState<ExceptionForm>(opened);
   const [picked, setPicked] = useState<DocRef | null>(null);           // the document the person chose in this form (the list may not hold it)
   const [tried, setTried] = useState(false);                          // errors are shown once a save was tried, not while the person is still typing
   const errors = tried ? formErrors(form) : {};
@@ -113,6 +114,10 @@ export function ExceptionFormDrawer({ exception, initial, documents, assets, onC
   );
   const inherited = exception?.department_inherited ? exception.department_path?.join(' › ') ?? '' : '';
   const unitHint = unitPlaceholder(documentUnitPath(chosen, departments.data), inherited);
+
+  // a new exception starts with the default implementer of its unit (_implementerDefault.ts): the one chosen, else its document's; the author may change it
+  const started = useImplementerDefault({ editing, unitId: form.department_id ? Number(form.department_id) : chosen?.unit ?? null, people: form.implementer_people, setPeople: (implementer_people) => set({ implementer_people }) });
+  const initial: ExceptionForm = started.untouched ? { ...opened, implementer_people: started.untouched } : opened;      // what the default put there is not a change the person made
 
   return (
     <RightSlidePanel
@@ -192,7 +197,7 @@ export function ExceptionFormDrawer({ exception, initial, documents, assets, onC
           </div>
         )}
         <div className="grid grid-cols-1 gap-[12px] sm:grid-cols-2">
-          <FormField label="Implementer" optional info={IMPLEMENTER_NOTE} error={daysWrong ? undefined : errors.implementer} className="sm:col-span-2">
+          <FormField label="Implementer" optional info={IMPLEMENTER_NOTE} hint={started.hint} error={daysWrong ? undefined : errors.implementer} className="sm:col-span-2">
             {people.isError && !people.data ? <SourceFailed what="people" source={people} /> : (
               <MultiSelect label="Implementer: who carries it out" options={implementerChoices} value={form.implementer_people} onChange={(implementer_people) => set({ implementer_people })}
                 display="chips" placeholder={people.isLoading ? 'Loading people…' : 'People, roles or owners'} />

@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { COMPACT_BELOW, FRAME, MIN_LIST_WITH_RAIL, RAIL_GAP, RAIL_KEEP, RAIL_WIDTH, TITLE_MIN, allColumns, fitColumns, fitExplorer, type FitColumn } from './explorerFit.ts';
+import { COMPACT_BELOW, FRAME, MIN_LIST_WITH_RAIL, RAIL_GAP, RAIL_KEEP, RAIL_WIDTH, TIGHT_BELOW, TITLE_MIN, allColumns, fitColumns, fitExplorer, fitExplorerTop, type FitColumn } from './explorerFit.ts';
 
 const COLUMNS: FitColumn[] = [
   { key: 'status', px: 100 },
@@ -41,6 +41,21 @@ test('under 640 an explorer is compact; the toolbar keeps icons only when its ro
   assert.equal(fitExplorer(736, false).tight, true);                      // no rail: the Filters button and every label do not fit in 736
   assert.equal(fitExplorer(890, false).tight, false);
   assert.equal(fitExplorer(986, true).tight, false);                      // the shell's 1440 with the panel docked: rail and list, every label
+});
+
+test('with the filters in a bar above the list there is no rail and the list has the whole box; a phone-sized box gives the bar up for the Filters button', () => {
+  assert.deepEqual(fitExplorerTop(null), { rail: false, list: null, compact: false, tight: false });          // not measured: the wide layout, as the server draws it
+  for (const width of [320, 390, COMPACT_BELOW - 1, COMPACT_BELOW, 700, 986, 1200, 2000]) {
+    const fit = fitExplorerTop(width);
+    assert.equal(fit.rail, false, `${width}`);
+    assert.equal(fit.list, width, `${width}`);
+    assert.equal(fit.compact, width < COMPACT_BELOW, `${width}`);
+  }
+  assert.equal(fitExplorerTop(TIGHT_BELOW - 1).tight, true);
+  assert.equal(fitExplorerTop(TIGHT_BELOW).tight, false);
+  // the side rail's answers are not touched by it: the same inputs still give the same fit
+  assert.deepEqual(fitExplorer(1200, true), { rail: true, list: 1200 - RAIL_WIDTH - RAIL_GAP, compact: false, tight: false });
+  assert.equal(fitExplorer(700, true).rail, false);
 });
 
 test('the columns give way in rank order until the title keeps its minimum, and the list is cards when the ones that stay leave it less', () => {

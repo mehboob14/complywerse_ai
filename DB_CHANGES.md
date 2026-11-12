@@ -32,6 +32,123 @@ you know nothing extra needs to run on Ubuntu.
 
 ---
 
+## 2026-11-11 - Directory: approval defaults per department and unit (one new table, auto-applied; four code-only changes)
+
+### What
+
+- **New table `grc_approval_defaults`** (class `ApprovalDefault` in `backend/grc/models/_94_approval_defaults.py`, made by `create_all` at a tenant's first access after a
+  restart): one row per organisation or unit (`department_id` NULL = the whole organisation; no foreign key, like the exception rules) and subject (`doc_review` |
+  `doc_approval` | `doc_route` | `exc_implementer`): `people` (JSON list of `{type: user | role | team | unit_owner | parent_owner, id?}`), `route` (JSON, a route's
+  stages, `doc_route` only), `locked`, `is_active`, who set it and when. Unique per tenant, unit and subject (the database cannot say it for the organisation's row,
+  a NULL is never equal to another: the service looks the row up before it writes). No column added to an existing table, no row written or rewritten, no seed, no
+  backfill: with an empty table every document and exception behaves exactly as before.
+- Code-only, nothing to run: a document sent for review with nobody named gets its unit's default copied into its sign-off (`grc_document_signoff_assignments`,
+  `grc_document_route_stages`: the same rows Send for review writes); `unit_owner` / `parent_owner` are stored in `target_type` (10 characters wide) as
+  `unit_owner` of one unit (`parent_owner` as the owner of the parent unit); a new audit action `defaults_applied` in `grc_document_audit_logs`; `PUT /governance/documents/{id}`
+  no longer accepts `pending_review` / `pending_approval` and `POST /governance/workflows/submit` goes through Send for review (no more `grc_document_approval_steps` rows
+  from it); a new exception's `implementer` starts from its unit's default.
+
+### Why
+
+The Directory (Governance > Documents) lets a department or unit say who reviews and approves its documents, and who carries out its exceptions, and the server holds it.
+
+### How
+
+Nothing to run. Equivalent SQL for a manual replay (idempotent):
+
+```sql
+CREATE TABLE IF NOT EXISTS grc_approval_defaults (
+	id SERIAL NOT NULL,
+	tenant_id INTEGER NOT NULL,
+	department_id INTEGER,
+	subject VARCHAR(20) NOT NULL,
+	people JSON,
+	route JSON,
+	locked BOOLEAN,
+	is_active BOOLEAN,
+	created_by INTEGER,
+	created_at TIMESTAMP WITHOUT TIME ZONE,
+	updated_by INTEGER,
+	updated_at TIMESTAMP WITHOUT TIME ZONE,
+	PRIMARY KEY (id),
+	CONSTRAINT uq_approval_default_unit_subject UNIQUE (tenant_id, department_id, subject),
+	FOREIGN KEY(tenant_id) REFERENCES grc_tenants (id) ON DELETE CASCADE,
+	FOREIGN KEY(created_by) REFERENCES grc_users (id) ON DELETE SET NULL,
+	FOREIGN KEY(updated_by) REFERENCES grc_users (id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS ix_grc_approval_defaults_id ON grc_approval_defaults (id);
+CREATE INDEX IF NOT EXISTS ix_grc_approval_defaults_tenant_id ON grc_approval_defaults (tenant_id);
+CREATE INDEX IF NOT EXISTS ix_grc_approval_defaults_department_id ON grc_approval_defaults (department_id);
+CREATE INDEX IF NOT EXISTS ix_approval_default_tenant_dept ON grc_approval_defaults (tenant_id, department_id);
+```
+
+The statements are what SQLAlchemy emits for the model on the PostgreSQL dialect (written by hand from the model, not run against a real tenant database; the tests use SQLite).
+
+### Risk
+
+None for existing data: the table is new and empty. Departments are never deleted, so a default never points at nothing; a deleted user or role leaves a default that names nobody (the screens say "Someone who left" / "A role that was removed", and a document sent under it says in words that nobody can sign).
+
+### Auto-applied?
+
+Yes, at each tenant's first access after the backend restart.
+
+---
+
+## 2026-11-11 - Directory: cascading department rights (one new table, auto-applied; two code-only changes)
+
+### What
+
+- **New table `grc_department_grants`** (class `GRCDepartmentGrant` in `backend/grc/models/_95_department_grants.py`, made by `create_all` at a tenant's first access after
+  a restart): one row per principal and department - `principal_type` `user` | `role`, `principal_id` (a user's or a role's id; no foreign key, it points at two tables),
+  `level` `none` | `view` | `edit` | `manage`, who gave it and when. Unique per department, principal type and principal. A row counts for the department and everything under
+  it (the nearest row on the way up wins; `none` stops what a department above gave that principal). Rows only ADD to what a person already has: no global right
+  and no department head's read is ever taken away. No column added to an existing table, no row written or rewritten, no seed, no backfill: with an empty table the
+  platform behaves exactly as before.
+- Code-only, nothing to run: a role deleted in Administration now also removes the grants it held (`admin_router.delete_role`); the department routes under
+  `/admin/departments` accept the manage level of that department besides `admin:organization:edit`.
+
+### Why
+
+The Directory (Governance > Documents) lets the owner of a department hand "view", "edit" or "manage" of a unit, and everything under it, to a person or a role.
+
+### How
+
+Nothing to run. Equivalent SQL for a manual replay (idempotent):
+
+```sql
+CREATE TABLE IF NOT EXISTS grc_department_grants (
+	id SERIAL NOT NULL,
+	tenant_id INTEGER NOT NULL,
+	department_id INTEGER NOT NULL,
+	principal_type VARCHAR(10) NOT NULL,
+	principal_id INTEGER NOT NULL,
+	level VARCHAR(10) NOT NULL,
+	created_by INTEGER,
+	created_at TIMESTAMP WITHOUT TIME ZONE,
+	PRIMARY KEY (id),
+	CONSTRAINT uq_department_grant UNIQUE (department_id, principal_type, principal_id),
+	FOREIGN KEY(tenant_id) REFERENCES grc_tenants (id) ON DELETE CASCADE,
+	FOREIGN KEY(department_id) REFERENCES grc_departments (id) ON DELETE CASCADE,
+	FOREIGN KEY(created_by) REFERENCES grc_users (id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS ix_grc_department_grants_id ON grc_department_grants (id);
+CREATE INDEX IF NOT EXISTS ix_grc_department_grants_tenant_id ON grc_department_grants (tenant_id);
+CREATE INDEX IF NOT EXISTS ix_grc_department_grants_department_id ON grc_department_grants (department_id);
+CREATE INDEX IF NOT EXISTS ix_department_grant_principal ON grc_department_grants (principal_type, principal_id);
+```
+
+The statements are what SQLAlchemy emits for the model on the PostgreSQL dialect; not yet run against a real tenant database (the tests use SQLite).
+
+### Risk
+
+None for existing data: the table is new and empty. Departments are never deleted, so the cascade on `department_id` never fires; a deleted user leaves a row that matches nobody.
+
+### Auto-applied?
+
+Yes, at each tenant's first access after the backend restart.
+
+---
+
 ## 2026-11-06 - Committee meetings: the roll call gets its own table (one new table; auto-applied)
 
 ### What

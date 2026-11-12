@@ -856,6 +856,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
             </Button>
           </>
         )}
+        railPlacement="top"
         groups={groups}
         onToggle={toggleFacet}
         onClear={clearFacet}

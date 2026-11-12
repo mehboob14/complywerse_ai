@@ -711,6 +711,8 @@ def get_me(
     is_admin = is_tenant_admin(db, user)
     from ..services import org_departments       # (inside the function, like the other late imports of this module)
     heads_department = bool(tenant and org_departments.headed_by(db, user.id, [tenant.id]))
+    from ..services import department_rights    # the departments where a grant (Directory) gives the person view, edit or manage
+    unit_rights = {str(dept_id): level for dept_id, level in department_rights.unit_rights(db, user).items()}
 
     if is_admin:
         permissions = ["*:*:*"]
@@ -743,6 +745,8 @@ def get_me(
             "is_admin": is_admin,
             # the owner (head) of a department: the menu shows them the Documents area (the sidebar and the top bar read it, nothing else)
             "heads_department": heads_department,
+            # {department id: "view" | "edit" | "manage"} for the departments where a grant gives the person a level (Directory)
+            "unit_rights": unit_rights,
             "permissions": permissions,
             "allowed_modules": allowed_modules,
         },

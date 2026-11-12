@@ -20,6 +20,10 @@ Who may read it (the user's decisions of 2026-10-17, "rights or asked"):
 * The owner (head) of a department reads every document of that department and of every department under it, drafts and
   archived ones included (the user's decision of 2026-11-05: the owner of a unit reads all of the unit). It is reading only: it
   gives no right to change, publish or delete, and no sight of a newer version on its way over the one in force.
+* Whoever holds a grant on its department or one above it (Directory, ``services/department_rights.py``; grants only ADD to every
+  other rule here): ``view`` reads what a library reader reads (in force, or lapsed after it was) in that department and under it;
+  ``edit`` and ``manage`` read all of it, drafts and archived ones included, and ``edit`` and ``manage`` may also change it (not
+  publish or delete it: those stay global).
 * Anyone asked about it: a request (review, approval, acknowledgement) still waiting, or one answered while staff read the
   document or while it was never published (never once archived, nor restored until it is published again), or its sign-off
   naming them as prepared by, reviewer or approver - by name, by a role the platform gave them, or by a team they belong to or lead.
@@ -45,7 +49,7 @@ from ...models import (DocumentObligation, DocumentSignoffAssignment, Governance
                        Tenant, UserRole, get_db)
 from ...routers.auth_router import (ADMIN_ROLE, PLATFORM_GRANT, get_user_tenants, has_tenant_permission, is_tenant_admin,
                                     platform_role_ids, require_auth)
-from ...services import org_departments
+from ...services import department_rights, org_departments
 
 EDIT_REFUSED = "Only the document's owner, its author or someone allowed to edit documents can change it."
 PUBLISH_REFUSED = "Only someone allowed to publish documents can approve or publish it."
@@ -96,14 +100,19 @@ def publisher_ids(db: Session) -> Set[int]:
 
 
 def can_edit(db: Session, user: GRCUser, doc: GovernanceDocument) -> bool:
-    return user.id in (doc.owner_id, doc.author_id) or _granted(db, user, "governance:policies:edit")
+    return (user.id in (doc.owner_id, doc.author_id) or _granted(db, user, "governance:policies:edit")
+            or (doc.department_id is not None and department_rights.at_least(db, user, doc.department_id, "edit")))     # a grant adds
 
 
 def edit_filter(db: Session, user: GRCUser):
     """``can_edit`` for a list: a condition on GovernanceDocument, or None when the person may change every document."""
     if _granted(db, user, "governance:policies:edit"):
         return None
-    return or_(GovernanceDocument.owner_id == user.id, GovernanceDocument.author_id == user.id)
+    mine = [GovernanceDocument.owner_id == user.id, GovernanceDocument.author_id == user.id]
+    _read, edit_units = department_rights.reach(db, user)          # the departments a grant lets the person change: empty for nearly everyone
+    if edit_units:
+        mine.append(GovernanceDocument.department_id.in_(edit_units))
+    return or_(*mine)
 
 
 def can_publish(db: Session, user: GRCUser) -> bool:
@@ -263,6 +272,11 @@ def _own_or_asked(db: Session, user: GRCUser):
     mine = [G.owner_id == user.id, G.author_id == user.id, G.id.in_(asked_ids(db, user))]
     if units:
         mine.append(G.department_id.in_(units))
+    read_units, edit_units = department_rights.reach(db, user)      # what grants add (Directory): empty for nearly everyone
+    if edit_units:
+        mine.append(G.department_id.in_(edit_units))                # edit and manage read all of it, drafts and archived ones too
+    if read_units:
+        mine.append(and_(G.department_id.in_(read_units), _staff_read(G)))      # view reads what a library reader reads
     return or_(*mine)
 
 
@@ -299,6 +313,10 @@ def can_read(db: Session, user: GRCUser, doc: GovernanceDocument) -> bool:
         return True
     if doc.department_id is not None and doc.department_id in headed_units(db, user):     # the owner of its department, or of one above it
         return True
+    if doc.department_id is not None:                                                     # a grant on its department or one above it
+        level = department_rights.level_of(db, user, doc.department_id)
+        if level in ("edit", "manage") or (level == "view" and staff_reads(doc)):
+            return True
     library, auditor, drafts = _rights(db, user)
     if drafts or auditor or (library and staff_reads(doc)):
         return True

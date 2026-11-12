@@ -220,10 +220,11 @@ def submit_for_approval(
     
     permissions.ensure_editor(db, current_user, document)
     permissions.ensure_not_archived(document)
-    if document.status not in ["draft", "pending_review"]:
+    if document.status != "draft":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Document cannot be submitted for approval in '{document.status}' status"
+            detail=("Document already has pending approval steps" if document.status in ("pending_review", "pending_approval")
+                    else f"Document cannot be submitted for approval in '{document.status}' status")
         )
 
     if not document.owner_id:
@@ -231,87 +232,13 @@ def submit_for_approval(
     if not document.author_id:
         document.author_id = current_user.id
 
-    approvers = db.query(DocumentReviewer).filter(
-        DocumentReviewer.document_id == request.document_id,
-        DocumentReviewer.role_type == "approver",
-        DocumentReviewer.user_id.isnot(None)
-    ).order_by(DocumentReviewer.sequence).all()
+    # The one engine: the document's own reviewers and approvers, else its department's defaults, then Send for review does the rest
+    # (this older endpoint used to make a step the submitter could approve themselves, outside every rule of the department)
+    from .document_signoff import send_for_review
 
-    approver_user_ids = []
-    for reviewer in approvers:
-        if reviewer.user_id and reviewer.user_id not in approver_user_ids:
-            approver_user_ids.append(reviewer.user_id)
-
-    if not approver_user_ids:
-        primary_approver_id = current_user.id or document.owner_id or document.author_id
-        if primary_approver_id:
-            reviewer = DocumentReviewer(
-                document_id=document.id,
-                user_id=primary_approver_id,
-                role_type="approver",
-                sequence=1,
-                is_required=True,
-                assigned_by=current_user.id,
-            )
-            db.add(reviewer)
-            approver_user_ids.append(primary_approver_id)
-
-    if not approver_user_ids:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unable to create a review step for this document."
-        )
-
-    existing_pending = db.query(DocumentApprovalStep).filter(
-        DocumentApprovalStep.document_id == request.document_id,
-        DocumentApprovalStep.status == "pending"
-    ).first()
-
-    if existing_pending:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Document already has pending approval steps"
-        )
-
-    due_date = datetime.utcnow() + timedelta(days=request.due_days)
-
-    # Keep approval intentionally simple for now: one open review step that any
-    # logged-in tenant user can action from the approvals queue.
-    created_steps = []
-    step = DocumentApprovalStep(
-        document_id=document.id,
-        step_sequence=1,
-        step_name="Document Review",
-        approval_type="single",
-        approver_id=approver_user_ids[0],
-        approver_role="approver",
-        status="pending",
-        requested_at=datetime.utcnow(),
-        due_date=due_date
-    )
-    db.add(step)
-    created_steps.append(step)
-    
-    document.status = "pending_review"
-    document.updated_at = datetime.utcnow()
-    
-    create_audit_log(
-        db=db,
-        document_id=document.id,
-        tenant_id=document.tenant_id,
-        user_id=current_user.id,
-        action="submitted",
-        action_details=f"Document submitted for approval. {len(created_steps)} approval steps created."
-    )
-    
-    db.commit()
-    
-    return {
-        "message": "Document submitted for approval",
-        "document_id": document.id,
-        "steps_created": len(created_steps),
-        "due_date": due_date.isoformat()
-    }
+    sent = send_for_review(request.document_id, db, current_user)
+    asked = len(sent["participants"]["reviewer"]) + len(sent["participants"]["approver"])
+    return {**sent, "message": "Document submitted for approval", "document_id": document.id, "steps_created": asked, "due_date": None}
 
 
 @router.post("/steps/{step_id}/approve")

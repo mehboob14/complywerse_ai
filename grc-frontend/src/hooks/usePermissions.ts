@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { authedFetch } from '@/lib/auth-fetch';
+import { hasUnitRights } from '@/components/layout/navAccess';
 
 const PERM_CACHE_KEY = '__perm_state';
 
@@ -63,7 +64,7 @@ export function usePermissions() {
                   .map((p: string) => normalizePerm(p))
               : [];
             const admin = !!data.user.is_admin;
-            const heads = !!data.user.heads_department;
+            const heads = !!data.user.heads_department || hasUnitRights(data.user.unit_rights);       // the owner's door also opens for a person given access to a unit (the Directory's Access tab)
             setPermissions(perms);
             setIsAdmin(admin);
             setHeadsDepartment(heads);

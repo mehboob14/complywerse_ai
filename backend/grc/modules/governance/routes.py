@@ -34,6 +34,7 @@ VERB = {"review": "review", "concurrence": "concur with", "recommendation": "rec
 DID = {"review": "reviewed", "concurrence": "concurred with", "recommendation": "recommended", "approval": "approved"}
 AGAIN = {"review": "Review again", "concurrence": "Concur again", "recommendation": "Recommend again", "approval": "Approve again"}
 STAGE_KINDS = tuple(KIND_LABEL)
+OWNERS = ("unit_owner", "parent_owner")      # people of a stage that name no one: the head of the document's unit, or of the unit above it
 ORDERS = ("together", "in_turn")
 RULES = ("all", "any", "at_least")
 PENDING = ("pending_review", "pending_approval")
@@ -599,9 +600,13 @@ def validate(stages_in: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
         rule = "all" if order == "in_turn" else (s.get("rule") or "all")
         if rule not in RULES:
             raise ValueError(f"Stage {i} ({name}): choose who has to sign.")
-        people = list(dict.fromkeys((p.get("target_type"), int(p["target_id"])) for p in (s.get("people") or [])
-                                    if p.get("target_type") in ("user", "role", "team") and str(p.get("target_id") or "").isdigit()
-                                    and int(p["target_id"]) > 0))
+        # a person, role or team by id; the owner of the document's unit (or of the unit above) by no id at all: (type, 0), which the
+        # document reads as its own unit when the route is written (document_signoff.anchored)
+        people = list(dict.fromkeys(
+            (p["target_type"], 0) if p.get("target_type") in OWNERS else (p.get("target_type"), int(p["target_id"]))
+            for p in (s.get("people") or [])
+            if p.get("target_type") in OWNERS or (p.get("target_type") in ("user", "role", "team")
+                                                  and str(p.get("target_id") or "").isdigit() and int(p["target_id"]) > 0)))
         if not people:
             raise ValueError(f"Stage {i} ({name}): choose who is asked.")
         min_count = None

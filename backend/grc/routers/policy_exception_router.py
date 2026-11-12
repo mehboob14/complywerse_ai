@@ -701,6 +701,7 @@ def create_exception(
     if "create" not in _held(db, current_user):
         _refuse(CREATE_REFUSED)
     from ..modules.governance import exception_approvals, exception_types
+    from ..services import approval_defaults
 
     user_tenants = get_user_tenants(current_user, db)
 
@@ -735,6 +736,8 @@ def create_exception(
         linked_asset_ids=(_clean_asset_ids(data, db, user_tenants) or []),
         metadata_=data.get("metadata", {})
     )
+    if not exception.implementer:          # the unit's default implementer (the Directory) starts it; its author may change it
+        exception.implementer = approval_defaults.implementer_default(db, tenant_id, exception_approvals.unit_of(db, exception))
     db.add(exception)
     db.flush()
     from ..modules.governance import exception_assets
@@ -1059,7 +1062,10 @@ def submit_exception(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only draft exceptions can be submitted")
 
     from ..modules.governance import exception_approvals
+    from ..services import approval_defaults
 
+    # none chosen: the unit's default implementer; a locked default's people have to be among those chosen (400)
+    approval_defaults.enforce_implementer(db, exception, exception_approvals.unit_of(db, exception))
     exception_approvals.check_implementer(db, exception)          # the one chosen to carry it out can act, whichever way it is approved
     # the approval rule that applies (Governance > Settings) asks its steps' people; with none, anyone allowed to approve decides, as before
     if exception_approvals.start(db, exception, current_user) is None:
