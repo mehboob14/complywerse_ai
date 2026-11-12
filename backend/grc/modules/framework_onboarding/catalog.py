@@ -56,6 +56,8 @@ CHECK_PARAMS = {
     "table_rule": ("field", "when_column", "equals", "then_column"),
 }
 WHEN_OPS = ("eq", "ne", "in", "includes", "truthy")   # includes: a multichoice/countries list contains the value
+FW_VERSION = "fw.version"     # a ``when`` may read the version in use (see ``version_key``); only for a framework whose entry has ``versions``
+VERSION_OPS = ("eq", "ne", "in")
 MAX_LABEL_WORDS = 3
 MAX_NOTE_CHARS = 320
 
@@ -90,6 +92,29 @@ def families() -> Dict[str, Dict[str, Any]]:
 def catalog_version() -> int:
     """One number for the whole shipped catalog; a snapshot records the one an approval used."""
     return max([int(profile().get("version") or 1), int(common().get("version") or 1)] + [int(f.get("version") or 1) for f in families().values()])
+
+
+def _vnorm(text: Any) -> str:
+    """A version as words compare: "v4.0.1" and "4.0.1", "Regulation (EU) 2022/2554" and "EU 2022/2554" are not the same text, but the leading v and spacing never matter."""
+    t = " ".join(str(text or "").lower().split())
+    return t[1:] if len(t) > 1 and t[0] == "v" and t[1].isdigit() else t
+
+
+def version_key(versions: Optional[Dict[str, Any]], answered: Any, library_version: Any) -> Optional[str]:
+    """The version of a framework that an onboarding is about, as the key its entry names (``versions.list[].key``): the version the organisation
+    ANSWERED when the entry names an answer field and it maps to one, else the one the library row holds, else none (no version-specific question is asked).
+    Nothing is guessed: a version the entry does not name (by a library text or by its answer option) is none."""
+    items = (versions or {}).get("list") or []
+    if answered not in (None, ""):
+        for it in items:
+            if it.get("answer") == answered:
+                return it["key"]
+    held = _vnorm(library_version)
+    if held:
+        for it in items:               # the texts the library is known to use for it, or the catalog's own name for it (its answer option)
+            if held in {_vnorm(x) for x in [*(it.get("library") or []), it.get("answer")] if x}:
+                return it["key"]
+    return None
 
 
 def family_key_for_slug(slug: Optional[str]) -> str:
@@ -155,7 +180,7 @@ def resolve(slug: Optional[str]) -> Dict[str, Any]:
     return {
         "slug": slug, "family": entry["family"], "family_label": fam.get("label"), "summary": fam.get("summary"),
         "label": entry.get("label"), "flow_id": entry.get("flow_id"), "not_in_library": bool(entry.get("not_in_library")),
-        "version": fam.get("version", 1),
+        "version": fam.get("version", 1), "versions": copy.deepcopy(entry.get("versions")),
         "requires_org": [],               # kept in the answer, empty: the profile gates nothing (a framework asks its own questions)
         # what a person may list as already existing for THIS framework (certificates, reports, plans): its own kinds, else the general ones
         "existing_types": list(entry.get("existing_types") or common().get("existing_types_default") or []),
@@ -284,9 +309,68 @@ def _check_value(target: Dict[str, Any], value: Any, where: str, errs: List[str]
         errs.append(f"{where}: {target.get('key')} is a bool; value {value!r}")
 
 
-def _check_when(when: Any, where: str, fam_idx, org_idx, errs: List[str], applies: Optional[List[str]]) -> None:
+def _check_fw_version_when(when: Dict[str, Any], where: str, errs: List[str], applies: Optional[List[str]],
+                           vkeys: Optional[Dict[str, Set[str]]]) -> None:
+    """``when`` on ``fw.version``: eq, ne or in over the version keys of EVERY framework the item applies to (so it needs ``applies_to``)."""
+    slugs = list(applies or [])
+    if not slugs or any(s not in (vkeys or {}) for s in slugs):
+        errs.append(f"{where}: 'when' on {FW_VERSION} needs applies_to frameworks that all have a versions block")
+        return
+    ops = [o for o in VERSION_OPS if o in when]
+    if len(ops) != 1 or len([k for k in when if k != "field"]) != 1:
+        errs.append(f"{where}: 'when' on {FW_VERSION} takes exactly one of {VERSION_OPS}")
+        return
+    for v in (when["in"] if ops[0] == "in" else [when[ops[0]]]):
+        for s in slugs:
+            if v not in vkeys[s]:
+                errs.append(f"{where}: {FW_VERSION} value {v!r} is not a version key of {s}")
+
+
+def _check_versions(entry: Dict[str, Any], fam_idx: Dict[str, Any], where: str, errs: List[str]) -> None:
+    """A framework entry's ``versions``: ``{answer?: "step.field", list: [{key, label, library: [strings], answer?: option, confidence}]}``.
+    Only a version the library holds or that an answer option already names may be listed; each needs one of the two to be found by."""
+    v = entry["versions"]
+    items = v.get("list")
+    if not isinstance(items, list) or not items:
+        errs.append(f"{where}: versions.list is empty")
+        return
+    field = None
+    if v.get("answer"):
+        field = fam_idx.get(v["answer"])
+        if field is None or field.get("type") != "choice":
+            errs.append(f"{where}: versions.answer {v['answer']!r} is not a choice field")
+            field = None
+        else:
+            if field.get("applies_to") and entry["slug"] not in field["applies_to"]:
+                errs.append(f"{where}: versions.answer {v['answer']} does not apply to {entry['slug']}")
+            if (field.get("when") or {}).get("field") == FW_VERSION:
+                errs.append(f"{where}: versions.answer {v['answer']} may not depend on {FW_VERSION} (it decides it)")
+    keys: Set[str] = set()
+    for it in items:
+        k = it.get("key")
+        if not k or not it.get("label"):
+            errs.append(f"{where}: a version needs a key and a label")
+        elif k in keys:
+            errs.append(f"{where}: duplicate version key {k}")
+        keys.add(k)
+        if it.get("confidence") not in CONFIDENCE:
+            errs.append(f"{where}.{k}: confidence {it.get('confidence')!r} not in {sorted(CONFIDENCE)}")
+        lib = it.get("library")
+        if not isinstance(lib, list) or not all(isinstance(x, str) and x.strip() for x in lib):
+            errs.append(f"{where}.{k}: library must be a list of version texts (may be empty)")
+        if not lib and not it.get("answer"):
+            errs.append(f"{where}.{k}: neither held by the library nor an answer option: nothing could find it")
+        if it.get("answer") and (field is None or it["answer"] not in (field.get("options") or [])):
+            errs.append(f"{where}.{k}: answer {it['answer']!r} is not an option of {v.get('answer')}")
+
+
+def _check_when(when: Any, where: str, fam_idx, org_idx, errs: List[str], applies: Optional[List[str]],
+                vkeys: Optional[Dict[str, Set[str]]] = None) -> None:
     if not isinstance(when, dict) or "field" not in when:
         errs.append(f"{where}: bad 'when'")
+        return
+    if when["field"] == FW_VERSION:
+        _check_fw_version_when(when, where, errs, applies, vkeys)
         return
     ops = [o for o in WHEN_OPS if o in when]
     if len(ops) != 1:
@@ -324,7 +408,7 @@ def _check_existing_types(types: Any, confidence: Any, where: str, errs: List[st
         errs.append(f"{where}: existing_confidence {confidence!r} not in {sorted(CONFIDENCE)}")
 
 
-def _check_gate(g: Dict[str, Any], where: str, fam_idx, org_idx, errs: List[str], slugs: Set[str]) -> None:
+def _check_gate(g: Dict[str, Any], where: str, fam_idx, org_idx, errs: List[str], slugs: Set[str], vkeys: Optional[Dict[str, Set[str]]] = None) -> None:
     for k in ("key", "label", "level", "hint", "check"):
         if not g.get(k):
             errs.append(f"{where}: missing {k}")
@@ -335,7 +419,7 @@ def _check_gate(g: Dict[str, Any], where: str, fam_idx, org_idx, errs: List[str]
     if g.get("source"):
         _check_source(g["source"], where, errs, required=False)
     if g.get("when"):
-        _check_when(g["when"], where, fam_idx, org_idx, errs, g.get("applies_to"))
+        _check_when(g["when"], where, fam_idx, org_idx, errs, g.get("applies_to"), vkeys)
     c = g.get("check") or {}
     ctype = c.get("type")
     if ctype not in CHECK_PARAMS:
@@ -481,11 +565,16 @@ def validate(flow_ids: Optional[Set[str]] = None) -> List[str]:
                 fkeys.add(f.get("key"))
                 _check_field(f, fw2, errs, in_profile=False, inherited_source=st.get("source"), slugs=slugs)
         fam_idx = family_fields(fam)
+        for entry in fam.get("frameworks", []):
+            if entry.get("versions") is not None and entry.get("slug"):
+                _check_versions(entry, fam_idx, f"{fw}.{entry['slug']}.versions", errs)
+        vkeys = {e["slug"]: {i.get("key") for i in (e.get("versions") or {}).get("list") or []}
+                 for e in fam.get("frameworks", []) if e.get("slug") and e.get("versions")}
         for st in fam.get("steps", []):
             for f in st.get("fields", []):
                 loc = f"{fw}.{st.get('key')}.{f.get('key')}"
                 if f.get("when"):
-                    _check_when(f["when"], loc, fam_idx, org_idx, errs, f.get("applies_to"))
+                    _check_when(f["when"], loc, fam_idx, org_idx, errs, f.get("applies_to"), vkeys)
                 if f.get("prefill_from"):
                     tgt = _ref(f["prefill_from"], fam_idx, org_idx)
                     if tgt is None:
@@ -497,7 +586,7 @@ def validate(flow_ids: Optional[Set[str]] = None) -> List[str]:
             if g.get("key") in gkeys2:
                 errs.append(f"{fw}.gate.{g.get('key')}: duplicate gate key")
             gkeys2.add(g.get("key"))
-            _check_gate(g, f"{fw}.gate.{g.get('key')}", fam_idx, org_idx, errs, slugs)
+            _check_gate(g, f"{fw}.gate.{g.get('key')}", fam_idx, org_idx, errs, slugs, vkeys)
     # ---- the common steps: asked of every framework
     com = common()
     _check_existing_types(com.get("existing_types_default"), com.get("existing_confidence"), "common", errs, required=True)

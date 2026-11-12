@@ -35,7 +35,7 @@ def decide(db: Session, tenant_id: int, fw: UploadedFramework) -> Dict[str, Any]
         out["unmet"] = [{"key": "onboarding", "label": "Onboarding has not started", "hint": "Start it from Frameworks > Onboarding."}]
     else:
         org_values = profile.merged_values(db, tenant_id)
-        out["unmet"] = engine.unmet(engine.evaluate(catalog.resolve(ob.framework_slug), ob.answers or {}, org_values))
+        out["unmet"] = engine.unmet(engine.evaluate(catalog.resolve(ob.framework_slug), ob.answers or {}, org_values, library_version=fw.version))
     return out
 
 

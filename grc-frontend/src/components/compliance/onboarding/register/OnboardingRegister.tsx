@@ -9,7 +9,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, Play, Search } from 'lucide-react';
+import { ArrowRight, Play, RefreshCw, Search } from 'lucide-react';
 import {
   Button, EmptyState, Notice, ProgressBar, RegisterTable, SectionCard, SegmentedControl, Select, StatusPill, TextInput, useAddressState, useNotify,
   rowCountText, sortRows, type RegisterColumn, type SortState,
@@ -19,9 +19,10 @@ import { oneOf, text } from '@/lib/addressState';
 import { formatRelative } from '@/lib/format';
 import { ONBOARDING_KEYS, onboardingApi, problemOf, STATE_LABEL, type RegisterRow } from '@/lib/frameworkOnboarding';
 import {
-  actionOf, countsOf, familiesOf, filterRows, journeyWords, knownFamily, progressPercent, progressWords, sortValue, startRefusalWords, STATE_FILTERS, STATE_TONE,
-  underwayWords, workspaceHref, type StateFilter,
+  actionOf, countsOf, familiesOf, FILTER_LABEL, filterRows, journeyWords, knownFamily, progressPercent, progressWords, sortValue, startRefusalWords, STATE_FILTERS, STATE_TONE,
+  underwayWords, visibleFilters, workspaceHref, type StateFilter,
 } from './registerModel';
+import { checkRefusal, checkWords, lastCheckedWords, versionCell } from '../workspace/versionModel';
 
 const SCHEMA = { state: oneOf(STATE_FILTERS, 'all'), family: text(), q: text() };
 const NAME = 'break-words font-[600] text-ds-fg hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring';
@@ -37,10 +38,13 @@ function NameCell({ row }: { row: RegisterRow }) {
 
 function StateCell({ row }: { row: RegisterRow }) {
   const why = underwayWords(row.underway);
+  const changed = versionCell(row);                                                      // the framework changed since approval, or was replaced by a newer entry
   return (
     <>
       <StatusPill tone={STATE_TONE[row.state]} label={STATE_LABEL[row.state]} size="sm" />
       {why && <span className="mt-[2px] block text-ds-label text-ds-fg-muted">{why}</span>}
+      {changed.pill && <span className="mt-[4px] block"><StatusPill tone={changed.pill.tone} label={changed.pill.label} size="sm" /></span>}
+      {changed.line && <span className="mt-[2px] block break-words text-ds-label text-ds-fg-muted">{changed.line}</span>}
     </>
   );
 }
@@ -77,7 +81,15 @@ export default function OnboardingRegister() {
     onSettled: () => setStartingId(null),
   });
 
-  const chips = STATE_FILTERS.map((s) => ({ value: s, label: `${s === 'all' ? 'All' : STATE_LABEL[s]} ${counts[s]}` }));
+  const chips = visibleFilters(counts, address.state).map((s) => ({ value: s, label: `${FILTER_LABEL[s]} ${counts[s]}` }));
+
+  // measures every settled onboarding against what it was settled on and tells the program owners; the register then reads again
+  const check = useMutation({
+    mutationFn: onboardingApi.versionCheck,
+    onSuccess: (r) => { notify.success(checkWords(r)); void qc.invalidateQueries({ queryKey: ONBOARDING_KEYS.register }); },
+    onError: (e) => { const p = problemOf(e); notify.error(checkRefusal(p.status, p.message), { title: "Couldn't check for changes" }); },
+  });
+  const checked = lastCheckedWords(register.data?.meta.version_checked_at, (iso) => formatRelative(iso));
 
   const columns: RegisterColumn<RegisterRow>[] = [
     { key: 'name', header: 'Framework', sortable: true, isRowHeader: true, cell: (r) => <NameCell row={r} /> },
@@ -118,8 +130,12 @@ export default function OnboardingRegister() {
           </>
         )}
       >
-        <div className="mb-[12px]">
+        <div className="mb-[12px] flex flex-wrap items-center justify-between gap-x-[16px] gap-y-[8px]">
           <SegmentedControl<StateFilter> label="State" name="onboarding-state" options={chips} value={address.state} onChange={(s) => setAddress({ state: s })} />
+          <div className="flex min-w-0 flex-wrap items-center gap-x-[12px] gap-y-[4px]">
+            {checked && <span className="text-ds-label text-ds-fg-muted">{checked}</span>}
+            <Button size="sm" leftIcon={<RefreshCw aria-hidden />} loading={check.isPending} onClick={() => check.mutate()}>Check for changes</Button>
+          </div>
         </div>
         <RegisterTable<RegisterRow>
           caption="Framework onboarding"

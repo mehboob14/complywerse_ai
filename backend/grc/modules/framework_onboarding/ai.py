@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from ...config import get_openai_model
 from ...models import FrameworkOnboarding, GRCUser
 from ...services.ai_gateway.errors import AIBlocked
-from . import catalog, engine, profile, service
+from . import catalog, engine, profile, service, versioning
 
 logger = logging.getLogger(__name__)
 
@@ -163,7 +163,7 @@ def exclusions_check(db: Session, ob: FrameworkOnboarding, ctx: Dict[str, Any]) 
 
 def gap_review(db: Session, ob: FrameworkOnboarding, ctx: Dict[str, Any]) -> Dict[str, Any]:
     res, org = ctx["res"], ctx["org"]
-    ev = engine.evaluate(res, ob.answers or {}, org)
+    ev = engine.evaluate(res, ob.answers or {}, org, library_version=versioning.library_version(db, ob))
     labels = {f"{s['key']}.{f['key']}": f["label"] for s in res["steps"] for f in s["fields"]}
     open_keys = [c["key"] for c in ev["checks"] if not c["ok"] and c.get("kind") == "field"][:20]
 

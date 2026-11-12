@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from ...models import GRCUser, get_db
-from ...routers.auth_router import get_user_primary_tenant, require_auth, require_tenant_permission
+from ...routers.auth_router import get_user_primary_tenant, has_tenant_permission, require_auth, require_tenant_permission
 from . import ai, catalog, files, gate, profile, programme, service
 
 router = APIRouter(prefix="/compliance", tags=["Framework Onboarding"])
@@ -106,6 +106,13 @@ def start(body: StartBody, db: Session = Depends(get_db), user: GRCUser = Depend
         return service.view(db, service.create(db, tid, user, fw))
     except service.OnboardingError as exc:
         raise _fail(exc)
+
+
+# --------------------------------------------------------------------------- framework versions (docs/framework-version-management.md)
+@router.post("/framework-onboarding/version-check")
+def version_check(db: Session = Depends(get_db), user: GRCUser = Depends(require_auth), _p: bool = Depends(EDIT_ONBOARDING)):
+    """Measure every settled onboarding against what it was settled on and tell the program owners (once per change). Answers the counts."""
+    return service.check_versions(db, _tenant(db, user), user)
 
 
 # --------------------------------------------------------------------------- documents on an answer
@@ -288,4 +295,26 @@ def underway(onboarding_id: int, body: UnderwayBody, db: Session = Depends(get_d
     try:
         return service.mark_underway(db, service.get(db, _tenant(db, user), onboarding_id), user, body.kind, body.reason)
     except service.OnboardingError as exc:
+        raise _fail(exc)
+
+
+class VersionReviewBody(BaseModel):
+    outcome: str = ""
+    note: str = Field(default="", max_length=2000)
+
+
+# who may take each decision on a version change: confirming is an approval, reopening is the reopen right, starting a draft for the newer version is editing
+_REVIEW_RIGHT = {"confirmed": ("compliance:framework_onboarding:approve",), "changes_needed": ("compliance:framework_onboarding:override",),
+                 "start_new_version": ("compliance:framework_onboarding:edit", "compliance:frameworks:edit")}
+
+
+@router.post("/framework-onboarding/{onboarding_id}/version-review")
+def version_review(onboarding_id: int, body: VersionReviewBody, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    right = _REVIEW_RIGHT.get(body.outcome)
+    if right and not has_tenant_permission(db, user, *right):
+        raise HTTPException(status_code=403, detail="Permission denied")
+    try:
+        return service.version_review(db, service.get(db, _tenant(db, user), onboarding_id), user, body.outcome, body.note)
+    except service.OnboardingError as exc:
+        db.rollback()
         raise _fail(exc)

@@ -11,9 +11,9 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ...models import CertificationJourney, FrameworkOnboarding, FrameworkOnboardingEvent, GRCUser, UploadedFramework
+from ...models import CertificationJourney, FrameworkOnboarding, FrameworkOnboardingEvent, FrameworkVersionBaseline, GRCUser, UploadedFramework
 from ..scf.registry import slug_for_framework
-from . import catalog, engine, existing, files, profile
+from . import catalog, engine, existing, files, profile, versioning
 from .errors import OnboardingError
 
 UNDERWAY_KINDS = [
@@ -122,7 +122,7 @@ def _journey(db: Session, tenant_id: int, framework_id: int) -> Optional[Dict[st
 
 def _readiness(db: Session, ob: FrameworkOnboarding, org_values: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     org_values = org_values if org_values is not None else profile.merged_values(db, ob.tenant_id)
-    return engine.evaluate(catalog.resolve(ob.framework_slug), ob.answers or {}, org_values)
+    return engine.evaluate(catalog.resolve(ob.framework_slug), ob.answers or {}, org_values, library_version=versioning.library_version(db, ob))
 
 
 def _person(db: Session, uid: Optional[int]) -> Optional[str]:
@@ -157,7 +157,7 @@ def view(db: Session, ob: FrameworkOnboarding) -> Dict[str, Any]:
     fw = db.query(UploadedFramework).filter(UploadedFramework.id == ob.uploaded_framework_id).first()
     res = catalog.resolve(ob.framework_slug)
     org_values = profile.merged_values(db, ob.tenant_id)
-    readiness = engine.evaluate(res, ob.answers or {}, org_values)
+    readiness = engine.evaluate(res, ob.answers or {}, org_values, library_version=fw.version if fw else None)
     refs = profile.refs_for(db, ob.tenant_id, org_values)
     for k, v in profile._names(db, ob.tenant_id, *_answer_refs(res, ob.answers or {})).items():
         refs.setdefault(k, {}).update(v)
@@ -173,6 +173,7 @@ def view(db: Session, ob: FrameworkOnboarding) -> Dict[str, Any]:
         "readiness": readiness,
         "refs": refs, "org_rows": _org_rows(org_values), "journey": _journey(db, ob.tenant_id, ob.uploaded_framework_id),
         "events": _events(db, ob), "catalog_version": ob.catalog_version, "current_catalog_version": catalog.catalog_version(),
+        "framework_version": fw.version if fw else None, "version": versioning.status(db, ob, deep=True, org_values=org_values),
     }
 
 
@@ -213,6 +214,17 @@ def _org_rows(org_values: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
 
 
 # --------------------------------------------------------------------------- the register
+def _version_row(base: Optional[FrameworkVersionBaseline], ob: FrameworkOnboarding, replaced: bool = False) -> Optional[Dict[str, Any]]:
+    """What the register says of a row's version: from the last check (a cheap read; the onboarding's own page measures live). None when it is not tracked."""
+    if not versioning.tracked(ob, base):
+        return None
+    if base is not None and base.review_state == "migrated":
+        return {"state": "superseded", "text": "A newer version has its own onboarding.", "successor_onboarding_id": base.successor_onboarding_id}
+    last = (base.last_check if base else None) or {}
+    state = last.get("state") if last.get("state") in ("current", "needs_review") else "current"
+    return {"state": state, "text": (last.get("reasons") or [None])[0], "replaced": replaced, "checked_at": last.get("at"), "pending": base is None}
+
+
 def register(db: Session, tenant_id: int) -> Dict[str, Any]:
     """GET /framework-onboarding: every library framework of the tenant with its onboarding state. Never writes."""
     from sqlalchemy import or_
@@ -226,6 +238,7 @@ def register(db: Session, tenant_id: int) -> Dict[str, Any]:
         if cur is None or STATUS_PRIORITY.get(fw.upload_status or "", 0) > STATUS_PRIORITY.get(cur.upload_status or "", 0):
             seen[key] = fw
     obs = {o.uploaded_framework_id: o for o in db.query(FrameworkOnboarding).filter(FrameworkOnboarding.tenant_id == tenant_id)}
+    bases = {b.onboarding_id: b for b in db.query(FrameworkVersionBaseline).filter(FrameworkVersionBaseline.tenant_id == tenant_id)}
     journeys: Dict[int, Dict[str, Any]] = {}
     for j in db.query(CertificationJourney).filter(CertificationJourney.tenant_id == tenant_id).order_by(CertificationJourney.id):
         if j.uploaded_framework_id:
@@ -243,18 +256,42 @@ def register(db: Session, tenant_id: int) -> Dict[str, Any]:
             "state": ob.state if ob else "not_started", "journey": journeys.get(fw.id),
             "progress": None, "updated_at": _iso(ob.updated_at) if ob else None, "underway": None,
         }
+        row["review"] = None                                # (``version`` stays the library row's own version text)
         if ob is not None:
-            counts = engine.evaluate(catalog.resolve(ob.framework_slug), ob.answers or {}, org_values)["counts"]
+            counts = engine.evaluate(catalog.resolve(ob.framework_slug), ob.answers or {}, org_values, library_version=fw.version)["counts"]
             row["progress"] = {"done": counts["required_ok"], "total": counts["required_total"]}
             if ob.state == "underway":
                 row["underway"] = {"kind": ob.underway_kind, "at": _iso(ob.underway_at), "legacy": ob.underway_source == "legacy"}
+            row["review"] = _version_row(bases.get(ob.id), ob)
         rows.append(row)
+    # an onboarding whose library row was replaced or retired stays listed: it was dropping out of this register without a word
+    listed = {fw.id for fw in seen.values()}
+    for ob in obs.values():
+        if ob.uploaded_framework_id in listed:
+            continue
+        fw = db.query(UploadedFramework).filter(UploadedFramework.id == ob.uploaded_framework_id).first()
+        if fw is None:
+            continue
+        slug = framework_slug(fw)
+        entry = catalog.framework_entry(slug)
+        fam = catalog.families().get(entry["family"]) or {}
+        counts = engine.evaluate(catalog.resolve(ob.framework_slug), ob.answers or {}, org_values, library_version=fw.version)["counts"]
+        rows.append({
+            "uploaded_framework_id": fw.id, "name": fw.name, "version": fw.version, "slug": slug, "family": entry["family"], "family_label": fam.get("label"),
+            "label": entry.get("label") or fw.name, "onboarding_id": ob.id, "state": ob.state, "journey": journeys.get(fw.id),
+            "progress": {"done": counts["required_ok"], "total": counts["required_total"]}, "updated_at": _iso(ob.updated_at),
+            "underway": {"kind": ob.underway_kind, "at": _iso(ob.underway_at), "legacy": ob.underway_source == "legacy"} if ob.state == "underway" else None,
+            "review": _version_row(bases.get(ob.id), ob, replaced=True),
+        })
     rows.sort(key=lambda r: (r["family"] == "general", r["label"] or ""))
     tally = {s: 0 for s in ("not_started",) + STATES}
     for r in rows:
         tally[r["state"]] = tally.get(r["state"], 0) + 1
+    tally["needs_review"] = sum(1 for r in rows if (r.get("review") or {}).get("state") == "needs_review")
+    checked = [(b.last_check or {}).get("at") for b in bases.values() if (b.last_check or {}).get("at")]
     return {"frameworks": rows, "counts": tally,
-            "meta": {"underway_kinds": UNDERWAY_KINDS, "min_underway_reason": MIN_UNDERWAY_REASON, "min_reopen_reason": MIN_REOPEN_REASON}}
+            "meta": {"underway_kinds": UNDERWAY_KINDS, "min_underway_reason": MIN_UNDERWAY_REASON, "min_reopen_reason": MIN_REOPEN_REASON,
+                     "version_checked_at": max(checked) if checked else None, "min_review_note": versioning.MIN_NOTE}}
 
 
 # --------------------------------------------------------------------------- answers
@@ -361,6 +398,7 @@ def approve(db: Session, ob: FrameworkOnboarding, user: GRCUser, note: Optional[
     ob.snapshot = _snapshot(db, ob, org_values)
     ob.state, ob.approved_by, ob.approved_at, ob.approval_note, ob.updated_at = "complete", user.id, now, (note or "").strip()[:1000] or None, now
     ob.catalog_version = catalog.catalog_version()
+    versioning.take_baseline(db, ob, "approval", user.id)            # what a later change to the framework or its questions is measured against
     _event(db, ob, "approved", user.id, {"note": ob.approval_note} if ob.approval_note else {})
     db.commit()
     return view(db, ob)
@@ -397,6 +435,70 @@ def mark_underway(db: Session, ob: FrameworkOnboarding, user: GRCUser, kind: str
     _event(db, ob, "marked_underway", user.id, {"kind": kind, "reason": ob.underway_reason})
     db.commit()
     return view(db, ob)
+
+
+# --------------------------------------------------------------------------- framework version management (see versioning.py)
+def check_versions(db: Session, tenant_id: int, user: Optional[GRCUser]) -> Dict[str, int]:
+    """Measure every settled onboarding against what it was settled on; tell the program owner once per change. Writes, so it is a POST."""
+    return versioning.check(db, tenant_id, user.id if user else None)
+
+
+def version_review(db: Session, ob: FrameworkOnboarding, user: GRCUser, outcome: str, note: Optional[str]) -> Dict[str, Any]:
+    """A person's decision on a version change, kept as an event. Never edits an answer, the approved snapshot, an assessment or evidence:
+    "confirmed" moves the baseline; "changes_needed" reopens a complete onboarding as an ordinary reopen; "start_new_version" starts a draft for the newer library entry."""
+    if outcome not in versioning.OUTCOMES:
+        raise OnboardingError(422, "Choose one of the listed outcomes.", errors=[{"field": "outcome", "message": "Unknown outcome."}])
+    if outcome == "confirmed":
+        versioning.confirm(db, ob, user, note)
+        return view(db, ob)
+    if outcome == "changes_needed":
+        was = ob.state
+        versioning.mark_changes_needed(db, ob, user, note, reopened=was == "complete")
+        if was == "complete":                                   # the ordinary reopen: draft, answers editable; a re-approval takes a new baseline
+            ob.state, ob.approved_by, ob.approved_at, ob.updated_at = "draft", None, None, datetime.utcnow()
+            ob.reopened_count = (ob.reopened_count or 0) + 1
+            _event(db, ob, "reopened", user.id, {"reason": (note or "").strip()[:1000], "from": was, "version_review": True})
+        db.commit()
+        return view(db, ob)
+    return migrate(db, ob, user, note)
+
+
+def migrate(db: Session, ob: FrameworkOnboarding, user: GRCUser, note: Optional[str]) -> Dict[str, Any]:
+    """A draft onboarding for the library's newer entry of the same framework, with the answers that still fit carried over and the rest listed. The earlier
+    onboarding stays approved and is marked superseded; both keep an event. The reply is the earlier onboarding's view with ``started_onboarding_id``."""
+    why = versioning.review_note(note)
+    st = versioning.status(db, ob, deep=False)
+    if st["state"] == "superseded":
+        raise OnboardingError(409, "A newer onboarding has already taken over from this one.", onboarding_id=(st["successor"] or {}).get("onboarding_id"))
+    if st["state"] != "needs_review":
+        raise OnboardingError(409, "Only an approved onboarding that needs review is moved to a newer version.")
+    succ = st["successor"]
+    if not succ or not succ.get("framework_id"):
+        raise OnboardingError(409, "The library has no newer entry for this framework to start from.")
+    sfw = db.query(UploadedFramework).filter(UploadedFramework.id == succ["framework_id"]).first()
+    there = find(db, ob.tenant_id, sfw.id)
+    if there is not None:
+        raise OnboardingError(409, "An onboarding already exists for the newer version.", onboarding_id=there.id)
+    new = create(db, ob.tenant_id, user, sfw)
+    org_values = profile.merged_values(db, ob.tenant_id)
+    kn = profile.known(db, ob.tenant_id, org_values)
+    kn.files = files.known(db, ob.tenant_id)
+    carried, dropped = versioning.carry_forward(ob.answers or {}, catalog.resolve(ob.framework_slug), catalog.resolve(new.framework_slug), kn)
+    answers = copy.deepcopy(new.answers or {})
+    for step, vals in carried.items():
+        answers.setdefault(step, {}).update(vals)
+    n_carried = sum(len(v) for v in carried.values())
+    new.answers, new.updated_at = answers, datetime.utcnow()
+    base = versioning.baseline_of(db, ob)
+    base.review_state, base.successor_onboarding_id = "migrated", new.id
+    _event(db, ob, "version_reviewed", user.id, {"outcome": "start_new_version", "note": why, "to_onboarding": new.id, "carried": n_carried,
+                                                 "not_carried": [d["label"] for d in dropped][:30]})
+    _event(db, new, "version_migrated", user.id, {"from_onboarding": ob.id, "carried": n_carried, "not_carried": len(dropped)})
+    db.commit()
+    out = view(db, ob)
+    out["started_onboarding_id"] = new.id
+    out["not_carried"] = dropped
+    return out
 
 
 # --------------------------------------------------------------------------- legacy

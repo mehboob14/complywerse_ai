@@ -272,8 +272,11 @@ Lookup = Callable[[str], Tuple[Optional[Dict[str, Any]], Any]]
 
 
 def make_lookup(fam_fields: Dict[str, Dict[str, Any]], answers: Dict[str, Any],
-                org_fields: Dict[str, Dict[str, Any]], org_values: Dict[str, Any], *, bare_is_org: bool = False) -> Lookup:
+                org_fields: Dict[str, Dict[str, Any]], org_values: Dict[str, Any], *, bare_is_org: bool = False,
+                fw_version: Optional[str] = None) -> Lookup:
     def look(ref: str) -> Tuple[Optional[Dict[str, Any]], Any]:
+        if ref == catalog.FW_VERSION:                   # the version in use, as a key of the framework's ``versions`` (None: not known)
+            return {"key": "version", "type": "choice"}, fw_version
         if ref.startswith("org.") or bare_is_org:
             key = ref[4:] if ref.startswith("org.") else ref
             g, _, k = key.partition(".")
@@ -420,8 +423,17 @@ def evaluate_org(org_values: Dict[str, Any], reviewed: Optional[Dict[str, Any]] 
     return {"complete": complete, "groups": groups, "checks": checks, "missing": missing}
 
 
-def evaluate(resolved: Dict[str, Any], answers: Dict[str, Any], org_values: Dict[str, Any]) -> Dict[str, Any]:
-    """Readiness of ONE framework's onboarding: ``{ready, checks, org_checks, steps, hidden, counts}``.
+def version_key_of(resolved: Dict[str, Any], answers: Dict[str, Any], library_version: Optional[str]) -> Optional[str]:
+    """The version of the framework this onboarding is about (``catalog.version_key``): the answered one, else the one the library row holds."""
+    vs = resolved.get("versions")
+    if not vs:
+        return None
+    step, _, key = (vs.get("answer") or "").partition(".")
+    return catalog.version_key(vs, (answers.get(step) or {}).get(key) if step else None, library_version)
+
+
+def evaluate(resolved: Dict[str, Any], answers: Dict[str, Any], org_values: Dict[str, Any], library_version: Optional[str] = None) -> Dict[str, Any]:
+    """Readiness of ONE framework's onboarding: ``{ready, checks, org_checks, steps, hidden, counts, version_key}``.
 
     Only this framework's own required answers and its gate checks decide ``ready``. The organisation profile gates nothing: a person who
     needs one of its lists (sites, systems, third parties) in a pick is sent to it; ``org_values`` only feeds the ``when`` of a question and the
@@ -431,7 +443,8 @@ def evaluate(resolved: Dict[str, Any], answers: Dict[str, Any], org_values: Dict
     for st in resolved["steps"]:
         for f in st["fields"]:
             fam_fields[f"{st['key']}.{f['key']}"] = f
-    look = make_lookup(fam_fields, answers, org_fields, org_values)
+    vkey = version_key_of(resolved, answers, library_version)
+    look = make_lookup(fam_fields, answers, org_fields, org_values, fw_version=vkey)
     visible = make_visible({**fam_fields}, look)
 
     checks: List[Dict[str, Any]] = []
@@ -464,7 +477,7 @@ def evaluate(resolved: Dict[str, Any], answers: Dict[str, Any], org_values: Dict
 
     required = [c for c in checks if c["required"]]
     return {
-        "ready": all(c["ok"] for c in required), "checks": checks, "org_checks": [], "steps": steps, "hidden": hidden,
+        "ready": all(c["ok"] for c in required), "checks": checks, "org_checks": [], "steps": steps, "hidden": hidden, "version_key": vkey,
         "counts": {"required_total": len(required), "required_ok": sum(1 for c in required if c["ok"]),
                    "advised_open": sum(1 for c in checks if not c["required"] and not c["ok"])},
     }

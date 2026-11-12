@@ -80,12 +80,12 @@ Status: **Done**, **Partly**, **Not built**.
 | Catalog audit fields (version, jurisdiction, entity types, required documents, certification requirements, validation, sources) | Partly | Section 1 and the coverage file hold family, region, assessment route, questions, sources. Not in the catalog data: framework version, intended entity types as metadata, required documents as metadata. |
 | Dynamic engine: field types | Done | Text, long text, dropdown, multi-select, yes/no, date, number, country(ies), organisation entity, department, asset, vendor, user (person), table, document upload, existing-work list. |
 | Dynamic engine: conditional questions and uploads, required/optional/advisory, framework-specific validation | Done | `when` rules (eq, ne, in, includes), gate checks (filled, equals, any_filled, distinct, table rule ...), required/advised/optional levels. |
-| Dynamic engine: framework-version-specific questions | Not built | A question can depend on an answer (for example the ECC edition) but the catalog has no notion of framework versions. |
+| Dynamic engine: framework-version-specific questions | Done (first slice) | A framework entry may name its versions (`versions`) and a `when` may read `fw.version`: the answered version, else the one the library row holds. Real use: NIST SP 800-171 (Rev 2 held by the library, Rev 3 an answer option, unverified) and NCA ECC (ECC-2:2024 and ECC-1:2018, unverified). See `docs/framework-version-management.md`. |
 | Separate applicability, scope, requirement, control, implementation, compliance | Partly | Onboarding stores the initial applicability and scope context only. Nothing writes a requirement, control or compliance status (tested). Requirement and control applicability belong to compliance execution, which is not wired. |
 | Exclusions justified and approved | Done | Exclusions need a reason; the whole onboarding is approved (one approver; four-eyes not built). No per-exclusion approval. |
 | A claim of existing compliance never marks controls compliant | Done | Items are claims kept in their own table; a test checks that nothing else is started or changed. |
 | Compliance execution after onboarding (load controls, assignments, evidence collection, workflows, dashboards, reassessment) | Partly | Approval lets the journey start (the gate). The hand-off (`programme.py`, "Compliance programme" card on Review) links or makes the journey, records the scope, proposes the programme owner as control owner and offers the "What exists" items as evidence candidates; it marks nothing. Assessments, testing, findings, dashboards and reassessment run in the journey as before. Per-control scope and applicability are not set. |
-| Framework version management | Not built | The catalog version an onboarding was approved under is recorded and a current catalog version is exposed. Nothing detects a changed framework version, flags stale answers or notifies owners. |
+| Framework version management | Done (first slice) | A baseline is taken at approval (library version, control fingerprint, shape of the questions, version in use); a changed library version, a successor row, changed controls or changed questions mark the onboarding "needs review" listing exactly the stale answers, stale applicability decisions, new questions, changed controls and the programs affected; the program owner is notified once per change; banner on the onboarding and the register; review outcomes (still correct, reopen to change, start for the new version) are events. Nothing is rewritten. Not built: moving compliance work onto a successor, notifying journey stage owners. Design: `docs/framework-version-management.md`. |
 | Frameworks missing from the library or the canonical catalog | Partly | Listed in section 1 (NCA ECC/CCC/DCC/OTCC/TCC and KSA PDPL are catalog only; UAE IA and GCRF are not in the canonical catalog). No action beyond listing. |
 | Custom and uploaded frameworks configurable beyond the common five steps | Not built | They get the common five steps with the general kinds of existing work. There is no way to add questions for a custom framework. |
 | Accuracy and source verification | Partly | V/S/U preserved on every question; one independent review. Nothing was checked against the issuing bodies' own texts; the gaps are listed in the coverage file. |
@@ -98,12 +98,12 @@ Status: **Done**, **Partly**, **Not built**.
 ## 3. Missing onboarding requirements
 
 - **A recorded applicability decision per framework**: applies, does not apply, or voluntary, with a reason. Today it is spread across the framework's own questions.
-- **Framework version** on the onboarding (the version being onboarded) and in the catalog, so a question can depend on it and a version change can be detected.
+- **Framework version** on the onboarding (the version being onboarded) and in the catalog, so a question can depend on it and a version change can be detected. Built (first slice): the baseline records the version, and the catalog names versions only where it knows them.
 - **Requirement-level applicability**: which requirements and controls are in or out, with justification. Belongs to compliance execution.
 - **Where the answers go next**: owner, control teams, scope systems and existing evidence are collected but not handed to the journey or the control assignments.
 - **Per-framework required documents** as metadata (what the framework or its assessor expects to see) rather than only free uploads.
 - **Questions for custom and uploaded frameworks**.
-- **Version data to check**: the versions in the journey flows were not checked against the library names (for example the flow for NIST CSF 2.0 says 1.1, ADHICS says 0.9, SOX 2024). Section 1 shows them as the platform holds them.
+- **Version data to check**: checked against the library files on 2026-11-12: 33 of 34 journey-flow versions agree with the library row's `version` once wording is dropped ("v4.0.1" and "4.0.1"). The one contradiction is NIST CSF: library 2.0, flow 1.1; the flow's phases were not reread, so the number was not edited. The SCF edition behind four crosswalks differs from the library edition (CIS 8.1 against 8.0, SWIFT 2025 against 2024, SAMA 2017 against 2023, NIST 800-171 R3 in SCF against Rev 2 in the library). ADHICS 0.9 and the HIPAA and SOX "2024" are what the library files say; whether they are what the issuing bodies call them is unverified.
 - **Authoritative verification** of the Gulf, Asia, supplier and KSA question sets (sources are listed per framework in the coverage file).
 
 ## 4. Question audit (generated)
@@ -128,7 +128,7 @@ grc_fw_existing_compliance: id, tenant_id, onboarding_id, assessment_type (the f
 Three things stay apart: the claim (a row here), the evidence (Evidence rows) and the compliance status (written only by the platform's own assessments).
 
 Recommended, not built:
-- **Version management**: `framework_version` on the onboarding and the catalog entry; a `grc_fw_version_change` record (framework, from, to, detected at, changed requirement ids); an onboarding review state `needs_review` that lists the answers a version change makes stale and notifies the program owner; historical onboardings and assessments are never rewritten.
+- **Version management** (built, first slice: `grc_fw_version_baseline`, `modules/framework_onboarding/versioning.py`; design `docs/framework-version-management.md`): a baseline per settled onboarding instead of a change record, a computed `needs_review` that lists the stale answers and decisions and notifies the program owner; historical onboardings and assessments are never rewritten.
 - **Compliance initialisation**: on approval, an idempotent hand-off that creates or updates the journey, proposes control owners from the control teams, scopes the controls to the picked systems and registers the existing evidence as candidates; every step an event, never a status.
 - **Document analysis**: a background job per uploaded document that proposes the version, type, issuer, dates and scope as suggestions the person confirms (through the AI guard, never SCF text), and matches findings and evidence to requirements as candidates with the source and date carried forward; nothing becomes a control status.
 - **Custom framework questions**: tenant-level question sets stored as data in the same catalog shape and merged after the common steps, authored in a settings page.
@@ -139,7 +139,7 @@ Recommended, not built:
 |---|---|---|
 | 1 | Common five steps, framework-specific questions for every framework, gate, "already underway" | Done |
 | 2 | "What exists": per-framework kinds, items, documents, verification status, approval snapshot | Done (this round) |
-| 3 | Framework version management | Proposed as its own piece of work |
+| 3 | Framework version management | Built (first slice, 2026-11-12, branch `claude/competent-lehmann-398b30`, not applied) |
 | 4 | Compliance initialisation from an approved onboarding | Vertical slice built (see `docs/framework-onboarding-programme-handoff.md`): journey, scope, proposed owners, evidence candidates; per-control scoping and the rest stay with the journey |
 | 5 | Reading uploaded documents: extraction, matching, carry forward | Proposed as its own piece of work |
 | 6 | Configurable questions for custom and uploaded frameworks | Proposed as its own piece of work |

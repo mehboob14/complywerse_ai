@@ -1389,6 +1389,31 @@ def _backfill_framework_onboarding_legacy(engine: Engine) -> None:
         logger.exception("framework onboarding legacy backfill failed on %s", getattr(engine.url, "database", "?"))
 
 
+def _check_framework_versions(engine: Engine) -> None:
+    """Framework version management: every settled onboarding is measured against what it was settled on, and its program owner told once per change. Runs in a
+    background thread (a mail server must not hold up the first request); idempotent, so every worker running it is harmless."""
+    try:
+        insp = inspect(engine)
+        if not all(insp.has_table(t) for t in ("grc_framework_onboardings", "grc_framework_onboarding_events", "grc_fw_version_baseline", "grc_uploaded_frameworks")):
+            return
+    except Exception:
+        logger.exception("framework version check could not inspect %s", getattr(engine.url, "database", "?"))
+        return
+
+    def run() -> None:
+        try:
+            from ..framework_onboarding.versioning import check_all
+            with Session(bind=engine) as db:
+                done = check_all(db)
+            if done["started"] or done["needs_review"]:
+                logger.info("Framework versions on %s: %s", getattr(engine.url, "database", "?"), done)
+        except Exception:
+            logger.exception("framework version check failed on %s", getattr(engine.url, "database", "?"))
+
+    import threading
+    threading.Thread(target=run, name="fw-version-check", daemon=True).start()
+
+
 def _backfill_committee_task_twins(engine: Engine) -> None:
     """Every committee action without a Task Management twin gets one."""
     try:
@@ -1596,6 +1621,7 @@ def _ensure_for_engine(engine: Engine) -> None:
 
         # Framework onboarding: a journey that was running before it existed counts as "already underway". Idempotent.
         _backfill_framework_onboarding_legacy(engine)
+        _check_framework_versions(engine)
 
         # Metabase / BI semantic layer — reporting_* views (idempotent).
         try:

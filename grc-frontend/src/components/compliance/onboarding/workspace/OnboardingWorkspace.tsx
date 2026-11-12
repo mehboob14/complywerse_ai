@@ -9,7 +9,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, Play } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Play } from 'lucide-react';
 import { PageHeading } from '@/components/ui/ds/PageHeading';
 import { Button, ErrorState, Notice, ReadOnlyNote, SectionCard, SkeletonLines, StatusPill, useAddressState, useNotify } from '@/components/ui/ds';
 import { InfoTip } from '@/components/ui/InfoTip';
@@ -18,11 +18,13 @@ import { text } from '@/lib/addressState';
 import { formatDate } from '@/lib/format';
 import { onboardingApi, ONBOARDING_KEYS, problemOf, refreshOnboarding, STATE_LABEL, type OnboardingView, type Problem, type Refs, type Register, type Step } from '@/lib/frameworkOnboarding';
 import { FRAMEWORK_FLOWS } from '@/app/(dashboard)/frameworks/[id]/_data/frameworkFlows';
-import { journeyWords, STATE_TONE } from '../register/registerModel';
+import { journeyWords, STATE_TONE, workspaceHref } from '../register/registerModel';
 import AiPanel from './AiPanel';
 import DecisionDialog, { type Decision } from './DecisionDialog';
 import ProgrammeCard, { useProgramme } from './ProgrammeCard';
 import ReviewStage from './ReviewStage';
+import VersionReviewDialog from './VersionReviewDialog';
+import { staleMarks, trackedFrom, versionBannerOf } from './versionModel';
 import StageStrip, { panelId, tabId } from './StageStrip';
 import StepFields, { fieldBoxId, type FieldContext } from './StepFields';
 import {
@@ -55,6 +57,7 @@ export default function OnboardingWorkspace({ id }: { id: number }) {
   const [saveProblem, setSaveProblem] = useState<SaveProblem | null>(null);
   const [extraRefs, setExtraRefs] = useState<Partial<Refs>>({});
   const [dialog, setDialog] = useState<Decision | null>(null);
+  const [reviewing, setReviewing] = useState(false);                                  // the review of a framework change (VersionReviewDialog)
   const tabsBase = useId();
   const sent = useRef('');
   const failed = useRef('');                                                    // the edits the server refused: not sent again until they change (or the person says so)
@@ -178,12 +181,23 @@ export default function OnboardingWorkspace({ id }: { id: number }) {
   const title = v.framework.label || v.framework.name || 'Framework';
   const actions = actionsOf(v.state, v.readiness);
   const banner = bannerOf(v, (iso) => (iso ? formatDate(iso) : ''));
+  const changed = versionBannerOf(v.version);
+  const tracking = trackedFrom(v.version, (iso) => (iso ? formatDate(iso) : ''));
   const phaseOne = v.framework.flow_id ? FRAMEWORK_FLOWS.find((f) => f.id === v.framework.flow_id)?.phases[0]?.name : undefined;
   const step = v.steps.find((s) => s.key === current);
   const { prev, next } = neighbours(stages, current);
-  const aiAfter = (stepKey: string) => (fieldKey: string): ReactNode => (locked ? null : aiKindsAfter(v.steps, stepKey, fieldKey).map((k) => (
-    <AiPanel key={k} id={id} kind={k} current={valueOf(v.answers, edits, stepKey, fieldKey)} steps={v.steps} onAccept={applyAi} onJump={goStage} />
-  )));
+  const marks = staleMarks(v.version);                                              // a field still drawn whose saved answer no longer fits (a changed option or kind of answer)
+  const aiAfter = (stepKey: string) => (fieldKey: string): ReactNode => {
+    const mark = marks[fieldRef(stepKey, fieldKey)];
+    return (
+      <>
+        {mark && <p className="mt-[4px] flex items-start gap-[6px] text-ds-label text-ds-fg-body"><AlertTriangle aria-hidden className="mt-[2px] h-[14px] w-[14px] shrink-0 text-ds-warning" strokeWidth={1.75} /><span className="min-w-0 break-words">{mark}</span></p>}
+        {locked ? null : aiKindsAfter(v.steps, stepKey, fieldKey).map((k) => (
+          <AiPanel key={k} id={id} kind={k} current={valueOf(v.answers, edits, stepKey, fieldKey)} steps={v.steps} onAccept={applyAi} onJump={goStage} />
+        ))}
+      </>
+    );
+  };
 
   return (
     <div className={SHELL}>
@@ -194,7 +208,7 @@ export default function OnboardingWorkspace({ id }: { id: number }) {
         actions={startable && programme.query.data && !programme.query.data.started ? (
           <Button variant="primary" leftIcon={<Play aria-hidden />} loading={programme.start.isPending} onClick={() => programme.start.mutate(undefined, { onSuccess: () => setAddress({ step: REVIEW }) })}>Start compliance programme</Button>
         ) : undefined}
-        chips={<><StatusPill tone={STATE_TONE[v.state]} label={STATE_LABEL[v.state]} />{v.framework.family_label && <StatusPill tone="neutral" label={v.framework.family_label} />}</>}
+        chips={<><StatusPill tone={STATE_TONE[v.state]} label={STATE_LABEL[v.state]} />{v.framework.family_label && <StatusPill tone="neutral" label={v.framework.family_label} />}{v.framework_version && <StatusPill tone="neutral" label={`Version ${v.framework_version}`} />}</>}
       />
       {(v.journey || phaseOne) && (
         <p className="text-ds-label text-ds-fg-muted">
@@ -203,6 +217,14 @@ export default function OnboardingWorkspace({ id }: { id: number }) {
             : <>Journey starts at: {phaseOne}</>}
         </p>
       )}
+      {changed && (
+        <Notice tone={changed.tone} role="status" title={changed.title}
+          action={changed.action === 'review' ? <Button size="sm" onClick={() => setReviewing(true)}>Review changes</Button>
+            : changed.action === 'successor' && v.version.successor?.onboarding_id ? <Button size="sm" href={workspaceHref(v.version.successor.onboarding_id)}>Open the new one</Button> : undefined}>
+          {changed.text}
+        </Notice>
+      )}
+      {tracking && <p className="text-ds-label text-ds-fg-muted">{tracking}</p>}
       {banner && (
         <Notice tone={banner.tone} role="status" title={banner.title}
           action={banner.action === 'reopen' ? <Button size="sm" onClick={() => setDialog('reopen')}>Reopen</Button> : banner.action === 'review' ? <Button size="sm" onClick={() => goStage(REVIEW)}>Review</Button> : undefined}>
@@ -239,6 +261,13 @@ export default function OnboardingWorkspace({ id }: { id: number }) {
           />
         )}
       </div>
+      {reviewing && v.version.state === 'needs_review' && (
+        <VersionReviewDialog
+          id={id} view={v} meta={register.data?.meta} steps={v.steps} flush={flush}
+          onClose={() => setReviewing(false)} onJump={(stage, field) => goStage(stage, field)}
+          onDone={(result, message) => { setReviewing(false); done(result, message); if (result.started_onboarding_id) router.push(workspaceHref(result.started_onboarding_id)); }}
+        />
+      )}
       {dialog && (
         <DecisionDialog
           id={id} decision={dialog} framework={title} meta={register.data?.meta ?? FALLBACK_META} flush={flush}

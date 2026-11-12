@@ -1,7 +1,7 @@
 // node --test "src/components/compliance/onboarding/register/registerModel.test.ts"
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { actionOf, countsOf, familiesOf, filterRows, journeyWords, knownFamily, progressPercent, progressWords, sortValue, startRefusalWords, underwayWords, workspaceHref } from './registerModel.ts';
+import { actionOf, countsOf, familiesOf, FILTER_LABEL, filterRows, journeyWords, knownFamily, progressPercent, progressWords, sortValue, startRefusalWords, STATE_FILTERS, underwayWords, visibleFilters, workspaceHref } from './registerModel.ts';
 
 const row = (over: Record<string, unknown>) => ({
   uploaded_framework_id: 1, name: 'ISO/IEC 27001:2022', version: '2022', slug: 'iso_27001', family: 'iso_management', family_label: 'ISO management systems', label: 'ISO 27001',
@@ -29,8 +29,8 @@ test('the filters combine, and a chip counts what pressing it shows', () => {
   assert.deepEqual(filterRows(rows, { state: 'all', family: '', q: '  iso ' }).map((r) => r.uploaded_framework_id), [1, 2]);
   assert.deepEqual(filterRows(rows, { state: 'all', family: '', q: 'type ii' }).map((r) => r.uploaded_framework_id), [3]);                // the library's own name
   assert.deepEqual(filterRows(rows, { state: 'draft', family: 'payments', q: '' }), []);
-  assert.deepEqual(countsOf(rows, { family: '', q: '' }), { all: 5, not_started: 1, draft: 1, ready: 1, complete: 1, underway: 1 });
-  assert.deepEqual(countsOf(rows, { family: '', q: 'iso' }), { all: 2, not_started: 1, draft: 1, ready: 0, complete: 0, underway: 0 });
+  assert.deepEqual(countsOf(rows, { family: '', q: '' }), { all: 5, not_started: 1, draft: 1, ready: 1, complete: 1, underway: 1, needs_review: 0 });
+  assert.deepEqual(countsOf(rows, { family: '', q: 'iso' }), { all: 2, not_started: 1, draft: 1, ready: 0, complete: 0, underway: 0, needs_review: 0 });
 });
 
 test('families are listed by name, the general one last, and an unknown one in the address is no filter', () => {
@@ -61,4 +61,22 @@ test('a refused start says who can do it, and a 404 says the framework is gone',
   assert.match(startRefusalWords(403, 'Forbidden'), /right to edit frameworks/);
   assert.match(startRefusalWords(404, 'x'), /no longer in the library/);
   assert.equal(startRefusalWords(500, 'Something went wrong. Try again.'), 'Something went wrong. Try again.');
+});
+
+test('"Needs review" keeps the rows whose framework changed since approval, counts them like any chip, and shows only when there are some', () => {
+  const changed = [
+    ...rows,
+    row({ uploaded_framework_id: 6, label: 'NIST 800-171', name: 'NIST SP 800-171', state: 'complete', onboarding_id: 11, review: { state: 'needs_review', text: 'The library version changed.' } }),
+    row({ uploaded_framework_id: 7, label: 'HIPAA', name: 'HIPAA', state: 'complete', onboarding_id: 12, review: { state: 'current', text: null } }),
+  ];
+  assert.deepEqual(filterRows(changed, { state: 'needs_review', family: '', q: '' }).map((r) => r.uploaded_framework_id), [6]);
+  assert.equal(filterRows(rows, { state: 'needs_review', family: '', q: '' }).length, 0);
+  assert.equal(countsOf(changed, { family: '', q: '' }).needs_review, 1);
+  assert.equal(countsOf(changed, { family: '', q: '' }).complete, 3);                           // a row keeps its own state chip as well
+  const none = countsOf(rows, { family: '', q: '' });
+  assert.ok(!visibleFilters(none, 'all').includes('needs_review'));
+  assert.ok(visibleFilters(none, 'needs_review').includes('needs_review'));                      // chosen through the address: its chip is not hidden
+  assert.ok(visibleFilters(countsOf(changed, { family: '', q: '' }), 'all').includes('needs_review'));
+  assert.deepEqual(visibleFilters(none, 'all'), ['all', 'not_started', 'draft', 'ready', 'complete', 'underway']);
+  assert.ok(STATE_FILTERS.every((s) => FILTER_LABEL[s].length > 0));
 });
