@@ -4,10 +4,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { GLOSSARY, HOW_STEPS, TERM_KEYS, plainOf, termLabel } from './glossary.ts';
+import { GLOSSARY, HOW_BLOCKERS, HOW_STEPS, TERM_KEYS, plainOf, termLabel } from './glossary.ts';
+import { STEPS } from './tracker/detailModel.ts';
 
-test('the seven words, each with its library spelling and a plain meaning', () => {
-  assert.deepEqual(TERM_KEYS.map((k) => GLOSSARY[k].word), ['Attestation', 'Published', 'Review cycle', 'Owner', 'Approver', 'Out of date', 'Framework']);
+test('the eight words, each with its library spelling and a plain meaning', () => {
+  assert.deepEqual(TERM_KEYS.map((k) => GLOSSARY[k].word), ['Attestation', 'Acknowledgement', 'Published', 'Review cycle', 'Owner', 'Approver', 'Out of date', 'Framework']);
   assert.deepEqual(Object.keys(GLOSSARY).sort(), [...TERM_KEYS].sort());
   for (const k of TERM_KEYS) {
     const plain = plainOf(k);
@@ -32,10 +33,13 @@ test('no meaning leans on jargon, an id or a vendor: the words of the glossary a
   assert.ok(/Not always the person who wrote it/.test(GLOSSARY.owner.plain));
 });
 
-test('six steps, each with a sentence and who does it', () => {
-  assert.equal(HOW_STEPS.length, 6);
+test('seven steps, the same as the stepper of a document detail, each with a sentence and who does it; and what can hold a document up', () => {
+  assert.deepEqual(HOW_STEPS.map((s) => s.title), STEPS.map((s) => s.name));
+  assert.equal(HOW_STEPS.length, 7);
   for (const s of HOW_STEPS) {
     assert.ok(s.title && s.text.length > 20 && s.who, s.title);
-    assert.ok(!/\b(gpt|openai|anthropic)\b/i.test(s.text), s.title);
+    assert.ok(!/(gpt|openai|anthropic)/i.test(s.text) && !/in force/i.test(s.text), s.title);
   }
+  assert.deepEqual(HOW_BLOCKERS.map((b) => b.title), ['Waiting on someone', 'Stuck', 'Changes requested', 'Changes proposed', 'Review overdue']);
+  for (const b of HOW_BLOCKERS) assert.ok(b.text.length > 30 && /\.$/.test(b.text) && !/in force/i.test(b.text), b.title);
 });

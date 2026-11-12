@@ -1,42 +1,17 @@
-// The Tracker layout of the Documents library ("Plain English", design E), without React so `node --test` checks it (libraryTracker.test.ts): where a document stands on the six plain
-// steps (Being written > Being checked > Being signed off > Ready to publish > Live > Everyone’s read it), the one-word badge (Live, Needs a fresh look, Out of date, Not live yet, On its
-// way ...), ONE short line for what is happening now and ONE for what happens next, and the order of the cards (what needs attention first).
-// Real data only: a line names only what the document row or the inbox holds. The row carries the owner, the author, the dates and the acknowledgements (`attestation`); the people a
-// request waits for are known only for the requests the signed-in person sent (the inbox's "sent" list) and for the ones addressed to them (its decisions), so a document with neither
-// says "Waiting for review", never an invented name. A date is said only when the row has it. The platform's rules win over the sample's: an expired document is "Out of date", a live one
-// whose review date has passed is "Needs a fresh look" (the library's own review rule, libraryModel.reviewState), a document is in force while a newer version is written.
+// The Tracker layout of the Documents library, without React so `node --test` checks it (libraryTracker.test.ts): the documents sorted into GROUPS that follow the life cycle the platform
+// really runs (Draft > In review > In approval > Approved > Published, then the groups for what needs attention: Changes requested, Changes proposed, Review overdue, Expired, Exception
+// applied, Archived), the count of each and the ONE line that says what holds it up ("4 late, 1 stuck"), and the paging that keeps a library of thousands cheap (groups closed, rows 25 at a time).
+// Every document is in exactly ONE group, so the counts add up to the documents shown: what needs attention takes a document out of its step's group (an archived, expired or excepted
+// document, one sent back for changes, one with a proposed change waiting for its owner, a published one whose review date has passed), in that order.
+// Real data only: the lean rows give the status, the dates, the owner and the attestation; the server's sets (GET /governance/document-tracker/sets: who is stuck, held, late, sent back,
+// waiting for a proposed change) give the rest. A set that is missing (not loaded yet, or refused) says nothing: a figure is never invented from it, and a document is then in its step's group.
+// The compact line of a document is lineModel.ts, the detail of a document detailModel.ts; the words a person reads about the steps are glossary.ts.
 import { formatDate } from '../../../../../lib/format.ts';
 import { parseUtc } from '../../../../../lib/serverTime.ts';
 import type { Tone } from '../../../../../lib/status.ts';
-import { KIND_META, type Inbox, type InboxItem, type Kind } from '../../../../../lib/inbox/buildInbox.ts';
+import type { Inbox, InboxItem, Kind } from '../../../../../lib/inbox/buildInbox.ts';
+import { NO_SETS, type SetKey } from '../../../../../lib/documentTrackerApi.ts';
 import { reviewState, type LibDoc, type Lookups } from './libraryModel.ts';
-
-// ─── The six steps ───────────────────────────────────────────────────────────────────────────────────────────────────────
-
-export type StageId = 'written' | 'checked' | 'signed' | 'ready' | 'live' | 'read';
-export interface Stage { id: StageId; name: string; /** the few words said under the step a document is at */ what: string }
-
-export const STAGES: readonly Stage[] = [
-  { id: 'written', name: 'Being written', what: 'Someone drafts it' },
-  { id: 'checked', name: 'Being checked', what: 'Colleagues read it' },
-  { id: 'signed', name: 'Being signed off', what: 'A leader approves' },
-  { id: 'ready', name: 'Ready to publish', what: 'Waiting to go live' },
-  { id: 'live', name: 'Live', what: 'Everyone follows it' },
-  { id: 'read', name: 'Everyone’s read it', what: 'People confirm' },
-];
-const LIVE = 4;
-const READ = 5;
-
-/** done: behind it; here: where it stands; next: still ahead; off: the document is out of the journey (archived, or a status this page does not know). */
-export type StepState = 'done' | 'here' | 'next' | 'off';
-export interface Step {
-  stage: Stage;
-  state: StepState;
-  /** `here` and it is a problem (out of date, a check-up that is late, an exception): drawn with a warning, not as progress */
-  problem: boolean;
-  /** what a screen reader and the caption under the step say: "Done", "Now", "Not yet", "Not asked", "Late" ... */
-  word: string;
-}
 
 // ─── The documents these rules read ──────────────────────────────────────────────────────────────────────────────────────
 
@@ -56,13 +31,24 @@ export interface DocPeople {
   sent?: { waiting: string[]; more: number; overdue: boolean };
 }
 
+/** The server's sets as the rules read them (NO_SETS: none known). */
+export type Sets = Readonly<Record<SetKey, ReadonlySet<number>>>;
+export const setsOf = (answer: Partial<Record<SetKey, readonly number[]>> | null | undefined): Sets => {
+  if (!answer) return NO_SETS;
+  const out = { ...NO_SETS } as Record<SetKey, ReadonlySet<number>>;
+  for (const k of Object.keys(NO_SETS) as SetKey[]) out[k] = new Set(Array.isArray(answer[k]) ? (answer[k] as readonly number[]) : []);
+  return out;
+};
+
 export interface TrackerContext {
-  lookups: Pick<Lookups, 'coverage'>;
+  lookups: Pick<Lookups, 'coverage'> & Partial<Pick<Lookups, 'departments' | 'departmentPaths' | 'frameworks'>>;
   now: Date;
   people?: ReadonlyMap<number, DocPeople>;
+  /** which documents are stuck, held, late ...; without it a document is in its step's group and no figure about them is said */
+  sets?: Sets;
 }
 
-/** The inbox sources that name documents (the same two the "Waiting for me" chip reads). */
+/** The inbox sources that name documents (the same two the "Waiting for me" filter reads). */
 export const DOCUMENT_SOURCES = ['doc.lifecycle', 'doc.signoff'] as const;
 
 /** The inbox as it concerns each document: the person's own requests (decisions before acknowledgements, the inbox's own order) and, when the sent list was asked for, who the
@@ -86,38 +72,13 @@ export function peopleOf(inbox: Pick<Inbox, 'bySection'>): Map<number, DocPeople
   return out;
 }
 
-// ─── Words ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
-
-export type BadgeWord = 'Live' | 'Needs a fresh look' | 'Out of date' | 'Not live yet' | 'On its way' | 'Update on its way' | 'Exception applied' | 'Archived';
-export interface Badge { word: string; tone: Tone }
-
-/** What each label says, for the "How it works" sheet. */
-export const BADGE_MEANING: readonly { word: BadgeWord; meaning: string }[] = [
-  { word: 'Live', meaning: 'Published. Everyone it applies to has to follow it.' },
-  { word: 'Needs a fresh look', meaning: 'Live, but its check-up date has passed.' },
-  { word: 'Out of date', meaning: 'It has expired and no longer applies.' },
-  { word: 'Not live yet', meaning: 'A draft. Nobody has to follow it.' },
-  { word: 'On its way', meaning: 'Being checked, signed off or waiting to be published.' },
-  { word: 'Update on its way', meaning: 'A newer version is being worked on; the published one still applies.' },
-  { word: 'Exception applied', meaning: 'An exception is in place, so it is not enforced.' },
-  { word: 'Archived', meaning: 'Taken out of use.' },
-];
+// ─── Words and dates ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 const IN_PROGRESS = ['draft', 'pending_review', 'pending_approval', 'approved', 'review_required'];
 
-/** In force: published, or a newer version is on its way over a published one (the row's `version_in_force`). */
+/** Published, or a newer version is on its way over a published one (the row's `version_in_force`). */
 export function isLive(d: Pick<LibDoc, 'status' | 'version_in_force'>): boolean {
   return d.status === 'published' || (IN_PROGRESS.includes(d.status) && !!d.version_in_force);
-}
-
-const first = (v: string | null | undefined): string | null => (v && v.trim() ? v.trim() : null);
-
-/** The acknowledgements of a document as one object: the row's own, else the coverage map's percentage. null: nobody was asked. */
-export function ackOf(d: Pick<TrackerDoc, 'id' | 'attestation'>, lk: Pick<Lookups, 'coverage'>): { pct: number; done: number | null; total: number | null } | null {
-  const a = d.attestation;
-  if (a && Number.isFinite(a.pct)) return { pct: Math.max(0, Math.min(100, Math.round(a.pct))), done: Number.isFinite(a.done) ? a.done : null, total: Number.isFinite(a.total) ? a.total : null };
-  const pct = lk.coverage[d.id];
-  return pct == null || !Number.isFinite(pct) ? null : { pct: Math.max(0, Math.min(100, Math.round(pct))), done: null, total: null };
 }
 
 /** "A", "A and B", "A, B and C", "A, B and 2 more". */
@@ -131,214 +92,208 @@ export function nameList(names: readonly string[], more = 0): string {
 const DAY = 86_400_000;
 const utcDay = (d: Date) => Math.floor(d.getTime() / DAY);
 
-/** How long ago, in words: "today", "yesterday", "6 days ago", "3 months ago". '' when there is no date. */
-export function agoWords(iso: string | null | undefined, now: Date): string {
+/** Whole UTC calendar days from `iso` to `now` (never negative); null without a date. */
+export function daysSince(iso: string | null | undefined, now: Date): number | null {
   const at = parseUtc(iso);
-  if (!at) return '';
-  const n = Math.max(0, utcDay(now) - utcDay(at));
-  if (n === 0) return 'today';
-  if (n === 1) return 'yesterday';
-  if (n < 60) return `${n} days ago`;
-  if (n < 730) return `${Math.round(n / 30.44)} months ago`;
-  return `${Math.round(n / 365)} years ago`;
+  return at ? Math.max(0, utcDay(now) - utcDay(at)) : null;
 }
 
-const dayOf = (iso: string | null | undefined): string => formatDate(iso, { calendar: true, empty: '' });
-const version = (v: string): string => `v${v.replace(/^v/i, '')}`;
-
-// ─── Where a document stands ─────────────────────────────────────────────────────────────────────────────────────────────
-
-export interface Standing {
-  badge: Badge;
-  /** the index of the step it is at; null: out of the journey (archived, an unknown status) */
-  at: number | null;
-  /** the last step is finished too (everyone has read it) */
-  complete: boolean;
-  /** the step it is at is a problem */
-  problem: boolean;
-  live: boolean;
-  /** overdue, due soon ... of its review date (libraryModel.reviewState) */
-  review: ReturnType<typeof reviewState>;
-  ack: ReturnType<typeof ackOf>;
+/** "today", "1 day", "6 days", "3 months", "2 years". */
+export function spanWords(days: number): string {
+  if (days <= 0) return 'today';
+  if (days < 60) return `${days} ${days === 1 ? 'day' : 'days'}`;
+  if (days < 730) return `${Math.round(days / 30.44)} months`;
+  return `${Math.round(days / 365)} years`;
 }
 
-export function standingOf(d: TrackerDoc, ctx: Pick<TrackerContext, 'lookups' | 'now'>): Standing {
-  const review = reviewState(d, ctx.now);
-  const ack = ackOf(d, ctx.lookups);
-  const live = isLive(d);
-  const late = live && review.bucket === 'overdue';
-  const base = { live, review, ack, complete: false, problem: false };
+/** "today", "yesterday", "6 days ago", "3 months ago". '' when there is no date. */
+export function agoWords(iso: string | null | undefined, now: Date): string {
+  const n = daysSince(iso, now);
+  if (n === null) return '';
+  return n === 0 ? 'today' : n === 1 ? 'yesterday' : `${spanWords(n)} ago`;
+}
+
+/** The short age in a pill: "today", "4 d", "3 mo". */
+export function ageLabel(days: number): string {
+  return days <= 0 ? 'today' : days < 60 ? `${days} d` : days < 730 ? `${Math.round(days / 30.44)} mo` : `${Math.round(days / 365)} y`;
+}
+
+export const dayOf = (iso: string | null | undefined): string => formatDate(iso, { calendar: true, empty: '' });
+
+/** The age pill's tone: nothing to worry about, a week or more, two weeks or more (or late). */
+export const ageTone = (days: number, late = false): Tone => (late || days >= 14 ? 'danger' : days >= 7 ? 'warning' : 'neutral');
+
+// ─── The attestation of a document ───────────────────────────────────────────────────────────────────────────────────────
+
+export type AttestationState = 'none' | 'not_started' | 'in_progress' | 'complete';
+export interface Attestation { state: AttestationState; done: number | null; total: number | null; pct: number | null }
+
+/** Where a document's attestation stands, in the Board's own words: none requested | requested but nobody has acknowledged | started | everyone has. The row's own numbers, else the
+ *  coverage map's percentage. */
+export function attestationOf(d: Pick<TrackerDoc, 'id' | 'attestation'>, lk: Pick<Lookups, 'coverage'>): Attestation {
+  const a = d.attestation;
+  const pct = a && Number.isFinite(a.pct) ? a.pct : lk.coverage[d.id];
+  if (pct == null || !Number.isFinite(pct)) return { state: 'none', done: null, total: null, pct: null };
+  const p = Math.max(0, Math.min(100, Math.round(pct)));
+  const done = a && Number.isFinite(a.done) ? a.done : null;
+  const total = a && Number.isFinite(a.total) ? a.total : null;
+  const state: AttestationState = (done !== null && total !== null ? done >= total && total > 0 : p >= 100) ? 'complete' : (done !== null ? done === 0 : p === 0) ? 'not_started' : 'in_progress';
+  return { state, done, total, pct: p };
+}
+
+// ─── The groups ──────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+export type GroupId = 'draft' | 'review' | 'approval' | 'approved' | 'published' | 'changes' | 'proposed' | 'overdue' | 'expired' | 'exception' | 'archived' | 'other';
+export interface GroupDef {
+  id: GroupId;
+  /** one to three words */
+  label: string;
+  kind: 'step' | 'attention';
+  /** the tone of its mark: attention groups are drawn with a colour besides the word */
+  tone: Tone;
+  /** the (i) note: what being in this group means */
+  info: string;
+}
+
+export const GROUPS: readonly GroupDef[] = [
+  { id: 'draft', label: 'Draft', kind: 'step', tone: 'neutral', info: 'Being written. Nobody has to follow it yet.' },
+  { id: 'review', label: 'In review', kind: 'step', tone: 'progress', info: 'Reviewers read it and sign, or ask for changes.' },
+  { id: 'approval', label: 'In approval', kind: 'step', tone: 'progress', info: 'Approvers decide. Nothing is published without this step.' },
+  { id: 'approved', label: 'Approved', kind: 'step', tone: 'success', info: 'Signed off and waiting to be published. Nobody has to follow it yet.' },
+  { id: 'published', label: 'Published', kind: 'step', tone: 'success', info: 'The version everyone follows. Attestation and acknowledgement happen here.' },
+  { id: 'changes', label: 'Changes requested', kind: 'attention', tone: 'warning', info: 'A reviewer or approver sent it back. It waits until the author makes the changes and resubmits it.' },
+  { id: 'proposed', label: 'Changes proposed', kind: 'attention', tone: 'warning', info: 'Someone who is not the owner proposed a change. It waits until the owner accepts or rejects it.' },
+  { id: 'overdue', label: 'Review overdue', kind: 'attention', tone: 'danger', info: 'Published, but its review date has passed, or a fresh review was asked for.' },
+  { id: 'expired', label: 'Expired', kind: 'attention', tone: 'danger', info: 'Its end date has passed. It no longer applies.' },
+  { id: 'exception', label: 'Exception applied', kind: 'attention', tone: 'warning', info: 'An exception is in place, so it is not enforced.' },
+  { id: 'archived', label: 'Archived', kind: 'attention', tone: 'neutral', info: 'Taken out of use.' },
+  { id: 'other', label: 'Other', kind: 'attention', tone: 'neutral', info: 'A status this page does not know.' },
+];
+export const GROUP_BY_ID: Readonly<Record<GroupId, GroupDef>> = Object.fromEntries(GROUPS.map((g) => [g.id, g])) as Record<GroupId, GroupDef>;
+
+/** The group a document is in: what needs attention first (archived, expired, an exception, sent back for changes, a proposed change waiting, a review that is late), else its step. */
+export function groupOf(d: TrackerDoc, ctx: Pick<TrackerContext, 'now' | 'sets'>): GroupId {
+  const sets = ctx.sets ?? NO_SETS;
   switch (d.status) {
-    case 'archived': return { ...base, badge: { word: 'Archived', tone: 'neutral' }, at: null };
-    case 'expired': return { ...base, badge: { word: 'Out of date', tone: 'danger' }, at: LIVE, problem: true };
-    case 'exception_applied': return { ...base, badge: { word: 'Exception applied', tone: 'warning' }, at: LIVE, problem: true };
-    case 'published': {
-      const at = ack ? READ : LIVE;
-      const complete = !!ack && ack.pct >= 100;
-      return { ...base, at, complete, problem: late, badge: late ? { word: 'Needs a fresh look', tone: 'warning' } : { word: 'Live', tone: 'success' } };
-    }
-    case 'draft': case 'pending_review': case 'pending_approval': case 'approved': case 'review_required': {
-      let at = d.status === 'draft' ? 0 : d.status === 'pending_review' ? 1 : d.status === 'pending_approval' ? 2 : d.status === 'approved' ? 3 : 1;
-      if (d.status === 'review_required' && live) at = LIVE;
-      const badge: Badge = late ? { word: 'Needs a fresh look', tone: 'warning' }
-        : live ? { word: 'Update on its way', tone: 'progress' }
-        : d.status === 'draft' ? { word: 'Not live yet', tone: 'neutral' }
-        : { word: 'On its way', tone: 'progress' };
-      return { ...base, badge, at, problem: d.status === 'review_required' && live };
-    }
-    default: return { ...base, badge: { word: d.status.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()), tone: 'neutral' }, at: null };
+    case 'archived': return 'archived';
+    case 'expired': return 'expired';
+    case 'exception_applied': return 'exception';
+    default: break;
+  }
+  if (sets.changes_requested.has(d.id)) return 'changes';
+  if (sets.proposals_waiting.has(d.id)) return 'proposed';
+  switch (d.status) {
+    case 'published': return reviewState(d, ctx.now).bucket === 'overdue' ? 'overdue' : 'published';
+    case 'review_required': return isLive(d) ? 'overdue' : 'review';
+    case 'draft': return 'draft';
+    case 'pending_review': return 'review';
+    case 'pending_approval': return 'approval';
+    case 'approved': return 'approved';
+    default: return 'other';
   }
 }
 
-/** The six steps with their state; `narrow` is not here: the view decides what to show, the words are the same. */
-export function stepsOf(s: Standing): Step[] {
-  return STAGES.map((stage, i): Step => {
-    if (s.at === null) return { stage, state: 'off', problem: false, word: 'Not in use' };
-    if (s.complete) return { stage, state: 'done', problem: false, word: 'Done' };
-    if (i < s.at) return { stage, state: 'done', problem: false, word: 'Done' };
-    if (i === s.at) {
-      const word = s.problem ? (s.badge.word === 'Needs a fresh look' ? 'Check-up late' : s.badge.word === 'Out of date' ? 'Expired' : s.badge.word === 'Exception applied' ? 'Exception' : 'Needs a look') : i === READ ? 'Under way' : 'Now';
-      return { stage, state: 'here', problem: s.problem, word };
-    }
-    return { stage, state: 'next', problem: false, word: i === READ && s.live && !s.ack ? 'Not asked' : 'Not yet' };
-  });
+export interface Group<D extends TrackerDoc = TrackerDoc> {
+  def: GroupDef;
+  docs: D[];
+  count: number;
+  /** the one line that says what holds it up ("4 late, 1 stuck"); '' when nothing does */
+  summary: string;
+  /** how many of its documents wait for the signed-in person */
+  mine: number;
 }
 
-// ─── Now and Next ────────────────────────────────────────────────────────────────────────────────────────────────────────
-
-/** What waits for the person themselves, in the words of the inbox's own kinds. */
-const WAITING_FOR_YOU: Partial<Record<Kind, string>> = {
-  approval: 'Waiting for your sign-off.', signoff: 'Waiting for your sign-off.', review: 'Waiting for your review.',
-  decide: 'A change is waiting for your decision.', revise: 'Waiting for you to revise it.', changes: 'Waiting for you to make the changes asked for.',
+const mineRank = (d: TrackerDoc, ctx: Pick<TrackerContext, 'people'>): number => {
+  const m = ctx.people?.get(d.id)?.mine;
+  return m ? (m.overdue ? 0 : 1) : 2;
 };
 
-export interface Lines { now: string; next: string }
+/** The documents in their groups, in the order of GROUPS; a group with nothing in it is not there. Inside a group the person's own (late ones first) come first, then the order the
+ *  documents came in (the order the person chose for the list). */
+export function buildGroups<D extends TrackerDoc>(docs: readonly D[], ctx: TrackerContext): Group<D>[] {
+  const by = new Map<GroupId, D[]>();
+  for (const d of docs) {
+    const id = groupOf(d, ctx);
+    const list = by.get(id);
+    if (list) list.push(d); else by.set(id, [d]);
+  }
+  const out: Group<D>[] = [];
+  for (const def of GROUPS) {
+    const list = by.get(def.id);
+    if (!list) continue;
+    const keyed = list.map((d, i) => ({ d, i, r: mineRank(d, ctx) })).sort((a, b) => a.r - b.r || a.i - b.i).map((k) => k.d);
+    out.push({ def, docs: keyed, count: keyed.length, summary: summaryOf(def.id, keyed, ctx), mine: keyed.filter((d) => ctx.people?.get(d.id)?.mine).length });
+  }
+  return out;
+}
 
-export function linesOf(d: TrackerDoc, s: Standing, ctx: Pick<TrackerContext, 'now' | 'people'>): Lines {
-  const people = ctx.people?.get(d.id);
-  const owner = first(d.owner_name);
-  const author = first(d.author_name) ?? owner;
-  const reviewDay = dayOf(d.next_review_date);
-  const checkUp = reviewDay ? `Next check-up is ${reviewDay}.` : 'No check-up date is set.';
-  const stays = d.version_in_force && d.version_in_force !== d.current_version ? ` ${version(d.version_in_force)} is still published.` : '';
-  const mineWords = people?.mine ? WAITING_FOR_YOU[people.mine.kind] : undefined;
-  const sent = people?.sent && (people.sent.waiting.length > 0 || people.sent.more > 0) ? nameList(people.sent.waiting, people.sent.more) : '';
+// ─── The one line under a group ──────────────────────────────────────────────────────────────────────────────────────────
 
-  switch (d.status) {
+const piece = (n: number, text: string): string => (n > 0 ? `${n} ${text}` : '');
+const MONTH = 30;
+const WEEK = 7;
+
+/** What holds the group's documents up, in a few words and only with figures that are known: "4 late, 1 stuck, 2 wait for you". '' when nothing does. */
+export function summaryOf(id: GroupId, docs: readonly TrackerDoc[], ctx: TrackerContext): string {
+  const sets = ctx.sets ?? NO_SETS;
+  const count = (test: (d: TrackerDoc) => boolean) => docs.reduce((n, d) => n + (test(d) ? 1 : 0), 0);
+  const you = piece(count((d) => !!ctx.people?.get(d.id)?.mine), 'for you');
+  const parts: string[] = [];
+  switch (id) {
     case 'draft':
-      return {
-        now: `${author ? `${author} is writing it.` : 'Still being written.'}${stays || ' Nobody has to follow it yet.'}`,
-        next: 'When it is finished, colleagues check it.',
-      };
-    case 'pending_review':
-      return {
-        now: `${mineWords ?? (sent ? `Waiting for review from ${sent}.` : 'Waiting for review.')}${stays}`,
-        next: 'Then an approver decides whether to sign it off.',
-      };
-    case 'pending_approval':
-      return {
-        now: `${mineWords ?? (sent ? `Waiting for ${sent} to sign off.` : 'Waiting for sign-off.')}${stays}`,
-        next: 'Once signed off, it waits to be published.',
-      };
+      parts.push(piece(count((d) => d.owner_id == null), 'with no owner'));
+      parts.push(piece(count((d) => (daysSince(d.updated_at, ctx.now) ?? 0) >= MONTH), `not touched for ${MONTH} days`));
+      parts.push(piece(count((d) => !!d.version_in_force), 'updating a published one'));
+      break;
+    case 'review': case 'approval': {
+      const late = count((d) => sets.late_approvals.has(d.id));
+      parts.push(piece(late, 'late'));
+      parts.push(piece(count((d) => sets.stuck.has(d.id) && !sets.late_approvals.has(d.id)), 'stuck'));
+      parts.push(piece(count((d) => sets.waiting_week.has(d.id) && !sets.late_approvals.has(d.id) && !sets.stuck.has(d.id)), 'waiting over a week'));   // late and stuck are already said
+      break;
+    }
     case 'approved': {
-      const when = agoWords(d.approved_at, ctx.now);
-      return { now: `${when ? `Signed off ${when}.` : 'Signed off.'} Not published yet.${stays}`, next: 'Publishing makes it live for everyone it applies to.' };
+      const old = count((d) => (daysSince(d.approved_at, ctx.now) ?? 0) >= WEEK);
+      parts.push(piece(old, 'waiting over a week to be published'));
+      break;
     }
-    case 'review_required':
-      return {
-        now: s.live ? 'Flagged for a fresh review. The published version still applies.' : `Flagged for review.${stays}`,
-        next: 'Once reviewed, an approver decides whether to sign it off.',
-      };
     case 'published': {
-      if (s.review.bucket === 'overdue') {
-        const late = s.review.long.replace(/^Overdue by /, '');
-        return {
-          now: s.review.long === 'Overdue today' || !reviewDay ? 'Live, but its check-up is due today.' : `Live, but its check-up was due ${reviewDay}, ${late} ago.`,
-          next: owner ? `${owner} needs to confirm it is still correct.` : 'It has no owner. Someone needs to take it on.',
-        };
-      }
-      const a = s.ack;
-      if (a && a.pct < 100) {
-        const left = a.total != null && a.done != null ? Math.max(0, a.total - a.done) : null;
-        return {
-          now: left != null && a.total != null
-            ? `Live. ${left} of ${a.total} ${a.total === 1 ? 'person' : 'people'} still ${left === 1 ? 'has' : 'have'} to confirm they have read it.`
-            : `Live. ${100 - a.pct}% still have to confirm they have read it.`,
-          next: checkUp,
-        };
-      }
-      if (a) return { now: 'Live. Everyone has confirmed they have read it.', next: reviewDay ? `Nothing until the next check-up on ${reviewDay}.` : checkUp };
-      return { now: 'Live. Nobody has been asked to confirm they have read it.', next: reviewDay ? `Nothing until the next check-up on ${reviewDay}.` : checkUp };
+      const states = docs.map((d) => attestationOf(d, ctx.lookups).state);
+      parts.push(piece(states.filter((s) => s === 'not_started').length, 'attestations not started'));
+      parts.push(piece(states.filter((s) => s === 'in_progress').length, 'attestations under way'));
+      parts.push(piece(count((d) => sets.late_acknowledgements.has(d.id)), 'with late acknowledgements'));
+      parts.push(piece(count((d) => d.owner_id == null), 'with no owner'));
+      break;
     }
-    case 'expired': {
-      const ran = dayOf(d.expiry_date);
-      return {
-        now: ran ? `It ran out on ${ran} and no longer applies.` : 'It has run out and no longer applies.',
-        next: owner ? `${owner} needs to publish a new version.` : 'It has no owner to replace it.',
-      };
+    case 'changes': parts.push('waiting for the author to revise and resubmit'); break;
+    case 'proposed': parts.push('waiting for the owner to accept or reject'); break;
+    case 'overdue': {
+      const longest = docs.reduce((m, d) => Math.max(m, -(reviewState(d, ctx.now).days ?? 0)), 0);
+      parts.push(longest > 0 ? `longest ${spanWords(longest)} late` : '');
+      parts.push(piece(count((d) => d.owner_id == null), 'with no owner'));
+      break;
     }
-    case 'exception_applied':
-      return { now: 'An exception is in place, so it is not enforced.', next: 'A new version has to be published for it to be enforced again.' };
-    case 'archived':
-      return { now: 'Taken out of use. Nobody has to follow it.', next: 'It can be restored as a draft.' };
-    default:
-      return { now: '', next: '' };
+    case 'expired': parts.push('no longer apply'); parts.push(piece(count((d) => d.owner_id == null), 'with no owner')); break;
+    case 'exception': parts.push('not enforced while an exception is in place'); break;
+    case 'archived': parts.push('taken out of use'); break;
+    default: break;
   }
+  parts.push(you);
+  return parts.filter(Boolean).join(', ');
 }
 
-// ─── One card ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// ─── Paging: a library may hold thousands ────────────────────────────────────────────────────────────────────────────────
 
-export interface Track extends Standing, Lines {
-  steps: Step[];
-  /** the signed-in person has something to do on it */
-  you: { word: 'Needs you' | 'You’re late'; what: string } | null;
-  /** "Step 2 of 6: Being checked": the one line a narrow card says instead of the step names */
-  where: string;
-}
-
-export function trackOf(d: TrackerDoc, ctx: TrackerContext): Track {
-  const s = standingOf(d, ctx);
-  const steps = stepsOf(s);
-  const m = ctx.people?.get(d.id)?.mine;
-  const you = m ? { word: m.overdue ? ('You’re late' as const) : ('Needs you' as const), what: KIND_META[m.kind].action } : null;
-  const where = s.at === null ? 'Not in use' : s.complete ? 'All 6 steps done' : `Step ${s.at + 1} of 6: ${STAGES[s.at].name}`;
-  return { ...s, ...linesOf(d, s, ctx), steps, you, where };
-}
-
-// ─── The order of the cards: what needs attention first ──────────────────────────────────────────────────────────────────
-
-/** Lower is sooner. Yours first (late ones before the rest), then what lapsed, what is live but late for its check-up, an exception, live documents still waiting for people to read
- *  them, what is on its way, drafts, live documents with nothing wrong, archived. */
-export function attentionOf(d: TrackerDoc, ctx: TrackerContext): { rank: number; tail: number } {
-  const m = ctx.people?.get(d.id)?.mine;
-  if (m) return { rank: 0, tail: m.overdue ? 0 : 1 };
-  switch (d.status) {
-    case 'expired': return { rank: 1, tail: 0 };
-    case 'exception_applied': return { rank: 3, tail: 0 };
-    case 'archived': return { rank: 8, tail: 0 };
-    case 'published': case 'draft': case 'pending_review': case 'pending_approval': case 'approved': case 'review_required': {
-      const r = reviewState(d, ctx.now);
-      if (isLive(d) && r.bucket === 'overdue') return { rank: 2, tail: r.days ?? 0 };          // the longest late first
-      if (d.status === 'published') {
-        const a = ackOf(d, ctx.lookups);
-        return a && a.pct < 100 ? { rank: 4, tail: a.pct } : { rank: 7, tail: 0 };                // the least read first
-      }
-      return { rank: d.status === 'draft' ? 6 : 5, tail: 0 };
-    }
-    default: return { rank: 8, tail: 1 };
-  }
-}
-
-/** The documents in the order of the cards. A stable sort: documents of the same standing keep the order they came in (the order the person chose for the list). */
-export function trackerOrder<D extends TrackerDoc>(docs: readonly D[], ctx: TrackerContext): D[] {
-  const keyed = docs.map((d, i) => ({ d, i, ...attentionOf(d, ctx) }));
-  keyed.sort((a, b) => a.rank - b.rank || a.tail - b.tail || a.i - b.i);
-  return keyed.map((k) => k.d);
-}
-
-/** How many cards are drawn before "Show more", and how many each press adds. */
-export const CARDS_AT_A_TIME = 12;
-export const cardsShown = (shown: number, total: number): { count: number; more: number } => {
-  const count = Math.min(Math.max(CARDS_AT_A_TIME, shown), total);
-  return { count, more: Math.min(CARDS_AT_A_TIME, total - count) };
+/** How many rows a group draws before "Show more", and how many each press adds. */
+export const ROWS_AT_A_TIME = 25;
+export const rowsShown = (shown: number, total: number): { count: number; more: number } => {
+  const count = Math.min(Math.max(ROWS_AT_A_TIME, shown), total);
+  return { count, more: Math.min(ROWS_AT_A_TIME, total - count) };
 };
+/** The rows in pages of ROWS_AT_A_TIME: a page asks the server for its own lines, so opening a group costs one request, and "Show more" one more. */
+export function pagesOf<T>(items: readonly T[], upTo: number, size: number = ROWS_AT_A_TIME): T[][] {
+  const out: T[][] = [];
+  const end = Math.min(items.length, Math.max(size, upTo));
+  for (let i = 0; i < end; i += size) out.push(items.slice(i, Math.min(end, i + size)));
+  return out;
+}

@@ -21,6 +21,9 @@ router.include_router(dashboard_router, tags=["Governance Dashboard"])
 # the Documents Overview: the library at a glance for a department (its own prefix, so it cannot meet /documents/{id})
 from .routers.document_overview import router as document_overview_router  # noqa: E402
 router.include_router(document_overview_router, tags=["Governance Documents Overview"])
+# the library's Tracker layout: what each document waits for, for a page of documents at once (its own prefix, read-only)
+from .routers.document_tracker import router as document_tracker_router  # noqa: E402
+router.include_router(document_tracker_router, tags=["Governance Document Tracker"])
 router.include_router(policy_parser_router, tags=["Governance Policy Parser"])
 router.include_router(document_workflow_router, tags=["Governance Document Workflow"])
 router.include_router(attestations_router, tags=["Policy Attestations"])

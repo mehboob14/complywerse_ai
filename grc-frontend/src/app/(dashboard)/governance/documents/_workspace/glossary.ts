@@ -3,7 +3,7 @@
 // the sample's ("Plain English", design E) made exact for this platform: an owner is not the author, an acknowledgement keeps the version read, a "published" document stays published
 // while a newer version is written, expired and overdue are not the same. A meaning is one to three short sentences; no id, no model name, no word that needs a meaning of its own.
 
-export const TERM_KEYS = ['attestation', 'in_force', 'review_cycle', 'owner', 'approver', 'out_of_date', 'framework'] as const;
+export const TERM_KEYS = ['attestation', 'acknowledgement', 'in_force', 'review_cycle', 'owner', 'approver', 'out_of_date', 'framework'] as const;
 export type TermKey = (typeof TERM_KEYS)[number];
 
 export interface Term {
@@ -16,7 +16,11 @@ export interface Term {
 export const GLOSSARY: Record<TermKey, Term> = {
   attestation: {
     word: 'Attestation',
-    plain: 'A formal "I have read this". Your name is kept against the version you read, so there is proof later.',
+    plain: 'A request the owner starts for a published document: people sign that they have read it. Each name is kept against the version it was signed for.',
+  },
+  acknowledgement: {
+    word: 'Acknowledgement',
+    plain: 'Everyone a document applies to is asked to confirm, once, that they have read the published version. It starts by itself when the document is published.',
   },
   in_force: {
     word: 'Published',
@@ -44,21 +48,13 @@ export const GLOSSARY: Record<TermKey, Term> = {
   },
 };
 
-/** The word a card's label leans on, so its (i) can say it: "Live" is "published", the two late ones are "out of date". Labels that are plain on their own have none. */
-export const BADGE_TERM: Record<string, TermKey> = {
-  'Live': 'in_force',
-  'Update on its way': 'in_force',
-  'Needs a fresh look': 'out_of_date',
-  'Out of date': 'out_of_date',
-};
-
 export const plainOf = (key: TermKey): string => GLOSSARY[key].plain;
 
 /** What a screen reader says for the (i) of a word. */
 export const termLabel = (key: TermKey): string => `What “${GLOSSARY[key].word}” means`;
 
 export interface HowStep {
-  /** the step's name: the same as the tracker's stage (libraryTracker.STAGES), checked by a test */
+  /** the step's name: the same as the detail's stepper (tracker/detailModel.ts STEPS), checked by a test */
   title: string;
   text: string;
   /** who does this step */
@@ -66,10 +62,22 @@ export interface HowStep {
 }
 
 export const HOW_STEPS: readonly HowStep[] = [
-  { title: 'Being written', text: 'Someone drafts the document. Until it is published nobody has to follow it.', who: 'The author' },
-  { title: 'Being checked', text: 'Colleagues who know the subject read it and suggest changes. Most of the back and forth happens here.', who: 'The reviewers' },
-  { title: 'Being signed off', text: 'An approver decides. Nothing becomes official without this step.', who: 'The approvers' },
-  { title: 'Ready to publish', text: 'It is approved and waits to be published. It is not live yet.', who: 'Someone who can publish' },
-  { title: 'Live', text: 'It is published. Everyone it applies to has to follow it, and the older version stops counting.', who: 'Everyone it applies to' },
-  { title: 'Everyone’s read it', text: 'People it applies to confirm they have read it. Only documents with such a request show progress here; the rest say they were not asked.', who: 'Everyone it applies to' },
+  { title: 'Draft', text: 'Someone writes the document. Until it is published nobody has to follow it.', who: 'The author and the owner' },
+  { title: 'In review', text: 'Reviewers read it and sign, or ask for changes. A route can have several stages, one after another or all at once.', who: 'The reviewers' },
+  { title: 'In approval', text: 'Approvers decide. Nothing is published without this step.', who: 'The approvers' },
+  { title: 'Approved', text: 'Signed off and waiting to be published. It is not live yet.', who: 'Someone who can publish' },
+  { title: 'Published', text: 'The version everyone follows. A newer version can be written while this one stays published.', who: 'Everyone it applies to' },
+  { title: 'Attestation', text: 'The owner can ask people to sign that they have read the published version. It shows how many have, and by when.', who: 'The owner asks, people sign' },
+  { title: 'Acknowledgement', text: 'Everyone it applies to is asked to confirm, once, that they have read the published version.', who: 'Everyone it applies to' },
+];
+
+export interface HowBlocker { title: string; text: string }
+
+/** What can hold a document up, as the line of a document says it. */
+export const HOW_BLOCKERS: readonly HowBlocker[] = [
+  { title: 'Waiting on someone', text: 'A review or approval was asked and is not done. The line says who and for how long. It turns red when a due date has passed.' },
+  { title: 'Stuck', text: 'Nobody can be asked: a role or department with nobody in it, or the only approver wrote the document.' },
+  { title: 'Changes requested', text: 'Someone asked for changes. Everyone else waits until the author makes them and resubmits it.' },
+  { title: 'Changes proposed', text: 'Someone who is not the owner changed or proposed a change. Nothing applies until the owner accepts it.' },
+  { title: 'Review overdue', text: 'It is published, but nobody has confirmed lately that it is still right.' },
 ];

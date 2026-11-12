@@ -1,15 +1,15 @@
 'use client';
 
-// "How it works": the side sheet of the Documents library's plain-English layer. The six steps a document goes through (the Tracker's own steps), who does each, what each label on a card
-// means, and the seven words the library uses with their plain meaning (glossary.ts; the same meanings the (i) notes say). It is the one place the explanations live besides those (i)
-// notes: the library prints no introduction. A sheet from the right on a desktop, a bottom sheet on a phone (the kit's Sheet: focus trapped, Escape closes it, focus goes back).
+// "How it works": the side sheet of the Documents library's plain-English layer. The seven steps a document goes through (the Tracker's own: Draft to Acknowledgement), who does each, what
+// each group of what needs attention means and what can hold a document up, and the words the library uses with their plain meaning (glossary.ts; the same meanings the (i) notes say). It is
+// the one place the explanations live besides those (i) notes: the library prints no introduction. A sheet from the right on a desktop, a bottom sheet on a phone (the kit's Sheet: focus trapped, Escape closes it, focus goes back).
 //   <HowItWorksButton />                       a button that opens it (the Tracker's toolbar)
 //   <HowItWorks open={open} onClose={close} />  the sheet itself, when the page holds its state
 import { useState } from 'react';
 import { HelpCircle } from 'lucide-react';
 import { Button, Sheet } from '@/components/ui/ds';
-import { GLOSSARY, HOW_STEPS, TERM_KEYS } from './glossary';
-import { BADGE_MEANING } from './libraryTracker';
+import { GLOSSARY, HOW_BLOCKERS, HOW_STEPS, TERM_KEYS } from './glossary';
+import { GROUPS } from './libraryTracker';
 
 const HEAD = 'm-0 !text-ds-section !font-[600] !text-ds-fg';
 
@@ -19,7 +19,7 @@ export function HowItWorks({ open, onClose }: { open: boolean; onClose: () => vo
       {/* focusable, so a keyboard can scroll the sheet's body (a scrolling region with nothing to focus cannot be reached) */}
       <div tabIndex={0} role="region" aria-label="How it works" className="flex flex-col gap-[24px] rounded-ds-control focus-visible:outline-none focus-visible:shadow-ds-ring">
         <section aria-labelledby="how-steps">
-          <h3 id="how-steps" className={HEAD}>Six steps</h3>
+          <h3 id="how-steps" className={HEAD}>Seven steps</h3>
           <ol className="m-0 mt-[12px] flex list-none flex-col gap-[14px] p-0">
             {HOW_STEPS.map((s, i) => (
               <li key={s.title} className="grid grid-cols-[28px_minmax(0,1fr)] gap-x-[12px]">
@@ -34,13 +34,25 @@ export function HowItWorks({ open, onClose }: { open: boolean; onClose: () => vo
           </ol>
         </section>
 
-        <section aria-labelledby="how-labels">
-          <h3 id="how-labels" className={HEAD}>Labels</h3>
+        <section aria-labelledby="how-groups">
+          <h3 id="how-groups" className={HEAD}>Needs attention</h3>
           <dl className="m-0 mt-[8px] flex flex-col">
-            {BADGE_MEANING.map((b) => (
-              <div key={b.word} className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] gap-x-[12px] border-t border-ds-border py-[8px] first:border-t-0">
-                <dt className="text-ds-body font-[600] text-ds-fg">{b.word}</dt>
-                <dd className="m-0 text-ds-body text-ds-fg-body">{b.meaning}</dd>
+            {GROUPS.filter((g) => g.kind === 'attention' && g.id !== 'other').map((g) => (
+              <div key={g.id} className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] gap-x-[12px] border-t border-ds-border py-[8px] first:border-t-0">
+                <dt className="text-ds-body font-[600] text-ds-fg">{g.label}</dt>
+                <dd className="m-0 text-ds-body text-ds-fg-body">{g.info}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+
+        <section aria-labelledby="how-blockers">
+          <h3 id="how-blockers" className={HEAD}>What holds it up</h3>
+          <dl className="m-0 mt-[8px] flex flex-col">
+            {HOW_BLOCKERS.map((b) => (
+              <div key={b.title} className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] gap-x-[12px] border-t border-ds-border py-[8px] first:border-t-0">
+                <dt className="text-ds-body font-[600] text-ds-fg">{b.title}</dt>
+                <dd className="m-0 text-ds-body text-ds-fg-body">{b.text}</dd>
               </div>
             ))}
           </dl>

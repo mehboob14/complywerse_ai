@@ -1,170 +1,149 @@
 // node --test "src/app/(dashboard)/governance/documents/_workspace/libraryTracker.test.ts"
-// The Tracker's rules: the six steps and where each status stands, the plain badge, the one line for now and the one for next (only what the data holds: a name only when the row or
-// the inbox carries it), and the order of the cards.
+// The Tracker's grouping rules: every document in exactly one group (what needs attention first, then its step), the count and the one line of each group (only with figures that are
+// known), the person's own documents first inside a group, the paging that keeps a large library cheap, and the plain helpers (names, ages, attestation).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { buildInbox, type SourceInput } from '../../../../../lib/inbox/buildInbox.ts';
-import { BADGE_TERM, GLOSSARY, HOW_STEPS } from './glossary.ts';
 import {
-  BADGE_MEANING, CARDS_AT_A_TIME, STAGES, agoWords, attentionOf, cardsShown, isLive, nameList, peopleOf, standingOf, stepsOf, trackOf, trackerOrder,
-  type DocPeople, type TrackerContext, type TrackerDoc,
+  GROUPS, GROUP_BY_ID, ROWS_AT_A_TIME, ageLabel, ageTone, agoWords, attestationOf, buildGroups, daysSince, groupOf, isLive, nameList, pagesOf, peopleOf, rowsShown, setsOf, spanWords, summaryOf,
+  type TrackerContext, type TrackerDoc,
 } from './libraryTracker.ts';
 
-const NOW = new Date('2026-11-11T12:00:00Z');
+const NOW = new Date('2026-11-12T12:00:00Z');
 const ctx = (o: Partial<TrackerContext> = {}): TrackerContext => ({ lookups: { coverage: {} }, now: NOW, ...o });
 let n = 0;
 const doc = (o: Partial<TrackerDoc> = {}): TrackerDoc => ({
   id: ++n, title: `Document ${n}`, document_code: null, doc_type: 'policy', status: 'published', owner_id: 7, owner_name: 'Maria Lopez', author_name: 'Omar Tariq', department_id: null,
-  next_review_date: '2027-03-01T00:00:00', created_at: '2026-01-01T00:00:00', updated_at: '2026-01-02T00:00:00', version_in_force: '1.0', current_version: '1.0', ...o,
+  next_review_date: '2027-03-01T00:00:00', created_at: '2026-01-01T00:00:00', updated_at: '2026-11-10T00:00:00', version_in_force: '1.0', current_version: '1.0', ...o,
 });
-const where = (d: TrackerDoc, c = ctx()) => standingOf(d, c).at;
+const sets = (o: Parameters<typeof setsOf>[0]) => setsOf(o);
+const group = (d: TrackerDoc, c = ctx()) => groupOf(d, c);
 
-test('six steps with the sample’s names, and the "How it works" sheet says the same six', () => {
-  assert.deepEqual(STAGES.map((s) => s.name), ['Being written', 'Being checked', 'Being signed off', 'Ready to publish', 'Live', 'Everyone’s read it']);
-  assert.deepEqual(HOW_STEPS.map((s) => s.title), STAGES.map((s) => s.name));
-  for (const s of STAGES) assert.ok(s.name.split(/\s+/).length <= 3, s.name);
-});
-
-test('where each status stands: the five of the approval workflow, then Live, and "Everyone’s read it" only when the document has an acknowledgement campaign', () => {
-  assert.equal(where(doc({ status: 'draft', version_in_force: null })), 0);
-  assert.equal(where(doc({ status: 'pending_review', version_in_force: null })), 1);
-  assert.equal(where(doc({ status: 'pending_approval', version_in_force: null })), 2);
-  assert.equal(where(doc({ status: 'approved', version_in_force: null })), 3);
-  assert.equal(where(doc({ status: 'published' })), 4);
-  assert.equal(where(doc({ status: 'published', attestation: { pct: 40, done: 4, total: 10 } })), 5);
-  assert.equal(where(doc({ status: 'published' }), ctx({ lookups: { coverage: { 99: 55 } } })), 4);
-  const d = doc({ status: 'published', id: 99 });
-  assert.equal(where(d, ctx({ lookups: { coverage: { 99: 55 } } })), 5);                       // the coverage map says it too, when the row has no counts
-  assert.equal(where(doc({ status: 'archived' })), null);
-  assert.equal(where(doc({ status: 'expired' })), 4);
-  assert.equal(where(doc({ status: 'exception_applied' })), 4);
-  assert.equal(where(doc({ status: 'something_new' })), null);
-});
-
-test('the plain badge: Live, Needs a fresh look (live and late), Out of date (expired), Not live yet, On its way, Update on its way (a newer version over one in force), Exception applied, Archived', () => {
-  const word = (d: TrackerDoc) => standingOf(d, ctx()).badge.word;
-  assert.equal(word(doc()), 'Live');
-  assert.equal(word(doc({ next_review_date: '2026-10-01T00:00:00' })), 'Needs a fresh look');
-  assert.equal(word(doc({ status: 'expired' })), 'Out of date');
-  assert.equal(word(doc({ status: 'draft', version_in_force: null })), 'Not live yet');
-  assert.equal(word(doc({ status: 'pending_review', version_in_force: null })), 'On its way');
-  assert.equal(word(doc({ status: 'approved', version_in_force: null })), 'On its way');
-  assert.equal(word(doc({ status: 'pending_review', version_in_force: '1.0', current_version: '1.1' })), 'Update on its way');
-  assert.equal(word(doc({ status: 'exception_applied' })), 'Exception applied');
-  assert.equal(word(doc({ status: 'archived' })), 'Archived');
-  assert.equal(word(doc({ status: 'weird_status' })), 'Weird status');                         // a status nobody registered is said readably, never blank
-  // a draft is not "late": no review is owed on a document that is not in force
-  assert.equal(word(doc({ status: 'draft', version_in_force: null, next_review_date: '2026-10-01T00:00:00' })), 'Not live yet');
-  // a workflow flagged a live document for review
-  assert.equal(word(doc({ status: 'review_required' })), 'Update on its way');
-  assert.equal(word(doc({ status: 'review_required', version_in_force: null })), 'On its way');
-  for (const b of BADGE_MEANING) assert.ok(b.word && b.meaning);
-  // a label that leans on a word of the glossary gets that word's (i); every such label is one the page can draw
-  for (const [label, term] of Object.entries(BADGE_TERM)) assert.ok(BADGE_MEANING.some((b) => b.word === label) && GLOSSARY[term], label);
-  assert.ok(isLive(doc()) && !isLive(doc({ status: 'draft', version_in_force: null })) && !isLive(doc({ status: 'expired' })));
-});
-
-test('the steps are done behind, here at the document, next ahead; a problem is marked and worded, and nothing rests on colour: every step has a word', () => {
-  const steps = (d: TrackerDoc, c = ctx()) => stepsOf(standingOf(d, c)).map((s) => `${s.state}${s.problem ? '!' : ''}:${s.word}`);
-  assert.deepEqual(steps(doc({ status: 'pending_approval', version_in_force: null })), ['done:Done', 'done:Done', 'here:Now', 'next:Not yet', 'next:Not yet', 'next:Not yet']);
-  assert.deepEqual(steps(doc()), ['done:Done', 'done:Done', 'done:Done', 'done:Done', 'here:Now', 'next:Not asked']);
-  assert.deepEqual(steps(doc({ attestation: { pct: 60, done: 6, total: 10 } })), ['done:Done', 'done:Done', 'done:Done', 'done:Done', 'done:Done', 'here:Under way']);
-  assert.deepEqual(steps(doc({ attestation: { pct: 100, done: 10, total: 10 } })), Array(6).fill('done:Done'));
-  assert.deepEqual(steps(doc({ status: 'expired' })), ['done:Done', 'done:Done', 'done:Done', 'done:Done', 'here!:Expired', 'next:Not yet']);
-  assert.deepEqual(steps(doc({ next_review_date: '2026-10-01T00:00:00' })), ['done:Done', 'done:Done', 'done:Done', 'done:Done', 'here!:Check-up late', 'next:Not asked']);
-  assert.deepEqual(steps(doc({ status: 'archived' })), Array(6).fill('off:Not in use'));
-});
-
-test('Now and Next name only what the data holds: no name for who a review waits on unless the inbox says it', () => {
-  const t = (o: Partial<TrackerDoc>, c: Partial<TrackerContext> = {}) => trackOf(doc(o), ctx(c));
-  // draft: the author writes it (the owner when there is no author); a newer version over one in force says so
-  assert.equal(t({ status: 'draft', version_in_force: null }).now, 'Omar Tariq is writing it. Nobody has to follow it yet.');
-  assert.equal(t({ status: 'draft', version_in_force: null, author_name: null }).now, 'Maria Lopez is writing it. Nobody has to follow it yet.');
-  assert.equal(t({ status: 'draft', version_in_force: null, author_name: null, owner_name: null }).now, 'Still being written. Nobody has to follow it yet.');
-  assert.equal(t({ status: 'draft', version_in_force: '1.0', current_version: '1.1' }).now, 'Omar Tariq is writing it. v1.0 is still published.');
-  // in review with no names anywhere: generic, and neither the owner nor the author is made the reviewer
-  const generic = t({ status: 'pending_review', version_in_force: null });
-  assert.equal(generic.now, 'Waiting for review.');
-  assert.ok(!/Maria|Omar/.test(generic.now + generic.next));
-  assert.equal(t({ status: 'pending_approval', version_in_force: null }).now, 'Waiting for sign-off.');
-  // the people the signed-in person asked, and what waits for them
-  const d = doc({ status: 'pending_review', version_in_force: null });
-  const sent: ReadonlyMap<number, DocPeople> = new Map([[d.id, { sent: { waiting: ['Bina Branch', 'Chen Wei'], more: 2, overdue: false } }]]);
-  assert.equal(trackOf(d, ctx({ people: sent })).now, 'Waiting for review from Bina Branch, Chen Wei and 2 more.');
-  const a = doc({ status: 'pending_approval', version_in_force: null });
-  const mine: ReadonlyMap<number, DocPeople> = new Map([[a.id, { mine: { kind: 'approval', overdue: true, dueAt: null, requester: null, createdAt: null } }]]);
-  const you = trackOf(a, ctx({ people: mine }));
-  assert.equal(you.now, 'Waiting for your sign-off.');
-  assert.deepEqual(you.you, { word: 'You’re late', what: 'Approve and sign' });
-  assert.equal(trackOf(doc(), ctx()).you, null);
-  // approved: the date it was signed off, when the row has it
-  assert.equal(t({ status: 'approved', version_in_force: null, approved_at: '2026-11-05T09:00:00' }).now, 'Signed off 6 days ago. Not published yet.');
-  assert.equal(t({ status: 'approved', version_in_force: null }).now, 'Signed off. Not published yet.');
-});
-
-test('a live document says how many still have to confirm, only when the row carries the counts; late, expired, exception and archived are named', () => {
-  const t = (o: Partial<TrackerDoc>) => trackOf(doc(o), ctx());
-  assert.equal(t({ attestation: { pct: 70, done: 28, total: 40 } }).now, 'Live. 12 of 40 people still have to confirm they have read it.');
-  assert.equal(t({ attestation: { pct: 97, done: 39, total: 40 } }).now, 'Live. 1 of 40 people still has to confirm they have read it.');
-  assert.equal(t({ attestation: { pct: 70, done: NaN, total: NaN } }).now, 'Live. 30% still have to confirm they have read it.');
-  assert.equal(t({ attestation: { pct: 100, done: 40, total: 40 } }).now, 'Live. Everyone has confirmed they have read it.');
-  assert.equal(t({}).now, 'Live. Nobody has been asked to confirm they have read it.');
-  assert.equal(t({}).next, 'Nothing until the next check-up on 1 Mar 2027.');
-  assert.equal(t({ next_review_date: null }).next, 'No check-up date is set.');
-  const late = t({ next_review_date: '2026-11-01T00:00:00' });
-  assert.equal(late.now, 'Live, but its check-up was due 1 Nov 2026, 10 days ago.');
-  assert.equal(late.next, 'Maria Lopez needs to confirm it is still correct.');
-  assert.equal(t({ next_review_date: '2026-11-01T00:00:00', owner_name: null }).next, 'It has no owner. Someone needs to take it on.');
-  assert.equal(t({ status: 'expired', expiry_date: '2026-10-20T00:00:00' }).now, 'It ran out on 20 Oct 2026 and no longer applies.');
-  assert.equal(t({ status: 'expired' }).now, 'It has run out and no longer applies.');
-  assert.equal(t({ status: 'exception_applied' }).now, 'An exception is in place, so it is not enforced.');
-  assert.equal(t({ status: 'archived' }).next, 'It can be restored as a draft.');
-  assert.equal(t({ status: 'weird' }).now, '');
-});
-
-test('Now and Next are one short line each: no line is a paragraph, none holds an id or a hash', () => {
-  const people: ReadonlyMap<number, DocPeople> = new Map();
-  for (const status of ['draft', 'pending_review', 'pending_approval', 'approved', 'published', 'expired', 'archived', 'exception_applied', 'review_required']) {
-    for (const o of [{}, { attestation: { pct: 10, done: 1, total: 10 } }, { next_review_date: '2026-01-01T00:00:00' }]) {
-      const t = trackOf(doc({ status, ...o }), ctx({ people }));
-      for (const line of [t.now, t.next]) {
-        assert.ok(line.length <= 120, line);
-        assert.ok(!/[0-9a-f]{12,}|#\d+|\bid\b/i.test(line), line);
-      }
-    }
+test('the groups follow the life cycle: five steps, then six for what needs attention, each with a short label and an (i) note', () => {
+  assert.deepEqual(GROUPS.map((g) => g.id), ['draft', 'review', 'approval', 'approved', 'published', 'changes', 'proposed', 'overdue', 'expired', 'exception', 'archived', 'other']);
+  assert.deepEqual(GROUPS.map((g) => g.kind), ['step', 'step', 'step', 'step', 'step', ...Array(7).fill('attention')]);
+  assert.deepEqual(GROUPS.slice(0, 5).map((g) => g.label), ['Draft', 'In review', 'In approval', 'Approved', 'Published']);
+  for (const g of GROUPS) {
+    assert.ok(g.label.split(/\s+/).length <= 3, g.label);
+    assert.ok(g.info.length > 15 && /\.$/.test(g.info) && !/\bin force\b/i.test(g.info), g.label);
+    assert.equal(GROUP_BY_ID[g.id], g);
   }
 });
 
-test('a narrow card says where it is in one line', () => {
-  assert.equal(trackOf(doc({ status: 'pending_review', version_in_force: null }), ctx()).where, 'Step 2 of 6: Being checked');
-  assert.equal(trackOf(doc({ attestation: { pct: 100, done: 1, total: 1 } }), ctx()).where, 'All 6 steps done');
-  assert.equal(trackOf(doc({ status: 'archived' }), ctx()).where, 'Not in use');
+test('a document is in the group of its step, and what needs attention takes it out of it: archived, expired, an exception, sent back, a proposed change, a late review', () => {
+  assert.equal(group(doc({ status: 'draft', version_in_force: null })), 'draft');
+  assert.equal(group(doc({ status: 'pending_review', version_in_force: null })), 'review');
+  assert.equal(group(doc({ status: 'pending_approval', version_in_force: null })), 'approval');
+  assert.equal(group(doc({ status: 'approved', version_in_force: null })), 'approved');
+  assert.equal(group(doc()), 'published');
+  assert.equal(group(doc({ status: 'archived' })), 'archived');
+  assert.equal(group(doc({ status: 'expired' })), 'expired');
+  assert.equal(group(doc({ status: 'exception_applied' })), 'exception');
+  assert.equal(group(doc({ status: 'something_new' })), 'other');
+  assert.equal(group(doc({ next_review_date: '2026-10-01T00:00:00' })), 'overdue');
+  // a newer version in review over a published one stays in review even when the published one's review date has passed: no review is owed on what is being replaced
+  assert.equal(group(doc({ status: 'pending_review', next_review_date: '2026-10-01T00:00:00' })), 'review');
+  assert.equal(group(doc({ status: 'draft', version_in_force: null, next_review_date: '2026-10-01T00:00:00' })), 'draft');
+  // a workflow flagged a published document for review; one never published sits with the reviews
+  assert.equal(group(doc({ status: 'review_required' })), 'overdue');
+  assert.equal(group(doc({ status: 'review_required', version_in_force: null })), 'review');
+  const held = doc({ status: 'pending_approval' }), proposed = doc(), both = doc({ status: 'pending_review' }), gone = doc({ status: 'archived' });
+  const c = ctx({ sets: sets({ changes_requested: [held.id, both.id], proposals_waiting: [proposed.id, both.id, gone.id] }) });
+  assert.equal(group(held, c), 'changes');
+  assert.equal(group(proposed, c), 'proposed');
+  assert.equal(group(both, c), 'changes');                     // sent back wins over a proposed change: the route is waiting for the author first
+  assert.equal(group(gone, c), 'archived');                    // archived wins over everything
+  assert.equal(group(doc({ status: 'published', next_review_date: '2026-10-01T00:00:00' }), ctx({ sets: sets({ proposals_waiting: [n] }) })), 'proposed');
 });
 
-test('the cards: yours first (late before the rest), then expired, late for a check-up (longest first), exception, live and not yet read (least first), on its way, drafts, live and fine, archived', () => {
-  const live = doc({ title: 'fine' });
-  const draft = doc({ status: 'draft', version_in_force: null, title: 'draft' });
-  const onItsWay = doc({ status: 'pending_review', version_in_force: null, title: 'onway' });
-  const archived = doc({ status: 'archived', title: 'archived' });
-  const unread = doc({ attestation: { pct: 20, done: 2, total: 10 }, title: 'unread20' });
-  const unread2 = doc({ attestation: { pct: 80, done: 8, total: 10 }, title: 'unread80' });
-  const exception = doc({ status: 'exception_applied', title: 'exception' });
-  const late5 = doc({ next_review_date: '2026-11-06T00:00:00', title: 'late5' });
-  const late40 = doc({ next_review_date: '2026-10-01T00:00:00', title: 'late40' });
-  const expired = doc({ status: 'expired', title: 'expired' });
-  const yours = doc({ status: 'pending_review', version_in_force: null, title: 'yours' });
-  const yoursLate = doc({ status: 'pending_review', version_in_force: null, title: 'yoursLate' });
-  const people: ReadonlyMap<number, DocPeople> = new Map([
-    [yours.id, { mine: { kind: 'review', overdue: false, dueAt: null, requester: null, createdAt: null } }],
-    [yoursLate.id, { mine: { kind: 'review', overdue: true, dueAt: null, requester: null, createdAt: null } }],
-  ]);
-  const all = [live, archived, draft, onItsWay, unread2, unread, exception, late5, late40, expired, yours, yoursLate];
-  assert.deepEqual(trackerOrder(all, ctx({ people })).map((d) => d.title), ['yoursLate', 'yours', 'expired', 'late40', 'late5', 'exception', 'unread20', 'unread80', 'onway', 'draft', 'fine', 'archived']);
-  // documents of the same standing keep the order they came in (the list's own sort)
-  const twins = [doc({ title: 'b' }), doc({ title: 'a' }), doc({ title: 'c' })];
-  assert.deepEqual(trackerOrder(twins, ctx()).map((d) => d.title), ['b', 'a', 'c']);
-  assert.equal(attentionOf(live, ctx()).rank, 7);
+test('without the server’s sets a document is in its step’s group and no figure about the sets is said', () => {
+  const held = doc({ status: 'pending_approval' });
+  assert.equal(group(held), 'approval');
+  assert.equal(group(held, ctx({ sets: sets(null) })), 'approval');
+  assert.equal(summaryOf('approval', [held], ctx()), '');
+});
+
+test('the groups hold every document once, in the order of GROUPS; an empty group is not there; the person’s own come first, late ones first', () => {
+  const a = doc({ status: 'draft', version_in_force: null }), b = doc({ status: 'pending_review', version_in_force: null }), c = doc(), d = doc({ status: 'archived' });
+  const e = doc(), f = doc(), g = doc();
+  const mk = (overdue: boolean) => ({ mine: { kind: 'review' as const, overdue, dueAt: null, requester: null, createdAt: null } });
+  const people = new Map([[g.id, mk(true)], [f.id, mk(false)]]);
+  const groups = buildGroups([a, b, c, d, e, f, g], ctx({ people }));
+  assert.deepEqual(groups.map((x) => x.def.id), ['draft', 'review', 'published', 'archived']);
+  assert.deepEqual(groups.map((x) => x.count), [1, 1, 4, 1]);
+  assert.equal(groups.reduce((s, x) => s + x.count, 0), 7);
+  assert.deepEqual(groups[2].docs.map((x) => x.id), [g.id, f.id, c.id, e.id]);                  // late first, then yours, then the order they came in
+  assert.equal(groups[2].mine, 2);
+  assert.deepEqual(buildGroups([], ctx()), []);
+});
+
+test('the one line of a group says only what is known: late and stuck from the sets, what the rows hold, what waits for you', () => {
+  const r = [doc({ status: 'pending_review', version_in_force: null }), doc({ status: 'pending_review', version_in_force: null }), doc({ status: 'pending_review', version_in_force: null }), doc({ status: 'pending_review', version_in_force: null })];
+  const c = ctx({ sets: sets({ late_approvals: [r[0].id, r[1].id], stuck: [r[0].id, r[2].id], on_hold: [], waiting_week: [r[1].id, r[2].id, r[3].id] }), people: new Map([[r[3].id, { mine: { kind: 'review' as const, overdue: false, dueAt: null, requester: null, createdAt: null } }]]) });
+  assert.equal(summaryOf('review', r, c), '2 late, 1 stuck, 1 waiting over a week, 1 for you');         // late and stuck are not said twice
+  assert.equal(summaryOf('review', r, ctx()), '');
+  assert.equal(buildGroups(r, c)[0].summary, '2 late, 1 stuck, 1 waiting over a week, 1 for you');
+
+  const drafts = [doc({ status: 'draft', owner_id: null, updated_at: '2026-09-01T00:00:00' }), doc({ status: 'draft', updated_at: '2026-11-11T00:00:00', version_in_force: null })];
+  assert.equal(summaryOf('draft', drafts, ctx()), '1 with no owner, 1 not touched for 30 days, 1 updating a published one');
+  assert.equal(summaryOf('approved', [doc({ status: 'approved', approved_at: '2026-11-01T00:00:00' }), doc({ status: 'approved', approved_at: '2026-11-11T00:00:00' })], ctx()), '1 waiting over a week to be published');
+  const pub = [doc({ attestation: { pct: 0, done: 0, total: 10 } }), doc({ attestation: { pct: 40, done: 4, total: 10 } }), doc({ attestation: { pct: 100, done: 10, total: 10 } }), doc({ owner_id: null })];
+  assert.equal(summaryOf('published', pub, ctx({ sets: sets({ late_acknowledgements: [pub[1].id, pub[2].id] }) })), '1 attestations not started, 1 attestations under way, 2 with late acknowledgements, 1 with no owner');
+  const late = [doc({ next_review_date: '2026-09-12T00:00:00' }), doc({ next_review_date: '2026-11-01T00:00:00' })];
+  assert.equal(summaryOf('overdue', late, ctx()), 'longest 2 months late');
+  assert.equal(summaryOf('changes', [doc()], ctx()), 'waiting for the author to revise and resubmit');
+  assert.equal(summaryOf('proposed', [doc()], ctx()), 'waiting for the owner to accept or reject');
+  assert.equal(summaryOf('published', [doc({ attestation: null })], ctx()), '');       // nothing holds it up: nothing is said
+});
+
+test('paging: 25 rows at a time, "Show more" adds 25, the pages are what each asks the server for', () => {
+  assert.equal(ROWS_AT_A_TIME, 25);
+  assert.deepEqual(rowsShown(25, 100), { count: 25, more: 25 });
+  assert.deepEqual(rowsShown(50, 60), { count: 50, more: 10 });
+  assert.deepEqual(rowsShown(25, 7), { count: 7, more: 0 });
+  assert.deepEqual(rowsShown(0, 0), { count: 0, more: 0 });
+  const ids = Array.from({ length: 60 }, (_, i) => i);
+  assert.deepEqual(pagesOf(ids, 25).map((p) => p.length), [25]);
+  assert.deepEqual(pagesOf(ids, 50).map((p) => p.length), [25, 25]);
+  assert.deepEqual(pagesOf(ids, 75).map((p) => p.length), [25, 25, 10]);
+  assert.deepEqual(pagesOf([], 25), []);
+  assert.deepEqual(pagesOf(ids, 0).map((p) => p.length), [25]);
+});
+
+test('a thousand documents are grouped without a request: groups are built from rows already held, and only a group’s first page is ever drawn', () => {
+  const docs = Array.from({ length: 2000 }, (_, i) => doc({ status: (['draft', 'pending_review', 'pending_approval', 'approved', 'published'] as const)[i % 5], version_in_force: i % 5 === 4 ? '1.0' : null }));
+  const t0 = Date.now();
+  const groups = buildGroups(docs, ctx());
+  assert.ok(Date.now() - t0 < 1500);
+  assert.deepEqual(groups.map((g) => g.count), [400, 400, 400, 400, 400]);
+  assert.equal(pagesOf(groups[0].docs, ROWS_AT_A_TIME).flat().length, 25);
+});
+
+test('plain helpers: names, spans, ages, attestation in the Board’s words', () => {
+  assert.equal(nameList([]), '');
+  assert.equal(nameList(['Sara']), 'Sara');
+  assert.equal(nameList(['Sara', 'Ed']), 'Sara and Ed');
+  assert.equal(nameList(['Sara', 'Ed'], 3), 'Sara, Ed and 3 more');
+  assert.equal(nameList(['Sara'], 1), 'Sara and 1 more');
+  assert.deepEqual([0, 1, 6, 59, 61, 400, 800].map(spanWords), ['today', '1 day', '6 days', '59 days', '2 months', '13 months', '2 years']);
+  assert.deepEqual([0, 4, 59, 61, 800].map(ageLabel), ['today', '4 d', '59 d', '2 mo', '2 y']);
+  assert.deepEqual([[0, false], [6, false], [7, false], [13, false], [14, false], [1, true]].map(([d, l]) => ageTone(d as number, l as boolean)), ['neutral', 'neutral', 'warning', 'warning', 'danger', 'danger']);
+  assert.equal(agoWords('2026-11-12T01:00:00', NOW), 'today');
+  assert.equal(agoWords('2026-11-11T23:00:00', NOW), 'yesterday');
+  assert.equal(agoWords('2026-11-06T00:00:00', NOW), '6 days ago');
+  assert.equal(agoWords(null, NOW), '');
+  assert.equal(daysSince('2026-11-20T00:00:00', NOW), 0);                       // the future is not "ago"
+  assert.equal(daysSince('x', NOW), null);
+  assert.ok(isLive(doc()) && isLive(doc({ status: 'draft' })) && !isLive(doc({ status: 'draft', version_in_force: null })) && !isLive(doc({ status: 'expired' })));
+  const lk = { coverage: { 99: 55 } as Record<number, number> };
+  const state = (o: Partial<TrackerDoc>, l = lk) => attestationOf(doc(o), l).state;
+  assert.equal(state({ attestation: null }), 'none');
+  assert.equal(state({ attestation: { pct: 0, done: 0, total: 9 } }), 'not_started');
+  assert.equal(state({ attestation: { pct: 44, done: 4, total: 9 } }), 'in_progress');
+  assert.equal(state({ attestation: { pct: 100, done: 9, total: 9 } }), 'complete');
+  assert.equal(state({ id: 99, attestation: null }), 'in_progress');           // the coverage map says it when the row carries no counts
+  assert.deepEqual(attestationOf(doc({ id: 99, attestation: null }), lk), { state: 'in_progress', done: null, total: null, pct: 55 });
 });
 
 test('the inbox as it concerns each document: the person’s own request (a decision before an acknowledgement) and who the requests they sent wait for', () => {
@@ -188,23 +167,5 @@ test('the inbox as it concerns each document: the person’s own request (a deci
   assert.equal(p.get(12)?.sent?.more, 1);
   assert.equal(p.get(12)?.mine, undefined);
   assert.equal(p.get(99), undefined);
-  // nothing asked of the person and nothing sent: nobody is named
-  assert.equal(peopleOf(buildInbox([], NOW)).size, 0);
-});
-
-test('small words: a list of names, how long ago, how many cards are drawn', () => {
-  assert.equal(nameList([]), '');
-  assert.equal(nameList(['A']), 'A');
-  assert.equal(nameList(['A', 'B']), 'A and B');
-  assert.equal(nameList(['A', 'B', 'C']), 'A, B and C');
-  assert.equal(nameList(['A', 'B'], 3), 'A, B and 3 more');
-  assert.equal(agoWords('2026-11-11T01:00:00', NOW), 'today');
-  assert.equal(agoWords('2026-11-10T20:00:00', NOW), 'yesterday');
-  assert.equal(agoWords('2026-11-05T09:00:00', NOW), '6 days ago');
-  assert.equal(agoWords('2026-05-11T09:00:00', NOW), '6 months ago');
-  assert.equal(agoWords(null, NOW), '');
-  assert.deepEqual(cardsShown(0, 5), { count: 5, more: 0 });
-  assert.deepEqual(cardsShown(0, 100), { count: CARDS_AT_A_TIME, more: CARDS_AT_A_TIME });
-  assert.deepEqual(cardsShown(24, 30), { count: 24, more: 6 });
-  assert.deepEqual(cardsShown(99, 30), { count: 30, more: 0 });
+  assert.equal(peopleOf(buildInbox([], NOW)).size, 0);                  // nothing asked of the person and nothing sent: nobody is named
 });
