@@ -227,7 +227,10 @@ function ProvenanceCard({ card, accent, kind, full }: { card: any; accent: strin
   );
 }
 
-export default function AssetOverview({ A }: { A: any }) {
+type SurfaceFingerprint = { osGuess: string | null; product: string | null; sshBanner: string | null; httpServer: string | null; httpTitle: string | null; snmpSysdescr: string | null; confidence: number | null; evidence: string[] | null; hostname: string | null };
+type SurfaceFacts = { ip: string | null; mac: string | null; ports: number[] | null; deviceType: string | null; vendor: string | null; internetFacing: boolean; fingerprint?: SurfaceFingerprint | null };
+
+export default function AssetOverview({ A, surface, riskProfile }: { A: any; surface?: SurfaceFacts | null; riskProfile?: any }) {
   // Default to the first collected domain — 'hardware' for a host, 'instance' for
   // a database, 'account' for cloud, etc. — so the correct tab is highlighted.
   const [deepTab, setDeepTab] = useState<string>(() => A.deep?.[0]?.key || 'hardware');
@@ -236,6 +239,8 @@ export default function AssetOverview({ A }: { A: any }) {
   const [svcState, setSvcState] = useState<'all' | 'running' | 'stopped'>('all');
   // Which KPI tile has its breakdown open (only the hygiene tile carries one).
   const [openKpi, setOpenKpi] = useState<number | null>(null);
+  // Risk Before/After breakdown reveal (the 3rd card toggles the averaged parameter table).
+  const [riskView, setRiskView] = useState<'before' | 'after' | null>(null);
 
   const software = useMemo(() => {
     const q = swQuery.trim().toLowerCase();
@@ -299,6 +304,125 @@ export default function AssetOverview({ A }: { A: any }) {
     return doms.filter((d) => d.secs.length > 0);
   }, [A]);
 
+  // ── Surface (agentless) asset: field-gated overview ──────────────────────
+  // No credentialed collection ran, so the deep telemetry domains are empty.
+  // Show the sweep facts + an honest "requires credentials" gate instead of
+  // the blank KPI strip / telemetry cards the credentialed path renders.
+  if (surface) {
+    const ports = surface.ports || [];
+    const fp = surface.fingerprint || null;
+    const cap = (s: string | null) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '');
+    const facts: [string, string][] = [
+      ['IP address', surface.ip || '—'],
+      ['MAC', surface.mac || '—'],
+      ['Device type', surface.deviceType || '—'],
+      ['Vendor', surface.vendor || '—'],
+      ['Internet-facing', surface.internetFacing ? 'Yes' : 'No'],
+    ];
+    if (fp?.osGuess) facts.push(['OS (inferred)', cap(fp.osGuess)]);
+    if (fp?.product) facts.push(['Primary product', fp.product]);
+    if (fp?.hostname && fp.hostname !== surface.ip) facts.push(['Computer name', fp.hostname]);
+    // Credential-free "surface intelligence" — banners + service versions the
+    // sweep already captured; shown so the page isn't a bare IP + "needs creds".
+    const intel: [string, string][] = [];
+    if (fp?.sshBanner) intel.push(['SSH service', fp.sshBanner]);
+    if (fp?.httpServer) intel.push(['Web server', fp.httpServer + (fp.httpTitle ? ` — "${fp.httpTitle}"` : '')]);
+    else if (fp?.httpTitle) intel.push(['Web page', `"${fp.httpTitle}"`]);
+    if (fp?.snmpSysdescr) intel.push(['SNMP sysDescr', fp.snmpSysdescr]);
+    const classLine = fp && (fp.confidence != null || (fp.evidence && fp.evidence.length))
+      ? `${surface.deviceType || 'host'}${fp.confidence != null ? ` · ${Math.round(fp.confidence * 100)}% confidence` : ''}${fp.evidence && fp.evidence.length ? ` · via ${fp.evidence.join(', ')}` : ''}`
+      : null;
+    return (
+      <div className="inv2" style={{ fontSize: 13.5 }}>
+        {/* Surface facts */}
+        <div className={CARD + ' mb-2.5'}>
+          <div className="flex items-center gap-3 px-3.5 py-2 bg-[#fafbfc]">
+            <span className="w-7 h-7 rounded-lg flex items-center justify-center flex-none" style={{ background: '#eef1f3', color: '#6b7787' }}>
+              <svg viewBox="0 0 24 24" className="w-[15px] h-[15px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3" /></svg>
+            </span>
+            <div className="flex-1 min-w-0">
+              <div className="text-[12.5px] font-bold text-[#0f1f2b]">Surface asset · agentless</div>
+              <div className="text-[10px] text-[#8a95a1]">Discovered by a credential-free sweep — only externally-visible facts are known</div>
+            </div>
+            <span className="text-[10px] font-semibold text-[#6b7787] bg-[#eef1f3] border border-[#dfe4e8] rounded-full px-2 py-[2px] whitespace-nowrap">Surface / Agentless</span>
+          </div>
+          <div className="p-4 grid grid-cols-2 lg:grid-cols-3 gap-x-5 gap-y-3">
+            {facts.map(([k, val]) => (
+              <div key={k}>
+                <div className="text-[10px] text-[#8a95a1] uppercase tracking-wide">{k}</div>
+                <div className={'text-[13px] text-[#0f1f2b] mt-0.5 ' + (k === 'IP address' || k === 'MAC' ? MONO : '')}>{val}</div>
+              </div>
+            ))}
+            <div className="col-span-2 lg:col-span-3">
+              <div className="text-[10px] text-[#8a95a1] uppercase tracking-wide mb-1">Open ports</div>
+              {ports.length ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {ports.map((p) => <span key={p} className={'text-[11.5px] font-semibold text-[#28578f] bg-[#e7f0f8] border border-[#cfe0f0] rounded-md px-2 py-0.5 ' + MONO}>{p}</span>)}
+                </div>
+              ) : <div className="text-[12px] text-[#aeb8c2]">No open ports recorded</div>}
+            </div>
+            {intel.length > 0 && (
+              <div className="col-span-2 lg:col-span-3 border-t border-[#eef1f3] pt-3 mt-1">
+                <div className="text-[10px] text-[#8a95a1] uppercase tracking-wide mb-2">Surface intelligence · inferred, no credentials</div>
+                <div className="space-y-2">
+                  {intel.map(([k, v]) => (
+                    <div key={k} className="flex gap-3">
+                      <div className="text-[11px] text-[#8a95a1] w-28 flex-none">{k}</div>
+                      <div className={'text-[12px] text-[#0f1f2b] min-w-0 break-words ' + MONO}>{v}</div>
+                    </div>
+                  ))}
+                  {classLine && (
+                    <div className="flex gap-3">
+                      <div className="text-[11px] text-[#8a95a1] w-28 flex-none">Classification</div>
+                      <div className="text-[12px] text-[#0f1f2b]">{classLine}</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Deep telemetry gate — OS / software / patches / hardware */}
+        <div className={CARD + ' mb-2.5'}>
+          <div className="flex items-center gap-3 px-3.5 py-2 bg-[#fafbfc]">
+            <span className="w-7 h-7 rounded-lg flex items-center justify-center flex-none" style={{ background: '#f6efe0', color: '#9a6410' }}>
+              <svg viewBox="0 0 24 24" className="w-[15px] h-[15px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
+            </span>
+            <div className="flex-1 min-w-0">
+              <div className="text-[12.5px] font-bold text-[#0f1f2b]">Operating system · software · patches · hardware</div>
+              <div className="text-[10px] text-[#8a95a1]">Deep inventory</div>
+            </div>
+          </div>
+          <div className="px-4 py-6 text-center">
+            <div className="text-[13px] font-semibold text-[#6b7787]">Requires credentials — not collected</div>
+            <div className="text-[11.5px] text-[#aeb8c2] mt-1 max-w-md mx-auto">Connect this asset with credentials to collect operating system, installed software, patch level and hardware telemetry.</div>
+          </div>
+        </div>
+
+        {/* Ownership & Business Context — manually maintained, still relevant for surface assets */}
+        {A.manual?.length > 0 && (
+          <section className={CARD + ' mb-2.5'}>
+            <div className="flex items-center gap-3 px-3.5 py-2 bg-[#fafbfc]">
+              <span className="w-7 h-7 rounded-lg flex items-center justify-center flex-none" style={{ background: '#fbf2df', color: '#9a6410' }}>
+                <svg viewBox="0 0 24 24" className="w-[15px] h-[15px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" /><circle cx="10" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /></svg>
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="text-[12.5px] font-bold text-[#0f1f2b]">Ownership &amp; Context</div>
+                <div className="text-[10px] text-[#8a95a1]">Ownership, business context &amp; procurement · manually maintained</div>
+              </div>
+            </div>
+            <div className="p-4 grid grid-cols-1 lg:grid-cols-2 gap-3.5 items-stretch">
+              {A.manual.map((c: any, i: number) => <ProvenanceCard key={i} card={c} accent="border-l-[#e2b33c]" kind="manual" full />)}
+            </div>
+          </section>
+        )}
+
+        <div className="text-center text-[#aeb8c2] text-[10.5px] mt-4">Surface overview · {A.header?.name} · agentless discovery · no credentialed collection</div>
+      </div>
+    );
+  }
+
   return (
     <div className="inv2" style={{ fontSize: 13.5 }}>
       {/* provenance legend + collection line */}
@@ -309,6 +433,71 @@ export default function AssetOverview({ A }: { A: any }) {
       </div>
 
       {/* KPI strip â one compact card, cells divided */}
+      {/* Asset-level Before / After vuln risk: two clickable cards, each opens ITS OWN parameter breakdown (no section headings). */}
+      {riskProfile && riskProfile.raw != null && (() => {
+        const beforeRows = Array.isArray(riskProfile.before_groups) ? riskProfile.before_groups : [];
+        const afterRows = Array.isArray(riskProfile.groups) ? riskProfile.groups.flatMap((g: any) => g.rows || []) : [];
+        const rows = riskView === 'before' ? beforeRows : riskView === 'after' ? afterRows : [];
+        const title = riskView === 'before'
+          ? `Before - the parameters behind the raw CVSS score, across ${riskProfile.count} open finding${riskProfile.count === 1 ? '' : 's'}`
+          : `After - how this host's context scores the risk, across ${riskProfile.count} open finding${riskProfile.count === 1 ? '' : 's'}`;
+        const cardCls = (active: boolean) => CARD + ' p-2.5 cursor-pointer ' + HOVER + (active ? ' ring-2 ring-[#2e63a8]' : '');
+        return (
+          <div className="mb-2.5">
+            <div className="grid grid-cols-2 gap-2">
+              <div className={cardCls(riskView === 'before')} onClick={() => setRiskView((v) => (v === 'before' ? null : 'before'))}
+                   title="Click to see the parameters behind the raw CVSS (before) score">
+                <div className="flex items-center justify-between">
+                  <div className="text-[10px] text-[#8a95a1] uppercase tracking-[0.04em] font-bold">Risk Before Context</div>
+                  <span className="text-[10px] font-semibold text-[#2e63a8]">{riskView === 'before' ? 'Hide' : 'Parameters'}</span>
+                </div>
+                <div className="flex items-baseline gap-1.5 mt-1.5">
+                  <span className={'text-[19px] font-extrabold leading-none ' + MONO} style={{ color: TONE.bad }}>{riskProfile.raw}</span>
+                  <span className="text-[12px] text-[#aeb8c2]">/ 100</span>
+                </div>
+                <div className="text-[10px] text-[#8a95a1] mt-1 leading-snug">Raw CVSS severity, the flaw in the abstract, averaged across {riskProfile.count} open finding{riskProfile.count === 1 ? '' : 's'}</div>
+              </div>
+              <div className={cardCls(riskView === 'after')} onClick={() => setRiskView((v) => (v === 'after' ? null : 'after'))}
+                   title="Click to see the context parameters that score the risk on this host">
+                <div className="flex items-center justify-between">
+                  <div className="text-[10px] text-[#8a95a1] uppercase tracking-[0.04em] font-bold">Risk After Context</div>
+                  <span className="text-[10px] font-semibold text-[#2e63a8]">{riskView === 'after' ? 'Hide' : 'Parameters'}</span>
+                </div>
+                <div className="flex items-baseline gap-1.5 mt-1.5">
+                  <span className={'text-[19px] font-extrabold leading-none ' + MONO} style={{ color: TONE.ok }}>{riskProfile.contextual}</span>
+                  <span className="text-[12px] text-[#aeb8c2]">/ 100</span>
+                </div>
+                <div className="text-[10px] text-[#8a95a1] mt-1 leading-snug">Scored on this host: exposure, exploitability, KEV and criticality{riskProfile.internet_facing ? ' (internet-facing)' : ''}</div>
+              </div>
+            </div>
+            {riskView && rows.length > 0 && (
+              <div className="rounded-2xl border-2 border-[#2e63a8] bg-[#e9f1fb] p-[16px] mt-2.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="text-[12px] font-bold text-[#0f1f2b]">{title}</div>
+                  <button onClick={(e) => { e.stopPropagation(); setRiskView(null); }} className="text-[11.5px] font-semibold text-[#2e63a8] whitespace-nowrap">Close</button>
+                </div>
+                <div className="mt-3 space-y-2">
+                  {rows.map((r: any, ri: number) => {
+                    const pct = r.max ? Math.max(0, Math.min(100, (r.pts / r.max) * 100)) : 0;
+                    return (
+                      <div key={ri} className="flex items-center gap-3">
+                        <div className="w-56 flex-none">
+                          <div className="text-[12px] font-semibold text-[#0f1f2b]">{r.label}</div>
+                          <div className="text-[10.5px] text-[#8a95a1]">{r.evidence}</div>
+                        </div>
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white">
+                          <div className="h-full rounded-full" style={{ width: Math.max(2, pct) + '%', background: '#2e63a8' }} />
+                        </div>
+                        <div className={'w-16 flex-none text-right text-[12px] font-semibold tabular-nums text-[#0f1f2b] ' + MONO}>{r.pts} / {r.max}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
       <div className={CARD + ' mb-2.5 flex flex-wrap'}>
         {A.kpis.map((k: any, i: number) => {
           const col = k.tone === 'muted' ? '#8a95a1' : TONE[k.tone] || '#0f1f2b';

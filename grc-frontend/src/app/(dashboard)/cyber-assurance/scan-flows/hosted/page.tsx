@@ -218,7 +218,7 @@ function SeverityDonut({ counts }: { counts: SevCounts }) {
   );
 }
 
-// Flow 1 — Complyverse drives the Nessus on your machine. Assets come from the IT
+// Flow 1 — ComplyVerse drives the Nessus on your machine. Assets come from the IT
 // inventory (each with its saved login), chosen in a side panel; the live scan
 // mirrors the Nessus view; history lives in its own tab, not a long scroll.
 export default function HostedScanPage() {
@@ -464,12 +464,12 @@ export default function HostedScanPage() {
             <Link href="/cyber-assurance/scan-flows/connect" className="text-xs text-primary-600 font-medium shrink-0">Add a scan engine first →</Link>
           ) : activeEngines.length === 1 ? (
             <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full border border-emerald-200 bg-emerald-50 text-xs text-emerald-700 shrink-0 self-start lg:self-auto">
-              <Server size={12} /> Complyverse Engine <Check size={11} />
+              <Server size={12} /> ComplyVerse Engine <Check size={11} />
             </span>
           ) : (
             <select value={connId ?? ''} onChange={(e) => setConnId(e.target.value ? Number(e.target.value) : null)}
               className="px-2 py-1 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 shrink-0">
-              {activeEngines.map((c, i) => <option key={c.id} value={c.id}>Complyverse Engine #{i + 1}</option>)}
+              {activeEngines.map((c, i) => <option key={c.id} value={c.id}>ComplyVerse Engine #{i + 1}</option>)}
             </select>
           )}
           <button type="button" onClick={() => setDrawerOpen(true)}

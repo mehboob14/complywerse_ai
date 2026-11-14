@@ -12,15 +12,13 @@ from ....models import (
     NormalizedControl, InternalControl, VulnerabilityMitigation
 )
 
-RESOLVED_STATUSES = [
-    "resolved", "remediated", "verified", "closed",
-    "accepted", "false_positive", "auto_closed_decommissioned",
-    "auto_closed_fixed",
-]
 from ....schemas import (
     VulnerabilityDashboard, OverdueVulnerabilityResponse, AssetExposureResponse
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from .._adhoc_filter import exclude_adhoc, inventory_assets_only
+# Single source of truth: RESOLVED_STATUSES + the shared deduped-distinct count helper.
+from ..dedup_count import RESOLVED_STATUSES, distinct_vuln_count  # noqa: F401 (re-exported for callers)
 
 router = APIRouter(prefix="/dashboard", tags=["Vulnerability Dashboard"])
 
@@ -67,8 +65,9 @@ def get_dashboard(
             contextual_priority={"urgent": 0, "moderate": 0, "low": 0},
         )
     
-    query = db.query(Vulnerability).filter(Vulnerability.tenant_id.in_(user_tenants))
-    
+    query = db.query(Vulnerability).filter(
+        Vulnerability.tenant_id.in_(user_tenants), exclude_adhoc(db))
+
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(Vulnerability.tenant_id == tenant_id)
@@ -77,8 +76,24 @@ def get_dashboard(
         target_tenant = get_user_primary_tenant(current_user, db) or user_tenants[0]
     
     vulns = query.all()
+
+    # Dedup to DISTINCT findings by the SAME dedup_key fold the AI-pentest view +
+    # inventory badge use, so EVERY register number reads the deduped truth, not raw
+    # cross-scanner rows (owner: "the truth number everywhere, not fold some and not
+    # others"). asset_type (host-type key namespacing) + internet exposure come from
+    # one batch link query over inventory assets only; exposure is a per-link fact so
+    # we keep each group's member ids to decide it. Representative = most severe.
+    # The dedup fold is the SHARED implementation (one source of truth for every "open vulns" surface —
+    # register, IT Asset Inventory, AI Pentest). get_dashboard is the canonical caller; keep it identical.
+    from ..dedup_count import fold_distinct_vulns
+    _groups, _exposed_ids = fold_distinct_vulns(db, vulns)
+    # Internet-exposed = DISTINCT findings with any member linked to an internet-facing
+    # inventory asset (computed here from the groups, replacing the old raw-link SQL).
+    internet_exposed_count = sum(
+        1 for g in _groups.values() if any(i in _exposed_ids for i in g["ids"]))
+    vulns = [g["rep"] for g in _groups.values()]
     vuln_ids = [v.id for v in vulns]
-    
+
     by_severity = {}
     by_status = {}
     by_assignee = {}
@@ -179,24 +194,9 @@ def get_dashboard(
         "without_mitigations": len(vuln_ids) - len(mit_vuln_ids)
     }
 
-    # Internet-exposed — distinct findings linked to an internet-facing asset.
-    # Honour BOTH exposure columns (canonical `internet_facing` and the legacy
-    # `is_internet_facing`) so this KPI never disagrees with the reachability
-    # engine / finding pages.
-    internet_exposed_count = 0
-    if vuln_ids:
-        internet_exposed_count = (
-            db.query(func.count(func.distinct(VulnerabilityAssetLink.vulnerability_id)))
-            .join(ITAsset, ITAsset.id == VulnerabilityAssetLink.asset_id)
-            .filter(
-                VulnerabilityAssetLink.vulnerability_id.in_(vuln_ids),
-                or_(
-                    ITAsset.internet_facing.is_(True),
-                    ITAsset.is_internet_facing.is_(True),
-                ),
-            )
-            .scalar() or 0
-        )
+    # internet_exposed_count is computed in the dedup fold above (distinct FINDINGS
+    # on internet-facing INVENTORY assets, both exposure columns honoured), so it
+    # reads the same deduped truth as every other register number.
 
     # Department breakdown
     by_department: Dict[str, int] = {}
@@ -233,8 +233,11 @@ def get_dashboard(
     asset_vuln_counts = db.query(
         VulnerabilityAssetLink.asset_id,
         func.count(VulnerabilityAssetLink.vulnerability_id).label("vuln_count")
-    ).join(Vulnerability).filter(
-        Vulnerability.tenant_id.in_(user_tenants)
+    ).join(Vulnerability).join(
+        ITAsset, ITAsset.id == VulnerabilityAssetLink.asset_id
+    ).filter(
+        Vulnerability.tenant_id.in_(user_tenants), exclude_adhoc(db),
+        *inventory_assets_only(ITAsset),  # rank inventory assets only, never an ad-hoc pentest target
     ).group_by(VulnerabilityAssetLink.asset_id).order_by(
         func.count(VulnerabilityAssetLink.vulnerability_id).desc()
     ).limit(5).all()
@@ -250,7 +253,7 @@ def get_dashboard(
             })
     
     recent_vulns = db.query(Vulnerability).filter(
-        Vulnerability.tenant_id.in_(user_tenants)
+        Vulnerability.tenant_id.in_(user_tenants), exclude_adhoc(db)
     ).order_by(Vulnerability.updated_at.desc()).limit(5).all()
     
     recent_activities = [
@@ -287,6 +290,9 @@ def get_dashboard(
         internet_exposed_count=internet_exposed_count,
         patch_count=patch_count,
         contextual_priority=contextual_priority,
+        # The ONE deduped-open metric, identical to the IT Asset + AI Pentest surfaces, so the
+        # register Overview "Open" tile reconciles instead of counting the raw list.
+        open_vulnerabilities=distinct_vuln_count(db, user_tenants, open_only=True, inventory_only=True),
     )
 
 
@@ -309,6 +315,7 @@ def get_overdue_vulnerabilities(
         joinedload(Vulnerability.assignee)
     ).filter(
         Vulnerability.tenant_id.in_(user_tenants),
+        exclude_adhoc(db),
         Vulnerability.due_date < now,
         Vulnerability.status.notin_(RESOLVED_STATUSES)
     )
@@ -363,8 +370,12 @@ def get_asset_exposure(
     ]
     asset_ids = db.query(VulnerabilityAssetLink.asset_id).join(
         Vulnerability
+    ).join(
+        ITAsset, ITAsset.id == VulnerabilityAssetLink.asset_id
     ).filter(
         Vulnerability.tenant_id.in_(filter_tenants),
+        exclude_adhoc(db),
+        *inventory_assets_only(ITAsset),  # inventory assets only (a vuln may also link an ad-hoc target)
         Vulnerability.status.notin_(_EXPOSURE_EXCLUDED)
     ).distinct().all()
     
@@ -378,6 +389,7 @@ def get_asset_exposure(
             Vulnerability
         ).filter(
             VulnerabilityAssetLink.asset_id == asset_id,
+            exclude_adhoc(db),
             Vulnerability.status.notin_(_EXPOSURE_EXCLUDED)
         ).all()
         
@@ -424,9 +436,9 @@ def get_department_metrics(
     ).all()
     
     all_vulns = db.query(Vulnerability).filter(
-        Vulnerability.tenant_id.in_(filter_tenants)
+        Vulnerability.tenant_id.in_(filter_tenants), exclude_adhoc(db)
     ).all()
-    
+
     assigned_vuln_ids = set()
     dept_vuln_map = {}
     
@@ -525,10 +537,11 @@ def get_sla_trends(
     
     query = db.query(Vulnerability).filter(
         Vulnerability.tenant_id.in_(filter_tenants),
+        exclude_adhoc(db),
         Vulnerability.status.in_(RESOLVED_STATUSES),
         Vulnerability.resolved_at >= start_date
     )
-    
+
     if department_id:
         dept_vuln_ids = db.query(GRCVulnerabilityDepartmentAssignment.vulnerability_id).filter(
             GRCVulnerabilityDepartmentAssignment.department_id == department_id
@@ -611,6 +624,7 @@ def get_workflow_metrics(
     
     vulns_with_state = db.query(Vulnerability).filter(
         Vulnerability.tenant_id.in_(filter_tenants),
+        exclude_adhoc(db),
         Vulnerability.current_state_id.isnot(None)
     ).all()
     
@@ -699,6 +713,7 @@ def get_aging_analysis(
     
     open_vulns = db.query(Vulnerability).filter(
         Vulnerability.tenant_id.in_(filter_tenants),
+        exclude_adhoc(db),
         Vulnerability.status.notin_(RESOLVED_STATUSES)
     ).all()
 
@@ -767,13 +782,13 @@ def get_control_coverage(
         filter_tenants = user_tenants
     
     total_vulns = db.query(func.count(Vulnerability.id)).filter(
-        Vulnerability.tenant_id.in_(filter_tenants)
+        Vulnerability.tenant_id.in_(filter_tenants), exclude_adhoc(db)
     ).scalar() or 0
-    
+
     vulns_with_links = db.query(func.count(func.distinct(VulnerabilityControlLink.vulnerability_id))).join(
         Vulnerability
     ).filter(
-        Vulnerability.tenant_id.in_(filter_tenants)
+        Vulnerability.tenant_id.in_(filter_tenants), exclude_adhoc(db)
     ).scalar() or 0
     
     coverage_rate = round((vulns_with_links / total_vulns) * 100, 1) if total_vulns > 0 else 0.0
@@ -885,6 +900,7 @@ def get_sla_compliance_trends(
     
     resolved_vulns = db.query(Vulnerability).filter(
         Vulnerability.tenant_id.in_(filter_tenants),
+        exclude_adhoc(db),
         Vulnerability.status.in_(RESOLVED_STATUSES),
         Vulnerability.resolved_at >= start_date
     ).all()
@@ -951,6 +967,7 @@ def get_department_workload(
     
     all_open_vulns = db.query(Vulnerability).filter(
         Vulnerability.tenant_id.in_(filter_tenants),
+        exclude_adhoc(db),
         Vulnerability.status.notin_(RESOLVED_STATUSES)
     ).all()
 
@@ -1008,6 +1025,7 @@ def get_aging_by_department(
     
     open_vulns = db.query(Vulnerability).filter(
         Vulnerability.tenant_id.in_(filter_tenants),
+        exclude_adhoc(db),
         Vulnerability.status.notin_(RESOLVED_STATUSES)
     ).all()
 
@@ -1288,6 +1306,7 @@ def get_dashboard_trends(
     # side so a report for "Jan 1–Mar 31" doesn't pick up April activity.
     discovered_rows = db.query(Vulnerability.created_at, Vulnerability.discovered_at).filter(
         Vulnerability.tenant_id.in_(filter_tenants),
+        exclude_adhoc(db),
         or_(
             and_(
                 Vulnerability.discovered_at != None,
@@ -1305,6 +1324,7 @@ def get_dashboard_trends(
     # Resolved (resolved_at within window).
     resolved_rows = db.query(Vulnerability.resolved_at).filter(
         Vulnerability.tenant_id.in_(filter_tenants),
+        exclude_adhoc(db),
         Vulnerability.resolved_at != None,
         Vulnerability.resolved_at >= start,
         Vulnerability.resolved_at <= end_dt,
@@ -1316,6 +1336,7 @@ def get_dashboard_trends(
         Vulnerability.id == GRCVulnWorkflowHistory.vulnerability_id,
     ).filter(
         Vulnerability.tenant_id.in_(filter_tenants),
+        exclude_adhoc(db),
         GRCVulnWorkflowHistory.performed_at != None,
         GRCVulnWorkflowHistory.performed_at >= start,
         GRCVulnWorkflowHistory.performed_at <= end_dt,
@@ -1349,6 +1370,7 @@ def get_dashboard_trends(
     # both discovered and resolved during the window.
     mttr_rows = db.query(Vulnerability.discovered_at, Vulnerability.resolved_at).filter(
         Vulnerability.tenant_id.in_(filter_tenants),
+        exclude_adhoc(db),
         Vulnerability.resolved_at != None,
         Vulnerability.resolved_at >= start,
         Vulnerability.resolved_at <= end_dt,
@@ -2164,6 +2186,7 @@ def get_threat_intel_dashboard(
 
     base_query = db.query(Vulnerability).filter(
         Vulnerability.tenant_id.in_(user_tenants),
+        exclude_adhoc(db),
         ~Vulnerability.status.in_(RESOLVED_STATUSES),
     )
     if tenant_id:
@@ -2232,7 +2255,7 @@ def get_threat_intel_dashboard(
             )
             .join(VulnerabilityAssetLink, VulnerabilityAssetLink.asset_id == ITAsset.id)
             .join(Vulnerability, Vulnerability.id == VulnerabilityAssetLink.vulnerability_id)
-            .filter(Vulnerability.id.in_(open_ids))
+            .filter(Vulnerability.id.in_(open_ids), *inventory_assets_only(ITAsset))
             .group_by(ITAsset.criticality, Vulnerability.severity)
             .all()
         )
@@ -2279,7 +2302,8 @@ def get_threat_intel_dashboard(
         # blowing out the query — we just need a small preview here.
         linked_count = (
             db.query(func.count(VulnerabilityAssetLink.id))
-            .filter(VulnerabilityAssetLink.vulnerability_id == v.id)
+            .join(ITAsset, ITAsset.id == VulnerabilityAssetLink.asset_id)
+            .filter(VulnerabilityAssetLink.vulnerability_id == v.id, *inventory_assets_only(ITAsset))
             .scalar() or 0
         )
         top_priority_vulns.append({
@@ -2354,6 +2378,7 @@ def get_asset_risk_heatmap(
         db.query(Vulnerability)
         .filter(
             Vulnerability.tenant_id.in_(filter_tenants),
+            exclude_adhoc(db),
             ~Vulnerability.status.in_(RESOLVED_STATUSES),
         )
     )
@@ -2367,7 +2392,8 @@ def get_asset_risk_heatmap(
             VulnerabilityAssetLink.vulnerability_id,
             VulnerabilityAssetLink.asset_id,
         )
-        .filter(VulnerabilityAssetLink.vulnerability_id.in_(open_vuln_ids))
+        .join(ITAsset, ITAsset.id == VulnerabilityAssetLink.asset_id)
+        .filter(VulnerabilityAssetLink.vulnerability_id.in_(open_vuln_ids), *inventory_assets_only(ITAsset))
         .all()
     )
     asset_ids = sorted({a_id for _, a_id in links})

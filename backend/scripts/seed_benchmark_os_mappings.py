@@ -54,7 +54,9 @@ from grc.models import BenchmarkOsMapping, CompliancePlugin, Tenant, SessionLoca
 MAPPINGS: List[Tuple[str, List[str], int]] = [
     # ── Windows desktop ──
     ("windows-11", ["CIS_Microsoft_Windows_11_Enterprise_Benchmark_v5.0.1"], 50),
-    ("windows-10", ["CIS_Microsoft_Windows_11_Enterprise_Benchmark_v5.0.1"], 150),
+    # Win10 gets the Win10 benchmark; Win11 kept only as a last-resort fallback
+    # for a tenant that somehow lacks the Win10 content (first-present wins).
+    ("windows-10", ["CIS_Microsoft_Windows_10_Enterprise_Benchmark_v4.0.0", "CIS_Microsoft_Windows_11_Enterprise_Benchmark_v5.0.1"], 150),
     # ── Windows Server (2008/2012 executable; 2016/2019/2022 manual) ──
     ("windows-server-2008", ["CIS_Microsoft_Windows_Server_2008_non-R2_Benchmark_v3.0.0"], 50),
     ("windows-server-2012", ["CIS_Microsoft_Windows_Server_2012_non-R2_Benchmark_v2.0.0"], 50),

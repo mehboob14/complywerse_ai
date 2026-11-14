@@ -2,8 +2,8 @@
 
 import { useId } from 'react';
 
-// Complyverse logo — a 3D orb (the internet-facing attack surface) with an orbiting
-// radar ring + a detected blip, beside the "Complyverse" wordmark. Matches the favicon.
+// ComplyVerse logo — a 3D orb (the internet-facing attack surface) with an orbiting
+// radar ring + a detected blip, beside the "ComplyVerse" wordmark. Matches the favicon.
 // `variant` flips the wordmark palette for dark vs. light panels.
 export function BrandLogo({
   variant = 'dark',
@@ -31,8 +31,8 @@ export function BrandLogo({
         <circle cx="57" cy="25" r="2.9" fill="#6497B1" />
       </svg>
       <span className="inline-flex items-start">
-        <span className={word}>Complyverse</span>
-        <span className={`ml-1 mt-[0.1em] text-[0.42em] font-semibold tracking-wider ${ai}`}>AI</span>
+        <span className={word}>ComplyVerse</span>
+        <span className={`ml-1 mt-[0.1em] text-[0.42em] font-semibold tracking-wider ${ai}`}>.IO</span>
       </span>
     </span>
   );

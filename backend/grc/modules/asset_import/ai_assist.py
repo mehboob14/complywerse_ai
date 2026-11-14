@@ -14,7 +14,7 @@ import re
 from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
-_MODEL = os.environ.get("AVA_AI_MODEL", "gpt-4o-mini")
+_MODEL = os.environ.get("COMPLYVERSE_AI_MODEL", "gpt-4o-mini")
 _CONF = {"high": 3, "medium": 2, "low": 1}
 
 

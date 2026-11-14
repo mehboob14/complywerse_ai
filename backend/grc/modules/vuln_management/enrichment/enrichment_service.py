@@ -469,3 +469,30 @@ def enrich_vulnerability(vuln: Vulnerability, db: Session) -> dict:
     # (grc.services.ai_control_proposals.generate_proposals), not per-ingest.
 
     return summary
+
+
+def ensure_cve_enriched(db: Session, vuln) -> bool:
+    """LAZY, SELF-HEALING enrichment for a single row on a READ path. Any CVE finding whose run was never
+    (re-)classified has CVSS/EPSS/KEV/CWE still NULL — enrich_vulnerability only ran inside classify_run.
+    Call this at a detail/intel read chokepoint: if the row is a real CVE and has never been synced, run
+    the SAME enrich_vulnerability once, so opening ANY finding heals it (no script, no re-scan).
+
+    Gated strictly on nvd_last_synced_at IS NULL, so an already-enriched row is NEVER re-fetched (the
+    7-day Redis cache covers repeats anyway). Non-CVE rows (GHSA/secret/SAST/no cve_id) are skipped —
+    honest empty, never fabricated. Best-effort: wrapped so an NVD/EPSS outage or rate-limit never 500s
+    or slow-fails the page — on failure the row returns as-is (un-enriched, retried next open).
+    Returns True when enrichment actually ran. ponytail: one guarded helper for every read path."""
+    try:
+        if vuln is None or getattr(vuln, "nvd_last_synced_at", None) is not None:
+            return False
+        if not str(getattr(vuln, "cve_id", "") or "").strip().upper().startswith("CVE-"):
+            return False
+        enrich_vulnerability(vuln, db)  # commits internally; each external call is best-effort within
+        return True
+    except Exception:  # noqa: BLE001 — a detail/intel GET must never 500 on an enrichment hiccup
+        logger.warning("lazy CVE enrich failed for vuln %s", getattr(vuln, "id", None), exc_info=True)
+        try:
+            db.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+        return False

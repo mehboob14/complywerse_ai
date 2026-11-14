@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Complyverse — Performance: the executive (C-level) view across every cyber module.
+ * ComplyVerse — Performance: the executive (C-level) view across every cyber module.
  *
  * Answers, above the fold: how exposed are we, how bad, where, and is it improving.
  * Module lenses below (vulnerabilities, attack surface, inventory, pentest, risk,
@@ -16,8 +16,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Activity, AlertTriangle, ArrowRight, Boxes, Bug, ClipboardCheck, Globe, RefreshCw, ShieldAlert } from 'lucide-react';
-import apiClient, { compliancePluginsApi, discoveryApi, riskPostureApi } from '@/cyber-assurance/lib/api';
+import { Activity, AlertTriangle, ArrowRight, Boxes, Bug, ClipboardCheck, Globe, Landmark, RefreshCw, ShieldAlert } from 'lucide-react';
+import apiClient, { compliancePluginsApi, discoveryApi, riskPostureApi, type LicenseSummary } from '@/cyber-assurance/lib/api';
 import { SCORECARD_QUERY_KEYS } from '@/cyber-assurance/components/dashboard/scorecard-query-keys';
 import PermissionGuard from '@/components/ui/PermissionGuard';
 import { navPermissions } from '@/components/layout/navAccess';
@@ -27,9 +27,10 @@ import {
 } from './_components/kit';
 import { FlowChart, Gauge, NEW_C, PartLegend, RES_C, Sparkline, StackBar, type Part, type Week } from './_components/charts';
 import {
-  AttackSurface, CisCompliance, CtemProgramme, InventoryHealth, PenTest, RiskDrivers, TopAssets, VulnExposure, busyOf, isExternalAsset,
+  AttackSurface, CisCompliance, CtemProgramme, InventoryHealth, LicenseCompliance, PenTest, RiskDrivers, TopAssets, VulnExposure, busyOf, isExternalAsset,
   type AssetsDash, type CisOverview, type Ctem, type Devices, type Easm, type ExecSummary, type Inventory, type Qs, type RiskDash,
 } from './_components/lenses';
+import { dnsName, externalUnitKey } from '@/cyber-assurance/lib/domains';
 
 type Trends = {
   buckets?: (string | { date: string })[];
@@ -51,9 +52,28 @@ const KEYS = {
   easm: ['exec-dashboard.easm'],
   devices: ['disc-discovered-devices', 'all'],
   ctem: ['exec-dashboard.ctem'],
+  licenses: ['licenses', 'summary'], // same key as the Licenses register's KPI strip
 };
 const ALL_KEYS = Object.values(KEYS);
 const get = (url: string) => async () => (await apiClient.get(url)).data;
+
+// User-settable auto-refresh cadence (ms; 0 = off / manual only), persisted per browser.
+const REFRESH_KEY = 'ava.dashboard.refreshMs';
+const REFRESH_OPTS: { label: string; ms: number }[] = [
+  { label: 'Manual', ms: 0 },
+  { label: '1 min', ms: 60_000 },
+  { label: '5 min', ms: 5 * 60_000 },
+  { label: '15 min', ms: 15 * 60_000 },
+  { label: '30 min', ms: 30 * 60_000 },
+];
+const REFRESH_DEFAULT = 5 * 60_000; // sensible default: refresh every 5 min
+function readRefreshMs(): number {
+  try {
+    const v = Number(localStorage.getItem(REFRESH_KEY));
+    if (Number.isFinite(v) && REFRESH_OPTS.some((o) => o.ms === v)) return v;
+  } catch { /* SSR / blocked storage → default */ }
+  return REFRESH_DEFAULT;
+}
 
 // opened by its URL without one of the sidebar entry's rights: the no-access page
 export default function GuardedPerformancePage() {
@@ -62,21 +82,43 @@ export default function GuardedPerformancePage() {
 
 function PerformancePage() {
   const qc = useQueryClient();
-  const summary = useQuery<ExecSummary>({ queryKey: KEYS.summary, queryFn: get('/exec-dashboard/summary'), retry: 1 });
-  const trends = useQuery<Trends>({ queryKey: KEYS.trends, queryFn: get('/vuln-management/dashboard/trends?period=90d'), retry: 1 });
-  const history = useQuery<{ series?: { date: string; value: number }[] }>({ queryKey: KEYS.history, queryFn: get('/enriched-dashboard/metric-trend?metric=vuln_open&days=90'), retry: false });
-  const risk = useQuery<RiskDash>({ queryKey: KEYS.risk, queryFn: async () => (await riskPostureApi.dashboard()).data, staleTime: 5 * 60_000, retry: 1 });
+
+  // Chosen cadence drives staleTime + refetchInterval below. Lazy init reads localStorage
+  // once (client only); default applies when unset or storage is unavailable.
+  const [refreshMs, setRefreshMs] = useState<number>(REFRESH_DEFAULT);
+  useEffect(() => { setRefreshMs(readRefreshMs()); }, []);
+  const chooseRefresh = (ms: number) => {
+    setRefreshMs(ms);
+    try { localStorage.setItem(REFRESH_KEY, String(ms)); } catch { /* ignore */ }
+  };
+
+  // Shared query options for every card: navigating back uses cache (no refetch on mount or
+  // focus); data is "fresh" for the whole chosen window; auto-updates every window (off when
+  // Manual). Manual "Refresh" button and tuning-invalidations still force a refetch.
+  const shared = {
+    refetchOnMount: false as const,
+    refetchOnWindowFocus: false as const,
+    staleTime: refreshMs || Infinity,
+    refetchInterval: refreshMs || (false as const),
+  };
+
+  const summary = useQuery<ExecSummary>({ queryKey: KEYS.summary, queryFn: get('/exec-dashboard/summary'), retry: 1, ...shared });
+  const trends = useQuery<Trends>({ queryKey: KEYS.trends, queryFn: get('/vuln-management/dashboard/trends?period=90d'), retry: 1, ...shared });
+  const history = useQuery<{ series?: { date: string; value: number }[] }>({ queryKey: KEYS.history, queryFn: get('/enriched-dashboard/metric-trend?metric=vuln_open&days=90'), ...shared, retry: false });
+  const risk = useQuery<RiskDash>({ queryKey: KEYS.risk, queryFn: async () => (await riskPostureApi.dashboard()).data, retry: 1, ...shared });
   const inv = useQuery<Inventory | null>({
     queryKey: KEYS.inv,
     // Same fetcher as InventoryScorecard / InventoryRedesign (null on failure) — the key is shared.
     queryFn: async () => { try { return (await apiClient.get('/assets/inventory-overview')).data; } catch { return null; } },
+    ...shared,
   });
-  const assets = useQuery<AssetsDash>({ queryKey: KEYS.assets, queryFn: get('/assets/dashboard'), retry: 1 });
-  const cis = useQuery<CisOverview>({ queryKey: KEYS.cis, queryFn: async () => (await compliancePluginsApi.assetsOverview()).data, retry: 1 });
-  const easm = useQuery<Easm>({ queryKey: KEYS.easm, queryFn: async () => (await discoveryApi.easmScorecard()).data, retry: 1 });
-  const devices = useQuery<Devices>({ queryKey: KEYS.devices, queryFn: async () => (await discoveryApi.discoveredDevices()).data, retry: 1 });
-  const ctem = useQuery<Ctem>({ queryKey: KEYS.ctem, queryFn: get('/erm/ctem/scopes/portfolio'), retry: 1 });
-  const mine = [summary, trends, history, risk, inv, assets, cis, easm, devices, ctem];
+  const assets = useQuery<AssetsDash>({ queryKey: KEYS.assets, queryFn: get('/assets/dashboard'), retry: 1, ...shared });
+  const cis = useQuery<CisOverview>({ queryKey: KEYS.cis, queryFn: async () => (await compliancePluginsApi.assetsOverview()).data, retry: 1, ...shared });
+  const easm = useQuery<Easm>({ queryKey: KEYS.easm, queryFn: async () => (await discoveryApi.easmScorecard()).data, retry: 1, ...shared });
+  const devices = useQuery<Devices>({ queryKey: KEYS.devices, queryFn: async () => (await discoveryApi.discoveredDevices()).data, retry: 1, ...shared });
+  const ctem = useQuery<Ctem>({ queryKey: KEYS.ctem, queryFn: get('/erm/ctem/scopes/portfolio'), retry: 1, ...shared });
+  const licenses = useQuery<LicenseSummary>({ queryKey: KEYS.licenses, queryFn: get('/licenses/summary'), retry: 1, ...shared });
+  const mine = [summary, trends, history, risk, inv, assets, cis, easm, devices, ctem, licenses];
   const fetching = mine.some((q) => q.isFetching);
   // Sources that failed on their last attempt (inventory's fetcher returns null instead of throwing).
   const failed = mine.filter((q) => q.isError).length + (inv.isSuccess && inv.data === null ? 1 : 0);
@@ -130,12 +172,21 @@ function PerformancePage() {
         </div>
         <div className="flex items-center gap-3 text-[11.5px] text-[#64748B]">
           <span aria-live="polite">
-            {updated ? `Live data · ${new Date(updated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Loading live data…'}
+            {updated ? `Last updated ${new Date(updated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Loading live data…'}
             {!fetching && failed > 0 && <span className="ml-2 inline-flex"><Warn>{plural(failed, 'source')} didn&rsquo;t respond</Warn></span>}
           </span>
+          <label className="inline-flex items-center gap-1.5 text-[#64748B]">
+            <span className="sr-only">Auto-refresh every</span>
+            <span aria-hidden>Auto-refresh</span>
+            <select value={refreshMs} onChange={(e) => chooseRefresh(Number(e.target.value))}
+              aria-label="Auto-refresh interval"
+              className="h-8 rounded-[9px] border border-[#E2E5EC] bg-white px-2 text-[12px] font-semibold text-[#334155] hover:bg-[#F6F7FB] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#005B96]">
+              {REFRESH_OPTS.map((o) => <option key={o.ms} value={o.ms}>{o.label}</option>)}
+            </select>
+          </label>
           <button type="button" onClick={refresh} disabled={fetching}
             className="inline-flex h-8 items-center gap-1.5 rounded-[9px] border border-[#E2E5EC] bg-white px-3 text-[12px] font-semibold text-[#334155] hover:bg-[#F6F7FB] disabled:cursor-default disabled:opacity-70">
-            <RefreshCw size={13} aria-hidden className={fetching ? 'animate-spin' : ''} style={{ color: T.base }} />{fetching ? 'Refreshing' : 'Refresh'}
+            <RefreshCw size={13} aria-hidden className={fetching ? 'animate-spin' : ''} style={{ color: T.base }} />{fetching ? 'Refreshing' : 'Refresh now'}
           </button>
         </div>
       </section>
@@ -147,7 +198,7 @@ function PerformancePage() {
       </div>
 
       {/* ── KPI strip ── */}
-      <nav aria-label="Key indicators" className="grid grid-cols-1 gap-2.5 min-[480px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+      <nav aria-label="Key indicators" className="grid grid-cols-1 gap-2.5 min-[480px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-7">
         <Kpi icon={<Boxes size={15} />} label="Assets under management" href="/cyber-assurance/assets" loading={inv.isLoading && assets.isLoading} busy={busyOf(inv, assets)}
           value={nfmt(assetsN)}
           sub={I?.attention_queue ? (I.attention_queue.assets_without_owner ? <Warn>{nfmt(I.attention_queue.assets_without_owner)} without an owner</Warn> : 'every asset has an owner') : 'in the IT asset inventory'} />
@@ -170,12 +221,16 @@ function PerformancePage() {
           sub={cis.data?.totals
             ? (cis.data.totals.scanned ? `pass rate · ${nfmt(cis.data.totals.scanned)} of ${nfmt(cis.data.totals.assets)} assets scanned` : <Cta>No CIS scan yet · Run a CIS scan</Cta>)
             : 'unavailable'} />
+        <Kpi icon={<Landmark size={15} />} label="PCI-scoped assets" href="/cyber-assurance/assets?tab=inventory&pci=1" loading={inv.isLoading} busy={busyOf(inv)}
+          value={I ? nfmt((I.counts as any)?.cde_scoped ?? 0) : '—'}
+          sub={I ? (assetsN ? `marked PCI of ${nfmt(assetsN)} assets` : 'no assets yet') : 'unavailable'} />
       </nav>
 
       {/* ── Module lenses ──
          Every 12-col row sums to 12 (no empty cell): row 1 = the four vuln tiles (their own
          full-width sub-grid); row 2 = Most-exposed (8) + Attack-surface (4); row 3 = the three
-         mid cards (4·3); row 4 = CIS (6) + CTEM (6). Rows STRETCH (equal heights, common
+         mid cards (4·3); row 4 = CIS (6) + CTEM (6); row 5 = Software licenses (12, its
+         own four-part band). Rows STRETCH (equal heights, common
          baseline, no hole beside a short card) and each Card body is a flex column its content
          fills — lists spread, tables grow, empty / loading / error states centre in the full
          height — so there is no white card bottom either, in any state. */}
@@ -188,6 +243,7 @@ function PerformancePage() {
         <PenTest q={summary} />
         <CisCompliance q={cis} />
         <CtemProgramme q={ctem} />
+        <LicenseCompliance q={licenses} />
       </div>
     </div>
   );
@@ -254,9 +310,25 @@ function PostureHero({ risk, assetsN }: { risk: Qs<RiskDash>; assetsN: number | 
       const k = xs.filter((a) => a.score != null);
       return k.length ? k.reduce((t, a) => t + (a.score as number), 0) / k.length : null;
     };
-    const ext = d.assets.filter(isExternalAsset), int = d.assets.filter((a) => !isExternalAsset(a));
+    const int = d.assets.filter((a) => !isExternalAsset(a));
+    // External assets roll up by registrable (apex) domain — ONE domain = one
+    // asset — so the count matches the register and a domain's 200 subdomains
+    // don't dominate the mean. Per the register's domain rule the apex takes the
+    // WEAKEST (highest-risk) score among its names; we then average those.
+    const extUnits = new Map<string, number | null>();
+    let extHosts = 0;
+    for (const a of d.assets) {
+      if (!isExternalAsset(a)) continue;
+      extHosts += 1;
+      const k = externalUnitKey(a, dnsName(a));
+      const cur = extUnits.get(k);
+      if (a.score != null) extUnits.set(k, cur == null ? a.score : Math.max(cur, a.score as number));
+      else if (!extUnits.has(k)) extUnits.set(k, null);
+    }
+    const extScores = Array.from(extUnits.values()).filter((v): v is number => v != null);
+    const extAvg = extScores.length ? extScores.reduce((t, v) => t + v, 0) / extScores.length : null;
     const top = d.assets.filter((a) => a.score != null).sort((a, b) => (b.score as number) - (a.score as number)).slice(0, 4);
-    return { ext: ext.length, extAvg: avg(ext), int: int.length, intAvg: avg(int), top };
+    return { ext: extUnits.size, extHosts, extAvg, int: int.length, intAvg: avg(int), top };
   }, [d]);
   const band: Band = toBand(null, s?.avg_score);
   const tone = BAND[band];
@@ -285,7 +357,7 @@ function PostureHero({ risk, assetsN }: { risk: Qs<RiskDash>; assetsN: number | 
         <div className="mt-1 flex items-center gap-2"><Pill tone={tone} /><span className="text-[11.5px] text-[#64748B]">{tone.desc}</span></div>
         {x && (
           <p className="m-0 mt-2 text-center text-[11px] leading-[1.5] text-[#64748B]">
-            External {nfmt(x.ext)} · avg {x.extAvg == null ? '—' : x.extAvg.toFixed(1)}<br />Internal {nfmt(x.int)} · avg {x.intAvg == null ? '—' : x.intAvg.toFixed(1)}
+            External {nfmt(x.ext)}{x.extHosts > x.ext ? ` · ${nfmt(x.extHosts)} hosts` : ''} · avg {x.extAvg == null ? '—' : x.extAvg.toFixed(1)}<br />Internal {nfmt(x.int)} · avg {x.intAvg == null ? '—' : x.intAvg.toFixed(1)}
           </p>
         )}
       </div>

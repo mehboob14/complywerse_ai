@@ -39,6 +39,10 @@ from grc.models import (
     Risk,
     RiskAssetLink,
 )
+from grc.modules.it_assets.asset_rollup import (
+    is_external as _rollup_is_external,
+    unit_key_for as _rollup_unit_key,
+)
 
 # ─── Tunables ───────────────────────────────────────────────────────────────
 
@@ -55,6 +59,44 @@ DEFAULT_WEIGHTS = {
 # `resolve_weights_for_tenant()` (see below).
 WEIGHTS = dict(DEFAULT_WEIGHTS)
 
+# EASM (external asset) default weights. External assets are graded by the
+# outside-in model in `_compute_easm_risk`, which uses these four dimensions
+# instead of the internal CIS/CIA/ctrl/risk ones. Per-tenant overrides come via
+# `resolve_easm_weights_for_tenant()`. (The `subdomains` rollup component keeps
+# its own fixed structural weight — it's present only for parent domains and is
+# not a tunable dimension.)
+DEFAULT_EASM_WEIGHTS = {
+    "hygiene":        0.30,
+    "exploitability": 0.35,
+    "exposure":       0.20,
+    "business":       0.15,
+}
+
+
+def _session_cache(db) -> dict:
+    """Request-scoped memo bag living on the Session (one SQLAlchemy
+    Session == one HTTP request here).
+
+    The dashboard sweep calls `compute_asset_risk` once per asset, and
+    several of the sub-score queries are tenant-wide and identical for
+    every asset (the whole CIS plugin library, the tenant weights). Left
+    un-memoised they run N times (and the plugin-library scan runs
+    N×peers times). Caching them on the Session collapses that to one
+    query per tenant per request with zero change to the numbers.
+
+    ponytail: Session attribute, not an external cache — scope is exactly
+    one request, nothing to invalidate. Falls back to an ephemeral dict if
+    the Session rejects the attribute so callers never break.
+    """
+    c = getattr(db, "_risk_posture_cache", None)
+    if c is None:
+        c = {}
+        try:
+            db._risk_posture_cache = c
+        except Exception:  # noqa: BLE001
+            pass
+    return c
+
 
 def resolve_weights_for_tenant(db, tenant_id: int) -> dict:
     """Return the weight map this tenant should use for risk scoring.
@@ -64,6 +106,14 @@ def resolve_weights_for_tenant(db, tenant_id: int) -> dict:
     we honour per-tenant tuning without forcing a row for tenants that
     haven't customised anything.
     """
+    # Memoised per request: the tenant sweep calls this once per asset,
+    # but the row never changes mid-request (writes go through a separate
+    # session). One indexed lookup instead of N.
+    cache = _session_cache(db)
+    ck = ("weights", tenant_id)
+    if ck in cache:
+        return dict(cache[ck])
+
     try:
         # Lazy import to avoid circular dependency with grc.models
         from grc.models import TenantRiskWeights
@@ -73,17 +123,56 @@ def resolve_weights_for_tenant(db, tenant_id: int) -> dict:
     except Exception:
         # If the table doesn't exist yet (e.g. running against an older
         # schema during migration), silently fall back to defaults so
-        # Risk Posture keeps rendering instead of 500-ing.
+        # Risk Posture keeps rendering instead of 500-ing. Not cached — a
+        # transient error shouldn't pin defaults for the rest of the request.
         return dict(DEFAULT_WEIGHTS)
     if not row:
-        return dict(DEFAULT_WEIGHTS)
-    return {
-        "cis":  float(row.weight_cis)  / 100.0,
-        "vuln": float(row.weight_vuln) / 100.0,
-        "cia":  float(row.weight_cia)  / 100.0,
-        "ctrl": float(row.weight_ctrl) / 100.0,
-        "risk": float(row.weight_risk) / 100.0,
-    }
+        resolved = dict(DEFAULT_WEIGHTS)
+    else:
+        resolved = {
+            "cis":  float(row.weight_cis)  / 100.0,
+            "vuln": float(row.weight_vuln) / 100.0,
+            "cia":  float(row.weight_cia)  / 100.0,
+            "ctrl": float(row.weight_ctrl) / 100.0,
+            "risk": float(row.weight_risk) / 100.0,
+        }
+    cache[ck] = resolved
+    return dict(resolved)
+
+
+def resolve_easm_weights_for_tenant(db, tenant_id: int) -> dict:
+    """Return the EASM (external asset) weight map for this tenant.
+
+    Mirrors `resolve_weights_for_tenant` but for the four outside-in
+    dimensions. Falls back to `DEFAULT_EASM_WEIGHTS` unless the tenant has
+    tuned all four (the four columns are nullable and move together — a
+    partial set can't happen through the PUT, which validates the whole set).
+    """
+    if db is None:
+        return dict(DEFAULT_EASM_WEIGHTS)
+    cache = _session_cache(db)
+    ck = ("easm_weights", tenant_id)
+    if ck in cache:
+        return dict(cache[ck])
+    try:
+        from grc.models import TenantRiskWeights
+        row = db.query(TenantRiskWeights).filter(
+            TenantRiskWeights.tenant_id == tenant_id,
+        ).first()
+    except Exception:
+        return dict(DEFAULT_EASM_WEIGHTS)
+    vals = None if not row else (
+        row.weight_easm_hygiene, row.weight_easm_exploit,
+        row.weight_easm_exposure, row.weight_easm_business,
+    )
+    if not vals or any(v is None for v in vals):
+        resolved = dict(DEFAULT_EASM_WEIGHTS)
+    else:
+        h, e, x, b = (float(v) / 100.0 for v in vals)
+        resolved = {"hygiene": h, "exploitability": e, "exposure": x, "business": b}
+    cache[ck] = resolved
+    return dict(resolved)
+
 
 VULN_SEVERITY_POINTS = {
     "critical": 10.0,
@@ -93,6 +182,17 @@ VULN_SEVERITY_POINTS = {
     "info":      0.2,
 }
 VULN_POINTS_CAP = 50.0
+
+# CVSS floor per severity band, for findings that carry a severity but NO numeric
+# cvss_score. The effective-risk formula (effective_risk.py) is driven by cvss/epss/
+# kev — a pentest finding ingested with severity="high" but cvss_score=NULL scored
+# 0.0, so scanner findings never raised the asset risk even though they DID show on
+# the Vulnerabilities subpage. Representative midpoints of the CVSS v3 bands (critical
+# 9.0-10, high 7.0-8.9, medium 4.0-6.9, low 0.1-3.9); info carries no numeric risk.
+# Used ONLY as a fallback — a real cvss_score always wins.
+_SEVERITY_CVSS_FLOOR = {
+    "critical": 9.5, "high": 8.0, "medium": 5.5, "low": 2.5, "info": 0.0,
+}
 CONTROL_COVERAGE_TARGET = 12
 
 # Cap for residual_score sum — most platforms use 1-25 (5x5 likelihood×impact),
@@ -176,28 +276,38 @@ def _cis_gap_self(db: Session, tenant_id: int, asset_id: int) -> Dict[str, Any]:
                     return True
         return False
 
-    all_plugins = (
-        db.query(CompliancePlugin.id, CompliancePlugin.os_keys, CompliancePlugin.benchmark)
-        .filter(
-            (CompliancePlugin.tenant_id.is_(None)) | (CompliancePlugin.tenant_id == tenant_id),
-            CompliancePlugin.review_status.in_(["approved", "auto_approved"]),
-            CompliancePlugin.enabled.is_(True),
-            # Match the scanner's eligibility EXACTLY (compliance_plugins scan_all):
-            # exclude TODO placeholders and unauthored auto-pass stubs so the
-            # posture denominator equals the rules the scanner actually runs.
-            # Without this the posture counted the full benchmark (incl. never-
-            # runnable rules) -> phantom "never-scanned" + stale errors, so its
-            # pass% disagreed with the CIS card.
-            ~cast(CompliancePlugin.check_definition, String).ilike("%TODO%"),
-            ~cast(CompliancePlugin.check_definition, String).ilike('%"kind": "any"%'),
-            ~cast(CompliancePlugin.check_definition, String).ilike('%"kind":"any"%'),
-            # Manual / attestation rules are never auto pass/fail — the scanner
-            # skips them, so counting them here only added stale-errored ghosts
-            # (497 rules incl. manual vs the 408 the scanner runs).
-            CompliancePlugin.runner_type != "manual",
+    # Tenant-wide and asset-independent: a full scan of the plugin library
+    # with four unindexable ILIKE-on-JSON filters. The dashboard sweep would
+    # otherwise re-run this once per asset AND once per co-located peer — the
+    # single biggest cost on the Risk Posture page. Memoise per request; the
+    # result is identical for every asset in the tenant.
+    _plugin_cache = _session_cache(db)
+    _pk = ("all_plugins", tenant_id)
+    all_plugins = _plugin_cache.get(_pk)
+    if all_plugins is None:
+        all_plugins = (
+            db.query(CompliancePlugin.id, CompliancePlugin.os_keys, CompliancePlugin.benchmark)
+            .filter(
+                (CompliancePlugin.tenant_id.is_(None)) | (CompliancePlugin.tenant_id == tenant_id),
+                CompliancePlugin.review_status.in_(["approved", "auto_approved"]),
+                CompliancePlugin.enabled.is_(True),
+                # Match the scanner's eligibility EXACTLY (compliance_plugins scan_all):
+                # exclude TODO placeholders and unauthored auto-pass stubs so the
+                # posture denominator equals the rules the scanner actually runs.
+                # Without this the posture counted the full benchmark (incl. never-
+                # runnable rules) -> phantom "never-scanned" + stale errors, so its
+                # pass% disagreed with the CIS card.
+                ~cast(CompliancePlugin.check_definition, String).ilike("%TODO%"),
+                ~cast(CompliancePlugin.check_definition, String).ilike('%"kind": "any"%'),
+                ~cast(CompliancePlugin.check_definition, String).ilike('%"kind":"any"%'),
+                # Manual / attestation rules are never auto pass/fail — the scanner
+                # skips them, so counting them here only added stale-errored ghosts
+                # (497 rules incl. manual vs the 408 the scanner runs).
+                CompliancePlugin.runner_type != "manual",
+            )
+            .all()
         )
-        .all()
-    )
+        _plugin_cache[_pk] = all_plugins
 
     # Prefer Stage-2 narrowing: if the asset has been scanned, the SPECIFIC
     # benchmark its (non-leaked) runs hit IS the applicable benchmark. That
@@ -556,8 +666,14 @@ def _vuln_score(
     best_reason: Optional[str] = None
     per_vuln_scores: list = []
     for v in active:
+        # Severity→CVSS fallback so a finding with a severity but no numeric CVSS
+        # (the common shape of pentest/scanner findings) still contributes to the
+        # score instead of evaluating to 0.0. A real cvss_score always takes priority.
+        _cvss = v.cvss_score
+        if _cvss is None:
+            _cvss = _SEVERITY_CVSS_FLOOR.get((v.severity or "").lower())
         inp = RiskInputs(
-            cvss_score=v.cvss_score,
+            cvss_score=_cvss,
             epss_score=v.epss_score,
             kev_flag=bool(v.kev_flag),
             asset_cia_max=asset_cia_max,
@@ -617,13 +733,31 @@ def _vuln_score(
         VULN_SEVERITY_POINTS.get((v.severity or "low").lower(), 0) for v in active
     )
 
+    # Dedup active findings by dedup_key so open_count matches the distinct truth (787),
+    # not raw link instances (863) - consistent with the tab badge / Overview Open Findings.
+    try:
+        from grc.modules.pentest.service import _fold_distinct as _fd
+        _arows = [{"id": v.id, "cve_id": getattr(v, "cve_id", None), "title": getattr(v, "title", None),
+                   "severity": getattr(v, "severity", None),
+                   "affected_url": getattr(v, "affected_url", None),
+                   "affected_component": getattr(v, "affected_component", None)} for v in active]
+        _adist = _fd(_arows, getattr(asset, "asset_type", None))
+        _open_distinct = len(_adist)
+        _sev_distinct = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
+        for _r in _adist:
+            _s = (_r.get("severity") or "low").lower()
+            if _s in _sev_distinct:
+                _sev_distinct[_s] += 1
+    except Exception:  # noqa: BLE001
+        _open_distinct = len(active)
+        _sev_distinct = breakdown
     return {
         "score": round(best_score, 4), "known": True,
         "raw_points": round(legacy_points, 2),
-        "open_count": len(active),
-        "active_count": len(active),
+        "open_count": _open_distinct,
+        "active_count": _open_distinct,
         "total_linked": len(links),
-        "by_severity": breakdown,
+        "by_severity": _sev_distinct,
         "by_status": by_status,
         # NEW (Risk Posture v2): explainable breakdown of the dimension.
         # Surfaces in the asset detail page's "Why this score" callout
@@ -843,18 +977,22 @@ def _easm_cve_counts(asset: ITAsset, ep: Dict[str, Any], db=None) -> Tuple[int, 
         return cve, kev
 
 
-def _compute_easm_risk(asset: ITAsset, ep: Dict[str, Any], db=None, sub_rollup: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def _compute_easm_risk(asset: ITAsset, ep: Dict[str, Any], db=None, sub_rollup: Optional[Dict[str, Any]] = None, tenant_id: Optional[int] = None) -> Dict[str, Any]:
     """Risk posture for an EXTERNAL asset. Health is an input, not the inverse."""
     health = ep.get("health") or {}
     hscore = health.get("score")
     cve_n, kev_n = _easm_cve_counts(asset, ep, db=db)
+
+    # Per-tenant EASM weights (falls back to DEFAULT_EASM_WEIGHTS when the tenant
+    # hasn't tuned them, or when called without a db — e.g. the subdomain rollup).
+    ew = resolve_easm_weights_for_tenant(db, tenant_id) if tenant_id is not None else dict(DEFAULT_EASM_WEIGHTS)
 
     components: Dict[str, Any] = {}
 
     if isinstance(hscore, (int, float)):
         components["hygiene"] = {
             "score": round(1.0 - (float(hscore) / 100.0), 4),
-            "weight": 0.30, "known": True,
+            "weight": ew["hygiene"], "known": True,
             "label": _EASM_RISK_LABELS["hygiene"],
             "detail": f"health {health.get('grade') or '—'} · {int(hscore)}/100",
         }
@@ -866,7 +1004,7 @@ def _compute_easm_risk(asset: ITAsset, ep: Dict[str, Any], db=None, sub_rollup: 
     else:
         expl, expl_d = 0.0, "no linked CVEs (banner CPE is a heuristic — see note)"
     components["exploitability"] = {
-        "score": round(expl, 4), "weight": 0.35, "known": True,
+        "score": round(expl, 4), "weight": ew["exploitability"], "known": True,
         "label": _EASM_RISK_LABELS["exploitability"], "detail": expl_d,
     }
 
@@ -878,7 +1016,7 @@ def _compute_easm_risk(asset: ITAsset, ep: Dict[str, Any], db=None, sub_rollup: 
     if live and not https:
         exp += 0.25
     components["exposure"] = {
-        "score": round(min(1.0, exp), 4), "weight": 0.20, "known": True,
+        "score": round(min(1.0, exp), 4), "weight": ew["exposure"], "known": True,
         "label": _EASM_RISK_LABELS["exposure"],
         "detail": (
             f"{'internet-facing' if getattr(asset, 'internet_facing', None) else 'not marked facing'}"
@@ -895,7 +1033,7 @@ def _compute_easm_risk(asset: ITAsset, ep: Dict[str, Any], db=None, sub_rollup: 
         biz = c_s if k_s is None else max(c_s, k_s)
         detail = ", ".join(x for x in (crit or None, klass or None) if x) or "set"
         components["business"] = {
-            "score": round(biz, 4), "weight": 0.15, "known": True,
+            "score": round(biz, 4), "weight": ew["business"], "known": True,
             "label": _EASM_RISK_LABELS["business"], "detail": detail,
         }
 
@@ -1072,7 +1210,7 @@ def compute_asset_risk(
     if getattr(asset, "last_seen_source", None) == "external" or (isinstance(_ep, dict) and _ep.get("health")):
         # Subdomains feed the parent as a weighted "Subdomain exposure" component.
         roll = _external_subdomain_rollup(db, tenant_id, asset)
-        res = _compute_easm_risk(asset, _ep or {}, db=db, sub_rollup=roll)
+        res = _compute_easm_risk(asset, _ep or {}, db=db, sub_rollup=roll, tenant_id=tenant_id)
         if roll:
             res["subdomain_rollup"] = roll
         return res
@@ -1161,6 +1299,73 @@ def compute_asset_risk(
     }
 
 
+def _persist_risk_snapshots(db: Session, tenant_id: int, rows: List[Dict[str, Any]]) -> None:
+    """Persist today's risk snapshot for each asset in `rows`.
+
+    ONE row per asset per day (UNIQUE tenant+asset+day). Within a day the row is
+    updated in place; a new day appends a fresh row. Writes ONLY when the row is
+    new or the score/band actually changed — so repeated dashboard polls where
+    nothing moved issue a single SELECT and no writes (the old per-poll write
+    amplification is NOT reintroduced). Commits only if something changed.
+
+    Called from compute_tenant_posture, wrapped so a snapshot failure can never
+    break the dashboard read.
+    """
+    from datetime import date, datetime as _dt
+    from grc.models import AssetRiskSnapshot
+
+    if not rows:
+        return
+    today = date.today()
+    asset_ids = [r["id"] for r in rows if r.get("id") is not None]
+    if not asset_ids:
+        return
+
+    existing = {
+        s.asset_id: s
+        for s in db.query(AssetRiskSnapshot).filter(
+            AssetRiskSnapshot.tenant_id == tenant_id,
+            AssetRiskSnapshot.snapshot_date == today,
+            AssetRiskSnapshot.asset_id.in_(asset_ids),
+        ).all()
+    }
+
+    now = _dt.utcnow()
+    dirty = False
+    for r in rows:
+        aid = r.get("id")
+        if aid is None:
+            continue
+        contrib = r.get("contributions") or {}
+        band = r.get("band") or {}
+        band_label = (band.get("label") if isinstance(band, dict) else str(band)) or None
+        score = r.get("score")
+
+        snap = existing.get(aid)
+        if snap is not None and snap.score == score and snap.band == band_label:
+            continue  # unchanged today → leave it untouched, no write
+        if snap is None:
+            snap = AssetRiskSnapshot(tenant_id=tenant_id, asset_id=aid, snapshot_date=today)
+            db.add(snap)
+
+        snap.asset_name = r.get("name")
+        snap.score = score
+        snap.band = band_label
+        snap.data_quality = r.get("data_quality")
+        snap.known_dimensions = ",".join(r.get("known_dimensions") or [])
+        snap.dim_cis = contrib.get("cis")
+        snap.dim_vuln = contrib.get("vuln")
+        snap.dim_cia = contrib.get("cia")
+        snap.dim_ctrl = contrib.get("ctrl")
+        snap.dim_risk = contrib.get("risk")
+        snap.snapshot_kind = "auto"
+        snap.computed_at = now
+        dirty = True
+
+    if dirty:
+        db.commit()
+
+
 def compute_tenant_posture(
     db: Session, tenant_id: int,
     owner_id: Optional[int] = None,
@@ -1177,7 +1382,14 @@ def compute_tenant_posture(
     # every per-asset compute below, so the response field and the math
     # stay in lock-step.
     weights = resolve_weights_for_tenant(db, tenant_id)
-    asset_q = db.query(ITAsset).filter(ITAsset.tenant_id == tenant_id)
+    asset_q = db.query(ITAsset).filter(
+        ITAsset.tenant_id == tenant_id,
+        # INVENTORY ONLY: transient AI-pentest ad-hoc targets are not inventory (same predicate as
+        # the asset register / estate_overview). Keeps them out of the rows, "highest risk",
+        # averages and band counts (and the per-day risk snapshots written from these rows).
+        func.coalesce(ITAsset.status, "") != "adhoc",
+        func.coalesce(ITAsset.last_seen_source, "") != "pentest-adhoc",
+    )
     if owner_id is not None:
         # Owner-scoped callers (e.g. Banking User) see assets they own PLUS
         # any UNOWNED asset. An asset with no owner_id isn't assigned to
@@ -1207,6 +1419,16 @@ def compute_tenant_posture(
             "host_name": a.host_name,
             "asset_type": a.asset_type,
             "criticality": a.criticality,
+            # Classification signals so EVERY consumer can call the one canonical
+            # is_external() rule (external = internet-facing / EASM / outside-in) —
+            # `mode` alone mislabelled internet-facing web targets as internal.
+            "internet_facing": getattr(a, "internet_facing", None),
+            "is_internet_facing": getattr(a, "is_internet_facing", None),
+            "origin_source": getattr(a, "origin_source", None),
+            "last_seen_source": getattr(a, "last_seen_source", None),
+            "is_external": _rollup_is_external(a),
+            "owner_id": getattr(a, "owner_id", None) or getattr(a, "primary_owner_id", None),
+            "cde_environment": bool(getattr(a, "cde_environment", None)),
             "score": r["score"],
             "band": r["band"],
             "data_quality": r["data_quality"],
@@ -1230,6 +1452,18 @@ def compute_tenant_posture(
         return (row["score"] is None, -(row["score"] or 0))
     rows.sort(key=sort_key)
 
+    # Persist today's per-asset risk snapshot (owner-requested; grc_asset_risk_snapshots).
+    # Deduped to one row per asset per day, write-on-change, so routine dashboard
+    # polls stay read-only. Isolated + non-fatal: a snapshot failure must never
+    # break the dashboard read, so swallow + rollback just the snapshot attempt.
+    try:
+        _persist_risk_snapshots(db, tenant_id, rows)
+    except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
     scored_rows = [r for r in rows if r["score"] is not None]
     if scored_rows:
         avg_score = round(sum(r["score"] for r in scored_rows) / len(scored_rows), 1)
@@ -1250,15 +1484,50 @@ def compute_tenant_posture(
     for r in rows:
         band_counts[r["band"]["label"]] = band_counts.get(r["band"]["label"], 0) + 1
 
+    # ── Rolled-up ASSET BASIS for the summary counts ──────────────────────────
+    # One registrable (apex) domain = ONE managed asset (subdomains fold in),
+    # internal flat — the same basis the register and inventory overview use, so
+    # "N of M scored" and the band distribution on the Performance dashboard count
+    # assets, not subdomains. Each domain takes the WEAKEST (highest-risk) score /
+    # worst band among its names; `by_band` and the counts are over these units.
+    _BAND_RANK = {"severe": 4, "elevated": 3, "watch": 2, "contained": 1, "unknown": 0}
+    units: Dict[str, Dict[str, Any]] = {}
+    for r in rows:
+        k = _rollup_unit_key(r)
+        u = units.get(k)
+        if u is None:
+            u = {"score": None, "band": "unknown", "external": bool(r.get("is_external"))}
+            units[k] = u
+        sc = r["score"]
+        if sc is not None and (u["score"] is None or sc > u["score"]):
+            u["score"] = sc
+        if _BAND_RANK.get(r["band"]["label"], 0) > _BAND_RANK.get(u["band"], 0):
+            u["band"] = r["band"]["label"]
+    rolled_band_counts = {"contained": 0, "watch": 0, "elevated": 0, "severe": 0, "unknown": 0}
+    for u in units.values():
+        rolled_band_counts[u["band"]] = rolled_band_counts.get(u["band"], 0) + 1
+    rolled_scored = sum(1 for u in units.values() if u["score"] is not None)
+    rolled_external = sum(1 for u in units.values() if u["external"])
+    _unit_scores = [u["score"] for u in units.values() if u["score"] is not None]
+    rolled_avg = round(sum(_unit_scores) / len(_unit_scores), 1) if _unit_scores else None
+
     return {
         "assets": rows,
         "summary": {
-            "asset_count": len(rows),
-            "scored_count": len(scored_rows),
-            "avg_score": avg_score,
-            "by_band": band_counts,
+            # Rolled-up managed-asset counts (apex domain = one asset). The flat
+            # per-host figures are kept under *_hosts so a host-level card can show both.
+            "asset_count": len(units),
+            "scored_count": rolled_scored,
+            "avg_score": rolled_avg,
+            "by_band": rolled_band_counts,
+            "external_count": rolled_external,
+            "internal_count": len(units) - rolled_external,
             "highest_score": highest_score,
             "highest_name": highest_name,
+            "asset_count_hosts": len(rows),
+            "scored_count_hosts": len(scored_rows),
+            "avg_score_hosts": avg_score,
+            "by_band_hosts": band_counts,
         },
         "weights": weights,
     }

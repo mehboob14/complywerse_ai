@@ -164,7 +164,10 @@ def _pressures(ctx: Dict[str, Any]) -> list[str]:
     # Every phrase here must read correctly after "This finding is …", so they
     # are adjectival, not verb phrases.
     if (ctx.get("epss") or 0) >= 0.5:
-        out.append(f"rated {round((ctx['epss'] or 0) * 100)}% likely to be exploited within 30 days")
+        # One decimal, matching the EPSS shown everywhere else (0.998 → 99.8%, not
+        # a rounded 100%). Drop a trailing .0 so whole values read "95%", not "95.0%".
+        _epss_pct = f"{(ctx['epss'] or 0) * 100:.1f}".rstrip("0").rstrip(".")
+        out.append(f"rated {_epss_pct}% likely to be exploited within 30 days")
     n = ctx.get("public_exploit_count") or 0
     if n > 0:
         out.append(f"backed by {n} public exploit{'' if n == 1 else 's'}")

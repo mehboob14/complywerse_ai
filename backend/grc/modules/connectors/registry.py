@@ -41,6 +41,11 @@ class ProviderMeta:
     beta: bool = False
     oauth_scopes: List[str] = field(default_factory=list)
     docs_url: Optional[str] = None
+    # AVA-OWNED infrastructure rather than a customer-owned third party. Such a
+    # provider is registered (so the adapter resolves) but NEVER listed in the
+    # customer-facing connectors UI — the client must not learn it exists, and
+    # is never asked for its credentials. Operators configure it platform-side.
+    internal: bool = False
 
 
 # Registry is populated below from each adapter module's
@@ -99,19 +104,30 @@ def _bootstrap() -> None:
     log = logging.getLogger(__name__)
 
     provider_modules = [
-        # Working exemplars
+        # Ticketing — vuln ticketing
         "grc.modules.connectors.providers.servicenow",
-        "grc.modules.connectors.providers.splunk",
-        "grc.modules.connectors.providers.metasploit",
-        "grc.modules.connectors.providers.msteams",
-        "grc.modules.connectors.providers.fireflies",
-        # Beta stubs
         "grc.modules.connectors.providers.bmc_remedy",
+        "grc.modules.connectors.providers.halo_itsm",
+        # SIEM — exploitation-signal pulls
+        "grc.modules.connectors.providers.splunk",
         "grc.modules.connectors.providers.wazuh",
         "grc.modules.connectors.providers.qradar",
+        # Endpoint / EDR — detection pulls
+        "grc.modules.connectors.providers.crowdstrike",
+        "grc.modules.connectors.providers.sentinelone",
+        "grc.modules.connectors.providers.defender",
+        # Identity — sign-in / audit telemetry pulls
+        "grc.modules.connectors.providers.okta",
+        "grc.modules.connectors.providers.entra",
+        # Pen-test — exploit feed
+        "grc.modules.connectors.providers.metasploit",
         "grc.modules.connectors.providers.core_impact",
-        "grc.modules.connectors.providers.zoom",
+        # Collaboration — meeting/notification targets
+        "grc.modules.connectors.providers.msteams",
         "grc.modules.connectors.providers.office365",
+        "grc.modules.connectors.providers.zoom",
+        # Transcription — meeting transcripts
+        "grc.modules.connectors.providers.fireflies",
         # EASM passive sources — pull-only; read by the asset_discovery collector.
         "grc.modules.connectors.providers.shodan",
         "grc.modules.connectors.providers.censys",

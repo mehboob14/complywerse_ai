@@ -366,7 +366,7 @@ export interface DocumentVersion {
   created_at: string;
 }
 
-export type AssetType = 'application' | 'infrastructure' | 'data' | 'cloud' | 'third_party';
+export type AssetType = 'application' | 'infrastructure' | 'data' | 'cloud' | 'third_party' | 'repository';
 
 export type LifecycleState =
   | 'planned'
@@ -445,6 +445,17 @@ export interface ITAsset {
   // Provenance. "unmanaged" = evidence-only (e.g. an external EASM finding you
   // can't log into) — gates the Connect affordance in the register.
   discovery_state?: string | null;
+  // Two-flow scan posture (derived server-side, never null in practice):
+  // 'surface' = evidence-only row we never logged into; else 'credentialed'.
+  scan_depth?: 'surface' | 'credentialed';
+  // Surface facts — stamped from the credential-free discovery sweep.
+  open_ports?: number[] | null;
+  device_type?: string | null;
+  // 3-mode inventory bucket (discovery contract): easm | credential | uncredential;
+  // null = manual/import (folds into the Credential bucket in the UI).
+  scan_mode?: 'easm' | 'credential' | 'uncredential' | null;
+  platform_kind?: string | null;
+  platform_properties?: Record<string, any> | null;
 }
 
 export interface AssetDetail extends ITAsset {

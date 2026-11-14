@@ -1,0 +1,62 @@
+[
+  {
+    "service_level": "Incident SLA",
+    "description": null,
+    "enabled": true,
+    "default_sla": false,
+    "rank": null,
+    "condition": "doc.process == 'incident'",
+    "condition_json": null,
+    "start_date": null,
+    "end_date": null,
+    "apply_sla_for_resolution": true,
+    "default_priority": "Medium",
+    "default_ticket_status": null,
+    "ticket_reopen_status": null
+  },
+  {
+    "service_level": "Service Request SLA",
+    "description": null,
+    "enabled": true,
+    "default_sla": false,
+    "rank": null,
+    "condition": "doc.process == 'service_request'",
+    "condition_json": null,
+    "start_date": null,
+    "end_date": null,
+    "apply_sla_for_resolution": true,
+    "default_priority": "Medium",
+    "default_ticket_status": null,
+    "ticket_reopen_status": null
+  },
+  {
+    "service_level": "Change SLA",
+    "description": null,
+    "enabled": true,
+    "default_sla": false,
+    "rank": null,
+    "condition": "doc.process == 'change'",
+    "condition_json": null,
+    "start_date": null,
+    "end_date": null,
+    "apply_sla_for_resolution": true,
+    "default_priority": "Medium",
+    "default_ticket_status": null,
+    "ticket_reopen_status": null
+  },
+  {
+    "service_level": "Problem SLA",
+    "description": null,
+    "enabled": true,
+    "default_sla": false,
+    "rank": null,
+    "condition": "doc.process == 'problem'",
+    "condition_json": null,
+    "start_date": null,
+    "end_date": null,
+    "apply_sla_for_resolution": true,
+    "default_priority": "Medium",
+    "default_ticket_status": null,
+    "ticket_reopen_status": null
+  }
+]

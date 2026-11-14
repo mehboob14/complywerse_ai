@@ -225,7 +225,7 @@ export default function LoginPage() {
           // detect wrong-subdomain bounces and redirect cleanly. Always
           // populate it (even if it equals tenant_slug, like in our default
           // setup where slug == subdomain).
-          localStorage.setItem('tenant_subdomain', data.tenant.subdomain || data.tenant.slug || '');
+          localStorage.setItem('tenant_subdomain', data.tenant.subdomain ?? data.tenant.slug ?? '');
           localStorage.setItem('tenant_name', data.tenant.name || '');
           localStorage.setItem('tenant_id', String(data.tenant.id || ''));
         }
@@ -246,7 +246,9 @@ export default function LoginPage() {
         //   2. A full nav resets React state and React Query cache cleanly,
         //      so the new tenant context can't see any stale data from the
         //      previous user/tenant.
-        const targetSub: string | undefined = data.tenant?.subdomain || data.tenant?.slug;
+        // subdomain '' = this tenant lives on the bare domain (the main tenant on the apex), not a subdomain.
+        const apex = data.tenant?.subdomain === '';
+        const targetSub: string | undefined = apex ? undefined : (data.tenant?.subdomain || data.tenant?.slug);
         const host = window.location.hostname.toLowerCase();
         const { protocol, port } = window.location;
         let currentSub: string | null = null;
@@ -278,9 +280,8 @@ export default function LoginPage() {
         //     hostname like `company.68.183.198.54`. The `baseHost`
         //     calculation above keeps IP hosts pointing at the IP.
         const isBareIPv4 = _IPV4_RE.test(host);
-        const shouldRedirect = !!targetSub
-          && !isBareIPv4
-          && (currentSub !== targetSub);
+        const shouldRedirect = !isBareIPv4
+          && (apex ? currentSub !== null : (!!targetSub && currentSub !== targetSub));
         if (shouldRedirect) {
           // localStorage on the destination is a SEPARATE storage area
           // (per-origin), so we hand off the token + tenant context via
@@ -291,10 +292,11 @@ export default function LoginPage() {
           const params = new URLSearchParams();
           if (data.access_token) params.set('auth_token', data.access_token);
           if (data.tenant?.slug) params.set('tenant_slug', data.tenant.slug);
-          if (data.tenant?.subdomain) params.set('tenant_subdomain', data.tenant.subdomain);
+          if (data.tenant?.subdomain != null) params.set('tenant_subdomain', data.tenant.subdomain);
           if (data.tenant?.name) params.set('tenant_name', data.tenant.name);
           if (data.tenant?.id != null) params.set('tenant_id', String(data.tenant.id));
-          const dest = `${protocol}//${targetSub}.${baseHost}${port ? ':' + port : ''}/dashboard#${params.toString()}`;
+          const destHost = apex ? baseHost : `${targetSub}.${baseHost}`;
+          const dest = `${protocol}//${destHost}${port ? ':' + port : ''}/dashboard#${params.toString()}`;
           window.location.href = dest;
           return;
         }

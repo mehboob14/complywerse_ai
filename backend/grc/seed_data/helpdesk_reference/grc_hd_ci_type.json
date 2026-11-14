@@ -1,0 +1,37 @@
+[
+  {
+    "code": "server",
+    "name": "Server",
+    "description": null,
+    "parent": null,
+    "icon": null
+  },
+  {
+    "code": "CIT-SERVER",
+    "name": "Server (sync)",
+    "description": null,
+    "parent": null,
+    "icon": null
+  },
+  {
+    "code": "CIT-WORKSTATION",
+    "name": "Workstation",
+    "description": null,
+    "parent": null,
+    "icon": null
+  },
+  {
+    "code": "CIT-WEBSVC",
+    "name": "Web Service",
+    "description": null,
+    "parent": null,
+    "icon": null
+  },
+  {
+    "code": "CIT-SOFTWARE",
+    "name": "Installed Software",
+    "description": "Software detected on a host by asset inventory (sync-owned).",
+    "parent": null,
+    "icon": null
+  }
+]

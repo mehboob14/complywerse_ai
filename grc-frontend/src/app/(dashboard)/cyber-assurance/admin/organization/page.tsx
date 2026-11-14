@@ -239,22 +239,6 @@ export default function OrganizationProfilePage() {
 
             <div>
               <label className="block text-sm font-medium text-slate-500 mb-2">
-                Regulatory Scope
-              </label>
-              {editing ? (
-                <input
-                  type="text"
-                  value={formData.regulatory_scope || ''}
-                  onChange={(e) => handleChange('regulatory_scope', e.target.value)}
-                  className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
-                />
-              ) : (
-                <p className="text-slate-900">{profile?.regulatory_scope || '-'}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-500 mb-2">
                 Website
               </label>
               {editing ? (

@@ -16,11 +16,13 @@ from .exploitability import router as exploitability_router
 from .choke_points import router as choke_points_router
 from .itsm import router as itsm_router
 from .ai_control_proposals import router as ai_control_proposals_router
+from .scan import router as scan_router
 
 __all__ = [
     "ai_control_proposals_router",
     "choke_points_router",
     "itsm_router",
+    "scan_router",
     "reports_router",
     "vulnerabilities_router",
     "mitigations_router",

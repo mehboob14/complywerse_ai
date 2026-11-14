@@ -1,0 +1,56 @@
+[
+  {
+    "impact": "low",
+    "likelihood": "low",
+    "risk_level": "low",
+    "cab_required": false
+  },
+  {
+    "impact": "low",
+    "likelihood": "medium",
+    "risk_level": "low",
+    "cab_required": false
+  },
+  {
+    "impact": "low",
+    "likelihood": "high",
+    "risk_level": "medium",
+    "cab_required": true
+  },
+  {
+    "impact": "medium",
+    "likelihood": "low",
+    "risk_level": "low",
+    "cab_required": false
+  },
+  {
+    "impact": "medium",
+    "likelihood": "medium",
+    "risk_level": "medium",
+    "cab_required": true
+  },
+  {
+    "impact": "medium",
+    "likelihood": "high",
+    "risk_level": "high",
+    "cab_required": true
+  },
+  {
+    "impact": "high",
+    "likelihood": "low",
+    "risk_level": "medium",
+    "cab_required": true
+  },
+  {
+    "impact": "high",
+    "likelihood": "medium",
+    "risk_level": "high",
+    "cab_required": true
+  },
+  {
+    "impact": "high",
+    "likelihood": "high",
+    "risk_level": "very_high",
+    "cab_required": true
+  }
+]

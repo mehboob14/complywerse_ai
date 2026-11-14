@@ -47,7 +47,7 @@ class QRadarAdapter(SiemAdapter):
                 body = resp.json()
                 return ConnectionTestResult(
                     success=True,
-                    message="QRadar reachable (beta).",
+                    message="QRadar reachable.",
                     server_version=body.get("release_name"),
                 )
             return ConnectionTestResult(
@@ -118,7 +118,7 @@ META = ProviderMeta(
     provider="qradar",
     label="IBM QRadar",
     category="siem",
-    description="Pull open offenses from QRadar. High-severity offenses tagged with hostnames matching the asset register surface as exploitation signals. Beta.",
+    description="Pull open offenses from QRadar. High-severity offenses tagged with hostnames matching the asset register surface as exploitation signals.",
     auth_method="token",
     fields=[
         ProviderField(key="console_url", label="QRadar console URL",
@@ -131,6 +131,5 @@ META = ProviderMeta(
                       is_credential=False),
     ],
     adapter_cls=QRadarAdapter,
-    beta=True,
     docs_url="https://www.ibm.com/docs/en/qsip/7.5?topic=overview-rest-api",
 )

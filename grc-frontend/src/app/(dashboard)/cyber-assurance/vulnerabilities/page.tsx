@@ -519,6 +519,18 @@ export default function VulnerabilitiesPage() {
     },
   });
 
+  // Delete a vulnerability from the register (row trash action). Invalidates the list,
+  // the dashboard counts and the domain buckets so every surface drops it at once.
+  const deleteVulnMutation = useMutation({
+    mutationFn: (id: number) => vulnManagementApi.vulnerabilities.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vulnerabilities'] });
+      queryClient.invalidateQueries({ queryKey: ['vuln-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['vuln-domains'] });
+    },
+    onError: (err: any) => { window.alert(err?.response?.data?.detail || 'Failed to delete the vulnerability.'); },
+  });
+
   const addMemberMutation = useMutation({
     mutationFn: ({ deptId, data }: { deptId: number; data: { user_id: number; role?: string; email_notifications_enabled?: boolean; escalation_order?: number } }) =>
       vulnManagementApi.departments.addMember(deptId, data),
@@ -618,6 +630,19 @@ export default function VulnerabilitiesPage() {
       setShowBulkAssignModal(false);
       setSelectedVulnIds(new Set());
     },
+  });
+
+  // Help Desk — the backend resolves the (invisible) Help Desk connection
+  // server-side, so the client never names it. Just send the finding ids.
+  const bulkTicketMutation = useMutation({
+    mutationFn: (ids: number[]) => vulnManagementApi.vulnerabilities.bulkPushToItsm(ids),
+    onSuccess: (res) => {
+      const d = res.data;
+      queryClient.invalidateQueries({ queryKey: ['vulnerabilities'] });
+      setSelectedVulnIds(new Set());
+      alert(`Help Desk: ${d.created} created, ${d.skipped} already had a ticket${d.failed ? `, ${d.failed} failed` : ''}.`);
+    },
+    onError: (e: any) => alert(e?.response?.data?.detail || e?.message || 'Could not create tickets.'),
   });
 
   const handleSelectVuln = (id: number) => {
@@ -1079,9 +1104,12 @@ export default function VulnerabilitiesPage() {
           canCreate={hasPermission('vulnerabilities:vulnerability_register:create')}
           canEdit={hasPermission('vulnerabilities:vulnerability_register:edit')}
           canDelete={hasPermission('vulnerabilities:vulnerability_register:delete')}
+          onDelete={(v) => { if (window.confirm(`Delete ${v.cve_id || v.title || ('VULN-' + v.id)} from the register? This cannot be undone.`)) deleteVulnMutation.mutate(v.id); }}
           onView={(v) => router.push(`/cyber-assurance/vulnerabilities/${v.id}`)}
           onOpenFull={(id) => router.push(`/cyber-assurance/vulnerabilities/${id}`)}
           onBulkAssign={(ids) => { setSelectedVulnIds(new Set(ids)); setShowBulkAssignModal(true); }}
+          onBulkCreateTickets={hasPermission('vulnerabilities:vulnerability_register:edit')
+            ? (ids) => bulkTicketMutation.mutate(ids) : undefined}
           onTemplate={downloadTemplate}
           onBulkUpload={() => {
             // Default the chooser to whichever register is currently active.

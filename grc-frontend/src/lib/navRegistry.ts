@@ -278,7 +278,9 @@ const SECTION: Record<string, string> = {
   reports: 'Reports',
   'performance-overview': 'Performance Overview',
   'task-management': 'Task Management',
-  'cybersecurity-assurance': 'Cybersecurity Assurance',
+  'it-asset': 'IT Asset',
+  cybersecurity: 'Cybersecurity',
+  'help-desk': 'Help Desk',
   administration: 'Administration',
   complychat: 'ComplyChat',
 };

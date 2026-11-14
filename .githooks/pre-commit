@@ -1,0 +1,4 @@
+#!/bin/sh
+# Blocks committing a config file carrying the postcss supply-chain loader.
+# Enable once per clone:  git config core.hooksPath .githooks
+node grc-frontend/scripts/guard-postcss.js --staged || exit 1

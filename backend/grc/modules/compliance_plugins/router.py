@@ -680,7 +680,12 @@ def assets_overview(
     # Tenant assets
     assets = (
         db.query(ITAsset)
-        .filter(ITAsset.tenant_id == tenant_id)
+        .filter(
+            ITAsset.tenant_id == tenant_id,
+            # INVENTORY ONLY: transient AI-pentest ad-hoc targets are not inventory.
+            func.coalesce(ITAsset.status, "") != "adhoc",
+            func.coalesce(ITAsset.last_seen_source, "") != "pentest-adhoc",
+        )
         .order_by(ITAsset.criticality.desc(), ITAsset.name.asc())
         .all()
     )
@@ -1171,6 +1176,9 @@ def match_preview(
             # / manual rules by old broken scans and disagrees with the posture.
             "plugin_ids": [p.id for p in stage2_kept],
             "examples": _sample(stage2_kept, n=5),
+            # Full rule list (id + title) so the preview can show ALL applicable
+            # rules scrollable, not just the 5-row sample. ~400 light rows.
+            "rules": [{"rule_id": p.rule_id, "title": (p.title or "")[:120]} for p in stage2_kept],
         },
     }
 
@@ -3285,12 +3293,20 @@ def execute(
         if not explicit_connection:
             raise HTTPException(404, "Connection not found")
 
-    # Same auto-resolution as /scan-all: if the caller didn't pin a
-    # specific connection, fall back to the tenant's most-recent active
-    # connection whose runner family matches this plugin.
-    connection = _resolve_connection_for_plugin(
-        db, tenant_id, plugin, explicit_connection, conn_cache={},
-    )
+    # Manual (attestation) checks record a human verdict and never connect to
+    # the target — don't auto-resolve a connection for them. Doing so made the
+    # tick "buffer": execute_plugin would resolve the connection's credentials,
+    # which DNS-resolves the host, stalling on an unresolvable discovery
+    # host_name. Only non-manual runners need a live connection.
+    if plugin.runner_type == "manual":
+        connection = explicit_connection  # None unless the caller pinned one
+    else:
+        # Same auto-resolution as /scan-all: if the caller didn't pin a specific
+        # connection, fall back to the tenant's most-recent active connection
+        # whose runner family matches this plugin.
+        connection = _resolve_connection_for_plugin(
+            db, tenant_id, plugin, explicit_connection, conn_cache={}, asset=asset,
+        )
 
     run = execute_plugin(
         db=db,
@@ -3306,10 +3322,38 @@ def execute(
     return _run_to_dict(run, plugin, asset, connection, triggered_by_user=current_user)
 
 
+def _agent_connection_for_asset(
+    db: Session, tenant_id: int, asset: Optional[ITAsset],
+) -> Optional[IntegrationConnection]:
+    """The active collector-agent connection bound to this asset, if any.
+
+    An installed agent reports in and gets a host-pinned connection tagged with
+    ``assigned_collector_agent_id`` (agents_router._ensure_agent_connection). When
+    the scanned asset has such an agent, CIS runs the agent can execute locally
+    should be dispatched to it rather than attempted agentless. Scoped to THIS
+    asset only (via the agent↔asset link), so it never targets another host."""
+    if asset is None:
+        return None
+    from grc.models import ComplianceAgent
+    agent = (db.query(ComplianceAgent)
+             .filter(ComplianceAgent.tenant_id == tenant_id,
+                     ComplianceAgent.asset_id == asset.id,
+                     ComplianceAgent.status.in_(("active", "pending")))
+             .order_by(ComplianceAgent.id.desc()).first())
+    if agent is None:
+        return None
+    return (db.query(IntegrationConnection)
+            .filter(IntegrationConnection.tenant_id == tenant_id,
+                    IntegrationConnection.assigned_collector_agent_id == agent.id,
+                    IntegrationConnection.is_active.is_(True))
+            .order_by(IntegrationConnection.id.desc()).first())
+
+
 def _resolve_connection_for_plugin(
     db: Session, tenant_id: int, plugin: CompliancePlugin,
     explicit_connection: Optional[IntegrationConnection],
     conn_cache: dict[str, Optional[IntegrationConnection]],
+    asset: Optional[ITAsset] = None,
 ) -> Optional[IntegrationConnection]:
     """Pick the right tenant connection for a plugin run.
 
@@ -3336,6 +3380,14 @@ def _resolve_connection_for_plugin(
     if (explicit_connection is not None and
             explicit_connection.integration_type in acceptable):
         return explicit_connection
+    # Agent routing: if the scanned asset has an active collector agent and this
+    # plugin is one the agent runs locally (carries an oscap datastream), prefer
+    # the agent's connection so the run is dispatched to it. Asset-scoped and
+    # oscap-gated, so it never hijacks an agentless host or a Windows CIS plugin.
+    if asset is not None and isinstance(plugin.check_definition, dict) and plugin.check_definition.get("oscap"):
+        agent_conn = _agent_connection_for_asset(db, tenant_id, asset)
+        if agent_conn is not None:
+            return agent_conn
     cached = conn_cache.get(plugin.runner_type, "MISSING")
     if cached != "MISSING":
         return cached
@@ -3345,6 +3397,10 @@ def _resolve_connection_for_plugin(
             IntegrationConnection.tenant_id == tenant_id,
             IntegrationConnection.integration_type.in_(acceptable),
             IntegrationConnection.is_active.is_(True),
+            # Host-pinned collector-agent connections are reachable only via the
+            # asset↔agent link above — keep them out of the tenant-wide fallback
+            # so they never become another host's resolved connection.
+            IntegrationConnection.assigned_collector_agent_id.is_(None),
         )
         .order_by(IntegrationConnection.updated_at.desc().nullslast(),
                   IntegrationConnection.id.desc())
@@ -3729,6 +3785,32 @@ def _do_scan_all(
                 )
                 break
     if asset is not None and explicit_connection is None and asset_pinned_connection is None:
+        # Distinguish "never onboarded" from "has a connection that was disabled".
+        # The pinned lookup above only considers ACTIVE connections, so a dormant
+        # one (disconnected but still holding valid credentials) lands here with
+        # the misleading "add credentials" message — implying none exist and
+        # sending the operator to re-onboard from scratch. Detect it and point at
+        # Reconnect instead, which re-enables the existing credentials.
+        dormant_conn = None
+        if asset.host_name or asset.ip_address:
+            from .services.connection_matcher import build_index, candidates_for_asset
+            _all_conns = (
+                db.query(IntegrationConnection)
+                .filter(IntegrationConnection.tenant_id == tenant_id)
+                .all()
+            )
+            dormant_conn = next(
+                (c for c in candidates_for_asset(asset, build_index(_all_conns))
+                 if not c.is_active),
+                None,
+            )
+        if dormant_conn is not None:
+            raise HTTPException(
+                409,
+                f"Asset '{asset.name}' has a connection "
+                f"('{dormant_conn.connection_name}') but it is currently disabled. "
+                f"Reconnect the asset to re-enable its stored credentials, then scan.",
+            )
         raise HTTPException(
             400,
             f"Asset '{asset.name}' has no connection. Add credentials via "
@@ -3978,7 +4060,75 @@ def _do_scan_all(
         finally:
             worker_db.close()
 
-    max_workers = int(os.environ.get("COMPLYVERSE_SCAN_CONCURRENCY", "10"))
+    # ── Connection preflight — transport-agnostic root-cause fix ──
+    # The scan fans out up to max_workers (default 10) sessions at once. Cold-
+    # starting them all simultaneously is what raced the SSH known_hosts file
+    # (1282/2041 rules errored "Host key verification failed"); the same cold
+    # fan-out risks first-contact flakiness on ANY transport, and a dead or
+    # mis-authenticated credential becomes hundreds of identical rule errors.
+    # So warm + verify each unique connection ONCE, serially, before the pool —
+    # Windows/WinRM, SSH, Postgres, MSSQL, MySQL, AWS all have a preflight:
+    #   • SSH also gets its host key seeded here, so the parallel oscap-ssh /
+    #     paramiko sessions can't race to add it (preflight's own connect does
+    #     not persist to ~/.ssh/known_hosts). Verification stays on; nothing is
+    #     hardcoded; operator-pinned known_hosts opts out of the seed.
+    #   • If preflight DEFINITIVELY fails (auth rejected or host unreachable),
+    #     that connection's rules are dropped with one clear reason instead of a
+    #     storm of identical errors — for every asset type, not just Linux.
+    _preflight_failed: dict = {}
+    try:
+        from .services.preflight import preflight_check
+        from .services.credentials import resolve_credentials_for_connection as _rc
+        from .runners.hostkeys import seed_host_keys
+        _conns_in_scan: dict = {}
+        _conn_asset_ip: dict = {}
+        for (_pg, _ea, _aa, _cn) in _work_queue:
+            if _cn is not None:
+                # Collector-agent connections execute remotely on the agent host
+                # (no backend SSH/creds) — preflighting one would always "fail"
+                # and wrongly drop every rule it carries. Leave them untouched.
+                if getattr(_cn, "assigned_collector_agent_id", None):
+                    continue
+                _conns_in_scan.setdefault(_cn.id, _cn)
+                if _ea is not None and getattr(_ea, "ip_address", None) and _cn.id not in _conn_asset_ip:
+                    _conn_asset_ip[_cn.id] = _ea.ip_address
+        # Resolve against the asset IP so an unresolvable stored host falls back
+        # to the reachable IP — same fallback the scan itself uses, so preflight
+        # and seed agree with execution instead of skipping a scannable host.
+        _cr_by_conn: dict = {cid: (_rc(cn, asset_ip=_conn_asset_ip.get(cid)) or {})
+                             for cid, cn in _conns_in_scan.items()}
+        # SSH host-key seed (persist once; skipped when the operator pinned theirs)
+        _ssh_seed: set = set()
+        for _cid, _cn in _conns_in_scan.items():
+            if (_cn.integration_type or "").lower() in ("linux_ssh", "netdev_ssh"):
+                _cr = _cr_by_conn[_cid]
+                if not _cr.get("ssh_known_hosts") and _cr.get("ssh_host"):
+                    _ssh_seed.add((_cr["ssh_host"], int(_cr.get("ssh_port") or 22)))
+        if _ssh_seed:
+            seed_host_keys(_ssh_seed)
+        # Warm + verify every connection (one serial preflight each)
+        for _cid, _cn in _conns_in_scan.items():
+            try:
+                _pf = preflight_check((_cn.integration_type or "").lower(), _cr_by_conn[_cid])
+            except Exception as _pfx:  # preflight itself errored — never block the scan
+                logger.warning("scan preflight error for connection id=%s: %s", _cid, _pfx)
+                continue
+            if not _pf.ok and _pf.code in ("auth_failed", "network_unreachable"):
+                _preflight_failed[_cid] = f"{_pf.code}: {_pf.detail}"
+                logger.warning("scan preflight: connection id=%s (%s) failed — %s",
+                               _cid, _cn.integration_type, _pf.detail)
+    except Exception as _exc:  # warm-up must never block a scan
+        logger.warning("scan preflight/seed skipped: %s", _exc)
+
+    # Drop rules bound to a connection that definitively failed preflight.
+    skipped_preflight = 0
+    if _preflight_failed:
+        _kept = [(p, ea, aa, c) for (p, ea, aa, c) in _work_queue
+                 if not (c is not None and c.id in _preflight_failed)]
+        skipped_preflight = len(_work_queue) - len(_kept)
+        _work_queue = _kept
+
+    max_workers = int(os.environ.get("AVA_SCAN_CONCURRENCY", "10"))
     if _work_queue:
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
             futures = [pool.submit(_one, p, ea, aa, c) for (p, ea, aa, c) in _work_queue]
@@ -3997,7 +4147,14 @@ def _do_scan_all(
     # silent success.
     hint: Optional[str] = None
     if asset is not None and len(runs) == 0:
-        if not asset.os_normalized:
+        _uc = explicit_connection or asset_pinned_connection
+        if _uc is not None and _uc.id in _preflight_failed:
+            hint = (
+                f"Couldn't scan '{asset.name}': the connection "
+                f"'{_uc.connection_name}' failed preflight — {_preflight_failed[_uc.id]}. "
+                f"Fix the credential or host reachability, then retry."
+            )
+        elif not asset.os_normalized:
             hint = (
                 f"Asset '{asset.name}' has no normalized OS — nothing scanned. "
                 f"Use 'Re-detect OS' on the Compliance tab, or set os_normalized "
@@ -4015,6 +4172,7 @@ def _do_scan_all(
         "skipped_wrong_os_version": skipped_wrong_os_version,
         "skipped_ai_refinement": skipped_ai_refinement,
         "skipped_no_connection": skipped_no_connection,
+        "skipped_preflight": skipped_preflight,
         "ai_routed_os_versions": [],
         "hint": hint,
     }

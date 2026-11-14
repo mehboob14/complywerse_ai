@@ -36,10 +36,10 @@
  * Must render inside a <RoomScanProvider> (../page.tsx does today).
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Network, Zap } from 'lucide-react';
+import { Loader2, Network, X, Zap } from 'lucide-react';
 import { apiClient, assetsApi, compliancePluginsApi } from '@/cyber-assurance/lib/api';
 import { GuideMarker } from '@/cyber-assurance/components/guide';
 import { useRoomScan } from '../_room-scan-context';
@@ -56,7 +56,7 @@ import ManualChecksPanel from './ManualChecksPanel';
 const MONO = "font-['ui-monospace','Cascadia_Code',Consolas,monospace] [font-variant-numeric:tabular-nums]";
 const CARD = 'bg-white border border-[#E8ECEE] rounded-[15px] shadow-[0_1px_2px_rgba(16,24,40,0.04)]';
 const SECLABEL = 'text-[9.5px] font-bold uppercase tracking-[0.05em] text-[#8A95A1]';
-const BTN_AC = 'border border-[#005B96] bg-[#005B96] text-[#06342B] font-semibold hover:bg-[#014A81] disabled:opacity-50 disabled:cursor-not-allowed';
+const BTN_AC = 'border border-[#005B96] bg-[#005B96] text-white font-semibold hover:bg-[#014A81] disabled:opacity-50 disabled:cursor-not-allowed';
 
 // mock's svg.ic / svg.ic.sm
 function Ic({ size = 16, children, style }: { size?: number; children: React.ReactNode; style?: React.CSSProperties }) {
@@ -160,6 +160,118 @@ function splitBenchmark(name: string | null): { title: string; version: string |
   return { title, version: m ? m[2] : null };
 }
 
+// Per-rule "why" detail — click any scan-result row to see the reasoning behind
+// its verdict (plain-English meaning, evidence, error cause, remediation). All
+// data is already on the run row from _run_to_dict; this just surfaces it.
+function ScanDetailModal({ run, benchmark, onClose }: { run: any; benchmark: string | null; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
+  }, [onClose]);
+
+  const st = (run.status || '').toLowerCase();
+  const tone: 'ok' | 'red' | 'warn' | 'neutral' | 'ac' =
+    st === 'passed' ? 'ok' : st === 'failed' ? 'red' : st === 'error' ? 'warn'
+      : (st === 'running' || st === 'pending') ? 'ac' : 'neutral';
+  const statusLabel = st === 'passed' ? '✓ Passed' : st === 'failed' ? '✕ Failed'
+    : st === 'error' ? '⚠ Error' : st === 'skipped' ? 'Not applicable' : (st || 'unknown');
+  const means: Record<string, string> = {
+    passed: 'This control is compliant on this host.',
+    failed: 'This control is non-compliant — a real hardening gap. See remediation below.',
+    error: 'OpenSCAP could not evaluate this rule. The most common cause is that the check needs elevated (sudo) access on the target, or a required file/probe wasn’t available on this host — a target prerequisite, not a scanner fault. Granting the scan account passwordless sudo resolves privilege-related errors.',
+    skipped: 'Not applicable to this host — OpenSCAP marked it notapplicable (e.g. a desktop/GNOME or package-specific rule on a server that doesn’t have it). It is neither a pass nor a fail and does not affect the score.',
+  };
+  const ro = (run.raw_output && typeof run.raw_output === 'object') ? run.raw_output : {};
+  const isOscap = ro.engine === 'openscap' || ro.xccdf_result != null;
+  const isCmd = ro.command != null;
+  const label = run.plugin_title || run.plugin_name || run.plugin_key || `#${run.plugin_id}`;
+  const ruleId = ro.rule_id || run.plugin_key || '';
+  const ms = run.duration_ms ?? null;
+  const dur = ms == null ? '-' : ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(1)}s`;
+  let started: string | null = null;
+  try { started = run.started_at ? new Date(run.started_at).toLocaleString() : null; } catch { started = run.started_at ?? null; }
+  const clip = (s: any, n = 4000) => { const t = String(s ?? ''); return t.length > n ? t.slice(0, n) + `\n…[truncated, ${t.length} chars]` : t; };
+  const Mono = ({ children }: { children: any }) => (
+    <pre className={MONO + ' text-[11px] text-[#0F1F2B] bg-[#F7F9FA] border border-[#E8ECEE] rounded-lg p-2.5 overflow-auto max-h-[220px] whitespace-pre-wrap [overflow-wrap:anywhere]'}>{clip(children)}</pre>
+  );
+  const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <div className="px-5 py-3.5 border-t border-[#F0F3F5]">
+      <div className={SECLABEL + ' mb-1.5'}>{title}</div>
+      {children}
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm" onClick={onClose}>
+      <div className={CARD + ' w-full max-w-[640px] max-h-[85vh] flex flex-col overflow-hidden'} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start gap-3 px-5 py-4 border-b border-[#F0F3F5] shrink-0">
+          <div className="min-w-0 flex-1">
+            <h3 className="text-[14px] font-semibold text-[#0F1F2B] leading-snug [overflow-wrap:anywhere]">{label}</h3>
+            {ruleId && <div className={MONO + ' text-[10px] text-[#8A95A1] mt-0.5 [overflow-wrap:anywhere]'}>{ruleId}</div>}
+          </div>
+          <Pill tone={tone}>{statusLabel}</Pill>
+          <button type="button" onClick={onClose} aria-label="Close" className="shrink-0 text-[#AEB8C2] hover:text-[#3A4653] -mr-1 -mt-1 p-1"><X className="h-4 w-4" /></button>
+        </div>
+        <div className="overflow-y-auto">
+          <Section title="What this means">
+            <p className="text-[12px] text-[#3A4653] leading-relaxed">{means[st] || run.result_summary || 'No additional detail recorded for this verdict.'}</p>
+          </Section>
+          {run.result_summary && <Section title="Summary"><p className="text-[12px] text-[#3A4653] [overflow-wrap:anywhere]">{run.result_summary}</p></Section>}
+          {isOscap && (
+            <Section title="Evidence · OpenSCAP">
+              <div className="flex flex-col gap-1 text-[11.5px]">
+                {benchmark && <div><span className="text-[#8A95A1]">Benchmark: </span><span className={MONO}>{benchmark}</span></div>}
+                {ro.xccdf_result && <div><span className="text-[#8A95A1]">XCCDF result: </span><span className={MONO + ' font-semibold'}>{ro.xccdf_result}</span></div>}
+                {ro.profile && <div><span className="text-[#8A95A1]">Profile: </span><span className={MONO + ' [overflow-wrap:anywhere]'}>{ro.profile}</span></div>}
+              </div>
+            </Section>
+          )}
+          {isCmd && (
+            <Section title="Evidence · command check">
+              {ro.command != null && <><div className="text-[10.5px] text-[#8A95A1] mb-1">Command</div><Mono>{ro.command}</Mono></>}
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11.5px] mt-2">
+                {ro.exit_status != null && <div><span className="text-[#8A95A1]">exit: </span><span className={MONO}>{String(ro.exit_status)}</span></div>}
+                {ro.expectation_detail && <div className="min-w-0"><span className="text-[#8A95A1]">expected: </span><span className={MONO + ' [overflow-wrap:anywhere]'}>{ro.expectation_detail}</span></div>}
+              </div>
+              {ro.stdout ? <><div className="text-[10.5px] text-[#8A95A1] mt-2 mb-1">stdout</div><Mono>{ro.stdout}</Mono></> : null}
+              {ro.stderr ? <><div className="text-[10.5px] text-[#8A95A1] mt-2 mb-1">stderr</div><Mono>{ro.stderr}</Mono></> : null}
+            </Section>
+          )}
+          {run.error_message && <Section title="Error detail"><p className={MONO + ' text-[11px] text-[#B23A3A] [overflow-wrap:anywhere]'}>{run.error_message}</p></Section>}
+          {run.result_detail && <Section title="Detail"><p className="text-[12px] text-[#3A4653] [overflow-wrap:anywhere]">{String(run.result_detail)}</p></Section>}
+          {run.remediation_shown && <Section title="How to fix"><p className="text-[12px] text-[#3A4653] leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]">{run.remediation_shown}</p></Section>}
+          <div className="px-5 py-3 border-t border-[#F0F3F5] flex flex-wrap gap-x-4 gap-y-1 text-[10.5px] text-[#8A95A1]">
+            <span>Duration <b className={MONO + ' text-[#3A4653]'}>{dur}</b></span>
+            {started && <span>Ran <b className="text-[#3A4653]">{started}</b></span>}
+            {run.connection_name && <span>Via <b className="text-[#3A4653] [overflow-wrap:anywhere]">{run.connection_name}</b></span>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Loading indicator for the software / benchmark sections, which populate after
+// the main panel paints (detectedSwQ classifies every installed package, which
+// is slow on a 1200-app host). An animated bar so an in-flight fetch never
+// renders as the "No software / no benchmark" empty state.
+function SwLoading({ label }: { label: string }) {
+  return (
+    <div className="px-0.5 py-1.5">
+      <style>{'@keyframes avaSwSlide{0%{margin-left:-35%}100%{margin-left:100%}}'}</style>
+      <div className="flex items-center gap-2 text-[10.5px] text-[#8A95A1] mb-1.5">
+        <Loader2 className="h-3 w-3 animate-spin" /><span>{label}</span>
+      </div>
+      <div className="h-[5px] rounded-full bg-[#EAEEF1] overflow-hidden">
+        <i className="block h-full w-[35%] rounded-full bg-[#005B96]" style={{ animation: 'avaSwSlide 1.15s ease-in-out infinite' }} />
+      </div>
+    </div>
+  );
+}
+
 // Backend timestamps are naive UTC (no zone). Without a 'Z', new Date() reads
 // them as LOCAL time, shifting by the browser's offset (a 40-min-old scan then
 // showed "5h ago" at UTC+5). Force UTC.
@@ -199,8 +311,10 @@ export default function CompliancePanel({ asset }: { asset: any }) {
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
   const [cTab, setCTab] = useState<'grp' | 'bench' | 'sess' | 'act' | 'manual'>('grp');
   const [noBenchOpen, setNoBenchOpen] = useState(false);
+  const [ruleFilter, setRuleFilter] = useState('');
   const [openSessions, setOpenSessions] = useState<Set<string>>(new Set());
   const [hasInteracted, setHasInteracted] = useState(false);
+  const [detailRun, setDetailRun] = useState<any>(null);  // scan-result row → "why" modal
 
   // Room-scan selection from the shared context (filled by HostApplicationsPanel
   // as the user ticks peer checkboxes).
@@ -221,6 +335,12 @@ export default function CompliancePanel({ asset }: { asset: any }) {
   });
   const selfPeerEntry = (selfIpPeersQ.data?.group ?? []).find((g: any) => g.is_self);
   const selfIsConnected: boolean = selfPeerEntry?.is_connected ?? false;
+  // Was this asset EVER scanned? ip-peers sets never_scanned only when no score
+  // exists. An asset that was scanned and later had its connection deactivated
+  // is NOT "not connected yet" — it just needs reconnecting to run a new scan,
+  // and its last results are still shown below. (Fixes the contradictory
+  // "can't be scanned yet" banner on an already-scanned asset.)
+  const selfNeverScanned: boolean = selfPeerEntry?.never_scanned ?? true;
 
   const isBrowserAsset = (() => {
     const k = (asset.os_normalized || '').toLowerCase();
@@ -370,8 +490,13 @@ export default function CompliancePanel({ asset }: { asset: any }) {
         try {
           const r = await compliancePluginsApi.listRuns({ limit: 5000 });
           const list = Array.isArray(r.data) ? r.data : (r.data?.runs || []);
+          // Count only runs that actually REACHED a verdict. A freshly-created
+          // run is 'pending' until the agent (or a direct scan) executes it;
+          // counting created runs as done made the banner declare "complete"
+          // while the agent hadn't run anything yet (0 pass / 0 fail).
           done = list.filter((run: any) =>
-            (run.id ?? 0) > baselineMaxId && attribIds.has(run.asset_id)
+            (run.id ?? 0) > baselineMaxId && attribIds.has(run.asset_id) &&
+            !['pending', 'running', 'queued', 'dispatched', 'in_progress'].includes(String(run.status || '').toLowerCase())
           ).length;
         } catch { /* transient — keep polling */ }
 
@@ -451,17 +576,38 @@ export default function CompliancePanel({ asset }: { asset: any }) {
     // until the applicable list loads.
     const applicableIds = new Set<number>(((previewQuery.data as any)?.applicable?.plugin_ids as number[]) || []);
     const rows = applicableIds.size ? latestByPlugin.filter((r) => applicableIds.has(r.plugin_id)) : latestByPlugin;
-    const passed = rows.filter((r) => (r.status || '').toLowerCase() === 'passed').length;
-    const failed = rows.filter((r) => (r.status || '').toLowerCase() === 'failed').length;
+    const autoPassed = rows.filter((r) => (r.status || '').toLowerCase() === 'passed').length;
+    const autoFailed = rows.filter((r) => (r.status || '').toLowerCase() === 'failed').length;
     const errored = rows.filter((r) => (r.status || '').toLowerCase() === 'error').length;
     const scanned = rows.length;
+    // Manual attestations count toward the one CIS score (owner's call): a human
+    // pass/fail on a manual check is a verdict like any other. Only attested
+    // (passed/failed) manuals enter the denominator — not-assessed / na drop out,
+    // same as an automated skip. Mirrors _asset_own_compliance on the backend, so
+    // the card, risk posture and asset-compliance API all agree.
+    let manualPassed = 0;
+    let manualFailed = 0;
+    for (const b of (((manualChecksQ.data as any)?.benchmarks ?? []) as any[]))
+      for (const sec of ((b.sections ?? []) as any[]))
+        for (const su of ((sec.subsections ?? []) as any[]))
+          for (const r of ((su.rules ?? []) as any[])) {
+            const s = (r.status || '').toLowerCase();
+            if (s === 'passed') manualPassed++;
+            else if (s === 'failed') manualFailed++;
+          }
+    const passed = autoPassed + manualPassed;
+    const failed = autoFailed + manualFailed;
     // CIS score = passed / evaluated (passed+failed). Not-applicable (skipped)
-    // and errored rules drop out of the denominator — same basis as the risk
-    // posture, so the % is identical on both pages.
+    // and errored rules drop out of the denominator.
     const evaluated = passed + failed;
     const passRate = evaluated ? Math.round((passed / evaluated) * 100) : 0;
-    return { passed, failed, errored, scanned, passRate };
-  }, [latestByPlugin, previewQuery.data]);
+    // Did the host scan actually run, or bypass? Judged on the automated rules
+    // only: a real run yields pass/fail verdicts; one that never connected leaves
+    // every rule errored. Manual attestations don't speak to host reachability.
+    const executed = (autoPassed + autoFailed) > 0;
+    const bypassed = scanned > 0 && (autoPassed + autoFailed) === 0 && errored > 0;
+    return { passed, failed, errored, scanned, passRate, evaluated, executed, bypassed, manualPassed, manualFailed };
+  }, [latestByPlugin, previewQuery.data, manualChecksQ.data]);
 
   // One session per Scan-all invocation — runs within 5 min of each other.
   const sessions = useMemo(() => {
@@ -543,10 +689,19 @@ export default function CompliancePanel({ asset }: { asset: any }) {
   const hostRecognized = hostSw.filter((s: any) => !s.benchmark_available);
   const hostBenchRuleSum = hostBench.reduce((s: number, x: any) => s + (x.rule_count || 0), 0);
   const swRuleSum = swWithBench.reduce((s: number, g: any) => s + (g.rule_count ?? 0), 0);
+  // The software (detectedSwQ) and peer (selfIpPeersQ) queries resolve after the
+  // panel first paints, so guard the "no software / no benchmark" empty states on
+  // their loading flags — otherwise an in-flight fetch shows as "nothing here".
+  const swLoading = detectedSwQ.isLoading || selfIpPeersQ.isLoading;
 
   const ruleCount = applicable.count ?? 0;
+  // Blended CIS scope = automated applicable rules + manual checks (the score now
+  // spans both), so the card's "rules" count matches the blended denominator.
+  const blendedRuleCount = ruleCount + (manualCount ?? 0);
   const applyTotal = ruleCount + peerExtra;
-  const scored = scanStats.scanned > 0;
+  // Scored if the host scan ran OR any manual attestation exists — either yields
+  // a real verdict for the blended score.
+  const scored = scanStats.scanned > 0 || scanStats.evaluated > 0;
   const headScore = scored ? scanStats.passRate : null;
   const bench = splitBenchmark(benchmark);
   const canScan = applyTotal > 0 && !scanMutation.isPending && !scanProgress.running;
@@ -646,7 +801,7 @@ export default function CompliancePanel({ asset }: { asset: any }) {
                     {hostInGroup ? (
                       <Link
                         href={`/cyber-assurance/assets/${hostInGroup.id}?tab=compliance`}
-                        className="inline-flex items-center gap-1.5 h-[33px] rounded-[9px] bg-[#005B96] px-3.5 text-[12.5px] font-semibold text-[#06342B] border border-[#005B96] hover:bg-[#014A81]"
+                        className="inline-flex items-center gap-1.5 h-[33px] rounded-[9px] bg-[#005B96] px-3.5 text-[12.5px] font-semibold text-white border border-[#005B96] hover:bg-[#014A81]"
                       >
                         <Network className="h-3.5 w-3.5" />
                         Go to host: {hostInGroup.name}
@@ -679,31 +834,47 @@ export default function CompliancePanel({ asset }: { asset: any }) {
         );
       })()}
 
-      {/* ── "Connect this asset" CTA — non-browser variant ── */}
+      {/* ── Connection CTA — non-browser. Distinguishes a never-onboarded asset
+           ("connect to scan") from one that WAS scanned but whose connection is
+           now inactive ("reconnect to rescan"). The latter still shows its last
+           scan results below, so the old "can't be scanned yet" copy was wrong. ── */}
       {selfIpPeersQ.data && !selfIsConnected && !isBrowserAsset && (
-        <div className={CARD + ' border-l-[3px] border-l-[#005B96] overflow-hidden'}>
+        <div className={CARD + ' border-l-[3px] overflow-hidden ' + (selfNeverScanned ? 'border-l-[#005B96]' : 'border-l-[#D8A93B]')}>
           <div className="px-4 py-3.5">
             <div className="flex items-start gap-3">
-              <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-[#EFF5FA] text-[#014A81]">
+              <div className={'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] ' + (selfNeverScanned ? 'bg-[#EFF5FA] text-[#014A81]' : 'bg-[#FBF2DF] text-[#9A6410]')}>
                 <Network className="h-[18px] w-[18px]" />
               </div>
               <div className="min-w-0 flex-1">
-                <h3 className="text-[13.5px] font-semibold text-[#0F1F2B]">This asset isn&apos;t connected yet</h3>
-                <p className="mt-1 text-[12px] text-[#3A4653] leading-relaxed">
-                  Manually-added assets need an integration before they can be scanned.
-                  Connect via the wizard to pick <strong>Agent</strong> (script the host runs once, then scans itself) or
-                  {' '}<strong>Agentless</strong> (your backend reaches out over WinRM / SSH / DB protocol with stored credentials).
-                  {' '}{wizPlatformForSelf
-                    ? <>Detected platform: <code className={MONO + ' text-[#0F1F2B]'}>{wizPlatformForSelf}</code> — wizard will jump straight to its credential form.</>
-                    : <>OS isn&apos;t set on this asset, so the wizard will start at the platform picker.</>}
-                </p>
+                {selfNeverScanned ? (
+                  <>
+                    <h3 className="text-[13.5px] font-semibold text-[#0F1F2B]">This asset isn&apos;t connected yet</h3>
+                    <p className="mt-1 text-[12px] text-[#3A4653] leading-relaxed">
+                      Manually-added assets need an integration before they can be scanned.
+                      Connect via the wizard to pick <strong>Agent</strong> (script the host runs once, then scans itself) or
+                      {' '}<strong>Agentless</strong> (your backend reaches out over WinRM / SSH / DB protocol with stored credentials).
+                      {' '}{wizPlatformForSelf
+                        ? <>Detected platform: <code className={MONO + ' text-[#0F1F2B]'}>{wizPlatformForSelf}</code> — wizard will jump straight to its credential form.</>
+                        : <>OS isn&apos;t set on this asset, so the wizard will start at the platform picker.</>}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <h3 className="text-[13.5px] font-semibold text-[#0F1F2B]">No active connection</h3>
+                    <p className="mt-1 text-[12px] text-[#3A4653] leading-relaxed">
+                      This asset has already been scanned — the results below are from that scan — but its integration
+                      connection is now <strong>inactive</strong>, so a new scan can&apos;t run until it&apos;s reconnected.
+                      {' '}Reactivate it in <Link href="/cyber-assurance/admin/integrations/connect" className="text-[#014A81] underline hover:text-[#0F1F2B]">Integrations</Link>, or reconnect via the wizard.
+                    </p>
+                  </>
+                )}
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <Link
                     href={connectWizardHref}
-                    className="inline-flex items-center gap-1.5 h-[33px] rounded-[9px] bg-[#005B96] px-3.5 text-[12.5px] font-semibold text-[#06342B] border border-[#005B96] hover:bg-[#014A81]"
+                    className="inline-flex items-center gap-1.5 h-[33px] rounded-[9px] bg-[#005B96] px-3.5 text-[12.5px] font-semibold text-white border border-[#005B96] hover:bg-[#014A81]"
                   >
                     <Zap className="h-3.5 w-3.5" />
-                    Connect this asset
+                    {selfNeverScanned ? 'Connect this asset' : 'Reconnect'}
                   </Link>
                   {asset.host_name && (
                     <span className="text-[11.5px] text-[#8A95A1]">
@@ -727,6 +898,9 @@ export default function CompliancePanel({ asset }: { asset: any }) {
         </Callout>
       )}
 
+      {/* ── Per-rule "why" detail modal ── */}
+      {detailRun && <ScanDetailModal run={detailRun} benchmark={benchmark} onClose={() => setDetailRun(null)} />}
+
       {/* ══ HEADER CARD ══ */}
       <article className={CARD}>
         <div className="flex items-center gap-4 px-[18px] py-3.5 flex-wrap">
@@ -735,13 +909,25 @@ export default function CompliancePanel({ asset }: { asset: any }) {
             <b className="text-[12.5px] font-semibold">
               {bench.title}{' '}
               {bench.version && <span className={MONO + ' font-medium text-[#8A95A1]'}>{bench.version}</span>}
+              {scanStats.executed && (
+                <span
+                  className="ml-2 inline-flex items-center gap-1 rounded-full bg-[#E7F5EE] border border-[#CFE9DC] px-2 py-[1px] text-[10px] font-semibold text-[#1F7A54] align-middle"
+                  title={`Scan executed on the host — ${scanStats.evaluated} rules returned a real pass/fail verdict.${scanStats.errored > 0 ? ` ${scanStats.errored} rule(s) returned "error": OpenSCAP itself could not evaluate those checks on this host (not a connection failure) — often privileged checks (sshd -T, auditd) when the SSH user lacks sudo.` : ''}`}
+                >✓ Executed</span>
+              )}
+              {scanStats.bypassed && (
+                <span
+                  className="ml-2 inline-flex items-center gap-1 rounded-full bg-[#FBEAEA] border border-[#F1D3D0] px-2 py-[1px] text-[10px] font-semibold text-[#B23A3A] align-middle"
+                  title={`Scan did NOT execute — all ${scanStats.errored} rules errored, meaning the scanner never ran the checks on the host (SSH connect/auth/host-key failed). Fix the connection, then rescan.`}
+                >⚠ Not executed</span>
+              )}
             </b>
             <div className="text-[11px] text-[#8A95A1] mt-0.5">
               {scored ? (
                 <>
                   <b className={'text-[#1F7A54] font-semibold ' + MONO}>{scanStats.passed}</b> pass ·{' '}
                   <b className={'text-[#B23A3A] font-semibold ' + MONO}>{scanStats.failed}</b> fail{scanStats.errored > 0 && <> · <b className={'text-[#9A6410] font-semibold ' + MONO}>{scanStats.errored}</b> error</>} ·{' '}
-                  <span className={MONO}>{ruleCount.toLocaleString()}</span> rules · last scan {lastRun ? relTime(parseTs(lastRun.started_at || lastRun.created_at).getTime()) : '—'}
+                  <span className={MONO}>{blendedRuleCount.toLocaleString()}</span> rules · last scan {lastRun ? relTime(parseTs(lastRun.started_at || lastRun.created_at).getTime()) : '—'}
                 </>
               ) : (
                 <>
@@ -830,7 +1016,9 @@ export default function CompliancePanel({ asset }: { asset: any }) {
           <div className="px-[18px] pt-3 pb-1 border-t border-[#F0F3F5]">
             <div className={SECLABEL}>Agent-detected software with CIS benchmarks</div>
           </div>
-          {swWithBench.length === 0 && hostBench.length === 0 ? (
+          {swLoading ? (
+            <div className="px-[18px] py-3 border-b border-[#F0F3F5]"><SwLoading label="Classifying detected software…" /></div>
+          ) : swWithBench.length === 0 && hostBench.length === 0 ? (
             <div className="px-[18px] py-3 text-[11px] text-[#8A95A1] border-b border-[#F0F3F5]">No software with a CIS benchmark detected on this host.</div>
           ) : (
             <>
@@ -861,7 +1049,7 @@ export default function CompliancePanel({ asset }: { asset: any }) {
                       {[s.software_key || 'classified', s.benchmark_name, `${(s.rule_count ?? 0).toLocaleString()} rules`].filter(Boolean).join(' · ')}
                     </span>
                   </div>
-                  <Link href={softwareSetupHref(s)} className="shrink-0 inline-flex items-center gap-1 rounded-[8px] bg-[#014A81] px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-[#0d8a72]" title="Set up a read-only credential for this software so its CIS rules can scan.">Set up scan →</Link>
+                  <Link href={softwareSetupHref(s)} className="shrink-0 inline-flex items-center gap-1 rounded-[8px] bg-[#005B96] px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-[#014A81]" title="Set up a read-only credential for this software so its CIS rules can scan.">Set up scan →</Link>
                 </div>
               ))}
             </>
@@ -927,7 +1115,9 @@ export default function CompliancePanel({ asset }: { asset: any }) {
               )}
               <div className="px-4 pt-2 pb-[3px] border-t border-[#F0F3F5]"><div className={SECLABEL}>Detected software · classified</div></div>
               <div className="px-4 pt-1.5 pb-3 flex flex-col gap-1.5">
-                {hostBench.length === 0 && hostRecognized.length === 0 && peers.length === 0 ? (
+                {swLoading ? (
+                  <SwLoading label="Classifying detected software…" />
+                ) : hostBench.length === 0 && hostRecognized.length === 0 && peers.length === 0 ? (
                   <div className="text-[10.5px] text-[#AEB8C2] px-0.5">No software detected on this host yet — run an inventory / agent scan.</div>
                 ) : (
                   <>
@@ -1008,7 +1198,9 @@ export default function CompliancePanel({ asset }: { asset: any }) {
 
               <div className="px-4 pt-2.5 pb-1 border-t border-[#F0F3F5]"><div className={SECLABEL}>Software benchmarks · include in scan scope</div></div>
               <div className="px-4 pt-1.5 pb-2.5 flex flex-col gap-1.5">
-                {swWithBench.length === 0 && hostBench.length === 0 ? (
+                {swLoading ? (
+                  <SwLoading label="Checking software for benchmarks…" />
+                ) : swWithBench.length === 0 && hostBench.length === 0 ? (
                   <div className="text-[10.5px] text-[#AEB8C2] px-0.5">No software benchmark to fold into this scan.</div>
                 ) : (
                   <>
@@ -1032,7 +1224,7 @@ export default function CompliancePanel({ asset }: { asset: any }) {
                         <b className="font-semibold flex-1 min-w-0 truncate">{s.name}</b>
                         <Mchip ac title={s.benchmark_name}>{s.benchmark_name}</Mchip>
                         <span className="text-[10.5px] text-[#8A95A1] shrink-0"><b className={'text-[#0F1F2B] font-semibold ' + MONO}>{(s.rule_count ?? 0).toLocaleString()}</b> rules</span>
-                        <Link href={softwareSetupHref(s)} className="shrink-0 inline-flex items-center gap-1 rounded-[8px] bg-[#014A81] px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-[#0d8a72]" title="Set up a read-only credential for this software so its CIS rules can scan.">Set up scan →</Link>
+                        <Link href={softwareSetupHref(s)} className="shrink-0 inline-flex items-center gap-1 rounded-[8px] bg-[#005B96] px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-[#014A81]" title="Set up a read-only credential for this software so its CIS rules can scan.">Set up scan →</Link>
                       </div>
                     ))}
                   </>
@@ -1053,44 +1245,75 @@ export default function CompliancePanel({ asset }: { asset: any }) {
               <span className="text-[10px] text-[#AEB8C2]">Library → matched benchmarks → applicable to scan</span>
             </div>
             <div className="grid gap-3 px-4 py-3.5" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))' }}>
-              <div className="bg-[#F7F9FA] rounded-[11px] px-[15px] py-[13px]">
-                <b className={'text-[21px] font-semibold ' + MONO}>{total.toLocaleString()}</b>
+              <div className="rounded-[11px] border border-[#EEF1F3] bg-[#F7F9FA] px-[15px] py-[13px] border-l-[3px] border-l-[#CBD4DD]">
+                <b className={'text-[22px] font-semibold ' + MONO}>{total.toLocaleString()}</b>
                 <span className="block text-[11px] text-[#3A4653] font-semibold mt-0.5">Library total</span>
                 <small className="text-[10px] text-[#AEB8C2]">approved CIS plugins</small>
               </div>
-              <div className="bg-[#F7F9FA] rounded-[11px] px-[15px] py-[13px]">
-                <b className={'text-[21px] font-semibold text-[#014A81] ' + MONO}>
+              <div className="rounded-[11px] border border-[#EEF1F3] bg-[#F7F9FA] px-[15px] py-[13px] border-l-[3px] border-l-[#7FA8CC]">
+                <b className={'text-[22px] font-semibold text-[#014A81] ' + MONO}>
                   {ruleCount.toLocaleString()}
                   {swRuleSum > 0 && <span className="text-[12px] text-[#8A95A1] font-medium"> + {swRuleSum.toLocaleString()} software</span>}
                 </b>
                 <span className="block text-[11px] text-[#3A4653] font-semibold mt-0.5">From matched benchmarks</span>
                 <small className="text-[10px] text-[#AEB8C2]">{(stage1.skipped ?? 0).toLocaleString()} from other benchmarks skipped</small>
               </div>
-              <div className="bg-[#EFF5FA] rounded-[11px] px-[15px] py-[13px]">
-                <b className={'text-[21px] font-semibold text-[#014A81] ' + MONO}>{applyTotal.toLocaleString()}</b>
+              <div className="rounded-[11px] border border-[#B3CDE0] bg-[#EFF5FA] px-[15px] py-[13px] border-l-[3px] border-l-[#005B96] shadow-[0_1px_2px_rgba(1,74,129,0.06)]">
+                <b className={'text-[22px] font-semibold text-[#014A81] ' + MONO}>{applyTotal.toLocaleString()}</b>
                 <span className="block text-[11px] text-[#014A81] font-semibold mt-0.5">Applicable to scan</span>
                 <small className="text-[10px] text-[#4A8577]">{total ? Math.round((applyTotal / total) * 100) : 0}% of library</small>
                 {hostBenchRuleSum > 0 && <small className="block text-[10px] text-[#8A5A0C] mt-1">+{hostBenchRuleSum.toLocaleString()} from detected software — set up to include</small>}
               </div>
             </div>
-            <div className="px-4 pt-0.5 pb-1"><div className={SECLABEL}>Preview — sample rules that will run</div></div>
-            <div className="px-4 pt-2 pb-3 flex flex-col gap-1.5">
-              {(!Array.isArray(applicable.examples) || applicable.examples.length === 0) ? (
-                <div className="text-[11px] italic text-[#AEB8C2] px-0.5">No applicable rules until OS data lands.</div>
-              ) : (
-                <>
-                  {applicable.examples.map((it: any, i: number) => (
-                    <div key={i} className="flex items-center gap-2.5 border border-[#E8ECEE] rounded-[9px] px-3 py-2 text-[11.5px]">
-                      <span className={MONO + ' bg-[#F1F4F6] rounded-md px-2 py-px text-[10px] font-semibold shrink-0'}>{it.rule_id}</span>
-                      <span className="flex-1 min-w-0">{it.title}</span>
-                    </div>
-                  ))}
-                  <div className="text-[10px] text-[#AEB8C2] px-0.5 pt-0.5">
-                    {applicable.examples.length} of {ruleCount.toLocaleString()} · all from <span className={MONO}>{benchmark}</span> · full outcomes appear per scan session
+            {(() => {
+              // Full applicable rule list (backend `rules`); falls back to the
+              // 5-row `examples` sample if an older backend is answering.
+              const allRules: any[] = Array.isArray(applicable.rules) && applicable.rules.length
+                ? applicable.rules
+                : (Array.isArray(applicable.examples) ? applicable.examples : []);
+              const q = ruleFilter.trim().toLowerCase();
+              const shown = q
+                ? allRules.filter((r: any) =>
+                    (r.rule_id || '').toLowerCase().includes(q) || (r.title || '').toLowerCase().includes(q))
+                : allRules;
+              return (
+                <div className="border-t border-[#F0F3F5] px-4 pt-3 pb-3.5">
+                  <div className="flex items-center gap-2 flex-wrap mb-2">
+                    <div className={SECLABEL + ' flex-1'}>Rules that will run</div>
+                    {allRules.length > 0 && (
+                      <>
+                        <input
+                          value={ruleFilter}
+                          onChange={(e) => setRuleFilter(e.target.value)}
+                          placeholder="Filter by id or title…"
+                          className="h-[27px] w-[180px] max-w-full rounded-[8px] border border-[#E4E8EC] bg-white px-2.5 text-[11px] text-[#0F1F2B] placeholder:text-[#AEB8C2] focus:border-[#005B96] focus:outline-none"
+                        />
+                        <span className={'text-[10px] text-[#8A95A1] shrink-0 ' + MONO}>
+                          {shown.length.toLocaleString()}{q ? ` / ${allRules.length.toLocaleString()}` : ` of ${ruleCount.toLocaleString()}`}
+                        </span>
+                      </>
+                    )}
                   </div>
-                </>
-              )}
-            </div>
+                  {allRules.length === 0 ? (
+                    <div className="text-[11px] italic text-[#AEB8C2] px-0.5">No applicable rules until OS data lands.</div>
+                  ) : shown.length === 0 ? (
+                    <div className="text-[11px] italic text-[#AEB8C2] px-0.5 py-2">No rule matches “{ruleFilter}”.</div>
+                  ) : (
+                    <div className="max-h-[380px] overflow-y-auto rounded-[10px] border border-[#E8ECEE] divide-y divide-[#F0F3F5]">
+                      {shown.map((it: any, i: number) => (
+                        <div key={it.rule_id || i} className="flex items-center gap-2.5 px-3 py-[7px] text-[11.5px] hover:bg-[#F7F9FA]">
+                          <span className={MONO + ' bg-[#F1F4F6] rounded-md px-2 py-px text-[10px] font-semibold shrink-0'}>{it.rule_id}</span>
+                          <span className="flex-1 min-w-0 truncate" title={it.title}>{it.title}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="text-[10px] text-[#AEB8C2] px-0.5 pt-2">
+                    all from <span className={MONO}>{benchmark}</span> · full pass/fail outcomes appear per scan session
+                  </div>
+                </div>
+              );
+            })()}
           </article>
         </>
       )}
@@ -1107,7 +1330,7 @@ export default function CompliancePanel({ asset }: { asset: any }) {
               <GuideMarker id="asset.compScanFrequency" n={4} />
               <GuideMarker id="asset.compFeedsHardeningGap" n={5} />
             </h3>
-            <span className="block text-[11px] text-[#8A95A1] mt-0.5">One session per scan · expand for rule outcomes · {ruleCount.toLocaleString()} applicable rules</span>
+            <span className="block text-[11px] text-[#8A95A1] mt-0.5">One session per scan · expand a scan, then click any rule to see why · {ruleCount.toLocaleString()} applicable rules</span>
           </div>
 
           {scanProgress.running && (
@@ -1169,20 +1392,29 @@ export default function CompliancePanel({ asset }: { asset: any }) {
                       const off = Math.max(0, Math.round((rt - session.endedAt) / 1000));
                       const st = (run.status || '').toLowerCase();
                       return (
-                        <div key={run.id} className="grid gap-2.5 items-center px-3.5 py-[9px] border-t border-[#F0F3F5] text-[11.5px]" style={{ gridTemplateColumns: 'minmax(0,1fr) 70px 90px 50px' }}>
+                        <div
+                          key={run.id}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setDetailRun(run)}
+                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetailRun(run); } }}
+                          title="View why — evidence & reasoning"
+                          className="grid gap-2.5 items-center px-3.5 py-[10px] border-t border-[#F0F3F5] text-[11.5px] cursor-pointer hover:bg-[#F7FBFA] transition-colors"
+                          style={{ gridTemplateColumns: 'minmax(0,1fr) 92px 56px 14px' }}
+                        >
                           <div className="min-w-0">
                             <b className="font-semibold leading-snug">{pluginLabel(run)}</b>
-                            {run.result_summary && <span className="block text-[10px] text-[#8A95A1] line-clamp-2">{run.result_summary}</span>}
+                            {run.result_summary && <span className="block text-[10px] text-[#8A95A1] line-clamp-1">{run.result_summary}</span>}
                           </div>
-                          <span className={MONO + ' text-[10.5px] text-[#8A95A1]'}>+{off}s</span>
-                          <span>
+                          <span className="justify-self-start">
                             {st === 'passed' ? <Pill tone="ok">✓ Passed</Pill>
                               : st === 'failed' ? <Pill tone="red">✕ Failed</Pill>
                                 : st === 'error' ? <Pill tone="warn">⚠ Error</Pill>
                                   : st === 'running' || st === 'pending' ? <Pill tone="ac"><Loader2 className="h-2.5 w-2.5 animate-spin" />Running</Pill>
                                     : <Pill tone="neutral">{st || 'unknown'}</Pill>}
                           </span>
-                          <span className={MONO + ' text-[10.5px] text-right'}>{fmtDuration(run)}</span>
+                          <span title={`+${off}s into the scan`} className={MONO + ' text-[10.5px] text-right text-[#8A95A1]'}>{fmtDuration(run)}</span>
+                          <span className="text-[#C8CFD8] justify-self-end"><Ic size={13}><path d="M9 6l6 6-6 6" /></Ic></span>
                         </div>
                       );
                     })}

@@ -93,11 +93,14 @@ def current_actor_workflow_id() -> Optional[int]:
 SENSITIVE_KEYS = {
     "password", "password_hash", "token", "access_token",
     "refresh_token", "secret", "api_key", "authorization", "cookie",
+    "product_key", "license_key",   # software-license volume keys (modules/license_management)
 }
 # Any key naming one of these is redacted too: a connector's second secret
 # (`secret2`), a `client_secret`, a `private_key`, an `x_api_token`. An exact-name
 # list let `secret2` through into the stored request payload.
-SENSITIVE_KEY_PARTS = ("password", "secret", "token", "api_key", "apikey", "private_key", "credential")
+# "communit" covers snmp_community / snmp_communities (SNMP v2c community strings are passwords).
+SENSITIVE_KEY_PARTS = ("password", "passwd", "secret", "token", "api_key", "apikey", "private_key", "credential",
+                       "communit", "access_key")
 
 
 def is_sensitive_key(key: Any) -> bool:
@@ -235,6 +238,7 @@ def write_rich_audit_log(
 
 __all__ = [
     "write_rich_audit_log",
+    "is_sensitive_key",
     "workflow_actor_context",
     "current_actor_source",
     "current_actor_type",

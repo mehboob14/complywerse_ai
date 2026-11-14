@@ -9,7 +9,7 @@ confidence gate, reason, and full audit trail. Findings the model finds no
 specific control for get an explicit "patch-only / no-specific-control" marker
 instead of a silent blank.
 
-The legacy `auto:cwe:` link-note prefix is still recognised for DISPLAY of any
-rows written before removal (see `control_links._parse_auto_marker`); no code
-writes new `auto:cwe:` links.
+CTEM Validate no longer uses the AI mapper: it maps to the SCF Control Library by
+SCF's own crosswalks (`grc.services.scf_validate`), which writes `auto:cwe:` rule
+links (see `control_links._parse_auto_marker`).
 """

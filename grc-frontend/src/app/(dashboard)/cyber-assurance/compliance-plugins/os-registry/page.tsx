@@ -75,7 +75,7 @@ export default function OsRegistryPage() {
           OS Knowledge Registry
         </h1>
         <p className="mt-1 max-w-3xl text-sm text-gray-600">
-          Every OS family, product, and build Complyverse recognises — Windows desktop, Windows Server, Linux distros, Cisco IOS XE minors, Oracle DB editions, AWS / Azure / GCP. Each row maps to a normalised key that asset feeds use and that plugins tag against. Rule counts and asset counts are live.
+          Every OS family, product, and build ComplyVerse recognises — Windows desktop, Windows Server, Linux distros, Cisco IOS XE minors, Oracle DB editions, AWS / Azure / GCP. Each row maps to a normalised key that asset feeds use and that plugins tag against. Rule counts and asset counts are live.
         </p>
       </div>
 
